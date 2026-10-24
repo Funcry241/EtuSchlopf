@@ -1,0 +1,15 @@
+[package]
+name = "etuschlopf-watch"
+version = "0.10.1737"
+edition = "2024"
+rust-version = "1.88"
+resolver = "3"
+description = "Local runtime watch for EtuSchlopf observation snapshots"
+license = "MIT"
+publish = false
+
+[dependencies]
+
+[profile.strict]
+inherits = "release"
+overflow-checks = true

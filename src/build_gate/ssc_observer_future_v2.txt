@@ -1,0 +1,146 @@
+pub(crate) fn observe_ssc_event_v2<'event>(
+    transformation: &'event SscTransformationEvidence<'event>,
+    invariant: SscInvariantAssessment<'event>,
+    necessity: SscNecessityAssessment<'event>,
+) -> Result<
+    SscClassifiedObservationV2<'event>,
+    SscEvidenceIntegrityFailure,
+> {
+    let scope = transformation.scope;
+    let same_event = |event: &SscEventBinding<'event>| {
+        std::ptr::eq(transformation.event, event)
+    };
+
+    match (scope, invariant, necessity) {
+        (
+            SscFamilyScope::OutOfScope,
+            SscInvariantAssessment::Unproven,
+            SscNecessityAssessment::Unproven,
+        ) => Ok(SscClassifiedObservationV2 {
+            transformation,
+            scope,
+            invariant,
+            necessity,
+            verdict: SscPermitVerdictV2::OutOfScope,
+        }),
+
+        (
+            SscFamilyScope::OutOfScope,
+            _,
+            _,
+        ) => Err(
+            SscEvidenceIntegrityFailure::IllegalProofCombination
+        ),
+
+        (
+            SscFamilyScope::InScope(_),
+            SscInvariantAssessment::Unproven,
+            SscNecessityAssessment::Unproven,
+        ) => Ok(SscClassifiedObservationV2 {
+            transformation,
+            scope,
+            invariant,
+            necessity,
+            verdict: SscPermitVerdictV2::InvariantUnproven,
+        }),
+
+        (
+            SscFamilyScope::InScope(_),
+            SscInvariantAssessment::Unproven,
+            SscNecessityAssessment::Proven(_),
+        ) => Err(
+            SscEvidenceIntegrityFailure::IllegalProofCombination
+        ),
+
+        (
+            SscFamilyScope::InScope(family),
+            SscInvariantAssessment::Refuted(counterexample),
+            SscNecessityAssessment::Unproven,
+        ) => {
+            if !same_event(counterexample.event) {
+                return Err(
+                    SscEvidenceIntegrityFailure::ProofBindingMismatch
+                );
+            }
+
+            if counterexample.family != family {
+                return Err(
+                    SscEvidenceIntegrityFailure::ProofFamilyMismatch
+                );
+            }
+
+            Ok(SscClassifiedObservationV2 {
+                transformation,
+                scope,
+                invariant,
+                necessity,
+                verdict: SscPermitVerdictV2::InvariantDenied,
+            })
+        }
+
+        (
+            SscFamilyScope::InScope(_),
+            SscInvariantAssessment::Refuted(_),
+            SscNecessityAssessment::Proven(_),
+        ) => Err(
+            SscEvidenceIntegrityFailure::IllegalProofCombination
+        ),
+
+        (
+            SscFamilyScope::InScope(family),
+            SscInvariantAssessment::Proven(proof),
+            SscNecessityAssessment::Unproven,
+        ) => {
+            if !same_event(proof.event) {
+                return Err(
+                    SscEvidenceIntegrityFailure::ProofBindingMismatch
+                );
+            }
+
+            if proof.family != family {
+                return Err(
+                    SscEvidenceIntegrityFailure::ProofFamilyMismatch
+                );
+            }
+
+            Ok(SscClassifiedObservationV2 {
+                transformation,
+                scope,
+                invariant,
+                necessity,
+                verdict: SscPermitVerdictV2::NecessityUnproven,
+            })
+        }
+
+        (
+            SscFamilyScope::InScope(family),
+            SscInvariantAssessment::Proven(proof),
+            SscNecessityAssessment::Proven(witness),
+        ) => {
+            if !same_event(proof.event)
+                || !same_event(witness.event)
+            {
+                return Err(
+                    SscEvidenceIntegrityFailure::ProofBindingMismatch
+                );
+            }
+
+            if proof.family != family
+                || witness.family != family
+            {
+                return Err(
+                    SscEvidenceIntegrityFailure::ProofFamilyMismatch
+                );
+            }
+
+            Ok(SscClassifiedObservationV2 {
+                transformation,
+                scope,
+                invariant,
+                necessity,
+                verdict: SscPermitVerdictV2::Permit,
+            })
+        }
+    }
+}
+

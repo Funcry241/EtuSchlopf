@@ -1,0 +1,31 @@
+[package]
+name = "schemaschlopf"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+resolver = "3"
+default-run = "schemaschlopf"
+description = "Fail-closed MusicXML 3.1 XSD 1.0 schema-profile qualification foundation"
+license = "MIT"
+publish = false
+
+[features]
+default = []
+take = ["dep:zip"]
+
+[dependencies]
+roxmltree = "=0.20.0"
+sha2 = "=0.10.9"
+zip = { version = "=8.6.0", optional = true, default-features = false, features = ["deflate"] }
+
+[[bin]]
+name = "schemaschlopf_take_bootstrap"
+path = "src/bin/schemaschlopf_take_bootstrap.rs"
+required-features = ["take"]
+
+[lints.rust]
+warnings = "deny"
+
+[profile.strict]
+inherits = "release"
+overflow-checks = true

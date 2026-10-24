@@ -1,0 +1,373 @@
+fn find_next_measure_bounds(xml: &str, from: usize) -> Option<(usize, usize, usize)> {
+    let marker = "<measure number=\"";
+    let start = from + xml[from..].find(marker)?;
+    let number_start = start + marker.len();
+    let number_end = number_start + xml[number_start..].find('"')?;
+    let measure_number = xml[number_start..number_end].trim().parse::<usize>().ok()?;
+    let close_rel = xml[start..].find("</measure>")?;
+    Some((start, start + close_rel + "</measure>".len(), measure_number))
+}
+
+fn extract_attr_from_opening_tag(fragment: &str, attr: &str) -> Option<String> {
+    let end = fragment.find('>').unwrap_or(fragment.len());
+    let opening = &fragment[..end];
+    let marker = format!("{attr}=\"");
+    let start = opening.find(&marker)? + marker.len();
+    let stop = start + opening[start..].find('"')?;
+    Some(opening[start..stop].to_string())
+}
+
+fn extract_first_text_from_fragment(text: &str, tag: &str) -> Option<String> {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let start = text.find(&open)? + open.len();
+    let end = text[start..].find(&close)? + start;
+    Some(text[start..end].trim().to_string())
+}
+
+fn apply_expression_polish(
+    xml: &mut String,
+    estimated_bpm: Option<f64>,
+) -> (String, master_state_identity::OwnerReceipts) {
+    let mut inserted = 0_usize;
+    let mut receipts = master_state_identity::OwnerReceipts::default();
+
+    let Some(first_measure) =
+        crate::structural_write_authority::first_structural_measure_locator(xml)
+    else {
+        return ("ExpressionPolish v0.1.162: keine Takte gefunden; keine Tempo-/Spiel-/Dynamikangaben gesetzt; keine Pedalzeichen eingefügt.".to_string(), receipts);
+    };
+
+    // v0.1.159: Startseiten-Luxuspolitur vor der Statusprüfung. Tempo und
+    // non legato bleiben reine MusicXML-Directions, bekommen aber mehr Abstand
+    // zum ersten System. Es ändert keine Noten, Dauern, Stimmen, Staffs,
+    // Oktavierungen, Schlüssel oder Solver-Auswahl.
+    let tempo_bpm = estimated_bpm
+        .map(|bpm| bpm.round().clamp(40.0, 220.0) as u32)
+        .filter(|bpm| *bpm > 0);
+    if let Some(bpm) = tempo_bpm {
+        let (tempo_inserted, tempo_receipts) =
+            insert_tempo_words_direction_into_measure(xml, &first_measure, bpm, "1");
+        inserted += tempo_inserted;
+        receipts.append(tempo_receipts);
+    }
+
+    let (performance_inserted, performance_receipt) =
+        insert_performance_words_direction_into_measure(xml, &first_measure, "non legato", "1");
+    inserted += performance_inserted;
+    receipts.push_additive(performance_receipt);
+
+    // Generische, sparsame Dynamikpunkte: Anfang, etwa 40%, etwa 60%, etwa 75%
+    // und ein später Schlussbereich. Die Positionen werden aus der Partiturstruktur
+    // abgeleitet, nicht aus festen Taktnummern.
+    let mut dynamic_targets = vec![(first_measure, "mf")];
+    for (fraction, dynamic) in [(0.40, "mp"), (0.60, "f"), (0.75, "mf"), (0.84, "f")] {
+        if let Some(locator) =
+            crate::structural_write_authority::fractional_structural_measure_locator(xml, fraction)
+        {
+            dynamic_targets.push((locator, dynamic));
+        }
+    }
+
+    dynamic_targets.sort_by_key(|(measure, _)| measure.measure_number());
+    dynamic_targets.dedup_by(|left, right| {
+        left.0.measure_number() == right.0.measure_number() && left.1 == right.1
+    });
+    for (measure, dyn_mark) in dynamic_targets {
+        let (dynamic_inserted, dynamic_receipt) =
+            insert_dynamic_direction_into_measure(xml, &measure, dyn_mark, "1");
+        inserted += dynamic_inserted;
+        receipts.push_additive(dynamic_receipt);
+    }
+
+    let tempo_fragment = tempo_bpm
+        .map_or_else(
+            || "Tempo nicht gesetzt, weil kein plausibler WAV-Tempo-Schätzwert vorlag".to_string(),
+            |bpm| format!("Tempo als echtes Metronomzeichen sichtbar: Viertel={bpm} aus WAV-Signatur"),
+        );
+    (format!(
+        "ExpressionPolish v0.1.162: {inserted} portable Tempo-/Spiel-/Dynamikangaben generisch aus der Partiturstruktur gesetzt; {tempo_fragment}; Startseite luxuriöser gesetzt: Tempo und non legato haben mehr Abstand zum ersten System, Editor-/Versionsmetadata bleiben aus dem Staff-Text entfernt; keine festen Taktnummern, keine Pedalzeichen, keine Noten-/Dauer-/Staff-/Oktavierungsänderung."
+    ), receipts)
+}
+
+
+fn insert_performance_words_direction_into_measure(
+    xml: &mut String,
+    measure: &crate::structural_write_authority::StructuralMeasureLocator,
+    words: &str,
+    staff: &str,
+) -> (usize, Option<master_state_identity::AdditiveTransformationReceipt>) {
+    let direction = format!(
+        "      <direction placement=\"above\">\n        <direction-type>\n          <words default-x=\"0\" default-y=\"58\" font-size=\"10\" font-style=\"italic\">{words}</words>\n        </direction-type>\n        <staff>{staff}</staff>\n      </direction>\n"
+    );
+    insert_direction_into_measure(xml, measure, &direction)
+}
+
+fn insert_tempo_words_direction_into_measure(
+    xml: &mut String,
+    measure: &crate::structural_write_authority::StructuralMeasureLocator,
+    bpm: u32,
+    staff: &str,
+) -> (usize, master_state_identity::OwnerReceipts) {
+    let measure_number = measure.measure_number();
+    let (equivalent_visible_tempo_present, equivalent_playback_tempo_present) = {
+        let mut visible_found = false;
+        let mut playback_found = false;
+        let mut scan = 0_usize;
+        while let Some((start, end, number)) = find_next_measure_bounds(xml, scan) {
+            scan = end;
+            if number != measure_number {
+                continue;
+            }
+            let measure = &xml[start..end];
+            let mut direction_scan = 0_usize;
+            while let Some(relative_start) = measure[direction_scan..].find("<direction") {
+                let direction_start = direction_scan + relative_start;
+                let Some(relative_end) = measure[direction_start..].find("</direction>") else {
+                    break;
+                };
+                let direction_end = direction_start + relative_end + "</direction>".len();
+                let direction = &measure[direction_start..direction_end];
+                direction_scan = direction_end;
+
+                let hidden = direction.contains("print-object=\"no\"");
+                let equivalent_metronome = direction.contains("<metronome")
+                    && !direction.contains("<beat-unit-dot")
+                    && extract_first_text_from_fragment(direction, "beat-unit").as_deref()
+                        == Some("quarter")
+                    && extract_first_text_from_fragment(direction, "per-minute")
+                        .and_then(|value| value.parse::<f64>().ok())
+                        .is_some_and(|value| (value - f64::from(bpm)).abs() < 0.001);
+                let visible_tempo_candidate = roxmltree::Document::parse(direction)
+                    .ok()
+                    .and_then(|document| {
+                        document.descendants().find(|node| node.has_tag_name("words"))
+                            .and_then(|node| node.text()).map(str::to_string)
+                    });
+                let equivalent_words = visible_tempo_candidate
+                    .filter(|value| value.contains("&#x2669;") || value.contains('♩'))
+                    .and_then(|value| value.rsplit_once('=').map(|(_, rhs)| rhs.trim().to_string()))
+                    .and_then(|value| value.parse::<f64>().ok())
+                    .is_some_and(|value| (value - f64::from(bpm)).abs() < 0.001);
+                let equivalent_sound = direction
+                    .find("<sound")
+                    .and_then(|relative| direction.get(relative..))
+                    .and_then(|sound| extract_attr_from_opening_tag(sound, "tempo"))
+                    .and_then(|value| value.parse::<f64>().ok())
+                    .is_some_and(|value| (value - f64::from(bpm)).abs() < 0.001);
+                let equivalent_staff = extract_first_text_from_fragment(direction, "staff")
+                    .is_none_or(|value| value == staff);
+                if equivalent_staff {
+                    visible_found |= !hidden && (equivalent_metronome || equivalent_words);
+                    playback_found |= equivalent_metronome || equivalent_sound;
+                }
+                if visible_found && playback_found {
+                    break;
+                }
+            }
+            break;
+        }
+        (visible_found, playback_found)
+    };
+
+    let mut receipts = master_state_identity::OwnerReceipts::default();
+    if equivalent_visible_tempo_present && equivalent_playback_tempo_present {
+        return (0, receipts);
+    }
+    // The accepted r1268 causal class binds one initial tempo event. When both
+    // representations are absent, one ADDITIVE direction owns both. Existing
+    // partial representations retain their bytes and gain only the missing half.
+    let visible = if equivalent_visible_tempo_present {
+        "          <words></words>".to_string()
+    } else {
+        format!("          <words default-x=\"0\" default-y=\"88\" font-size=\"11\" font-weight=\"bold\">&#x2669; = {bpm}</words>")
+    };
+    let playback = if equivalent_playback_tempo_present {
+        String::new()
+    } else {
+        format!("        <sound tempo=\"{bpm}\"/>\n")
+    };
+    let marker = if equivalent_visible_tempo_present {
+        "etuschlopf_playback_tempo"
+    } else {
+        "etuschlopf_visible_tempo"
+    };
+    let direction = format!(
+        "      <!-- {marker} -->\n      <direction placement=\"above\">\n        <direction-type>\n{visible}\n        </direction-type>\n        <staff>{staff}</staff>\n{playback}      </direction>\n"
+    );
+    let (inserted, receipt) = insert_direction_into_measure(xml, measure, &direction);
+    receipts.push_additive(receipt);
+    (inserted, receipts)
+}
+
+#[cfg(test)]
+mod initial_tempo_semantic_identity_tests {
+    use super::insert_tempo_words_direction_into_measure;
+
+    fn insert_tempo(xml: &mut String, bpm: u32, staff: &str) -> usize {
+        let locator = crate::structural_write_authority::first_structural_measure_locator(xml).unwrap();
+        insert_tempo_words_direction_into_measure(xml, &locator, bpm, staff).0
+    }
+
+    #[test]
+    fn equivalent_visible_metronome_already_owns_visibility_and_playback() {
+        let mut xml = "<score-partwise><part id=\"P1\"><measure number=\"\
+1\"><attributes></attributes>\n<direction placement=\"above\"><direction-type><metronome default-y=\"72\"><beat-unit>quarter</beat-unit><per-minute>126.0</per-minute></metronome></direction-type><staff>1</staff></direction>\n<note><rest/><duration>96</duration><voice>1</voice><staff>1</staff></note></measure></part></score-partwise>".to_string();
+        let before = xml.clone();
+        assert_eq!(insert_tempo(&mut xml, 126, "1"), 0);
+        assert_eq!(xml, before);
+        assert_eq!(xml.matches("<metronome").count(), 1);
+    }
+
+    #[test]
+    fn generated_start_tempo_uses_visible_staff_text_and_sound_only_playback() {
+        let mut xml = "<score-partwise><part id=\"P1\"><measure number=\"\
+1\"><attributes></attributes>\n</measure></part></score-partwise>".to_string();
+        assert_eq!(insert_tempo(&mut xml, 126, "1"), 1);
+        assert_eq!(xml.matches("etuschlopf_visible_tempo").count(), 1);
+        assert_eq!(xml.matches("etuschlopf_playback_tempo").count(), 0);
+        assert_eq!(xml.matches("<words").count(), 1);
+        assert_eq!(xml.matches("<metronome").count(), 0);
+        assert_eq!(xml.matches("<sound tempo=\"126\"/>").count(), 1);
+        assert_eq!(xml.matches("print-object=\"no\"").count(), 0);
+    }
+
+    #[test]
+    fn equivalent_generated_pair_is_not_materialized_twice() {
+        let mut xml = "<score-partwise><part id=\"P1\"><measure number=\"\
+1\"><attributes></attributes>\n<!-- etuschlopf_visible_tempo --><direction placement=\"above\"><direction-type><words>&#x2669; = 126.0</words></direction-type><staff>1</staff></direction>\n<!-- etuschlopf_playback_tempo --><direction placement=\"above\"><direction-type><words></words></direction-type><staff>1</staff><sound tempo=\"126\"/></direction>\n</measure></part></score-partwise>".to_string();
+        let before = xml.clone();
+        assert_eq!(insert_tempo(&mut xml, 126, "1"), 0);
+        assert_eq!(xml, before);
+    }
+
+    #[test]
+    fn visible_words_without_playback_gain_only_sound_carrier() {
+        let mut xml = "<score-partwise><part id=\"P1\"><measure number=\"\
+1\"><attributes></attributes>\n<direction placement=\"above\"><direction-type><words>&#x2669; = 126</words></direction-type><staff>1</staff></direction>\n</measure></part></score-partwise>".to_string();
+        assert_eq!(insert_tempo(&mut xml, 126, "1"), 1);
+        assert_eq!(xml.matches("&#x2669; = 126").count(), 1);
+        assert_eq!(xml.matches("<sound tempo=\"126\"/>").count(), 1);
+        assert_eq!(xml.matches("<metronome").count(), 0);
+    }
+
+    #[test]
+    fn distinct_visible_tempo_remains_legitimate() {
+        let mut xml = "<score-partwise><part id=\"P1\"><measure number=\"\
+1\"><attributes></attributes>\n<direction placement=\"above\"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>121</per-minute></metronome></direction-type><staff>1</staff></direction>\n</measure></part></score-partwise>".to_string();
+        assert_eq!(insert_tempo(&mut xml, 126, "1"), 1);
+        assert_eq!(xml.matches("<metronome").count(), 1);
+        assert_eq!(xml.matches("etuschlopf_visible_tempo").count(), 1);
+        assert_eq!(xml.matches("<sound tempo=\"126\"/>").count(), 1);
+        assert!(xml.contains("<per-minute>121</per-minute>"));
+        assert!(xml.contains("&#x2669; = 126"));
+    }
+
+    #[test]
+    fn dotted_quarter_is_not_the_same_tempo_identity() {
+        let mut xml = "<score-partwise><part id=\"P1\"><measure number=\"\
+1\"><attributes></attributes>\n<direction placement=\"above\"><direction-type><metronome><beat-unit>quarter</beat-unit><beat-unit-dot/><per-minute>126</per-minute></metronome></direction-type><staff>1</staff></direction>\n</measure></part></score-partwise>".to_string();
+        assert_eq!(insert_tempo(&mut xml, 126, "1"), 1);
+        assert_eq!(xml.matches("<metronome").count(), 1);
+        assert_eq!(xml.matches("etuschlopf_visible_tempo").count(), 1);
+        assert_eq!(xml.matches("<sound tempo=\"126\"/>").count(), 1);
+    }
+
+    #[test]
+    fn sound_only_playback_suppresses_only_the_playback_duplicate() {
+        let mut xml = "<score-partwise><part id=\"P1\"><measure number=\"\
+1\"><attributes></attributes>\n<direction placement=\"above\"><direction-type><words></words></direction-type><staff>1</staff><sound tempo=\"126\"/></direction>\n</measure></part></score-partwise>".to_string();
+        assert_eq!(insert_tempo(&mut xml, 126, "1"), 1);
+        assert_eq!(xml.matches("<sound tempo=\"126\"/>").count(), 1);
+        assert_eq!(xml.matches("etuschlopf_visible_tempo").count(), 1);
+        assert_eq!(xml.matches("<metronome").count(), 0);
+    }
+}
+
+#[cfg(test)]
+#[path = "../../tests/fixtures/synthetic/wav_metronome_construction.rs"]
+mod wav_metronome_construction_tests;
+
+fn insert_dynamic_direction_into_measure(
+    xml: &mut String,
+    measure: &crate::structural_write_authority::StructuralMeasureLocator,
+    dynamic: &str,
+    staff: &str,
+) -> (usize, Option<master_state_identity::AdditiveTransformationReceipt>) {
+    let direction = format!(
+        "      <direction placement=\"below\">\n        <direction-type>\n          <dynamics>\n            <{dynamic}/>\n          </dynamics>\n        </direction-type>\n        <staff>{staff}</staff>\n      </direction>\n"
+    );
+    insert_direction_into_measure(xml, measure, &direction)
+}
+
+
+fn insert_direction_into_measure(
+    xml: &mut String,
+    measure: &crate::structural_write_authority::StructuralMeasureLocator,
+    direction: &str,
+) -> (usize, Option<master_state_identity::AdditiveTransformationReceipt>) {
+    crate::structural_write_authority::insert_direction_into_measure_authorized(xml, measure, direction)
+}
+
+
+/// Final notation polish guard. A wrapper only: it returns the receipts of its
+/// inner owners (#5 note visibility, #6 allowed range removal) in application
+/// order and mints none of its own.
+fn apply_final_notation_polish_guard(xml: &mut String) -> master_state_identity::OwnerReceipts {
+    let mut receipts = master_state_identity::OwnerReceipts::default();
+    receipts.append(hide_exact_duplicate_visible_noteheads(xml).1);
+    receipts.append(hide_redundant_visible_staff_rests(xml).1);
+
+    for _ in 0..4 {
+        let ((removed_slurs, removed_ties), endpoint_receipts) =
+            remove_orphan_slur_and_tie_endpoints(xml);
+        receipts.append(endpoint_receipts);
+        let (rest_only_clefs, rest_only_receipt) = prune_rest_only_staff2_clef_noops(xml);
+        receipts.push_exact(rest_only_receipt);
+        let ((empty_clefs, trailing_clefs, redundant_clefs, advance_clefs), redundant_receipt) =
+            prune_redundant_lower_staff_clefs(xml);
+        receipts.push_exact(redundant_receipt);
+        if removed_slurs
+            + removed_ties
+            + rest_only_clefs
+            + empty_clefs
+            + trailing_clefs
+            + redundant_clefs
+            + advance_clefs
+            == 0
+        {
+            break;
+        }
+    }
+    receipts
+}
+
+pub(crate) struct RenderRow19BlockMint { _private: () }
+
+pub(crate) struct RenderRow54BlockMint { _private: () }
+
+#[cfg(test)]
+#[path = "../../tests/unit/selected_master_notation_journal.rs"]
+mod selected_master_notation_journal_tests;
+
+#[cfg(test)]
+#[path = "../../tests/unit/notation_endpoint_cleanup_adoption.rs"]
+mod notation_endpoint_cleanup_adoption_tests;
+
+#[cfg(test)]
+#[path = "../../tests/unit/preserving_representation_receipt_custody.rs"]
+pub(crate) mod preserving_representation_receipt_custody_tests;
+
+#[cfg(test)]
+#[path = "../../tests/unit/register_tie_boundary_owner.rs"]
+mod register_tie_boundary_owner;
+
+#[cfg(test)]
+mod same_beat_existing_beam_edge_protection_tests {
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/support/same_beat_existing_beam_edge_protection.rs"));
+}
+
+#[cfg(test)]
+mod bridge_frozen_voice_compatibility_tests {
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/support/bridge_frozen_voice_compatibility.rs"));
+}

@@ -1,0 +1,3 @@
+EtuSchlopf v0.10.777:
+Die Launcher-, Take-, Heartbeat- und Logik liegt in src/bin/etuschlopf_launcher.rs.
+Dieses tools-Verzeichnis enthaelt bewusst keine PowerShell-Launcher mehr.

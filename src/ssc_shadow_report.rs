@@ -1,0 +1,50 @@
+//! Pure observation report sink; no return or writer authority.
+pub(crate) fn append_ssc_shadow_observation(
+    _access: &crate::final_report::SscObservationReadAccess,
+    out: &mut String,
+) {
+    out.push_str("\nSSC-SHADOW-PROOF-V2\n===================\nShadowAuthority: observation_only\nPermitEnforcement: active\n");
+    append_ssc_remaining_projection_v2(out);
+}
+fn append_ssc_remaining_projection_v2(out: &mut String) {
+    let baseline = include_str!("build_gate/ssc_exit_dependencies_r1238_v1.tsv");
+    let mut lines = baseline.lines();
+    if lines.next() != Some("# SSC exit dependencies r1238 v1")
+        || lines.next() != Some("id\tparent_status\tanchor_path\tanchor_symbol") {
+        out.push_str("NAProjection: unreadable\n");
+        return;
+    }
+    let mut ids = std::collections::BTreeSet::new();
+    for line in lines {
+        let row = line.split('\t').collect::<Vec<_>>();
+        if row.len() != 4 || row[1] != "OPEN" || !ids.insert(row[0]) {
+            out.push_str("NAProjection: unreadable\n");
+            return;
+        }
+    }
+    if ids.len() != 15 {
+        out.push_str("NAProjection: unreadable\n");
+        return;
+    }
+    let remaining = include_str!("build_gate/ssc_exit_remaining_v1.txt");
+    let mut lines = remaining.lines();
+    if lines.next() != Some("schema=ssc_exit_remaining_v1")
+        || lines.next() != Some("exit_claim=not_closed") {
+        out.push_str("NAProjection: unreadable\n");
+        return;
+    }
+    let mut open = std::collections::BTreeSet::new();
+    for line in lines {
+        let Some(id) = line.strip_prefix("open=") else {
+            out.push_str("NAProjection: unreadable\n");
+            return;
+        };
+        if !ids.contains(id) || !open.insert(id) {
+            out.push_str("NAProjection: unreadable\n");
+            return;
+        }
+    }
+    let retired = ids.difference(&open).copied().collect::<Vec<_>>();
+    let retirement = if retired.is_empty() { "none".to_owned() } else { retired.join(",") };
+    out.push_str(&format!("NAOpenGroups: {}; retirement={}\n", open.len(), retirement));
+}

@@ -1,0 +1,8 @@
+# r1251 SSC Render construction governance
+Parent accepted r1250. ChangeClass KodexOnly. Runtime, population and six OPEN IDs remain unchanged. Full K-R proves current #67 Relocated, but src/master_state_identity/tests.rs::render_boundary_descriptors_preserve_the_accepted_contracts still explicitly requires DEFERRED_RENDER_PREREQUISITE. Synchronize that existing test under a legally admitted class before the separate formal READY/OPEN discharge. No test-path exception is introduced here.
+
+Install a closed, executable #57 lower-staff clef batch fixture. Every source-bound validator remains exact. Future atomic construction requires disjoint move envelopes, constructs from original segments and commits once. Shared insertion targets, nesting and crossing fail before mutation. The accepted legacy writer is preserved as an exact negative-control fixture. External Rust execution verifies both fixtures; in-tree structural tests verify their exact construction and non-authorizing status. This introduces no writer calls from governance into productive runtime.
+
+Freeze the accepted r1250 population baseline independently of the mutable status projection. The child-compiled gate can then read the accepted parent's original status after a later legal READY transition. The preexisting exact transition predicates, immutable non-status columns and rollback rejection remain in effect.
+
+This take changes no productive Rust, writer, selection, receipt mint, score, WAV decision or enforcement. #57 remains OPEN and its population remains deferred. The fixture does not grant runtime admission or #57 READY; a later named population-governance contract must check the complete row57 trial and its existing receipts before discharge. No SSC final-exit claim.

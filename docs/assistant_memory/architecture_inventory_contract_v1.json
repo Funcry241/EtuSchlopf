@@ -1,0 +1,427 @@
+{
+  "schema_version": 1,
+  "artifact": "etuschlopf_architecture_inventory_contract",
+  "contract_version": "AIC-1",
+  "authority": {
+    "class": "advisory_only",
+    "normative": false,
+    "productive_authority": [],
+    "runtime_implementation": "none",
+    "statement": "AIC-1 defines assistant-side architecture inventory extraction, interpretation and rendering only. It grants no MusicMutation, Writer, Repair, Release, Proof, Measurement or other productive authority."
+  },
+  "purpose": {
+    "statement": "A fresh assistant can derive one complete current-state architecture inventory from the embedded physical source snapshot without using an older workbook or chat history.",
+    "core_rule": "The assistant does not decide what exists; it decides what the mechanically extracted existing symbols mean.",
+    "truth_once_rule": "Each truth is produced once at its owning layer and only referenced or derived elsewhere."
+  },
+  "inputs": {
+    "assistant_context": "physical-source/export binding and current artifact references",
+    "physical_source_snapshot": "repository truth and symbol universe source",
+    "canonical_measurement_snapshot_v1": "native runtime measurements when present and bound",
+    "architecture_essence": "advisory reasoning method",
+    "aic": "this inventory and render contract"
+  },
+  "truth_classes": {
+    "native_measurement": "produced by EtuSchlopf and read from CanonicalMeasurementSnapshotV1; never reconstructed by the assistant",
+    "repository_truth": "mechanically extracted from the bound physical source snapshot",
+    "ai_interpretation": "meaning assigned by the assistant after the complete symbol universe exists",
+    "mechanically_derived_inventory": "counts/formulas derived only from the completed inventory table"
+  },
+  "source_scope": {
+    "glob_semantics": "** means zero or more path components; all paths are repository-relative and slash-normalized",
+    "include": [
+      "src/**/*.rs",
+      "tests/**/*.rs",
+      "tools/RUST_KODEX_GATE_CORE/src/**/*.rs",
+      "tools/etuschlopf_watch/src/**/*.rs",
+      "tools/wav_pitch_external_sensor_audit/src/**/*.rs"
+    ],
+    "exclude": [
+      "target/**",
+      "tools/qualified_components/**",
+      "external dependencies",
+      "generated build artifacts",
+      "macro expansions as generated symbols",
+      "anonymous closures"
+    ],
+    "rule": "Only source files physically present in the bound physical source snapshot and matched by include minus exclude belong to AIC-1."
+  },
+  "symbol_extraction": {
+    "side": "assistant",
+    "runtime_product_change_required": false,
+    "extraction_basis": "rust_source_ast",
+    "regex_only_extraction_allowed": false,
+    "included_declarations": [
+      "named free Rust functions",
+      "named inherent impl associated functions and methods",
+      "named trait-impl associated functions and methods",
+      "named trait method declarations/default methods"
+    ],
+    "excluded_declarations": [
+      "anonymous closures",
+      "functions existing only after macro expansion",
+      "foreign function declarations from extern blocks",
+      "generated or dependency source outside source_scope"
+    ],
+    "repository_fields": [
+      "qualified_symbol",
+      "relative_source_path",
+      "start_line",
+      "line_count",
+      "source_visibility",
+      "context"
+    ],
+    "line_rule": "start_line is the 1-based first source line of the declaration; line_count is the inclusive source-span line count. Start line is navigation metadata, not semantic identity.",
+    "visibility_rule": "Preserve explicit Rust visibility as pub, pub(crate), pub(super) or pub(in path); use private when no visibility is declared; trait members use trait_member.",
+    "context_rule": {
+      "Test": "symbol is in tests/** or is syntactically nested in a cfg(test)/test-only source context",
+      "Tool": "symbol is under an included tools/** source root",
+      "Launcher / Build": "symbol belongs to launcher/build entry or orchestration source under src/bin or other explicit launcher/build ownership",
+      "Governance / Gate": "symbol belongs to explicit governance, take, kodex, identity, build-gate or trust-boundary ownership",
+      "Produktiv": "remaining src/** symbol with productive-domain source context",
+      "Gemischt": "source-level evidence makes more than one of the above contexts materially true"
+    }
+  },
+  "row_contract": {
+    "grain": "one mechanically extracted qualified Rust symbol",
+    "one_symbol_one_row": true,
+    "semantic_identity": [
+      "relative_source_path",
+      "qualified_symbol"
+    ],
+    "qualified_symbol_rule": "Use module/impl/trait context sufficient to identify the source declaration, e.g. module::function, Type::method, or Trait for Type::method. If the pair is not unique, extraction fails closed until the source-level context is disambiguated; start_line must not be promoted into semantic identity.",
+    "primary_topic_rule": "Each row has at most one primary Thema-ID/Thema. Additional architectural relationships are described in Relevanzgrund/Gegenbeleg and never create duplicate rows.",
+    "completeness_rule": "Every extracted symbol is represented exactly once and receives one of A, B, C, N or OFFEN.",
+    "default_unreviewed_state": "OFFEN",
+    "inventory_balance": "Gesamt = A + B + C + N + OFFEN"
+  },
+  "relevance_classes": {
+    "A": "Schlüsselstelle: fachlicher Owner, zentrale Entscheidung, kanonischer Writer/Materializer, entscheidender Gate-/Proof-Knoten oder struktureller Hebel.",
+    "B": "Kernmechanismus: direkt am kausalen Mechanismus beteiligt und für Verständnis oder Änderung notwendig, aber nicht die zentrale Schlüsselstelle.",
+    "C": "Themenumfeld: relevanter Caller, Consumer, Adapter, Nachbar, Support- oder Kontextmechanismus.",
+    "N": "Bewusst außerhalb: tatsächlich betrachtet und derzeit nicht Teil eines relevanten Architekturthemas; nicht dauerhaft irrelevant.",
+    "OFFEN": "Noch nicht individuell belastbar bewertet; kein Relevanzurteil."
+  },
+  "controlled_vocabularies": {
+    "Themenwichtigkeit": [
+      "Jetzt",
+      "Danach",
+      "Beobachten",
+      "Bewusst nicht priorisiert"
+    ],
+    "Arbeitsmodus": [
+      "Untersuchen",
+      "Nachweis schließen",
+      "Bewusst beibehalten",
+      "Nicht isoliert ändern",
+      "Beobachten",
+      "Offen"
+    ],
+    "Kontext": [
+      "Produktiv",
+      "Governance / Gate",
+      "Launcher / Build",
+      "Test",
+      "Tool",
+      "Gemischt"
+    ],
+    "Produktive Erreichbarkeit": [
+      "Ja",
+      "Indirekt",
+      "Nein",
+      "Nur Test",
+      "Nur Tool",
+      "Unklar"
+    ],
+    "Authority-Bezug": [
+      "Kanonischer Owner",
+      "Autorisierter Materializer",
+      "Consumer / Projection",
+      "Proof / Readback",
+      "Keine fachliche Authority",
+      "Unklar"
+    ],
+    "Wahrheitslage": [
+      "Einzige Wahrheit",
+      "Abgeleitet",
+      "Parallel-/Doppelwahrheit",
+      "Historischer Rest",
+      "Keine Wahrheitsrolle",
+      "Unklar"
+    ],
+    "Ursache / Symptom": [
+      "Ursache",
+      "Kernmechanismus",
+      "Symptom",
+      "Reparaturfolge",
+      "Schutz / Regression",
+      "Neutral",
+      "Unklar"
+    ],
+    "Beweislage": [
+      "Sehr gut belegt",
+      "Gut belegt",
+      "Plausibel",
+      "Offen"
+    ],
+    "Denkraumgewinn": [
+      "Sehr groß",
+      "Groß",
+      "Merklich",
+      "Gering",
+      "Kein",
+      "Unklar"
+    ]
+  },
+  "columns": [
+    {
+      "position": 1,
+      "id": "topic_importance",
+      "label": "Themenwichtigkeit",
+      "truth_class": "ai_interpretation",
+      "meaning": "Priorität des primären Architekturthemas.",
+      "vocabulary": "Themenwichtigkeit"
+    },
+    {
+      "position": 2,
+      "id": "function_relevance",
+      "label": "Funktionsrelevanz",
+      "truth_class": "ai_interpretation",
+      "meaning": "A/B/C/N/OFFEN-Einordnung des Symbols.",
+      "vocabulary": "relevance_classes"
+    },
+    {
+      "position": 3,
+      "id": "relevance_reason",
+      "label": "Relevanzgrund",
+      "truth_class": "ai_interpretation",
+      "meaning": "Konkreter Grund für die Einordnung und den Themenbezug.",
+      "type": "free_text"
+    },
+    {
+      "position": 4,
+      "id": "work_mode",
+      "label": "Arbeitsmodus",
+      "truth_class": "ai_interpretation",
+      "meaning": "Aktuelle sinnvolle Behandlung des Symbols.",
+      "vocabulary": "Arbeitsmodus"
+    },
+    {
+      "position": 5,
+      "id": "topic_id",
+      "label": "Thema-ID",
+      "truth_class": "ai_interpretation",
+      "meaning": "Workbook-lokale ID des einen Primärthemas; keine historische Authority.",
+      "type": "short_text"
+    },
+    {
+      "position": 6,
+      "id": "topic",
+      "label": "Thema",
+      "truth_class": "ai_interpretation",
+      "meaning": "Name des einen Primärthemas.",
+      "type": "short_text"
+    },
+    {
+      "position": 7,
+      "id": "context",
+      "label": "Kontext",
+      "truth_class": "repository_truth",
+      "meaning": "Mechanisch/source-semantisch bestimmter Produkt-, Gate-, Launcher-, Test- oder Tool-Kontext.",
+      "vocabulary": "Kontext"
+    },
+    {
+      "position": 8,
+      "id": "productive_reachability",
+      "label": "Produktive Erreichbarkeit",
+      "truth_class": "ai_interpretation",
+      "meaning": "Ob und wie das Symbol produktiv erreichbar ist.",
+      "vocabulary": "Produktive Erreichbarkeit"
+    },
+    {
+      "position": 9,
+      "id": "architecture_role",
+      "label": "Architekturrolle",
+      "truth_class": "ai_interpretation",
+      "meaning": "Kurze Rolle des Symbols im Architekturmechanismus.",
+      "type": "short_text"
+    },
+    {
+      "position": 10,
+      "id": "authority_relation",
+      "label": "Authority-Bezug",
+      "truth_class": "ai_interpretation",
+      "meaning": "Beziehung des Symbols zu kanonischer Authority/Materialisierung/Proof.",
+      "vocabulary": "Authority-Bezug"
+    },
+    {
+      "position": 11,
+      "id": "truth_state",
+      "label": "Wahrheitslage",
+      "truth_class": "ai_interpretation",
+      "meaning": "Einordnung, ob das Symbol Wahrheit besitzt, ableitet, dupliziert oder historisch verblieben ist.",
+      "vocabulary": "Wahrheitslage"
+    },
+    {
+      "position": 12,
+      "id": "cause_or_symptom",
+      "label": "Ursache / Symptom",
+      "truth_class": "ai_interpretation",
+      "meaning": "Kausale Rolle im betrachteten Architekturthema.",
+      "vocabulary": "Ursache / Symptom"
+    },
+    {
+      "position": 13,
+      "id": "evidence_state",
+      "label": "Beweislage",
+      "truth_class": "ai_interpretation",
+      "meaning": "Qualität der aktuellen Evidenz für die Interpretation.",
+      "vocabulary": "Beweislage"
+    },
+    {
+      "position": 14,
+      "id": "counterevidence_or_protection",
+      "label": "Gegenbeleg / Schutzgrund",
+      "truth_class": "ai_interpretation",
+      "meaning": "Gegenbelege, Regression-Schutz oder Grund für bewusstes Beibehalten.",
+      "type": "free_text"
+    },
+    {
+      "position": 15,
+      "id": "reasoning_space_gain",
+      "label": "Denkraumgewinn",
+      "truth_class": "ai_interpretation",
+      "meaning": "Erwarteter Gewinn an Architektur-/Denkraumvereinfachung bei Klärung.",
+      "vocabulary": "Denkraumgewinn"
+    },
+    {
+      "position": 16,
+      "id": "open_proof",
+      "label": "Offener Nachweis",
+      "truth_class": "ai_interpretation",
+      "meaning": "Noch fehlender konkreter Beweis oder Klärungspunkt.",
+      "type": "free_text"
+    },
+    {
+      "position": 17,
+      "id": "next_step",
+      "label": "Nächster Schritt",
+      "truth_class": "ai_interpretation",
+      "meaning": "Kleinster nächster Untersuchungsschritt; keine automatische Produktmutation.",
+      "type": "free_text"
+    },
+    {
+      "position": 18,
+      "id": "qualified_symbol",
+      "label": "Funktion / Methode",
+      "truth_class": "repository_truth",
+      "meaning": "Mechanisch extrahiertes qualifiziertes Rust-Symbol.",
+      "type": "text"
+    },
+    {
+      "position": 19,
+      "id": "relative_source_path",
+      "label": "Datei",
+      "truth_class": "repository_truth",
+      "meaning": "Repository-relativer Source-Pfad.",
+      "type": "text"
+    },
+    {
+      "position": 20,
+      "id": "start_line",
+      "label": "Startzeile",
+      "truth_class": "repository_truth",
+      "meaning": "1-basierte erste Source-Zeile der Deklaration; Navigation, nicht Identität.",
+      "type": "integer"
+    },
+    {
+      "position": 21,
+      "id": "line_count",
+      "label": "Zeilenanzahl",
+      "truth_class": "repository_truth",
+      "meaning": "Inklusive Source-Span-Zeilenanzahl der Deklaration.",
+      "type": "integer"
+    },
+    {
+      "position": 22,
+      "id": "source_visibility",
+      "label": "Sichtbarkeit",
+      "truth_class": "repository_truth",
+      "meaning": "Mechanisch gelesene Rust-Sichtbarkeit gemäß symbol_extraction.visibility_rule.",
+      "type": "text"
+    }
+  ],
+  "header_contract": {
+    "native_measurements": {
+      "source": "CanonicalMeasurementSnapshotV1 only",
+      "metric_ids": [
+        "final_findings.blocker.count",
+        "final_findings.warning.count",
+        "final_findings.hint.count",
+        "source.canonical_event.count",
+        "source.selection.retained.count",
+        "source.selection.removed.count"
+      ],
+      "scope_rule": "Display the snapshot's actual bound scope. Never infer a corpus count from project snapshots or logs. A non-measured state must never be rendered as zero.",
+      "producer_rule": "Display Runtime Producer binding separately from Physical Source. Never attribute a runtime measurement to the physical source unless the producer binding proves that identity."
+    },
+    "inventory_counts": {
+      "source": "mechanically_derived_inventory",
+      "labels": [
+        "Gesamt",
+        "A",
+        "B",
+        "C",
+        "Außerhalb",
+        "Offen"
+      ],
+      "rules": {
+        "Gesamt": "number of rows in EtuSchlopfInventur",
+        "A": "count Funktionsrelevanz = A",
+        "B": "count Funktionsrelevanz = B",
+        "C": "count Funktionsrelevanz = C",
+        "Außerhalb": "count Funktionsrelevanz = N",
+        "Offen": "count Funktionsrelevanz = OFFEN"
+      },
+      "invariant": "Gesamt = A + B + C + Außerhalb + Offen"
+    }
+  },
+  "provenance_rules": [
+    "Native measurements are read from their bound measurement snapshot and are never reconstructed from logs or source.",
+    "Repository fields are extracted from the one bound physical source snapshot before AI interpretation starts.",
+    "A/B/C/N/OFFEN and architecture meaning are AI interpretation and are never emitted by EtuSchlopf runtime.",
+    "Inventory header counts are derived from the structured table and are never manually duplicated.",
+    "The workbook is a reproducible analysis artifact, not project memory or product authority."
+  ],
+  "render_profile": {
+    "type": "excel",
+    "workbook_count": 1,
+    "sheet_count": 1,
+    "sheet": "Inventur",
+    "table_name": "EtuSchlopfInventur",
+    "layout": {
+      "row_1": "Titel / Physical Source / Runtime Producer / AIC-Version",
+      "row_2": "Native EtuSchlopf metric labels",
+      "row_3": "Native EtuSchlopf metric values/states",
+      "row_4": "KI-Inventur metric labels",
+      "row_5": "KI-Inventur metric values",
+      "rows_6_7": "free compact provenance/meta area",
+      "table_start_row": 8
+    },
+    "structured_table": true,
+    "autofilter": true,
+    "freeze_header": true,
+    "freeze_panes": "A9",
+    "text_wrap": true,
+    "sensible_column_widths": true,
+    "hidden_second_inventory": false,
+    "second_data_table": false,
+    "information_by_color_only": false
+  },
+  "history": {
+    "current_state_first": true,
+    "older_workbook_required": false,
+    "historical_delta_columns": false,
+    "comparator_in_scope": false
+  }
+}

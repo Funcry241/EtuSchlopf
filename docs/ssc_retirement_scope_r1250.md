@@ -1,0 +1,6 @@
+# r1250 SSC legacy alias and audit carrier closure
+SscNonProductiveOnly: true
+SscExitObligations: master_receipt_legacy_alias_contract,audit_carrier_grandfathering
+RetiredAuthoritySymbols: src/build_gate/destructive_population_freeze_gate.rs::MasterExactReceipt,src/build_gate/destructive_population_freeze_gate.rs::MasterBlockReceipt,src/build_gate/destructive_population_freeze_gate.rs::MasterPreservingReceipt,src/build_gate/destructive_population_freeze_gate.rs::MasterAdditiveReceipt,src/build_gate/destructive_carrier_effect_scan.rs::NON_PRODUCTIVE_REBUILD_PREFIXES
+Parent accepted r1249, KodexOnly. Runtime already uses only neutral transformation receipts. Remove obsolete alias alternatives from Freeze and migrate synthetic signature fixtures to the neutral names. Activate the parent-compiled exact general carrier inventory fixture, including audit directories in ordinary carrier checks. No directory-based exemption remains. Existing exact function-effect rules remain.
+Remove exactly these two OPEN IDs only after child K2 predicates pass. Baseline unchanged; exit_claim=not_closed. No productive runtime, music, writer, selector, receipt mint, population, V2 observer or enforcement change.

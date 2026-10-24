@@ -1,0 +1,4 @@
+schema=ssc_surface_extensions_v1
+# variant=<V3 enum or struct>|<appended variant or named field source>
+variant=SscProofFamily|Edit
+variant=SscProofFamily|Block

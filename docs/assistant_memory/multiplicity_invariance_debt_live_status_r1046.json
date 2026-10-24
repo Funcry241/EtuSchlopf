@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "projection_id": "multiplicity_invariance_debt_live_status_r1046",
+  "historical_baseline": {
+    "inventory_id": "multiplicity_invariance_debt_r1035",
+    "path": "docs/assistant_memory/multiplicity_invariance_debt_inventory_v1.json",
+    "a_total": 12,
+    "b_total": 2,
+    "c_total": 4,
+    "baseline_is_immutable_history": true
+  },
+  "current_a_projection": {
+    "productively_closed": 5,
+    "productively_open": 7,
+    "entries": [
+      {
+        "id": "MI-A01",
+        "status": "retired_productive_authority",
+        "authority_retirement_revision": "r1037",
+        "physical_writer_surface_cleanup_revision": "r1039",
+        "report_verdict_cleanup_revision": "r1040"
+      },
+      {
+        "id": "MI-A02",
+        "status": "retired_productive_authority",
+        "authority_retirement_revision": "r1041",
+        "physical_writer_surface_cleanup_revision": null,
+        "note": "central authorized facade remains compile-live by non-invoking function-value reference; cleanup is a later separately classified transition"
+      },
+      {
+        "id": "MI-A03",
+        "status": "closed_measure_local_multiplicity_invariant",
+        "causal_class_revision": "r1042",
+        "closure_revision": "r1043",
+        "candidate_duplication_regression": true,
+        "same_measure_ambiguity_fail_closed": true
+      },
+      {
+        "id": "MI-A04",
+        "status": "closed_measure_local_multiplicity_invariant",
+        "causal_class_revision": "r1044",
+        "closure_revision": "r1045",
+        "candidate_duplication_regression": true,
+        "same_measure_ambiguity_fail_closed": true
+      },
+      {
+        "id": "MI-A06",
+        "status": "retired_productive_authority",
+        "authority_retirement_revision": "r1046",
+        "physical_writer_surface_cleanup_revision": null,
+        "candidate_detection_retained_read_only": false,
+        "legacy_root_byte_identical_to_parent": true,
+        "productive_invocation_removed": true,
+        "scorewide_selector_implementation_changed": false,
+        "max_actions_implementation_changed": false,
+        "replacement_writer": false,
+        "beam_occurrence_identity_retrofit": false,
+        "note": "r04 preserves the r03 semantic cut but is rebuilt from pristine r1045 after r03 packaging rejection; it leaves the complete MI-A06 root byte-identical to r1045 and removes only its productive invocation from build_behind_bars_rule_check_rest_and_tie_audit; a non-invoking function-value keepalive preserves the private symbol"
+      }
+    ]
+  },
+  "beam_projection_at_parent_r1045": {
+    "same_line": 147,
+    "cross_voice": 144,
+    "occurrence_identical": 90,
+    "occurrence_unresolved": 54,
+    "r1046_claims_reduction": false,
+    "note": "r1046 retires MI-A06 writer reachability only; it does not claim a Beam Occurrence identity closure"
+  },
+  "r1046_candidate_recovery": {
+    "first_candidate_sha256": "0bc8103495f361eb07fa2158dc9a65ac4d0c87e8cc1eceabb165e625c054e43d",
+    "first_candidate_status": "rejected_authority_retirement_not_detected_as_pure_monotone_writer_loss",
+    "r02_sha256": "28539d6cc0343d430e7aa11ad410c263dd07ee2bb31744c934cd1c3e35929650",
+    "r02_status": "rejected_detached_music_writer_root_changed_in_same_capability_change",
+    "r03_parent": "r1045",
+    "r03_strategy": "remove only the productive invocation in the existing owner while keeping the detached MI-A06 writer root byte-identical",
+    "r03_sha256": "9327eb2bdf9bd9794b3affc803e1f9e244ae1ffd19d4a84d314b956636b142a2",
+    "r03_status": "rejected_take_change_control_undeclared_readme_diff",
+    "r04_parent": "r1045",
+    "r04_strategy": "preserve r03 semantic cut while rebuilding from pristine r1045 so README.md remains byte-identical and undeclared diff is eliminated"
+  },
+  "r1046_expected_validation": {
+    "accepted_parent_revision": "r1045",
+    "parent_strict_tests_passed": 1352,
+    "new_regression_tests": 0,
+    "expected_strict_tests_passed": 1352,
+    "required_run_scope": "--take --all",
+    "authority_change": "retirement_only"
+  }
+}

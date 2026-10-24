@@ -1,0 +1,5 @@
+# r1249 SscK2GovernanceRevisionKodex
+Parent accepted r1248; ChangeClass KodexOnly.
+The original 15-ID initial remaining set must be immutable. The old checker included the mutable OPEN file at compile time and compared it with the immutable baseline, so the first legal removal passed parent admission but would fail child build. The checker now embeds the exact original remaining bytes. Baseline equality, subset monotonicity, accepted-parent V2/A4, all-tree K2 predicates and compiled checker protection remain enforced. This is the explicit named K2 governance revision branch, not an implicit runtime checker change.
+Removed OPEN IDs: e031_tenuto, ra5_accent_reserve, macro_hand_role, macro_cross_staff, macro_terminal_shadow, macro_same_pitch_tie, macro_lower_rhythm_lane. All corresponding symbols already disappeared in accepted parents r1246/r1247. No physical retirement occurs here.
+Eight OPEN IDs remain; exit_claim=not_closed. The dynamic A4 report derives retirement from baseline minus OPEN. No V2 proof/observer/source runtime or population change; MusicXML/render XML, PDF pixels and lineage remain unchanged.

@@ -1,0 +1,23 @@
+# WAV dependency closure preparation r1258
+
+Accepted parent r1257; named SscK2GovernanceRevisionKodex; KodexOnly.
+
+The appended, separately pinned WAV completion registry closes the remaining private Salience helper dependency nodes and the row 28 exact batch authority, its descriptor, mint, reexports and synthetic receipt probe. It seals the entire articulation-only additive impl container so that future retirement does not leave an empty impl rejected by RSP. The original WAV registry, neutral and completion registries remain byte-identical. Existing exact erasure verification and obligation binding apply unchanged to these additional nodes.
+
+Shared pitch-only proofs and candidate path validation retain their invariants and surviving callers; only their unused Salience report fields are removed by exact replacements. WAV decoding and WAV feature extraction remain unchanged. Auxiliary receipt and NoteStaff authority nodes whose sole productive caller belongs to Salience are bound as well. The independent local attack-blocker tests retain their helpers under exact cfg(test) replacements. The non-writing WAV audit remains; only writer-exclusive fields are trimmed. The metronome through best.reference_signature.estimated_bpm remains unchanged.
+
+Only the exact accepted r1257 checker bytes, original WAV registry and all registered original contexts qualify for the historical absence of the new registry. Every incoming child must contain the exact appended registry; later trees cannot omit it. Unnamed checker changes remain blocked.
+
+No productive runtime source, population, OPEN, RSP, musical output, observer or enforcement change occurs in this take. A later physical MusicMutation must declare authority_retirement_v1 for wav_pending_28, wav_accent_productive and wav_salience_master_adoptions and consume only the exact admitted nodes. This preparation does not itself execute that product decision.
+
+The closure is evaluated as a combined hypothetical deletion against the real accepted parent, including Rust compilation of all targets and full SSC structural admission. Corpus-specific output remains evaluation evidence, not a new selector or normative test fixture.
+
+The three reference-input replacements supersede the old input nodes only when selecting a complete registered caller loss. Their exact before/after bytes are unchanged, but their symbol binding names the disappearing Salience authority rather than the surviving input container. Appended helper and field nodes likewise bind their exact dependency scopes to the canonical disappearing authority of their obligation. RetiredAuthoritySymbols still requires global absence; no surviving type or shared helper is misdeclared as a retired authority.
+
+The real_main initializer lives in an Audit-classified orchestration owner. MusicMutation admits only a modified existing pipeline_orchestrator_report_compaction.rs under an explicit authority_retirement_contract. Actual admission additionally requires SscExitObligations and the unchanged exact whole-file SSC structural-erasure check. Generic retirement, unbound takes, added files and other Audit paths remain rejected. No path-role classification changes.
+
+Semantic admission distinguishes the complete loss of a registered private owner from tuning a surviving decision. Only removed local CalibrationThreshold and FeedbackIdentityChannel records qualify when their unique parent function is exactly a compiled whole-function deletion node, its obligation and canonical disappearing anchor are declared, and neither owner nor anchor survives in the child inventory. Added/modified thresholds, replacements, stubs, changed parent contexts and surviving readers remain outside this exception. Original policy guards remain in their original owners; the revision-effect summary continues to count the removed records.
+
+The Audit initializer exception verifies the entire report-compaction source file against its single registered replacement, in addition to the exact real_main caller proof. Only the corresponding modified AuditLogic records and strictly narrowing WriterReachability qualify. Surviving roots, no relocation, no new productive authority and all other Audit changes retain their existing guards.
+
+The complete hypothetical MusicMutation admission passes with zero added capabilities and zero unknown deltas. Its 125 exact nodes cover 24 runtime source files. OPEN and population remain unchanged during that physical probe; a later Kodex-only projection can close their already satisfied predicates. No local corpus result is claimed for this preparation; the take is submitted with ./run.cmd --take --all.

@@ -1,0 +1,1825 @@
+diff --git a/src/audit_only/notation_voice_pre_serialization_constraint_closure_audit.rs b/src/audit_only/notation_voice_pre_serialization_constraint_closure_audit.rs
+--- a/src/audit_only/notation_voice_pre_serialization_constraint_closure_audit.rs
++++ b/src/audit_only/notation_voice_pre_serialization_constraint_closure_audit.rs
+@@ -4129,6 +4129,24 @@
+ 
+ #[cfg(test)]
+ mod tests {
++    fn baseline_pre_serialization_visible_occupancy_row() -> PreSerializationVisibleOccupancyRow {
++        PreSerializationVisibleOccupancyRow {
++            measure: 1,
++            staff: 1,
++            represented_onset: 0,
++            represented_duration: 24,
++            visible: true,
++            is_rest: false,
++            is_chord_member: false,
++            pitch_midi: None,
++            source_event_id: None,
++            attack_id: None,
++            atomic_group_id: 1,
++            atomic_group_kind: PreSerializationAtomicGroupKind::VisiblePitched,
++        }
++    }
++
++
+     use super::*;
+ 
+     fn source(
+@@ -4178,14 +4196,11 @@
+             staff: row.staff,
+             represented_onset: row.represented_onset,
+             represented_duration: row.represented_duration,
+-            visible: true,
+-            is_rest: false,
+-            is_chord_member: false,
+             pitch_midi: Some(row.pitch_midi),
+             source_event_id: Some(row.source_event_id),
+             attack_id: Some(row.attack_id),
+             atomic_group_id: row.pitched_ordinal.saturating_add(1),
+-            atomic_group_kind: PreSerializationAtomicGroupKind::VisiblePitched,
++            ..baseline_pre_serialization_visible_occupancy_row()
+         }
+     }
+ 
+@@ -4479,18 +4494,11 @@
+     fn visible_rest_overlap_blocks_without_becoming_hard_different() {
+         let (xml, source_rows, occurrence_rows, mut occupancy_rows) = clean_fixture(["1", "3", "1", "3"]);
+         occupancy_rows.push(PreSerializationVisibleOccupancyRow {
+-            measure: 1,
+-            staff: 1,
+             represented_onset: 24,
+-            represented_duration: 24,
+-            visible: true,
+             is_rest: true,
+-            is_chord_member: false,
+-            pitch_midi: None,
+-            source_event_id: None,
+-            attack_id: None,
+             atomic_group_id: 90,
+             atomic_group_kind: PreSerializationAtomicGroupKind::VisibleRest,
++            ..baseline_pre_serialization_visible_occupancy_row()
+         });
+         let projection = build_notation_voice_pre_serialization_constraint_closure_audit_projection(
+             &xml,
+@@ -4506,18 +4514,9 @@
+         let (xml, source_rows, occurrence_rows, mut occupancy_rows) =
+             clean_fixture(["1", "3", "1", "3"]);
+         occupancy_rows.push(PreSerializationVisibleOccupancyRow {
+-            measure: 1,
+-            staff: 1,
+-            represented_onset: 0,
+-            represented_duration: 24,
+-            visible: true,
+-            is_rest: false,
+             is_chord_member: true,
+             pitch_midi: Some(72),
+-            source_event_id: None,
+-            attack_id: None,
+-            atomic_group_id: 1,
+-            atomic_group_kind: PreSerializationAtomicGroupKind::VisiblePitched,
++            ..baseline_pre_serialization_visible_occupancy_row()
+         });
+         let projection = build_notation_voice_pre_serialization_constraint_closure_audit_projection(
+             &xml,
+@@ -4624,57 +4623,44 @@
+                 measure: 30,
+                 staff: 2,
+                 represented_onset: 288,
+-                represented_duration: 24,
+-                visible: true,
+                 is_rest: true,
+-                is_chord_member: false,
+-                pitch_midi: None,
+-                source_event_id: None,
+-                attack_id: None,
+                 atomic_group_id: visible_rest_group,
+                 atomic_group_kind: visible_rest_kind,
++                ..baseline_pre_serialization_visible_occupancy_row()
+             },
+             PreSerializationVisibleOccupancyRow {
+                 measure: 30,
+                 staff: 2,
+                 represented_onset: 288,
+-                represented_duration: 24,
+                 visible: false,
+                 is_rest: true,
+-                is_chord_member: false,
+-                pitch_midi: None,
+-                source_event_id: None,
+-                attack_id: None,
+                 atomic_group_id: hidden_rest_group,
+                 atomic_group_kind: hidden_rest_kind,
++                ..baseline_pre_serialization_visible_occupancy_row()
+             },
+             PreSerializationVisibleOccupancyRow {
+                 measure: 30,
+                 staff: 2,
+                 represented_onset: 288,
+-                represented_duration: 24,
+-                visible: true,
+-                is_rest: false,
+                 is_chord_member: true,
+                 pitch_midi: Some(66),
+                 source_event_id: Some(901),
+                 attack_id: Some(1901),
+                 atomic_group_id: chord_group,
+                 atomic_group_kind: chord_kind,
++                ..baseline_pre_serialization_visible_occupancy_row()
+             },
+             PreSerializationVisibleOccupancyRow {
+                 measure: 30,
+                 staff: 2,
+                 represented_onset: 288,
+-                represented_duration: 24,
+-                visible: true,
+-                is_rest: false,
+                 is_chord_member: true,
+                 pitch_midi: Some(63),
+                 source_event_id: Some(902),
+                 attack_id: Some(1902),
+                 atomic_group_id: chord_group_2,
+                 atomic_group_kind: chord_kind_2,
++                ..baseline_pre_serialization_visible_occupancy_row()
+             },
+         ];
+         let projection =
+@@ -5103,32 +5089,17 @@
+ 1\"><attributes><divisions>96</divisions></attributes></measure></part></score-partwise>";
+         let occupancy_rows = vec![
+             PreSerializationVisibleOccupancyRow {
+-                measure: 1,
+-                staff: 1,
+-                represented_onset: 0,
+-                represented_duration: 24,
+-                visible: true,
+-                is_rest: false,
+-                is_chord_member: false,
+                 pitch_midi: Some(60),
+                 source_event_id: Some(1),
+                 attack_id: Some(101),
+-                atomic_group_id: 1,
+-                atomic_group_kind: PreSerializationAtomicGroupKind::VisiblePitched,
++                ..baseline_pre_serialization_visible_occupancy_row()
+             },
+             PreSerializationVisibleOccupancyRow {
+-                measure: 1,
+-                staff: 1,
+-                represented_onset: 0,
+-                represented_duration: 24,
+-                visible: true,
+-                is_rest: false,
+                 is_chord_member: true,
+                 pitch_midi: Some(64),
+                 source_event_id: Some(2),
+                 attack_id: Some(102),
+-                atomic_group_id: 1,
+-                atomic_group_kind: PreSerializationAtomicGroupKind::VisiblePitched,
++                ..baseline_pre_serialization_visible_occupancy_row()
+             },
+         ];
+         let audit = build_visible_rhythmic_occupancy_closure_audit(xml, &occupancy_rows, true);
+@@ -5149,46 +5120,25 @@
+ 1\"><attributes><divisions>96</divisions></attributes></measure></part></score-partwise>";
+         let occupancy_rows = vec![
+             PreSerializationVisibleOccupancyRow {
+-                measure: 1,
+-                staff: 1,
+-                represented_onset: 0,
+                 represented_duration: 48,
+-                visible: true,
+                 is_rest: true,
+-                is_chord_member: false,
+-                pitch_midi: None,
+-                source_event_id: None,
+-                attack_id: None,
+-                atomic_group_id: 1,
+                 atomic_group_kind: PreSerializationAtomicGroupKind::VisibleRest,
++                ..baseline_pre_serialization_visible_occupancy_row()
+             },
+             PreSerializationVisibleOccupancyRow {
+-                measure: 1,
+-                staff: 1,
+-                represented_onset: 0,
+                 represented_duration: 48,
+-                visible: true,
+                 is_rest: true,
+-                is_chord_member: false,
+-                pitch_midi: None,
+-                source_event_id: None,
+-                attack_id: None,
+                 atomic_group_id: 2,
+                 atomic_group_kind: PreSerializationAtomicGroupKind::VisibleRest,
++                ..baseline_pre_serialization_visible_occupancy_row()
+             },
+             PreSerializationVisibleOccupancyRow {
+-                measure: 1,
+-                staff: 1,
+                 represented_onset: 24,
+-                represented_duration: 24,
+-                visible: true,
+-                is_rest: false,
+-                is_chord_member: false,
+                 pitch_midi: Some(67),
+                 source_event_id: Some(3),
+                 attack_id: Some(103),
+                 atomic_group_id: 3,
+-                atomic_group_kind: PreSerializationAtomicGroupKind::VisiblePitched,
++                ..baseline_pre_serialization_visible_occupancy_row()
+             },
+         ];
+         let audit = build_visible_rhythmic_occupancy_closure_audit(xml, &occupancy_rows, true);
+diff --git a/src/pipeline_shards/pipeline_orchestrator_final_notation_support.rs b/src/pipeline_shards/pipeline_orchestrator_final_notation_support.rs
+--- a/src/pipeline_shards/pipeline_orchestrator_final_notation_support.rs
++++ b/src/pipeline_shards/pipeline_orchestrator_final_notation_support.rs
+@@ -387,16 +387,12 @@
+     // Ein unabhängiger Post-Write-Verifier prüft anschließend das tatsächlich
+     // erzeugte semantische und klingende Ereignis-Multiset, bevor exakt diese
+     // Kandidatendatei als PDF-Quelle freigegeben werden darf.
+-    let prepared = structural_write_authority::execute_authorized_cursor_neutral_writer_candidate(
+-        &structural_authority_source_xml,
+-        &structural_repair_intents,
+-        &identity_free_detector_module_boundary_audit,
+-        &identity_free_semantic_event_equivalence_audit,
+-        &identity_free_metamorphic_safety_net_audit,
+-        "echter Vor-Operator-Snapshot mit unabhaengiger Token-Autorisierung und Handoff",
+-        "echter Vor-Operator-Snapshot mit tokenpflichtigem cursorneutralem Writer Phase 6C",
+-        historical_checkpoint.as_deref(),
+-    )?;
++    let prepared = structural_write_authority::execute_authorized_cursor_neutral_writer_candidate(&structural_authority_source_xml,
++&structural_repair_intents,
++&identity_free_detector_module_boundary_audit,
++&identity_free_semantic_event_equivalence_audit,
++&identity_free_metamorphic_safety_net_audit,
++crate::structural_write_authority::CursorNeutralExecutionStages { verifier_source_stage: "echter Vor-Operator-Snapshot mit unabhaengiger Token-Autorisierung und Handoff", writer_source_stage: "echter Vor-Operator-Snapshot mit tokenpflichtigem cursorneutralem Writer Phase 6C", historical_checkpoint_58: historical_checkpoint.as_deref() })?;
+     let _receipt_iteration_counts = (prepared.accepted_iterations, prepared.accepted_direction_iterations);
+     let _token_issuance_audit = &prepared.verifier_audit;
+     let structural_write_authority::PreparedCursorNeutralWriterCandidate {
+diff --git a/src/pipeline_shards/pipeline_orchestrator_initial_render_stage.rs b/src/pipeline_shards/pipeline_orchestrator_initial_render_stage.rs
+--- a/src/pipeline_shards/pipeline_orchestrator_initial_render_stage.rs
++++ b/src/pipeline_shards/pipeline_orchestrator_initial_render_stage.rs
+@@ -272,13 +272,13 @@
+                 );
+                 let failed = trial_result.is_err();
+                 let mut receipts = crate::master_state_identity::RenderTransitionReceipts::new();
+-                let planned_post = receipt.and_then(|receipt| {
++                let planned_post = receipt.map(|receipt| {
+                     let (receipt, realized_post) = receipt.split_realized_post_document();
+                     let post = realized_post.expect(
+                         "#57 file-bound BLOCK receipt must carry the realized Render post",
+                     );
+                     receipts.push_block(Some(receipt), &post);
+-                    Some(post)
++                    post
+                 });
+                 structural_write_authority::RenderPathBoundOutcome {
+                     value: trial_result,
+@@ -301,13 +301,12 @@
+             },
+         )
+         .with_context(|| "RenderSovereignty IR4 PrintCleanup konnte nicht adoptiert werden")??;
+-    if render_xml_print_cleanup_one_safe_visual_trial.written {
+-        if let Some(adopted_post) = render_state.document() {
++    if render_xml_print_cleanup_one_safe_visual_trial.written
++        && let Some(adopted_post) = render_state.document() {
+             crate::audit_only::destructive_edit_attribution::observe_selected_state_successor(
+                 &render_xml_print_cleanup_pre,
+                 adopted_post,
+             );
+-        }
+     }
+     crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
+         "InitialRenderAfterPrintCleanupOneSafeVisual",
+diff --git a/src/pipeline_shards/pipeline_orchestrator_metric_final_notation_stage.rs b/src/pipeline_shards/pipeline_orchestrator_metric_final_notation_stage.rs
+--- a/src/pipeline_shards/pipeline_orchestrator_metric_final_notation_stage.rs
++++ b/src/pipeline_shards/pipeline_orchestrator_metric_final_notation_stage.rs
+@@ -869,16 +869,13 @@
+             &baseline_render_xml,
+         )?;
+         let shadow_final_notation_commit =
+-            render::final_pdf_source_commit::finalize_pdf_source_before_renderer_authorized(
+-                &mut *render_state,
+-                &shadow_musicxml,
+-                render::final_pdf_source_commit::FinalPdfSourceDisposition::Shadow,
+-                &render_final_chord_structural_plan,
+-                &render_pdf_source_voice_plan,
+-                &render_pruned_final_chord_omissions,
+-                baseline_occurrence_continuation,
+-                None,
+-            )?;
++            render::final_pdf_source_commit::finalize_pdf_source_before_renderer_authorized(&mut *render_state,
++&shadow_musicxml,
++render::final_pdf_source_commit::FinalPdfSourceDisposition::Shadow,
++render::final_pdf_source_commit::FinalPdfSourcePlans { chord: &render_final_chord_structural_plan, voice: &render_pdf_source_voice_plan },
++&render_pruned_final_chord_omissions,
++baseline_occurrence_continuation,
++None)?;
+         let shadow_final_notation_xml = shadow_final_notation_commit
+             .committed_xml()
+             .with_context(|| {
+@@ -900,10 +897,8 @@
+             &shadow_musicxml, &shadow_directives, &[]);
+         let shadow_layout_post = render::final_pdf_source_commit::discard_shadow_layout_receipt_post(
+             &shadow_final_notation_xml, shadow_layout_receipt)?;
+-        shadow_layout_result.map_err(|error| {
+-            crate::master_state_identity::count_render_closure_failure(crate::master_state_identity::RenderClosureMetric::CandidateCoverageFailures);
+-            error
+-        })?;
++        shadow_layout_result.inspect_err(|_error| {
++            crate::master_state_identity::count_render_closure_failure(crate::master_state_identity::RenderClosureMetric::CandidateCoverageFailures); })?;
+         let shadow_commit =
+             render::final_pdf_source_commit::preserve_pdf_source_commit_through_horizontal_layout_authorized(
+                 &shadow_musicxml,
+@@ -1058,16 +1053,13 @@
+                     "FinalPdfSourceCommit selected Render source lost FinalChord occurrence continuation"
+                 })?;
+             Some(
+-                render::final_pdf_source_commit::finalize_pdf_source_before_renderer_authorized(
+-                    &mut *render_state,
+-                    pdf_source_path,
+-                    render::final_pdf_source_commit::FinalPdfSourceDisposition::Live,
+-                    &render_final_chord_structural_plan,
+-                    &render_pdf_source_voice_plan,
+-                    &render_pruned_final_chord_omissions,
+-                    render_occurrence_continuation,
+-                    primary_beam_voice_partition_plan.as_ref(),
+-                )?,
++                render::final_pdf_source_commit::finalize_pdf_source_before_renderer_authorized(&mut *render_state,
++pdf_source_path,
++render::final_pdf_source_commit::FinalPdfSourceDisposition::Live,
++render::final_pdf_source_commit::FinalPdfSourcePlans { chord: &render_final_chord_structural_plan, voice: &render_pdf_source_voice_plan },
++&render_pruned_final_chord_omissions,
++render_occurrence_continuation,
++primary_beam_voice_partition_plan.as_ref())?,
+             )
+         } else {
+             Some(committed_master_source)
+@@ -1202,10 +1194,8 @@
+                     shadow_musicxml, &shadow_directives, &[]);
+                 let shadow_layout_post = render::final_pdf_source_commit::discard_shadow_layout_receipt_post(
+                     &committed_source_xml, shadow_layout_receipt)?;
+-                shadow_layout_result.map_err(|error| {
+-            crate::master_state_identity::count_render_closure_failure(crate::master_state_identity::RenderClosureMetric::CandidateCoverageFailures);
+-            error
+-        })?;
++                shadow_layout_result.inspect_err(|_error| {
++            crate::master_state_identity::count_render_closure_failure(crate::master_state_identity::RenderClosureMetric::CandidateCoverageFailures); })?;
+ 
+                 let shadow_commit = if render_xml_selected_for_pdf {
+                     let committed_source = final_pdf_source_commit.as_ref().with_context(|| {
+diff --git a/src/pipeline_shards/render_polish_hidden_rest_readability_tail.rs b/src/pipeline_shards/render_polish_hidden_rest_readability_tail.rs
+--- a/src/pipeline_shards/render_polish_hidden_rest_readability_tail.rs
++++ b/src/pipeline_shards/render_polish_hidden_rest_readability_tail.rs
+@@ -1,3 +1,5 @@
++type PreparedRestTieActions = ((String, Vec<BehindBarsRuleCheckRestAndTieAction>, usize), crate::master_state_identity::RenderTransitionReceipts);
++
+ fn render_xml_trial_path_for_source(source: &source::SourcePlan) -> PathBuf {
+     source.render_musicxml_out.clone()
+ }
+@@ -2563,10 +2565,7 @@
+ fn apply_behind_bars_rule_check_lower_staff_rest_compaction(
+     xml: &str,
+     max_actions: usize,
+-) -> anyhow::Result<(
+-    (String, Vec<BehindBarsRuleCheckRestAndTieAction>, usize),
+-    crate::master_state_identity::RenderTransitionReceipts,
+-)> {
++) -> anyhow::Result<PreparedRestTieActions> {
+     let metric_by_scope = render_scope_metric_expected_and_beat_map(xml);
+     let spans = collect_visible_rest_spans_for_repair(xml);
+     let mut by_scope_voice: BTreeMap<(usize, String, String), Vec<RenderXmlRestFragmentSpan>> = BTreeMap::new();
+diff --git a/src/pipeline_shards/strict_staff_visible_lane_rest_rewrite_tail.rs b/src/pipeline_shards/strict_staff_visible_lane_rest_rewrite_tail.rs
+--- a/src/pipeline_shards/strict_staff_visible_lane_rest_rewrite_tail.rs
++++ b/src/pipeline_shards/strict_staff_visible_lane_rest_rewrite_tail.rs
+@@ -1,3 +1,5 @@
++type PreparedInitialRestCoalescing = ((String, usize, usize, String, i32, usize, usize, String, i32, usize, String), crate::master_state_identity::RenderTransitionReceipts);
++
+ fn build_visible_lane_completeness_readback_gate_no_mutation(
+     xml: &str,
+     source_label: &str,
+@@ -304,10 +306,7 @@
+ fn apply_structural_rest_beat_materialization(
+     xml: &str,
+     max_actions: usize,
+-) -> anyhow::Result<(
+-    (String, Vec<BehindBarsRuleCheckRestAndTieAction>, usize),
+-    crate::master_state_identity::RenderTransitionReceipts,
+-)> {
++) -> anyhow::Result<PreparedRestTieActions> {
+     let metric_by_scope = render_scope_metric_expected_and_beat_map(xml);
+     let spans = collect_visible_rest_spans_for_repair(xml);
+     let mut by_beat_lane: BTreeMap<(usize, String, String, i32), Vec<RenderXmlRestFragmentSpan>> = BTreeMap::new();
+@@ -2031,10 +2030,7 @@
+ fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
+     xml: &str,
+     max_coalesces: usize,
+-) -> anyhow::Result<(
+-    (String, usize, usize, String, i32, usize, usize, String, i32, usize, String),
+-    crate::master_state_identity::RenderTransitionReceipts,
+-)> {
++) -> anyhow::Result<PreparedInitialRestCoalescing> {
+     let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+     let mut duration_promotions = Vec::<crate::structural_write_authority::DurationPromotion>::new();
+     let mut occupied = Vec::<(usize, usize)>::new();
+diff --git a/src/render/silent_voice_visible_measure_coverage_render_writer.rs b/src/render/silent_voice_visible_measure_coverage_render_writer.rs
+--- a/src/render/silent_voice_visible_measure_coverage_render_writer.rs
++++ b/src/render/silent_voice_visible_measure_coverage_render_writer.rs
+@@ -54,10 +54,12 @@
+     Rejected,
+ }
+ 
++type FinalRenderSourceFinish = Box<dyn FnOnce(&str) -> FinalRenderSourceSnapshot>;
++
+ pub(super) struct FinalRenderSourceClosure {
+     pub(super) candidate_xml: Option<String>,
+     pub(super) receipts: RenderTransitionReceipts,
+-    pub(super) finish: Option<Box<dyn FnOnce(&str) -> FinalRenderSourceSnapshot>>,
++    pub(super) finish: Option<FinalRenderSourceFinish>,
+ }
+ 
+ #[derive(Debug, Clone)]
+diff --git a/src/structural_write_authority/final_notation_phrase_projection_transaction.rs b/src/structural_write_authority/final_notation_phrase_projection_transaction.rs
+--- a/src/structural_write_authority/final_notation_phrase_projection_transaction.rs
++++ b/src/structural_write_authority/final_notation_phrase_projection_transaction.rs
+@@ -209,8 +209,8 @@
+         if !phrase_notation_intents.is_empty() {
+             let approved = super::phrase_notation_policy::
+                 approve_pending_visual_intents_from_musicxml(&layout_post, phrase_notation_intents)?;
+-            if !approved.is_empty() {
+-                if let Some(plan) = build_phrase_slur_edit_plan(&layout_post, &approved)? {
++            if !approved.is_empty()
++                && let Some(plan) = build_phrase_slur_edit_plan(&layout_post, &approved)? {
+                     let insertions = plan.insertions.iter()
+                         .map(|insertion| (insertion.position, insertion.text.clone()))
+                         .collect::<Vec<_>>();
+@@ -232,7 +232,6 @@
+                         bail!("phrase-slur render candidate is not exactly pair-balanced by number");
+                     }
+                     phrase_write = true;
+-                }
+             }
+         }
+         Ok(PreparedFinalLayoutPhrase {
+@@ -247,10 +246,9 @@
+         ),
+         Err(_) => None,
+     };
+-    if let Ok(prepared) = result.as_ref() {
+-        if source != prepared.final_post() && receipt.is_none() {
++    if let Ok(prepared) = result.as_ref()
++        && source != prepared.final_post() && receipt.is_none() {
+             return (Err(anyhow::anyhow!("E007 changed prepared post without its own PR")), None);
+-        }
+     }
+     (result, receipt)
+ }
+diff --git a/src/structural_write_authority/final_pdf_source_commit.rs b/src/structural_write_authority/final_pdf_source_commit.rs
+--- a/src/structural_write_authority/final_pdf_source_commit.rs
++++ b/src/structural_write_authority/final_pdf_source_commit.rs
+@@ -74,13 +74,16 @@
+     Shadow,
+ }
+ 
++pub(in crate::pipeline) struct FinalPdfSourcePlans<'a> {
++    pub(in crate::pipeline) chord: &'a crate::structural_write_authority::CanonicalFinalChordStructuralPlan,
++    pub(in crate::pipeline) voice: &'a crate::structural_write_authority::FrozenSerializedVoicePlan,
++}
++
+ pub(in crate::pipeline) fn finalize_pdf_source_before_renderer_authorized(
+     render_state: &mut RenderSovereignState,
+     input_musicxml: &Path,
+     disposition: FinalPdfSourceDisposition,
+-    final_chord_structural_plan:
+-        &crate::structural_write_authority::CanonicalFinalChordStructuralPlan,
+-    frozen_serialized_voice_plan: &crate::structural_write_authority::FrozenSerializedVoicePlan,
++    plans: FinalPdfSourcePlans<'_>,
+     render_pruned_final_chord_omissions: &std::collections::BTreeSet<
+         crate::structural_write_authority::RenderPrunedFinalChordOmissionKey,
+     >,
+@@ -88,6 +91,7 @@
+     primary_beam_voice_partition_plan:
+         Option<&crate::structural_write_authority::PrimaryBeamVoicePartitionBoundPlan>,
+ ) -> std::io::Result<FinalPdfSourceCommit> {
++    let FinalPdfSourcePlans { chord: final_chord_structural_plan, voice: frozen_serialized_voice_plan } = plans;
+     if disposition == FinalPdfSourceDisposition::Live
+         && input_musicxml != render_state.artifact_path()
+     {
+@@ -235,10 +239,8 @@
+                 final_chord_structural_plan,
+                 frozen_serialized_voice_plan,
+                 Some(render_pruned_final_chord_omissions),
+-            ).map_err(|error| {
+-                count_render_closure_failure(RenderClosureMetric::CandidateCoverageFailures);
+-                error
+-            })?;
++            ).inspect_err(|_error| {
++                count_render_closure_failure(RenderClosureMetric::CandidateCoverageFailures); })?;
+     if committed_occurrence_continuation.xml() != persisted_layout_xml {
+         count_render_closure_failure(RenderClosureMetric::CandidateCoverageFailures);
+         return Err(std::io::Error::new(
+@@ -256,6 +258,33 @@
+         primary_beam_voice_partition_changed_voice_elements:
+             source_commit.primary_beam_voice_partition_changed_voice_elements,
+     })
++}
++
++// Read-only candidate probes use the same canonical writer authorities and close
++// their receipts locally; they never enter the accepted PDF receipt chain.
++pub(super) fn pdf_exact_probe(
++    pre: &str,
++    replacements: Vec<(usize, usize, String)>,
++) -> Option<String> {
++    let (result, receipt) =
++        crate::structural_write_authority::apply_strict_staff_gap_materialization_authorized(
++            pre,
++            replacements,
++        );
++    let mut probe = crate::master_state_identity::RenderTransitionReceipts::new();
++    probe.push_exact(receipt);
++    probe.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
++    result
++}
++
++#[cfg(test)]
++pub(super) fn primary_clef_probe(xml: &mut String) -> Result<(), &'static str> {
++    let (result, receipt) =
++        crate::structural_write_authority::apply_rustig_clef_course_to_buffer(xml);
++    let mut receipts = crate::master_state_identity::RenderTransitionReceipts::new();
++    receipts.push_preserving(receipt, xml);
++    receipts.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
++    result
+ }
+ 
+ #[cfg(test)]
+@@ -340,29 +369,3 @@
+ 
+ }
+ 
+-// Read-only candidate probes use the same canonical writer authorities and close
+-// their receipts locally; they never enter the accepted PDF receipt chain.
+-pub(super) fn pdf_exact_probe(
+-    pre: &str,
+-    replacements: Vec<(usize, usize, String)>,
+-) -> Option<String> {
+-    let (result, receipt) =
+-        crate::structural_write_authority::apply_strict_staff_gap_materialization_authorized(
+-            pre,
+-            replacements,
+-        );
+-    let mut probe = crate::master_state_identity::RenderTransitionReceipts::new();
+-    probe.push_exact(receipt);
+-    probe.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
+-    result
+-}
+-
+-#[cfg(test)]
+-pub(super) fn primary_clef_probe(xml: &mut String) -> Result<(), &'static str> {
+-    let (result, receipt) =
+-        crate::structural_write_authority::apply_rustig_clef_course_to_buffer(xml);
+-    let mut receipts = crate::master_state_identity::RenderTransitionReceipts::new();
+-    receipts.push_preserving(receipt, xml);
+-    receipts.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
+-    result
+-}
+diff --git a/src/structural_write_authority/master_adoption/final_layout_phrase_materialization.rs b/src/structural_write_authority/master_adoption/final_layout_phrase_materialization.rs
+--- a/src/structural_write_authority/master_adoption/final_layout_phrase_materialization.rs
++++ b/src/structural_write_authority/master_adoption/final_layout_phrase_materialization.rs
+@@ -83,7 +83,7 @@
+ ) -> Result<usize> {
+     let root = state.require_state_root("Release/E007");
+     let ticket = RefCell::<Option<PreparedFinalLayoutPhrase>>::new(None);
+-    let result = state.adopt_path_bound_transition(
++    state.adopt_path_bound_transition(
+         root,
+         RenderSinkKind::FinalLayoutPhraseProjection,
+         |pre| {
+@@ -119,8 +119,7 @@
+             let prepared = ticket.borrow_mut().take().expect("accepted E007 prepared ticket");
+             adopt_prepared_final_layout_phrase_materialization(path, pre, post, prepared)
+         },
+-    )?;
+-    result
++    )?
+ }
+ 
+ #[cfg(test)]
+diff --git a/src/structural_write_authority/master_adoption/render_fragment_draft.rs b/src/structural_write_authority/master_adoption/render_fragment_draft.rs
+--- a/src/structural_write_authority/master_adoption/render_fragment_draft.rs
++++ b/src/structural_write_authority/master_adoption/render_fragment_draft.rs
+@@ -42,11 +42,13 @@
+ /// an already-selected legacy A->C edit list onto B. The returned receipt
+ /// chain proves only A->B. The caller MUST execute the real existing EXACT
+ /// consumer on B and append that receipt before any physical sink.
++type SelectedDurationFragmentPost = (String, Vec<(usize, usize, String)>, RenderTransitionReceipts);
++
+ pub(crate) fn mutate_selected_duration_fragments(
+     source: &str,
+     mut promotions: Vec<DurationPromotion>,
+     final_edits_on_a: Vec<(usize, usize, String)>,
+-) -> anyhow::Result<(String, Vec<(usize, usize, String)>, RenderTransitionReceipts)> {
++) -> anyhow::Result<SelectedDurationFragmentPost> {
+     promotions.sort_by_key(|promotion| promotion.start);
+ 
+     let rebased = (|| -> anyhow::Result<Vec<(usize, usize, String)>> {
+diff --git a/src/structural_write_authority/mod.rs b/src/structural_write_authority/mod.rs
+--- a/src/structural_write_authority/mod.rs
++++ b/src/structural_write_authority/mod.rs
+@@ -603,13 +603,19 @@
+     }
+ }
+ 
++struct CursorIterationHead<'a> {
++    chain: &'a mut crate::master_state_identity::RenderTransitionReceipts,
++    head: &'a mut Option<String>,
++    basis: &'a mut CursorNeutralPreparedBasis,
++}
++
+ fn retain_accepted_cursor_iteration(
+-    chain: &mut crate::master_state_identity::RenderTransitionReceipts,
+-    head: &mut Option<String>, basis: &mut CursorNeutralPreparedBasis,
++    state: CursorIterationHead<'_>,
+     iteration_source: &str, cursor_post: &str, actual_final: &str,
+     historical: Option<&str>, cursor: Option<crate::master_state_identity::ExactTransformationReceipt>,
+     direction: Option<crate::master_state_identity::ExactTransformationReceipt>,
+ ) -> Result<(), &'static str> {
++    let CursorIterationHead { chain, head, basis } = state;
+     let has_direction = direction.is_some();
+     let cursor_binds = cursor.as_ref().map(|r| r.minted_by::<CursorNeutralRenderExactMint>() && r.realize_post_document(iteration_source).as_deref() == Some(cursor_post)).unwrap_or(iteration_source == cursor_post);
+     let direction_binds = direction.as_ref().map(|r| r.minted_by::<DirectionRelocationExactMint>() && historical.is_some_and(|h| r.realize_post_document(h).as_deref() == Some(actual_final))).unwrap_or(cursor_post == actual_final);
+@@ -624,16 +630,21 @@
+     Ok(())
+ }
+ 
++pub(crate) struct CursorNeutralExecutionStages<'a> {
++    pub(crate) verifier_source_stage: &'a str,
++    pub(crate) writer_source_stage: &'a str,
++    pub(crate) historical_checkpoint_58: Option<&'a str>,
++}
++
+ pub(crate) fn execute_authorized_cursor_neutral_writer_candidate(
+     source_xml: &str,
+     repair_intents: &[LocatedStructuralRepairIntent],
+     detector_boundary_audit: &IdentityFreeDetectorModuleBoundaryAudit,
+     semantic_event_audit: &IdentityFreeSemanticEventEquivalenceAudit,
+     metamorphic_audit: &IdentityFreeMetamorphicSafetyNetAudit,
+-    verifier_source_stage: &str,
+-    writer_source_stage: &str,
+-    historical_checkpoint_58: Option<&str>,
++    stages: CursorNeutralExecutionStages<'_>,
+ ) -> Result<PreparedCursorNeutralWriterCandidate, CursorNeutralPreparationError> {
++    let CursorNeutralExecutionStages { verifier_source_stage, writer_source_stage, historical_checkpoint_58 } = stages;
+     let mut receipts = crate::master_state_identity::RenderTransitionReceipts::new();
+     let mut head: Option<String> = None;
+     let mut basis = CursorNeutralPreparedBasis::Source;
+@@ -850,10 +861,13 @@
+                 accepted_iterations += 1;
+                 accepted_direction_iterations += usize::from(direction_relocation_receipt.is_some());
+                 if let Err(message) = retain_accepted_cursor_iteration(
+-                    &mut receipts, &mut head, &mut basis, &current_xml,
+-                    &pre_relocation_candidate_xml, &final_candidate_xml,
+-                    historical_checkpoint_58, cursor_neutral_receipt, direction_relocation_receipt,
+-                ) {
++                    CursorIterationHead { chain: &mut receipts, head: &mut head, basis: &mut basis },
++&current_xml,
++&pre_relocation_candidate_xml,
++&final_candidate_xml,
++historical_checkpoint_58,
++cursor_neutral_receipt,
++direction_relocation_receipt) {
+                     receipts.discard_unadopted(crate::master_state_identity::RenderDiscardReason::LosingCandidate);
+                     crate::master_state_identity::count_render_closure_failure(crate::master_state_identity::RenderClosureMetric::CandidateCoverageFailures);
+                     return Err(CursorNeutralPreparationError { message, accepted_iterations, accepted_direction_iterations });
+@@ -963,7 +977,12 @@
+         semantic: &IdentityFreeSemanticEventEquivalenceAudit, metamorphic: &IdentityFreeMetamorphicSafetyNetAudit,
+         verifier_stage: &str, writer_stage: &str,
+     ) -> (String, IndependentVerifierTokenIssuanceAudit, AuthorizedWriterEntryBoundaryAudit) {
+-        let prepared = super::execute_authorized_cursor_neutral_writer_candidate(source_xml, intents, detector, semantic, metamorphic, verifier_stage, writer_stage, None).expect("cursor fixture");
++        let prepared = super::execute_authorized_cursor_neutral_writer_candidate(source_xml,
++intents,
++detector,
++semantic,
++metamorphic,
++crate::structural_write_authority::CursorNeutralExecutionStages { verifier_source_stage: verifier_stage, writer_source_stage: writer_stage, historical_checkpoint_58: None }).expect("cursor fixture");
+         prepared.receipts.discard_unadopted(crate::master_state_identity::RenderDiscardReason::ReadOnlyProbe);
+         (prepared.candidate_xml, prepared.verifier_audit, prepared.writer_audit)
+     }
+@@ -1081,11 +1100,12 @@
+         // The historical sink has a different note/staff relation, so the
+         // authorized Direction target cannot compose onto that snapshot.
+         let wrong_note_sink = cursor_bound_snapshot.replace("<staff>1</staff>", "<staff>2</staff>");
+-        let prepared = super::execute_authorized_cursor_neutral_writer_candidate(
+-            &cursor_bound_snapshot, &intents, &detector_boundary, &semantic,
+-            &metamorphic, "writer-fixture", "writer-fixture",
+-            Some(&wrong_note_sink),
+-        ).expect("wrong-note sink fixture");
++        let prepared = super::execute_authorized_cursor_neutral_writer_candidate(&cursor_bound_snapshot,
++&intents,
++&detector_boundary,
++&semantic,
++&metamorphic,
++crate::structural_write_authority::CursorNeutralExecutionStages { verifier_source_stage: "writer-fixture", writer_source_stage: "writer-fixture", historical_checkpoint_58: Some(&wrong_note_sink) }).expect("wrong-note sink fixture");
+         prepared.receipts.discard_unadopted(
+             crate::master_state_identity::RenderDiscardReason::ReadOnlyProbe);
+         let (candidate, verifier, writer) =
+@@ -1444,10 +1464,12 @@
+         &intents, views.len(), "b4-fixture");
+     let metamorphic = audit_identity_free_metamorphic_safety_net(
+         source, 96, "b4-fixture");
+-    execute_authorized_cursor_neutral_writer_candidate(
+-        source, &intents, &detector, &semantic, &metamorphic,
+-        "b4-fixture", "b4-fixture", historical,
+-    )
++    execute_authorized_cursor_neutral_writer_candidate(source,
++&intents,
++&detector,
++&semantic,
++&metamorphic,
++crate::structural_write_authority::CursorNeutralExecutionStages { verifier_source_stage: "b4-fixture", writer_source_stage: "b4-fixture", historical_checkpoint_58: historical })
+ }
+ 
+ // Unabhängige spezifische Byteoracle für den bestehenden Zwei-Measure-
+diff --git a/src/structural_write_authority/orchestrator_artifact_sink_authority.rs b/src/structural_write_authority/orchestrator_artifact_sink_authority.rs
+--- a/src/structural_write_authority/orchestrator_artifact_sink_authority.rs
++++ b/src/structural_write_authority/orchestrator_artifact_sink_authority.rs
+@@ -107,7 +107,7 @@
+ 
+ pub fn validate_terminal_render_temporal_postcondition_authorized(path: &Path, sovereign_xml: &str) -> io::Result<()> {
+     if !path.file_name().and_then(|v| v.to_str()).is_some_and(|v| v.ends_with(".render.musicxml")) { return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid render artifact path")); }
+-    let actual = std::fs::read_to_string(path).map_err(|error| { crate::master_state_identity::count_render_closure_failure(crate::master_state_identity::RenderClosureMetric::ArtifactReadbackMismatch); error })?;
++    let actual = std::fs::read_to_string(path).inspect_err(|_error| { crate::master_state_identity::count_render_closure_failure(crate::master_state_identity::RenderClosureMetric::ArtifactReadbackMismatch); })?;
+     if actual != sovereign_xml { crate::master_state_identity::count_render_closure_failure(crate::master_state_identity::RenderClosureMetric::ArtifactReadbackMismatch); return Err(io::Error::new(io::ErrorKind::InvalidData, "terminal artifact differs from sovereign bytes")); }
+     validate_complete_musicxml(sovereign_xml)?;
+     validate_serialized_temporal_materialization(sovereign_xml)
+diff --git a/src/structural_write_authority/serialization_plan.rs b/src/structural_write_authority/serialization_plan.rs
+--- a/src/structural_write_authority/serialization_plan.rs
++++ b/src/structural_write_authority/serialization_plan.rs
+@@ -8623,6 +8623,90 @@
+ 
+ #[cfg(test)]
+ mod tests {
++    macro_rules! fixture_xml {
++        ($($part:expr),+ $(,)?) => { &[$($part),+].concat() };
++    }
++
++    const FIXTURE_NOTE_070FEEE235: &str = r#"      <note>
++        <rest/>
++        <duration>4</duration>
++        <voice>1</voice>
++        <type>quarter</type>
++        <staff>1</staff>
++      </note>"#;
++    const FIXTURE_NOTE_1C6F0511B4: &str = r#"      <note print-object="no">
++        <chord/>
++        <pitch><step>C</step><octave>4</octave></pitch>
++        <duration>8</duration>
++        <voice>1</voice>
++        <type>half</type>
++        <staff>1</staff>
++      </note>"#;
++    const FIXTURE_NOTE_395A683D76: &str = r#"      <note>
++        <chord/>
++        <pitch><step>E</step><octave>4</octave></pitch>
++        <duration>8</duration>
++        <voice>1</voice>
++        <type>half</type>
++        <staff>1</staff>
++      </note>"#;
++    const FIXTURE_NOTE_631875EE3D: &str = r#"      <note>
++        <rest/>
++        <duration>8</duration>
++        <voice>1</voice>
++        <type>half</type>
++        <staff>1</staff>
++      </note>"#;
++    const FIXTURE_NOTE_64DC3197A6: &str = r#"      <note>
++        <pitch><step>C</step><octave>4</octave></pitch>
++        <duration>4</duration>
++        <voice>1</voice>
++        <type>quarter</type>
++        <staff>1</staff>
++      </note>"#;
++    const FIXTURE_NOTE_D42565F8C7: &str = r#"      <note>
++        <chord/>
++        <pitch><step>E</step><octave>4</octave></pitch>
++        <duration>4</duration>
++        <voice>1</voice>
++        <type>quarter</type>
++        <staff>1</staff>
++      </note>"#;
++    const FIXTURE_NOTE_F714A49732: &str = r#"      <note>
++        <rest/>
++        <duration>12</duration>
++        <voice>1</voice>
++        <type>half</type><dot/>
++        <staff>1</staff>
++      </note>"#;
++    const FIXTURE_NOTE_F9745462DA: &str = r#"      <note>
++        <pitch><step>E</step><octave>4</octave></pitch>
++        <duration>4</duration>
++        <voice>1</voice>
++        <type>quarter</type>
++        <staff>1</staff>
++      </note>"#;
++
++
++    fn baseline_final_chord_canonical_source_locator() -> FinalChordCanonicalSourceLocator {
++        FinalChordCanonicalSourceLocator {
++            fragment_id: 1,
++            source_event_id: 1,
++            attack_id: 1,
++            measure: 1,
++            raw_note_index: 0,
++            onset: 0,
++            duration: 4,
++            pitch_identity: "midi:64".to_string(),
++            pitch_midi: 64,
++            staff: "1".to_string(),
++            chord_syntax: false,
++            tie_start: false,
++            tie_stop: false,
++        }
++    }
++
++
+     use super::*;
+     use crate::structural_write_authority::{
+         adapt_structural_snapshot_read_only, detect_structural_repair_intents_read_only,
+@@ -9033,16 +9117,8 @@
+             fragment_id: 7,
+             source_event_id: 70,
+             attack_id: 70,
+-            measure: 1,
+-            raw_note_index: 0,
+-            onset: 0,
+-            duration: 4,
+-            pitch_identity: "midi:64".to_string(),
+-            pitch_midi: 64,
+-            staff: "1".to_string(),
+             chord_syntax: true,
+-            tie_start: false,
+-            tie_stop: false,
++            ..baseline_final_chord_canonical_source_locator()
+         };
+         let owner = FinalChordTransactionOutputOccurrenceWitness {
+             fragment_id: 7,
+@@ -9161,21 +9237,8 @@
+     #[test]
+     fn p2_render_occurrence_witness_binds_stale_ambiguous_physical_locator_without_inversion() {
+         let render_xml = final_chord_score(
+-            r#"      <note>
+-        <pitch><step>C</step><octave>4</octave></pitch>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
+-      <note>
+-        <chord/>
+-        <pitch><step>E</step><octave>4</octave></pitch>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
++            fixture_xml!(FIXTURE_NOTE_64DC3197A6, r#"
++"#, FIXTURE_NOTE_D42565F8C7, r#"
+       <note>
+         <chord/>
+         <pitch><step>G</step><octave>4</octave></pitch>
+@@ -9184,21 +9247,8 @@
+         <type>quarter</type>
+         <staff>1</staff>
+       </note>
+-      <note>
+-        <chord/>
+-        <pitch><step>E</step><octave>4</octave></pitch>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
+-      <note>
+-        <rest/>
+-        <duration>8</duration>
+-        <voice>1</voice>
+-        <type>half</type>
+-        <staff>1</staff>
+-      </note>
++"#, FIXTURE_NOTE_D42565F8C7, r#"
++"#, FIXTURE_NOTE_631875EE3D, r#"
+       <note>
+         <pitch><step>D</step><octave>3</octave></pitch>
+         <duration>4</duration>
+@@ -9206,83 +9256,51 @@
+         <type>eighth</type>
+         <staff>2</staff>
+         <beam number="1">begin</beam>
+-      </note>"#,
++      </note>"#),
+         );
+         let locators = vec![
+             FinalChordCanonicalSourceLocator {
+-                fragment_id: 1,
+-                source_event_id: 1,
+-                attack_id: 1,
+-                measure: 1,
+-                raw_note_index: 0,
+-                onset: 0,
+-                duration: 4,
+                 pitch_identity: "midi:60".to_string(),
+                 pitch_midi: 60,
+-                staff: "1".to_string(),
+-                chord_syntax: false,
+-                tie_start: false,
+-                tie_stop: false,
++                ..baseline_final_chord_canonical_source_locator()
+             },
+             FinalChordCanonicalSourceLocator {
+                 fragment_id: 2,
+                 source_event_id: 2,
+                 attack_id: 2,
+-                measure: 1,
+                 raw_note_index: 1,
+-                onset: 0,
+-                duration: 4,
+-                pitch_identity: "midi:64".to_string(),
+-                pitch_midi: 64,
+-                staff: "1".to_string(),
+                 chord_syntax: true,
+-                tie_start: false,
+-                tie_stop: false,
++                ..baseline_final_chord_canonical_source_locator()
+             },
+             FinalChordCanonicalSourceLocator {
+                 fragment_id: 3,
+                 source_event_id: 3,
+                 attack_id: 3,
+-                measure: 1,
+                 raw_note_index: 2,
+                 onset: 4,
+-                duration: 4,
+-                pitch_identity: "midi:64".to_string(),
+-                pitch_midi: 64,
+-                staff: "1".to_string(),
+                 chord_syntax: true,
+-                tie_start: false,
+-                tie_stop: false,
++                ..baseline_final_chord_canonical_source_locator()
+             },
+             FinalChordCanonicalSourceLocator {
+                 fragment_id: 4,
+                 source_event_id: 4,
+                 attack_id: 4,
+-                measure: 1,
+                 raw_note_index: 2,
+-                onset: 0,
+-                duration: 4,
+                 pitch_identity: "midi:67".to_string(),
+                 pitch_midi: 67,
+-                staff: "1".to_string(),
+                 chord_syntax: true,
+-                tie_start: false,
+-                tie_stop: false,
++                ..baseline_final_chord_canonical_source_locator()
+             },
+             FinalChordCanonicalSourceLocator {
+                 fragment_id: 5,
+                 source_event_id: 5,
+                 attack_id: 5,
+-                measure: 1,
+                 raw_note_index: 5,
+                 onset: 12,
+-                duration: 4,
+                 pitch_identity: "midi:50".to_string(),
+                 pitch_midi: 50,
+                 staff: "2".to_string(),
+-                chord_syntax: false,
+-                tie_start: false,
+-                tie_stop: false,
++                ..baseline_final_chord_canonical_source_locator()
+             },
+         ];
+         let base = CanonicalFinalChordStructuralPlan {
+@@ -9504,34 +9522,19 @@
+         let rest_end = rest_start + target_rest.len();
+ 
+         let anchor_locator = FinalChordCanonicalSourceLocator {
+-            fragment_id: 1,
+-            source_event_id: 1,
+-            attack_id: 1,
+-            measure: 1,
+-            raw_note_index: 0,
+-            onset: 0,
+             duration: 24,
+             pitch_identity: "midi:60".to_string(),
+             pitch_midi: 60,
+-            staff: "1".to_string(),
+-            chord_syntax: false,
+-            tie_start: false,
+-            tie_stop: false,
++            ..baseline_final_chord_canonical_source_locator()
+         };
+         let member_locator = FinalChordCanonicalSourceLocator {
+             fragment_id: 2,
+             source_event_id: 2,
+             attack_id: 2,
+-            measure: 1,
+             raw_note_index: 1,
+-            onset: 0,
+             duration: 24,
+-            pitch_identity: "midi:64".to_string(),
+-            pitch_midi: 64,
+-            staff: "1".to_string(),
+             chord_syntax: true,
+-            tie_start: false,
+-            tie_stop: false,
++            ..baseline_final_chord_canonical_source_locator()
+         };
+         let canonical = CanonicalFinalChordStructuralPlan {
+             authority_bound: true,
+@@ -9690,7 +9693,7 @@
+     #[test]
+     fn transaction_output_alpha_carries_tied_one_to_many_occurrences() {
+         let render_xml = final_chord_score(
+-            r#"      <note>
++            fixture_xml!(r#"      <note>
+         <pitch><step>C</step><octave>4</octave></pitch>
+         <duration>4</duration>
+         <tie type="start"/>
+@@ -9708,66 +9711,35 @@
+         <staff>1</staff>
+         <notations><tied type="stop"/></notations>
+       </note>
+-      <note>
+-        <chord/>
+-        <pitch><step>E</step><octave>4</octave></pitch>
+-        <duration>8</duration>
+-        <voice>1</voice>
+-        <type>half</type>
+-        <staff>1</staff>
+-      </note>
+-      <note>
+-        <rest/>
+-        <duration>8</duration>
+-        <voice>1</voice>
+-        <type>half</type>
+-        <staff>1</staff>
+-      </note>"#,
++"#, FIXTURE_NOTE_395A683D76, r#"
++"#, FIXTURE_NOTE_631875EE3D),
+         );
+         let first_anchor = FinalChordCanonicalSourceLocator {
+-            fragment_id: 1,
+-            source_event_id: 1,
+-            attack_id: 1,
+-            measure: 1,
+-            raw_note_index: 0,
+-            onset: 0,
+-            duration: 4,
+             pitch_identity: "midi:60".to_string(),
+             pitch_midi: 60,
+-            staff: "1".to_string(),
+-            chord_syntax: false,
+             tie_start: true,
+-            tie_stop: false,
++            ..baseline_final_chord_canonical_source_locator()
+         };
+         let second_anchor = FinalChordCanonicalSourceLocator {
+             fragment_id: 3,
+             source_event_id: 3,
+             attack_id: 3,
+-            measure: 1,
+             raw_note_index: 1,
+             onset: 4,
+-            duration: 4,
+             pitch_identity: "midi:60".to_string(),
+             pitch_midi: 60,
+-            staff: "1".to_string(),
+-            chord_syntax: false,
+-            tie_start: false,
+             tie_stop: true,
++            ..baseline_final_chord_canonical_source_locator()
+         };
+         let tied_source = FinalChordCanonicalSourceLocator {
+             fragment_id: 2,
+             source_event_id: 2,
+             attack_id: 2,
+-            measure: 1,
+             raw_note_index: 2,
+             onset: 4,
+             duration: 8,
+-            pitch_identity: "midi:64".to_string(),
+-            pitch_midi: 64,
+-            staff: "1".to_string(),
+             chord_syntax: true,
+-            tie_start: false,
+-            tie_stop: false,
++            ..baseline_final_chord_canonical_source_locator()
+         };
+         let canonical = CanonicalFinalChordStructuralPlan {
+             authority_bound: true,
+@@ -9851,58 +9823,22 @@
+     #[test]
+     fn transaction_output_alpha_carries_auxiliary_lane_occurrence_across_label_length_change() {
+         let render_xml = final_chord_score(
+-            r#"      <note>
+-        <pitch><step>C</step><octave>4</octave></pitch>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
+-      <note>
+-        <chord/>
+-        <pitch><step>E</step><octave>4</octave></pitch>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
+-      <note>
+-        <rest/>
+-        <duration>12</duration>
+-        <voice>1</voice>
+-        <type>half</type><dot/>
+-        <staff>1</staff>
+-      </note>"#,
++            fixture_xml!(FIXTURE_NOTE_64DC3197A6, r#"
++"#, FIXTURE_NOTE_D42565F8C7, r#"
++"#, FIXTURE_NOTE_F714A49732),
+         );
+         let anchor = FinalChordCanonicalSourceLocator {
+-            fragment_id: 1,
+-            source_event_id: 1,
+-            attack_id: 1,
+-            measure: 1,
+-            raw_note_index: 0,
+-            onset: 0,
+-            duration: 4,
+             pitch_identity: "midi:60".to_string(),
+             pitch_midi: 60,
+-            staff: "1".to_string(),
+-            chord_syntax: false,
+-            tie_start: false,
+-            tie_stop: false,
++            ..baseline_final_chord_canonical_source_locator()
+         };
+         let auxiliary = FinalChordCanonicalSourceLocator {
+             fragment_id: 2,
+             source_event_id: 2,
+             attack_id: 2,
+-            measure: 1,
+             raw_note_index: 1,
+-            onset: 0,
+-            duration: 4,
+-            pitch_identity: "midi:64".to_string(),
+-            pitch_midi: 64,
+-            staff: "1".to_string(),
+             chord_syntax: true,
+-            tie_start: false,
+-            tie_stop: false,
++            ..baseline_final_chord_canonical_source_locator()
+         };
+         let canonical = CanonicalFinalChordStructuralPlan {
+             authority_bound: true,
+@@ -9975,73 +9911,30 @@
+         std::collections::BTreeSet<RenderPrunedFinalChordOmissionKey>,
+     ) {
+         let render_xml = final_chord_score(
+-            r#"      <note>
+-        <pitch><step>C</step><octave>4</octave></pitch>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
+-      <note>
+-        <chord/>
+-        <pitch><step>E</step><octave>4</octave></pitch>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
+-      <note>
+-        <rest/>
+-        <duration>12</duration>
+-        <voice>1</voice>
+-        <type>half</type><dot/>
+-        <staff>1</staff>
+-      </note>"#,
++            fixture_xml!(FIXTURE_NOTE_64DC3197A6, r#"
++"#, FIXTURE_NOTE_D42565F8C7, r#"
++"#, FIXTURE_NOTE_F714A49732),
+         );
+         let anchor = FinalChordCanonicalSourceLocator {
+-            fragment_id: 1,
+-            source_event_id: 1,
+-            attack_id: 1,
+-            measure: 1,
+-            raw_note_index: 0,
+-            onset: 0,
+-            duration: 4,
+             pitch_identity: "midi:60".to_string(),
+             pitch_midi: 60,
+-            staff: "1".to_string(),
+-            chord_syntax: false,
+-            tie_start: false,
+-            tie_stop: false,
++            ..baseline_final_chord_canonical_source_locator()
+         };
+         let chord = FinalChordCanonicalSourceLocator {
+             fragment_id: 2,
+             source_event_id: 2,
+             attack_id: 2,
+-            measure: 1,
+             raw_note_index: 1,
+-            onset: 0,
+-            duration: 4,
+-            pitch_identity: "midi:64".to_string(),
+-            pitch_midi: 64,
+-            staff: "1".to_string(),
+             chord_syntax: true,
+-            tie_start: false,
+-            tie_stop: false,
++            ..baseline_final_chord_canonical_source_locator()
+         };
+         let survivor_chord = FinalChordCanonicalSourceLocator {
+             fragment_id: 3,
+             source_event_id: 3,
+             attack_id: 3,
+-            measure: 1,
+             raw_note_index: 2,
+-            onset: 0,
+-            duration: 4,
+-            pitch_identity: "midi:64".to_string(),
+-            pitch_midi: 64,
+-            staff: "1".to_string(),
+             chord_syntax: true,
+-            tie_start: false,
+-            tie_stop: false,
++            ..baseline_final_chord_canonical_source_locator()
+         };
+         let canonical = CanonicalFinalChordStructuralPlan {
+             authority_bound: true,
+@@ -10296,49 +10189,29 @@
+         ));
+ 
+         let first_anchor = FinalChordCanonicalSourceLocator {
+-            fragment_id: 1,
+-            source_event_id: 1,
+-            attack_id: 1,
+-            measure: 1,
+-            raw_note_index: 0,
+-            onset: 0,
+-            duration: 4,
+             pitch_identity: "midi:60".to_string(),
+             pitch_midi: 60,
+-            staff: "1".to_string(),
+-            chord_syntax: false,
+-            tie_start: false,
+-            tie_stop: false,
++            ..baseline_final_chord_canonical_source_locator()
+         };
+         let tied_source = FinalChordCanonicalSourceLocator {
+             fragment_id: 2,
+             source_event_id: 2,
+             attack_id: 2,
+-            measure: 1,
+             raw_note_index: 2,
+             onset: 4,
+             duration: 8,
+-            pitch_identity: "midi:64".to_string(),
+-            pitch_midi: 64,
+-            staff: "1".to_string(),
+             chord_syntax: true,
+-            tie_start: false,
+-            tie_stop: false,
++            ..baseline_final_chord_canonical_source_locator()
+         };
+         let second_anchor = FinalChordCanonicalSourceLocator {
+             fragment_id: 3,
+             source_event_id: 3,
+             attack_id: 3,
+-            measure: 1,
+             raw_note_index: 1,
+             onset: 4,
+-            duration: 4,
+             pitch_identity: "midi:62".to_string(),
+             pitch_midi: 62,
+-            staff: "1".to_string(),
+-            chord_syntax: false,
+-            tie_start: false,
+-            tie_stop: false,
++            ..baseline_final_chord_canonical_source_locator()
+         };
+         let fragments = vec![
+             FinalChordCanonicalFragmentTarget {
+@@ -10481,21 +10354,8 @@
+     #[test]
+     fn final_chord_auxiliary_multi_member_group_is_atomic_and_simultaneous() {
+         let xml = final_chord_score(
+-            r#"      <note>
+-        <rest/>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
+-      <note print-object="no">
+-        <chord/>
+-        <pitch><step>C</step><octave>4</octave></pitch>
+-        <duration>8</duration>
+-        <voice>1</voice>
+-        <type>half</type>
+-        <staff>1</staff>
+-      </note>
++            fixture_xml!(FIXTURE_NOTE_070FEEE235, r#"
++"#, FIXTURE_NOTE_1C6F0511B4, r#"
+       <note print-object="no">
+         <chord/>
+         <pitch><step>E</step><octave>4</octave></pitch>
+@@ -10504,13 +10364,7 @@
+         <type>half</type>
+         <staff>1</staff>
+       </note>
+-      <note>
+-        <rest/>
+-        <duration>12</duration>
+-        <voice>1</voice>
+-        <type>half</type><dot/>
+-        <staff>1</staff>
+-      </note>"#,
++"#, FIXTURE_NOTE_F714A49732),
+         );
+         let plan = plan_final_chord_encoding(&xml).expect("plan");
+         let out = project_final_chord_encoding_plan(&xml, &plan).0.expect("materialize");
+@@ -10524,14 +10378,8 @@
+     #[test]
+     fn final_chord_auxiliary_six_member_group_advances_cursor_once() {
+         let mut body = String::from(
+-            r#"      <note>
+-        <rest/>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
+-"#,
++            fixture_xml!(FIXTURE_NOTE_070FEEE235, r#"
++"#),
+         );
+         for step in ["C", "D", "E", "F", "G", "A"] {
+             body.push_str(&format!(
+@@ -10547,13 +10395,7 @@
+             ));
+         }
+         body.push_str(
+-            r#"      <note>
+-        <rest/>
+-        <duration>12</duration>
+-        <voice>1</voice>
+-        <type>half</type><dot/>
+-        <staff>1</staff>
+-      </note>"#,
++            fixture_xml!(FIXTURE_NOTE_F714A49732),
+         );
+         let xml = final_chord_score(&body);
+         let plan = plan_final_chord_encoding(&xml).expect("plan");
+@@ -10570,28 +10412,9 @@
+     #[test]
+     fn final_chord_rejected_auxiliary_lane_keeps_original_members() {
+         let xml = final_chord_score(
+-            r#"      <note>
+-        <rest/>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
+-      <note print-object="no">
+-        <chord/>
+-        <pitch><step>C</step><octave>4</octave></pitch>
+-        <duration>8</duration>
+-        <voice>1</voice>
+-        <type>half</type>
+-        <staff>1</staff>
+-      </note>
+-      <note>
+-        <rest/>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
++            fixture_xml!(FIXTURE_NOTE_070FEEE235, r#"
++"#, FIXTURE_NOTE_1C6F0511B4, r#"
++"#, FIXTURE_NOTE_070FEEE235, r#"
+       <note print-object="no">
+         <chord/>
+         <pitch><step>D</step><octave>4</octave></pitch>
+@@ -10600,13 +10423,7 @@
+         <type>half</type>
+         <staff>1</staff>
+       </note>
+-      <note>
+-        <rest/>
+-        <duration>8</duration>
+-        <voice>1</voice>
+-        <type>half</type>
+-        <staff>1</staff>
+-      </note>"#,
++"#, FIXTURE_NOTE_631875EE3D),
+         );
+         let plan = plan_final_chord_encoding(&xml).expect("plan");
+         assert!(plan.edits.is_empty());
+@@ -10619,21 +10436,8 @@
+     #[test]
+     fn final_chord_visible_long_member_uses_existing_auxiliary_lane() {
+         let xml = final_chord_score(
+-            r#"      <note>
+-        <pitch><step>C</step><octave>4</octave></pitch>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
+-      <note>
+-        <chord/>
+-        <pitch><step>E</step><octave>4</octave></pitch>
+-        <duration>8</duration>
+-        <voice>1</voice>
+-        <type>half</type>
+-        <staff>1</staff>
+-      </note>
++            fixture_xml!(FIXTURE_NOTE_64DC3197A6, r#"
++"#, FIXTURE_NOTE_395A683D76, r#"
+       <note>
+         <pitch><step>D</step><octave>4</octave></pitch>
+         <duration>4</duration>
+@@ -10641,13 +10445,7 @@
+         <type>quarter</type>
+         <staff>1</staff>
+       </note>
+-      <note>
+-        <rest/>
+-        <duration>8</duration>
+-        <voice>1</voice>
+-        <type>half</type>
+-        <staff>1</staff>
+-      </note>"#,
++"#, FIXTURE_NOTE_631875EE3D),
+         );
+         let plan = plan_final_chord_encoding(&xml).expect("plan");
+         let projection = project_final_chord_encoding_plan_with_provenance(&xml, &plan)
+@@ -10673,13 +10471,7 @@
+     #[test]
+     fn final_chord_long_member_is_bounded_by_next_same_pitch_reattack() {
+         let xml = final_chord_score(
+-            r#"      <note>
+-        <pitch><step>C</step><octave>4</octave></pitch>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
++            fixture_xml!(FIXTURE_NOTE_64DC3197A6, r#"
+       <note print-object="no" print-spacing="no">
+         <chord/>
+         <pitch><step>E</step><octave>4</octave></pitch>
+@@ -10688,20 +10480,8 @@
+         <type>half</type>
+         <staff>1</staff>
+       </note>
+-      <note>
+-        <pitch><step>E</step><octave>4</octave></pitch>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
+-      <note>
+-        <rest/>
+-        <duration>8</duration>
+-        <voice>1</voice>
+-        <type>half</type>
+-        <staff>1</staff>
+-      </note>"#,
++"#, FIXTURE_NOTE_F9745462DA, r#"
++"#, FIXTURE_NOTE_631875EE3D),
+         );
+         let plan = plan_final_chord_encoding(&xml).expect("plan");
+         let out = project_final_chord_encoding_plan(&xml, &plan).0.expect("materialize");
+@@ -10717,21 +10497,8 @@
+     #[test]
+     fn final_chord_same_anchor_same_pitch_peers_share_existing_auxiliary_lane() {
+         let xml = final_chord_score(
+-            r#"      <note>
+-        <pitch><step>C</step><octave>4</octave></pitch>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
+-      <note>
+-        <chord/>
+-        <pitch><step>E</step><octave>4</octave></pitch>
+-        <duration>8</duration>
+-        <voice>1</voice>
+-        <type>half</type>
+-        <staff>1</staff>
+-      </note>
++            fixture_xml!(FIXTURE_NOTE_64DC3197A6, r#"
++"#, FIXTURE_NOTE_395A683D76, r#"
+       <note print-object="no" print-spacing="no">
+         <chord/>
+         <pitch><step>E</step><octave>4</octave></pitch>
+@@ -10740,13 +10507,7 @@
+         <type>half</type>
+         <staff>1</staff>
+       </note>
+-      <note>
+-        <rest/>
+-        <duration>12</duration>
+-        <voice>1</voice>
+-        <type>half</type><dot/>
+-        <staff>1</staff>
+-      </note>"#,
++"#, FIXTURE_NOTE_F714A49732),
+         );
+         let plan = plan_final_chord_encoding(&xml).expect("plan");
+         let projection = project_final_chord_encoding_plan_with_provenance(&xml, &plan)
+@@ -10771,13 +10532,7 @@
+     #[test]
+     fn final_chord_same_onset_same_pitch_owner_remains_fail_closed() {
+         let xml = final_chord_score(
+-            r#"      <note>
+-        <pitch><step>E</step><octave>4</octave></pitch>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
++            fixture_xml!(FIXTURE_NOTE_F9745462DA, r#"
+       <backup><duration>4</duration></backup>
+       <note>
+         <pitch><step>C</step><octave>3</octave></pitch>
+@@ -10787,15 +10542,8 @@
+         <staff>2</staff>
+         <beam number="1">continue</beam>
+       </note>
+-      <note>
+-        <chord/>
+-        <pitch><step>E</step><octave>4</octave></pitch>
+-        <duration>8</duration>
+-        <voice>1</voice>
+-        <type>half</type>
+-        <staff>1</staff>
+-      </note>
+-      <forward><duration>12</duration></forward>"#,
++"#, FIXTURE_NOTE_395A683D76, r#"
++      <forward><duration>12</duration></forward>"#),
+         );
+         let plan = plan_final_chord_encoding(&xml).expect("plan");
+         assert!(plan.edits.is_empty());
+@@ -10825,7 +10573,7 @@
+     #[test]
+     fn final_chord_long_member_is_split_over_tied_anchor_chain() {
+         let xml = final_chord_score(
+-            r#"      <note>
++            fixture_xml!(r#"      <note>
+         <pitch><step>C</step><octave>4</octave></pitch>
+         <duration>4</duration>
+         <tie type="start"/>
+@@ -10841,21 +10589,8 @@
+         <type>quarter</type>
+         <staff>1</staff>
+       </note>
+-      <note>
+-        <chord/>
+-        <pitch><step>E</step><octave>4</octave></pitch>
+-        <duration>8</duration>
+-        <voice>1</voice>
+-        <type>half</type>
+-        <staff>1</staff>
+-      </note>
+-      <note>
+-        <rest/>
+-        <duration>8</duration>
+-        <voice>1</voice>
+-        <type>half</type>
+-        <staff>1</staff>
+-      </note>"#,
++"#, FIXTURE_NOTE_395A683D76, r#"
++"#, FIXTURE_NOTE_631875EE3D),
+         );
+         let plan = plan_final_chord_encoding(&xml).expect("plan");
+         let projection = project_final_chord_encoding_plan_with_provenance(&xml, &plan)
+@@ -10885,22 +10620,10 @@
+     #[test]
+     fn final_chord_projection_provenance_keeps_representation_collision_sources_distinct() {
+         let xml = final_chord_score(
+-            r#"      <note>
+-        <pitch><step>C</step><octave>4</octave></pitch>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
++            fixture_xml!(FIXTURE_NOTE_64DC3197A6, r#"
+       <backup><duration>4</duration></backup>
+-      <note>
+-        <pitch><step>C</step><octave>4</octave></pitch>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
+-      <forward><duration>12</duration></forward>"#,
++"#, FIXTURE_NOTE_64DC3197A6, r#"
++      <forward><duration>12</duration></forward>"#),
+         );
+         let plan = plan_final_chord_encoding(&xml).expect("plan");
+         let projection = project_final_chord_encoding_plan_with_provenance(&xml, &plan)
+@@ -10918,15 +10641,9 @@
+     #[test]
+     fn final_chord_orphan_after_forward_six_member_group_moves_atomically() {
+         let mut body = String::from(
+-            r#"      <note>
+-        <rest/>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
++            fixture_xml!(FIXTURE_NOTE_070FEEE235, r#"
+       <forward><duration>4</duration></forward>
+-"#,
++"#),
+         );
+         for step in ["C", "D", "E", "F", "G", "A"] {
+             body.push_str(&format!(
+@@ -10942,14 +10659,8 @@
+             ));
+         }
+         body.push_str(
+-            r#"      <forward><duration>4</duration></forward>
+-      <note>
+-        <rest/>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>"#,
++            fixture_xml!(r#"      <forward><duration>4</duration></forward>
++"#, FIXTURE_NOTE_070FEEE235),
+         );
+         let xml = final_chord_score(&body);
+         let plan = plan_final_chord_encoding(&xml).expect("plan");
+@@ -10970,27 +10681,9 @@
+     #[test]
+     fn final_chord_tied_split_stays_unchanged_across_same_pitch_reattack() {
+         let xml = final_chord_score(
+-            r#"      <note>
+-        <rest/>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
+-      <note>
+-        <pitch><step>E</step><octave>4</octave></pitch>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
+-      <note>
+-        <rest/>
+-        <duration>8</duration>
+-        <voice>1</voice>
+-        <type>half</type>
+-        <staff>1</staff>
+-      </note>
++            fixture_xml!(FIXTURE_NOTE_070FEEE235, r#"
++"#, FIXTURE_NOTE_F9745462DA, r#"
++"#, FIXTURE_NOTE_631875EE3D, r#"
+       <backup><duration>16</duration></backup>
+       <note>
+         <pitch><step>C</step><octave>3</octave></pitch>
+@@ -11009,21 +10702,14 @@
+         <type>quarter</type>
+         <staff>2</staff>
+       </note>
+-      <note>
+-        <chord/>
+-        <pitch><step>E</step><octave>4</octave></pitch>
+-        <duration>8</duration>
+-        <voice>1</voice>
+-        <type>half</type>
+-        <staff>1</staff>
+-      </note>
++"#, FIXTURE_NOTE_395A683D76, r#"
+       <note>
+         <rest/>
+         <duration>8</duration>
+         <voice>2</voice>
+         <type>half</type>
+         <staff>2</staff>
+-      </note>"#,
++      </note>"#),
+         );
+         let plan = plan_final_chord_encoding(&xml).expect("plan");
+         assert!(plan.edits.is_empty());
+@@ -11035,21 +10721,8 @@
+     #[test]
+     fn final_chord_plan_is_source_bound_and_idempotent() {
+         let xml = final_chord_score(
+-            r#"      <note>
+-        <rest/>
+-        <duration>4</duration>
+-        <voice>1</voice>
+-        <type>quarter</type>
+-        <staff>1</staff>
+-      </note>
+-      <note print-object="no">
+-        <chord/>
+-        <pitch><step>C</step><octave>4</octave></pitch>
+-        <duration>8</duration>
+-        <voice>1</voice>
+-        <type>half</type>
+-        <staff>1</staff>
+-      </note>
++            fixture_xml!(FIXTURE_NOTE_070FEEE235, r#"
++"#, FIXTURE_NOTE_1C6F0511B4, r#"
+       <note print-object="no">
+         <chord/>
+         <pitch><step>E</step><octave>4</octave></pitch>
+@@ -11058,13 +10731,7 @@
+         <type>half</type>
+         <staff>1</staff>
+       </note>
+-      <note>
+-        <rest/>
+-        <duration>12</duration>
+-        <voice>1</voice>
+-        <type>half</type><dot/>
+-        <staff>1</staff>
+-      </note>"#,
++"#, FIXTURE_NOTE_F714A49732),
+         );
+         let plan = plan_final_chord_encoding(&xml).expect("plan");
+         assert!(project_final_chord_encoding_plan(&(xml.clone() + "\n"), &plan).0.is_err());
+@@ -11111,49 +10778,32 @@
+         );
+         let source_locators = vec![
+             FinalChordCanonicalSourceLocator {
+-                fragment_id: 1,
+-                source_event_id: 1,
+-                attack_id: 1,
+-                measure: 1,
+-                raw_note_index: 0,
+-                onset: 0,
+-                duration: 4,
+                 pitch_identity: "midi:48".to_string(),
+                 pitch_midi: 48,
+                 staff: "2".to_string(),
+-                chord_syntax: false,
+-                tie_start: false,
+-                tie_stop: false,
++                ..baseline_final_chord_canonical_source_locator()
+             },
+             FinalChordCanonicalSourceLocator {
+                 fragment_id: 2,
+                 source_event_id: 2,
+                 attack_id: 2,
+-                measure: 1,
+                 raw_note_index: 1,
+                 onset: 4,
+-                duration: 4,
+                 pitch_identity: "midi:50".to_string(),
+                 pitch_midi: 50,
+                 staff: "2".to_string(),
+-                chord_syntax: false,
+-                tie_start: false,
+-                tie_stop: false,
++                ..baseline_final_chord_canonical_source_locator()
+             },
+             FinalChordCanonicalSourceLocator {
+                 fragment_id: 3,
+                 source_event_id: 3,
+                 attack_id: 3,
+-                measure: 1,
+                 raw_note_index: 2,
+                 onset: 8,
+-                duration: 4,
+                 pitch_identity: "midi:52".to_string(),
+                 pitch_midi: 52,
+                 staff: "2".to_string(),
+-                chord_syntax: false,
+-                tie_start: false,
+-                tie_stop: false,
++                ..baseline_final_chord_canonical_source_locator()
+             },
+         ];
+         let canonical = CanonicalFinalChordStructuralPlan {

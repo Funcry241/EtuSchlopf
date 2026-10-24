@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "artifact": "etuschlopf_architecture_classification_contract",
+  "contract_version": "ARCH-1",
+  "authority": {
+    "class": "native_deterministic_architecture_projection",
+    "productive_music_authority": false,
+    "statement": "ARCH-1 classifies ESI-1 symbols deterministically for architecture cleanup/ownership visibility. It never authorizes deletion by itself and cannot weaken build, test, Kodex or runtime gates."
+  },
+  "classes": {
+    "A": {
+      "label": "Loeschbar",
+      "meaning": "Within the complete ESI-1 source scope, a private free function has no lexical reference, no incoming unique-name call edge, no productive reachability, and no cfg/export/test/bench/proc-macro/used-sensitive attribute in its declaration context.",
+      "fail_closed": "Any unresolved prerequisite yields OFFEN, not A."
+    },
+    "B": {
+      "label": "Zusammenfuehrbar / redundant",
+      "meaning": "An explicitly legacy/obsolete/deprecated/shadow-named symbol that is itself still bound by reachability/reference evidence has a deterministic same-file counterpart target that is productively reachable or referenced.",
+      "fail_closed": "No concrete target yields no B classification."
+    },
+    "C": {
+      "label": "Notwendige Unterstuetzung",
+      "meaning": "A symbol is productively reachable without an ARCH-1 D authority rule, or is explicitly bound test/tool support under the fixed rules."
+    },
+    "D": {
+      "label": "Autoritativer Kern",
+      "meaning": "A productively reachable entrypoint or explicitly named Writer-Authority/Owner, Selection-Authority/Owner, Canonical-Authority/Owner or Governance gate path matches a versioned ARCH-1 rule."
+    },
+    "OFFEN": {
+      "label": "Nicht sicher entscheidbar",
+      "meaning": "No A/B/C/D rule has sufficient static evidence. OFFEN is the mandatory fail-closed default."
+    }
+  },
+  "removed_legacy_class": "N is not part of ARCH-1. Legacy AIC-1 A/B/C/N/OFFEN classifications are not comparable to ARCH-1.",
+  "comparability": {
+    "rule": "A/B/C/D/OFFEN counts are directly comparable only when architecture_contract_version is identical. ARCH-1 -> ARCH-2 is an explicit classification-series break."
+  },
+  "deletion_boundary": "Class A is a static architecture statement inside ESI-1 scope, not a command to mutate source. Actual removal still requires normal EtuSchlopf change control and gates."
+}

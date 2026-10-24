@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "projection_id": "beam_occurrence_identity_closure_status_r1049",
+  "parent": {
+    "revision": "r1048",
+    "name": "BeamOccurrenceSourceAttackMultiplicityLocalBijectionAudit",
+    "status": "accepted",
+    "strict_tests_passed": 1360,
+    "corpus_projects_ok": 10
+  },
+  "accepted_parent_beam_identity_evidence": {
+    "cross_voice_observations": 144,
+    "legacy_exact": 90,
+    "source_attack_bridge_additional": 41,
+    "local_bijection_additional": 13,
+    "causally_explained_total": 144,
+    "remaining_identity_unresolved": 0,
+    "frozen_parent_readout_exact": 90,
+    "frozen_parent_readout_unresolved": 54
+  },
+  "r1049": {
+    "name": "BeamOccurrenceIdentityClosure",
+    "change_class": "AuditOnly",
+    "music_mutation": false,
+    "productive_selector_change": false,
+    "audit_error_classification_change": true,
+    "writer_change": false,
+    "frozen_error_class_definition_change": false,
+    "closure_paths": [
+      "legacy exact measure+pitched_ordinal binding",
+      "unique SourceEventId+SoundingAttackId cross-phase bridge with exact S0/S1 geometry",
+      "unique local SourceEventId+SoundingAttackId perfect geometry bijection"
+    ],
+    "ranking": "none",
+    "tie_break": "none",
+    "claims_beam_occurrence_identity_closure": true,
+    "claims_primary_beam_authority_binding": false,
+    "claims_renderer_visible_beam_geometry": false,
+    "claims_repair_authority": false
+  },
+  "expected_validation": {
+    "required_run_scope": "--take --all",
+    "new_regression_tests": 3,
+    "expected_strict_tests_passed": 1363,
+    "expected_cross_voice": 144,
+    "expected_legacy_exact": 90,
+    "expected_source_attack_bridge": 41,
+    "expected_local_bijection": 13,
+    "expected_occurrence_identity_exact": 144,
+    "expected_occurrence_identity_unresolved": 0,
+    "product_musicxml_delta_expected": false,
+    "render_musicxml_delta_expected": false,
+    "visible_pdf_geometry_delta_expected": false
+  }
+}

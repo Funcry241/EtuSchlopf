@@ -169,9 +169,8 @@ Sie werden miteinander verbunden, ohne einander stillschweigend zu ersetzen.
 ## Revisionen, Takes und Rückkehr
 
 Der erste öffentliche Ausgangspunkt dieses Repositorys ist der akzeptierte
-Quellstand **r1507**, Paketversion **0.10.1839**. Der Git-Tag `r1507` markiert den
-importierten Stand. Die öffentliche README und die Git-Ausschlussregeln liegen
-in einem nachfolgenden, getrennten Commit.
+Quellstand **r1507**, Paketversion **0.10.1839**. Die öffentliche README, die MIT-Lizenz und die Git-Ausschlussregeln ergänzen
+den importierten Quellstand. Der Git-Verlauf dokumentiert die Veröffentlichung.
 
 Die frühere Entwicklung wird nicht als nachträglich erfundene Git-Historie
 rekonstruiert. Ihre im Quellbaum enthaltenen Verträge und Begründungen bleiben
@@ -215,3 +214,8 @@ etwas zu leicht möglich war.
 
 Wer nur die Ausgabe sehen möchte, beginnt mit einem Projekt.
 Wer verstehen möchte, weshalb sie so entstehen darf, folgt den Übergängen.
+
+## Lizenz
+
+EtuSchlopf steht unter der [MIT-Lizenz](LICENSE). Vorhandene Lizenz- und
+Urheberrechtshinweise eingebundener Fremdkomponenten bleiben maßgeblich.

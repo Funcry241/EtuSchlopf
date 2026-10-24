@@ -1,0 +1,17 @@
+# r622 PianisticSymbolicStructuralReachabilityWitnessClosure
+
+r622 basiert direkt auf dem real gruenen und korpusweit 10/10 qualifizierten r621 `PianisticSymbolicCapabilityReachabilityClosureClippyRecovery`: 1232/1232 integrierte Rust-Tests, Build/Strict-Clippy/FinalExit 0. r621 schliesst die quantifizierte execution-v2-Capability-Formel fuer alle zehn Etueden und replayt ihre Static-/Transition-/Same-Key-Evaluatoren unabhaengig. Sein rein struktureller Existenzbeweis ist jedoch bewusst nur positiv und unvollstaendig: ein einzelner degree-descending First-Fit-Coloring-Versuch findet fuer Etueden 3, 7, 8, 9 und 10 einen 10-Slot-Witness, waehrend Etueden 1, 2, 4, 5 und 6 bei `UNRESOLVED_NO_FALSE_NEGATIVE` verbleiben.
+
+Die offene Klasse ist algorithmisch und nicht extern. Das Scheitern einer festen Greedy-Reihenfolge beweist keine fehlende 10-Faerbbarkeit. r622 ersetzt deshalb ausschliesslich diesen Existenzversuch durch deterministische Smallest-Last-Elimination und Reverse-First-Fit. Beim sukzessiven Entfernen des aktuell kleinsten Grades wird zugleich die exakte Graph-Degeneracy bestimmt. Die umgekehrte Reihenfolge reduziert die klassische False-Unresolved-Klasse deutlich; jede gefundene Faerbung wird anschliessend byte-/constraint-unabhaengig gegen alle symbolischen Slot-Ungleichungen validiert. Die Faerbung bleibt ein interner Existenzwitness und wird nicht als bevorzugte oder leichte Fingersetzung exportiert.
+
+Ein adversarialer 11x11-Crown-Graph ist als Runtime- und Unit-Regressionsfall gebunden. Bei interleavter Vertex-Reihenfolge kann die r621-artige feste First-Fit-Faerbung elf Farben verlangen, obwohl der Graph bipartit ist. Der r622-Smallest-Last-Witness findet fuer denselben Graphen innerhalb der zehn execution-v2-Slots eine gueltige Faerbung. Damit ist konkret bewiesen, dass `r621 Greedy miss` und `structural empty` nicht gleichgesetzt werden duerfen.
+
+Die symbolische Capability-Formel selbst bleibt unveraendert:
+
+`Exists(slot_variables): StructuralConstraints AND ValuationDerivedStaticAtoms AND ValuationDerivedTransitionAtoms AND ValuationDerivedSameKeyAtoms`
+
+r622 fuegt keine Capability-Antwort hinzu. `UNMODELED` bleibt externe Variable; r295 StaticConfigurationSignature, r296 TransitionSignature und r619 SameKeyTechniqueSignature bleiben exakt valuation-derived. CapabilityValuation bleibt `UNBOUND`, PathSelection und Ranking bleiben `NONE`, HumanPlayabilityClaim bleibt `NOT_EVALUATED`. Wenn der neue konstruktive Beweis keinen Witness findet, folgt weiterhin keine Negativaussage, ausser ein bereits separat bewiesener struktureller Obstruction-Vertrag greift. `UNRESOLVED_NO_FALSE_NEGATIVE` bleibt damit fail-closed erhalten.
+
+IndependentSymbolicReplay rekonstruiert neben Formel, Zeiten, Boundary-/Same-Key-Historien nun auch die Smallest-Last-Degeneracy und den konstruktiven Witness-Status. Die Formula-SHA bindet die Degeneracy als Bestandteil des strukturellen Beweiszustands. Ein positiver Status bedeutet weiterhin nur `NONEMPTY_WITNESS_VERIFIED` innerhalb der expliziten execution-v2-Ontologie; er behauptet weder Capability-Support noch menschliche Spielbarkeit.
+
+`ChangeClass=AuditOnly`. Keine MusicXML-/Render-/PDF-Aenderung, kein Writer, keine Repair-/Recovery-Authority, keine neue Musikmutation und keine menschliche Schwelle. Gegenueber r621 kommt ein neuer Unit-Test fuer den Crown-False-Unresolved-Gegenfall hinzu; erwarteter integrierter Testbestand: 1233/1233.

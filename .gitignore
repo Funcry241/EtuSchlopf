@@ -1,0 +1,34 @@
+# Derived build and runtime state
+/target/
+**/target/
+/debug/
+/release/
+
+# Project inputs and generated outputs at the project root
+/*.wav
+/*.WAV
+/*.mid
+/*.MID
+/*.midi
+/*.MIDI
+/*.flp
+/*.FLP
+/*.musicxml
+/*.mxl
+/*.pdf
+/*.result.txt
+/*.console.txt
+/*.zip
+
+# Local credentials and editor state
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.vscode/
+.idea/
+__pycache__/
+*.py[cod]
+Thumbs.db
+.DS_Store

@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "projection_id": "canonical_primary_beam_owner_receipt_transport_status_r1051",
+  "parent": {
+    "revision": "r1050",
+    "name": "CanonicalPrimaryBeamAuthorityBindingAudit",
+    "status": "accepted",
+    "strict_tests_passed": 1366,
+    "corpus_projects_ok": 10,
+    "cross_voice_observations": 144,
+    "occurrence_identity_exact": 144,
+    "pre_final_exact_encoding_witnesses": 144,
+    "typed_owner_receipts_available": 0,
+    "canonical_authority_bindings_proven": 0,
+    "canonical_authority_bindings_unresolved": 144
+  },
+  "r1051": {
+    "name": "CanonicalPrimaryBeamOwnerReceiptTransportAudit",
+    "change_class": "AuditOnly",
+    "music_mutation": false,
+    "productive_selector_change": false,
+    "audit_error_classification_change": true,
+    "writer_change": false,
+    "frozen_error_class_definition_change": false,
+    "current_canonical_owner_receipt": true,
+    "historical_owner_causality_claimed": false,
+    "owner_kind": "structural_metric_beam_hierarchy_plan",
+    "owner_source_fnv64": "b304f23e30b16e79",
+    "claims_primary_beam_authority_closure": false,
+    "claims_renderer_visible_beam_geometry": false,
+    "claims_repair_authority": false
+  },
+  "expected_validation": {
+    "required_run_scope": "--take --all",
+    "new_regression_tests": 4,
+    "expected_strict_tests_passed": 1370,
+    "expected_cross_voice_observations": 144,
+    "expected_occurrence_identity_bound": 144,
+    "expected_pre_final_chord_exact_encoding_witnesses": 144,
+    "expected_typed_current_canonical_owner_receipts": 144,
+    "expected_receipt_event_count_mismatch": 0,
+    "expected_receipt_transport_proven": 144,
+    "expected_receipt_transport_unresolved": 0,
+    "product_musicxml_delta_expected": false,
+    "render_musicxml_delta_expected": false,
+    "visible_pdf_geometry_delta_expected": false
+  }
+}

@@ -1,0 +1,10 @@
+schema_version=1
+change_class=MusicMutation
+from_version=0.10.1839
+to_version=0.10.1839
+reason=Align primary-beam interior protection with the accepted part-local lower octave clef decision scope; declared pure-clef course changes only
+change=modified|ZIP_KIND.txt|fnv64:cb1036ad34c7e549
+change=modified|docs/assistant_memory/050_aktueller_stand.md|fnv64:fe1974cf127361c2
+change=added|docs/selector_derivation_contract_primary_beam_lower_octave_scope_repair.md|fnv64:9fd254d5d6df90bf
+change=modified|src/structural_write_authority/rustig_clef_planning.rs|fnv64:e6ffd8d6fce1b242
+change=modified|tests/unit/lower_staff_chord_attack_checkpoint58.rs|fnv64:3fb38496b1b8169b

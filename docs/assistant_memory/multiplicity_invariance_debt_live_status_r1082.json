@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "projection_id": "multiplicity_invariance_debt_live_status_r1082",
+  "historical_baseline": {
+    "inventory_id": "multiplicity_invariance_debt_r1035",
+    "path": "docs/assistant_memory/multiplicity_invariance_debt_inventory_v1.json",
+    "a_total": 12,
+    "b_total": 2,
+    "c_total": 4,
+    "baseline_is_immutable_history": true
+  },
+  "current_a_projection": {
+    "productively_closed_if_r1082_accepted": 10,
+    "productively_open_if_r1082_accepted": 2,
+    "newly_closed": [
+      {
+        "id": "MI-A07",
+        "status": "retired_productive_authority",
+        "authority_retirement_revision": "r1082",
+        "legacy_root_compile_live": true,
+        "productive_invocation_removed": true
+      },
+      {
+        "id": "MI-A08",
+        "status": "retired_productive_authority",
+        "authority_retirement_revision": "r1082",
+        "legacy_root_compile_live": true,
+        "productive_invocation_removed": true
+      },
+      {
+        "id": "MI-A09",
+        "status": "retired_productive_authority",
+        "authority_retirement_revision": "r1082",
+        "legacy_root_compile_live": true,
+        "productive_invocation_removed": true
+      },
+      {
+        "id": "MI-A10",
+        "status": "retired_productive_authority",
+        "authority_retirement_revision": "r1082",
+        "legacy_root_compile_live": true,
+        "productive_invocation_removed": true
+      }
+    ],
+    "remaining_open": [
+      "MI-A05",
+      "MI-A12"
+    ],
+    "previously_closed": [
+      {
+        "id": "MI-A01",
+        "status": "retired_productive_authority",
+        "closure_revision": "r1037"
+      },
+      {
+        "id": "MI-A02",
+        "status": "retired_productive_authority",
+        "closure_revision": "r1041"
+      },
+      {
+        "id": "MI-A03",
+        "status": "closed_measure_local_multiplicity_invariant",
+        "closure_revision": "r1043"
+      },
+      {
+        "id": "MI-A04",
+        "status": "closed_measure_local_multiplicity_invariant",
+        "closure_revision": "r1045"
+      },
+      {
+        "id": "MI-A06",
+        "status": "retired_productive_authority",
+        "closure_revision": "r1046"
+      },
+      {
+        "id": "MI-A11",
+        "status": "retired_productive_materialization_authority_with_orphan_writer_compile_closure",
+        "closure_revision": "r1081"
+      }
+    ]
+  },
+  "rejected_evidence": [
+    {
+      "revision": "r1078",
+      "sha256": "d766d8c90d60d1aac36c08c93236266af44d0a3e5175d9f20f6ad0021162f711",
+      "authority": "none"
+    },
+    {
+      "revision": "r1079",
+      "sha256": "aa5f25a77d97946a3e295e31435ea53dbc4f3140129d7a354c901df99e4a8ed6",
+      "authority": "none"
+    },
+    {
+      "revision": "r1080",
+      "sha256": "c2a2e56442d0d8555d3178702b72d82dcc7e81cb295335e4e81fa18094d1a4a5",
+      "authority": "none"
+    }
+  ],
+  "accepted_parent": {
+    "revision": "r1081",
+    "sha256": "8511b01fd711816a40a010a3e461de0f8d554c845a574fc3f31ac78eafd8b03f"
+  },
+  "validation": {
+    "required_run_scope": "--take --all",
+    "authority_change": "retirement_only",
+    "product_delta_scope": "removal_of_parent_writes_only"
+  },
+  "parent_projection_path": "docs/assistant_memory/multiplicity_invariance_debt_live_status_r1081.json"
+}

@@ -1,0 +1,29 @@
+ETUSCHLOPF PERSISTENT CONFIRMED REFERENCE RENDERER EVIDENCE
+===========================================================
+EvidenceContract: persistent_confirmed_reference_v1
+EvidenceOrigin: assistant_export_latest v0.10.1113, raw runtime artifact v0.10.1111
+EvidencePurpose: Preserve the confirmed WrittenButNonZeroExit renderer conclusion across source versions, project directories and target cleanup; Project is provenance only and never a selection key.
+Boundary: audit_only; not_current_preflight; no_renderer_exit_acceptance; no_music_mutation; no_master_apply
+Version: 0.10.1111
+Project: Etüde Nr. 6
+Instrumentation: render_rs_output_freshness_and_process_lifecycle_v1110
+RendererFinalStatus: WrittenButNonZeroExit
+RendererWinningExitCode: -1073741819
+RendererProcessExitCodeHex: 0xC0000005
+RendererProcessExitClass: windows_ntstatus_access_violation
+RendererProcessElapsedMs: 1793
+OutputCreatedAfterDelete: ja
+OutputPresentAtProcessEnd: ja
+OutputSecondPresenceAfterProcessMs: 251
+OutputContentStableAcrossSettle: ja
+OutputStructureStatus: green_basic_pdf_structure_plausible
+FreshnessStatus: yellow_renderer_wrote_fresh_output_after_delete_but_exit_nonzero
+RendererLifecycleInterpretation: access_violation_observed_when_parent_wait_returned_with_structurally_plausible_pdf_already_present_and_content_stable_across_settle
+ConfirmedRendererOutputStatus: complete_and_structurally_plausible
+ConfirmedRendererProcessStatus: crashed_with_windows_access_violation
+ConfirmedRendererOverallStatus: yellow_output_valid_process_failed
+ConfirmedRendererGuardStatus: yellow_no_renderer_exit_acceptance
+ProvenanceInputMusicXmlFnv64: fnv64:a7d164caa6e28d15
+ProvenanceOutputPdfBytes: 123997
+ProvenanceOutputPdfFnv64: fnv64:fa7019718e64c6fe
+Interpretation: The PDF was already present when the renderer process ended, was structurally plausible and remained content-stable. MuseScore ended with 0xC0000005. This is persistent yellow renderer-behavior evidence, selected by typed outcome and evidence freshness rather than project identity, and never a music-write authority.

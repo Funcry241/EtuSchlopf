@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "projection_id": "multiplicity_invariance_debt_live_status_r1042",
+  "historical_baseline": {
+    "inventory_id": "multiplicity_invariance_debt_r1035",
+    "path": "docs/assistant_memory/multiplicity_invariance_debt_inventory_v1.json",
+    "a_total": 12,
+    "b_total": 2,
+    "c_total": 4,
+    "baseline_is_immutable_history": true
+  },
+  "current_a_projection": {
+    "productively_retired": 2,
+    "open": 10,
+    "entries": [
+      {
+        "id": "MI-A01",
+        "status": "retired_productive_authority",
+        "authority_retirement_revision": "r1037",
+        "physical_writer_surface_cleanup_revision": "r1039",
+        "report_verdict_cleanup_revision": "r1040"
+      },
+      {
+        "id": "MI-A02",
+        "status": "retired_productive_authority",
+        "authority_retirement_revision": "r1041",
+        "physical_writer_surface_cleanup_revision": null,
+        "note": "central authorized facade remains compile-live by non-invoking function-value reference; cleanup is a later separately classified transition"
+      },
+      {
+        "id": "MI-A03",
+        "status": "open_causal_class_frozen",
+        "causal_class_revision": "r1042",
+        "causal_class_contract": "docs/selector_derivation_contract_partial_beat_cursor_lane_serialization_split.md",
+        "productive_selector_changed_in_r1042": false,
+        "next_action": "localize existing authority per measure-local conflict group under candidate_duplication_v1; keep multiple plans within one measure fail-closed"
+      }
+    ]
+  },
+  "current_r1041_corpus_evidence": {
+    "projects": 10,
+    "fragmented_rest_chain_invoked_each_project": 1,
+    "fragmented_rest_chain_adopted_total": 0,
+    "fragmented_rest_chain_written_total": 0,
+    "interpretation": "runtime evidence only; not part of the causal class and not a retirement proof"
+  }
+}

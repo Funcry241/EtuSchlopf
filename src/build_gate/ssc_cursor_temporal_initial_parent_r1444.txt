@@ -1,0 +1,1503 @@
+struct InitialRenderTransactionStageInputs<'a> {
+    best: SolverCandidate,
+    source: &'a source::SourcePlan,
+    reference: &'a ReferenceReport,
+}
+
+struct InitialRenderTransactionStageOutcome {
+    best: SolverCandidate,
+    transaction: InitialRenderTransaction,
+    render_state: structural_write_authority::RenderSovereignState,
+}
+
+type FinalChordSourceRange = (usize, usize);
+type FinalChordSourceDescriptor = (usize, usize, i64, Option<i32>);
+type FinalChordSourceByRange =
+    std::collections::BTreeMap<FinalChordSourceRange, FinalChordSourceDescriptor>;
+
+#[derive(Debug, Clone)]
+struct FinalChordSourceBindingRow {
+    fragment_id: usize,
+    measure: usize,
+    raw_note_index: usize,
+    source_onset: i64,
+    source_pitch: Option<i32>,
+    fragment: CandidateMaterialFragmentState,
+}
+
+fn final_chord_source_binding(
+    cache: &mut std::collections::BTreeMap<(usize, usize), FinalChordSourceBindingRow>,
+    source_range: (usize, usize),
+    source_by_range: &FinalChordSourceByRange,
+    fragment_by_raw: &std::collections::BTreeMap<(usize, usize), CandidateMaterialFragmentState>,
+    fragment_id_by_raw: &std::collections::BTreeMap<(usize, usize), usize>,
+    missing_source_message: &'static str,
+    missing_fragment_message: &'static str,
+) -> anyhow::Result<FinalChordSourceBindingRow> {
+    if let Some(binding) = cache.get(&source_range) {
+        return Ok(binding.clone());
+    }
+    let (measure, raw_note_index, source_onset, source_pitch) = source_by_range
+        .get(&source_range)
+        .copied()
+        .ok_or_else(|| anyhow!("{}", missing_source_message))?;
+    let fragment = fragment_by_raw
+        .get(&(measure, raw_note_index))
+        .cloned()
+        .ok_or_else(|| anyhow!("{}", missing_fragment_message))?;
+    let fragment_id = fragment_id_by_raw
+        .get(&(measure, raw_note_index))
+        .copied()
+        .ok_or_else(|| {
+            anyhow!(
+                "FinalChordSourceBinding: CandidateMaterial fragment has no canonical fragment id"
+            )
+        })?;
+    let binding = FinalChordSourceBindingRow {
+        fragment_id,
+        measure,
+        raw_note_index,
+        source_onset,
+        source_pitch,
+        fragment,
+    };
+    cache.insert(source_range, binding.clone());
+    Ok(binding)
+}
+
+// Representation provenance binds occurrences, not necessarily new attacks.
+// A tie continuation retains its existing attack identity at a later fragment
+// onset. Only an actual onset change enters the attack translation owner.
+fn final_chord_forward_attack_translation(
+    binding: &FinalChordSourceBindingRow,
+    attack: &CandidateMaterialAttackState,
+    source_onset: i64,
+    target_onset: i64,
+) -> anyhow::Result<Option<CandidateMaterialForwardOnsetTranslation>> {
+    let fragment = &binding.fragment;
+    if binding.source_onset != source_onset
+        || fragment.measure != binding.measure
+        || fragment.raw_note_index != binding.raw_note_index
+        || fragment.onset != source_onset
+        || fragment.duration <= 0
+        || fragment.pitch != binding.source_pitch
+        || fragment.pitch != Some(attack.pitch)
+        || fragment.source_event_id != Some(attack.source_event_id)
+        || fragment.attack_id != Some(attack.attack_id)
+        || !attack.exists
+    {
+        return Err(anyhow!(
+            "FinalChordEncodingSoundingMaterialization: bound occurrence identity disagrees with CandidateMaterialState for SourceEventId {}",
+            attack.source_event_id.0
+        ));
+    }
+    if source_onset == target_onset && fragment.tie_stop {
+        return Ok(None);
+    }
+    if attack.measure != binding.measure || attack.onset != source_onset {
+        return Err(anyhow!(
+            "FinalChordEncodingSoundingMaterialization: forward identity bridge disagrees with CandidateMaterialState for SourceEventId {}; fragment_id={} fragment_measure={} attack_measure={} source_onset={} attack_onset={} target_onset={} tie_stop={}",
+            attack.source_event_id.0, binding.fragment_id, binding.measure, attack.measure,
+            source_onset, attack.onset, target_onset, fragment.tie_stop,
+        ));
+    }
+    if source_onset == target_onset {
+        return Ok(None);
+    }
+    Ok(Some(CandidateMaterialForwardOnsetTranslation {
+        source_event_id: attack.source_event_id,
+        attack_id: attack.attack_id,
+        target_onset,
+    }))
+}
+
+#[cfg(test)]
+#[path = "../../tests/unit/final_chord_material_identity_continuation.rs"]
+mod final_chord_material_identity_continuation_tests;
+
+struct InitialRenderTransaction {
+    render_xml_trial_path: PathBuf,
+    render_xml_pruned_pdf_trial: RenderXmlPrunedPdfTrial,
+    behind_bars_rule_check_rest_and_tie_audit: BehindBarsRuleCheckRestAndTieAudit,
+    cross_staff_hand_role_materialization_trial: CrossStaffHandRoleMaterializationTrial,
+    lower_staff_visible_rhythm_rest_lane_trial: UpperStaffLocalVisualRestLedgerProofTrial,
+    final_render_source_available: bool,
+    pre_preview_render_xml_for_gap: String,
+    final_export_xml: String,
+    master_export_block_receipt: Option<BlockTransformationReceipt>,
+    frozen_sounding_temporal_lane_plan: FrozenSoundingTemporalLanePlan,
+    frozen_sounding_material_attacks: std::sync::Arc<[CandidateMaterialAttackState]>,
+    cursor_lane_end_invariant_repair_audit: CursorLaneEndInvariantRepairAudit,
+    lower_staff_secondary_reanchored_lane_rest_visibility_suppression_trial:
+        LowerStaffSecondaryReanchoredLaneRestVisibilitySuppressionTrial,
+    p2_assertive_return_write_audit: RetentionFirstP2AssertiveReturnWriteAudit,
+    render_pruned_final_chord_omissions: std::collections::BTreeSet<
+        crate::structural_write_authority::RenderPrunedFinalChordOmissionKey,
+    >,
+    upper_staff_final_duplicate_rest_rewrite_written: bool,
+    strict_staff_local_release_completeness_trial: StrictStaffOverfullCoverageNormalizationTrial,
+    final_visible_rest_role_purge_and_vertical_placement_write_audit:
+        UpperStaffShadowRestVoice1KeepWithoutShadowLaneFixAudit,
+    strict_visible_rest_arithmetic_materializer_trial: RenderXmlPianisticRestRepairTrial,
+    external_feedback_safe_notation_write_audit:
+        TieMergeAccountingAndTrueTransactionalRestCoalesceAudit,
+}
+
+fn run_initial_render_transaction_stage(
+    inputs: InitialRenderTransactionStageInputs<'_>,
+) -> anyhow::Result<InitialRenderTransactionStageOutcome> {
+    crate::master_state_identity::record_render_stage_boundary(
+        crate::master_state_identity::RenderStageBoundary::InitialRender,
+    );
+    let InitialRenderTransactionStageInputs {
+        mut best,
+        source,
+        reference,
+    } = inputs;
+    crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
+        "InitialRenderEntryMaster",
+        best.layout_xml(),
+    );
+    let render_xml_hidden_material_prune_audit =
+        build_render_xml_hidden_material_prune_audit(best.layout_xml());
+    let render_xml_trial_path = render_xml_trial_path_for_source(source);
+    // r1230 WIP: create the single Render state carrier before any initial
+    // Render trial. IR1 is already adopted through it; the remaining stages
+    // migrate serially before the final closure is enabled.
+    let mut render_state = structural_write_authority::RenderSovereignState::begin_project_render(
+        &render_xml_trial_path,
+        &best.master_state,
+    );
+    console_artifact_line(
+        ConsoleArtifactLine::PreRenderXml,
+        format!(
+            "Render-XML-Pfad vorbereitet: {}",
+            render_xml_trial_path.display()
+        ),
+    );
+    let artifact_progress_started = Instant::now();
+    console_artifact_progress(
+        ConsoleArtifactLine::PreRenderXml,
+        "Pre-Render-XML bereit",
+        1,
+        1,
+        artifact_progress_started,
+    );
+    let render_xml_pruned_pdf_root = render_state.initial_trial_root(true);
+    let (render_xml_pruned_pdf_trial, render_xml_pruned_pdf_candidate, render_xml_pruned_pdf_receipts) =
+        build_render_xml_pruned_pdf_trial(
+            best.layout_xml(),
+            &render_xml_hidden_material_prune_audit,
+            &render_xml_trial_path,
+        )?;
+    if let Some(render_xml_pruned_pdf_candidate) = render_xml_pruned_pdf_candidate.as_deref() {
+        render_state
+            .adopt_transition(
+                render_xml_pruned_pdf_root,
+                render_xml_pruned_pdf_candidate,
+                render_xml_pruned_pdf_receipts,
+                structural_write_authority::RenderSinkKind::PrunedPdfTrial,
+                |path, source_xml, candidate_xml| {
+                    let result = (|| -> anyhow::Result<()> {
+                        if let Some(parent) =
+                            path.parent().filter(|path| !path.as_os_str().is_empty())
+                        {
+                            std::fs::create_dir_all(parent).with_context(|| {
+                                format!(
+                                    "Konnte Render-XML-Ausgabeverzeichnis nicht anlegen: {}",
+                                    parent.display()
+                                )
+                            })?;
+                        }
+                        crate::structural_write_authority::write_pruned_pdf_render_trial_authorized(
+                            source_xml,
+                            candidate_xml,
+                            path,
+                        )
+                        .with_context(|| {
+                            format!("Konnte Render-XML-Ausgabe nicht schreiben: {}", path.display())
+                        })
+                    })();
+                    (result, None)
+                },
+            )
+            .with_context(|| "RenderSovereignty IR1 PrunedPdfTrial konnte nicht adoptiert werden")?;
+    } else if !render_xml_pruned_pdf_receipts.is_empty() {
+        render_state.decline_transition(
+            render_xml_pruned_pdf_root,
+            render_xml_pruned_pdf_receipts,
+        );
+    }
+    let receipt_checkpoint_after_pruned_write = render_state.observed_document_or(best.layout_xml()).to_owned();
+    crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
+        "InitialRenderPrunedPdfMaterializedBeforeAdvance",
+        &receipt_checkpoint_after_pruned_write,
+    );
+    crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
+        "InitialRenderAfterPrunedPdfTrial",
+        render_state.observed_document_or(best.layout_xml()),
+    );
+    let render_xml_hidden_rest_dependency_audit = build_render_xml_hidden_rest_dependency_audit(render_state.observed_document_or(best.layout_xml()));
+    let render_xml_hidden_rest_forward_collapse_root = render_state.initial_trial_root(false);
+    let render_xml_hidden_rest_forward_collapse_source = render_xml_hidden_rest_forward_collapse_root.document().to_owned();
+    let render_xml_hidden_rest_forward_collapse_trial =
+        build_render_xml_hidden_rest_forward_collapse_trial(
+            &render_xml_hidden_rest_forward_collapse_source,
+            &render_xml_hidden_rest_dependency_audit,
+            &render_xml_trial_path,
+            &mut render_state,
+            render_xml_hidden_rest_forward_collapse_root,
+        )?;
+    crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
+        "InitialRenderAfterHiddenRestForwardCollapse",
+        render_state.observed_document_or(best.layout_xml()),
+    );
+    let render_xml_visible_rest_readability_audit = build_render_xml_visible_rest_readability_audit(
+        render_state.observed_document_or(best.layout_xml()),
+        if render_xml_hidden_rest_forward_collapse_trial.written {
+            "Render-XML nach Forward-Collapse"
+        } else {
+            "Render-XML vor Forward-Collapse"
+        },
+    );
+    let render_xml_pianistic_rest_repair_root = render_state.initial_trial_root(false);
+    let (
+        render_xml_pianistic_rest_repair_trial,
+        render_xml_pianistic_rest_repair_candidate,
+        render_xml_pianistic_rest_repair_receipts,
+    ) = build_render_xml_pianistic_rest_repair_trial(
+        render_state.observed_document_or(best.layout_xml()),
+        &render_xml_visible_rest_readability_audit,
+        &render_xml_trial_path,
+    )?;
+    if let Some(render_xml_pianistic_rest_repair_candidate) =
+        render_xml_pianistic_rest_repair_candidate.as_deref()
+    {
+        render_state
+            .adopt_transition(
+                render_xml_pianistic_rest_repair_root,
+                render_xml_pianistic_rest_repair_candidate,
+                render_xml_pianistic_rest_repair_receipts,
+                structural_write_authority::RenderSinkKind::PianisticRestRepairTrial,
+                |path, source_xml, candidate_xml| {
+                    (
+                        crate::structural_write_authority::write_pianistic_rest_repair_trial_authorized(
+                            source_xml,
+                            candidate_xml,
+                            path,
+                        ),
+                        None,
+                    )
+                },
+            )
+            .with_context(|| {
+                "RenderSovereignty IR3 PianisticRestRepair konnte nicht adoptiert werden"
+            })?;
+    } else {
+        render_state.decline_transition(
+            render_xml_pianistic_rest_repair_root,
+            render_xml_pianistic_rest_repair_receipts,
+        );
+    }
+    crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
+        "InitialRenderAfterPianisticRestRepair",
+        render_state.observed_document_or(best.layout_xml()),
+    );
+    let render_xml_print_cleanup_pre = render_state.observed_document_or(best.layout_xml()).to_string();
+    let render_xml_print_cleanup_root = render_state.initial_trial_root(false);
+    let render_xml_print_cleanup_source_label = if render_xml_pianistic_rest_repair_trial.written {
+        "Render-XML nach Pausenketten-Repair"
+    } else {
+        "Render-XML vor PrintCleanup-Trial"
+    };
+    let render_xml_print_cleanup_one_safe_visual_trial = render_state
+        .adopt_path_bound_transition(
+            render_xml_print_cleanup_root,
+            structural_write_authority::RenderSinkKind::PrintCleanupOneSafeVisual,
+            |source_xml| {
+                let (trial_result, receipt) = build_render_xml_print_cleanup_one_safe_visual_trial(
+                    source_xml,
+                    render_xml_print_cleanup_source_label,
+                    &render_xml_trial_path,
+                );
+                let failed = trial_result.is_err();
+                let mut receipts = crate::master_state_identity::RenderTransitionReceipts::new();
+                let planned_post = receipt.map(|receipt| {
+                    let (receipt, realized_post) = receipt.split_realized_post_document();
+                    let post = realized_post.expect(
+                        "#57 file-bound BLOCK receipt must carry the realized Render post",
+                    );
+                    receipts.push_block(Some(receipt), &post);
+                    post
+                });
+                structural_write_authority::RenderPathBoundOutcome {
+                    value: trial_result,
+                    planned_post,
+                    receipts,
+                    failed,
+                }
+            },
+            |path, _source_xml, candidate_xml| {
+                crate::structural_write_authority::write_visual_cleanup_candidate_authorized(
+                    path,
+                    candidate_xml,
+                )
+                .with_context(|| {
+                    format!(
+                        "Konnte Render-XML-PrintCleanupTrial nicht schreiben: {}",
+                        path.display()
+                    )
+                })
+            },
+        )
+        .with_context(|| "RenderSovereignty IR4 PrintCleanup konnte nicht adoptiert werden")??;
+    if render_xml_print_cleanup_one_safe_visual_trial.written
+        && let Some(adopted_post) = render_state.document() {
+            crate::audit_only::destructive_edit_attribution::observe_selected_state_successor(
+                &render_xml_print_cleanup_pre,
+                adopted_post,
+            );
+    }
+    crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
+        "InitialRenderAfterPrintCleanupOneSafeVisual",
+        render_state.observed_document_or(best.layout_xml()),
+    );
+    let render_xml_pianistic_missing_rest_insert_root = render_state.initial_trial_root(false);
+    let (
+        _,
+        render_xml_pianistic_missing_rest_insert_candidate,
+        render_xml_pianistic_missing_rest_insert_receipts,
+    ) = build_render_xml_pianistic_missing_rest_insert_trial(
+        render_xml_pianistic_missing_rest_insert_root.document(),
+        if render_xml_print_cleanup_one_safe_visual_trial.written {
+            "Render-XML nach PrintCleanup-OneSafeVisualTrial"
+        } else if render_xml_pianistic_rest_repair_trial.written {
+            "Render-XML nach Pausenketten-Repair"
+        } else {
+            "Render-XML vor Missing-Rest-Insert"
+        },
+        &render_xml_trial_path,
+    )?;
+    if let Some(render_xml_pianistic_missing_rest_insert_candidate) =
+        render_xml_pianistic_missing_rest_insert_candidate.as_deref()
+    {
+        render_state
+            .adopt_transition(
+                render_xml_pianistic_missing_rest_insert_root,
+                render_xml_pianistic_missing_rest_insert_candidate,
+                render_xml_pianistic_missing_rest_insert_receipts,
+                structural_write_authority::RenderSinkKind::MissingRestInsertTrial,
+                |path, source_xml, candidate_xml| {
+                    (
+                        crate::structural_write_authority::write_missing_rest_trial_xml_authorized(
+                            path,
+                            source_xml,
+                            candidate_xml,
+                        ),
+                        None,
+                    )
+                },
+            )
+            .with_context(|| {
+                "RenderSovereignty IR5 MissingRestInsert konnte nicht adoptiert werden"
+            })?;
+    } else {
+        render_state.decline_transition(
+            render_xml_pianistic_missing_rest_insert_root,
+            render_xml_pianistic_missing_rest_insert_receipts,
+        );
+    }
+    crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
+        "InitialRenderAfterMissingRestInsert",
+        render_state.observed_document_or(best.layout_xml()),
+    );
+    let behind_bars_root = render_state.initial_trial_root(false);
+    let (behind_bars_rule_check_rest_and_tie_audit, behind_bars_candidate, behind_bars_receipts) =
+        build_behind_bars_rule_check_rest_and_tie_audit(
+            behind_bars_root.document(),
+            "Render-XML vor BehindBarsRestAndTieAudit",
+            &render_xml_trial_path,
+        )?;
+    if let Some(behind_bars_candidate) = behind_bars_candidate.as_deref() {
+        render_state
+            .adopt_transition(
+                behind_bars_root,
+                behind_bars_candidate,
+                behind_bars_receipts,
+                structural_write_authority::RenderSinkKind::BehindBarsRestTieAudit,
+                |path, _source_xml, verified_candidate| {
+                    (
+                        crate::structural_write_authority::write_behind_bars_rest_tie_audit_candidate_authorized(
+                            path,
+                            verified_candidate,
+                        ),
+                        None,
+                    )
+                },
+            )
+            .with_context(|| "RenderSovereignty IR6 BehindBars konnte nicht adoptiert werden")?;
+    } else {
+        render_state.decline_transition(behind_bars_root, behind_bars_receipts);
+    }
+    crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
+        "InitialRenderAfterBehindBarsRestTie",
+        render_state.observed_document_or(best.layout_xml()),
+    );
+    let cross_staff_hand_role_materialization_trial =
+        build_cross_staff_hand_role_materialization_trial(
+            render_state.observed_document_or(best.layout_xml()),
+            if behind_bars_rule_check_rest_and_tie_audit.written {
+                "Render-XML nach BehindBarsRestAndTieAudit"
+            } else {
+                "Render-XML nach BehindBarsRestAndTieAudit ohne Mutation"
+            },
+            &render_xml_trial_path,
+        )?;
+    crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
+        "InitialRenderAfterCrossStaffHandRole",
+        render_state.observed_document_or(best.layout_xml()),
+    );
+    let lower_staff_visible_rhythm_root = render_state.initial_trial_root(false);
+    let (
+        lower_staff_visible_rhythm_rest_lane_trial,
+        lower_staff_visible_rhythm_candidate,
+        lower_staff_visible_rhythm_receipts,
+    ) = build_lower_staff_visible_rhythm_rest_lane_trial(
+        lower_staff_visible_rhythm_root.document(),
+        if cross_staff_hand_role_materialization_trial.written {
+            "Render-XML nach CrossStaffHandRoleMaterializationTrial"
+        } else {
+            "Render-XML nach CrossStaffHandRoleMaterializationTrial ohne Mutation"
+        },
+        &render_xml_trial_path,
+    )?;
+    if let Some(lower_staff_visible_rhythm_candidate) =
+        lower_staff_visible_rhythm_candidate.as_deref()
+    {
+        render_state
+            .adopt_transition(
+                lower_staff_visible_rhythm_root,
+                lower_staff_visible_rhythm_candidate,
+                lower_staff_visible_rhythm_receipts,
+                structural_write_authority::RenderSinkKind::LowerStaffVisibleRhythmTrial,
+                |path, source_xml, verified_candidate| {
+                    (
+                        crate::structural_write_authority::write_lower_staff_visible_rhythm_rest_lane_trial_authorized(
+                            source_xml,
+                            verified_candidate,
+                            path,
+                        ),
+                        None,
+                    )
+                },
+            )
+            .with_context(|| {
+                "RenderSovereignty IR8 LowerStaffVisibleRhythm konnte nicht adoptiert werden"
+            })?;
+    } else {
+        render_state.decline_transition(
+            lower_staff_visible_rhythm_root,
+            lower_staff_visible_rhythm_receipts,
+        );
+    }
+    crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
+        "InitialRenderAfterLowerStaffVisibleRhythm",
+        render_state.observed_document_or(best.layout_xml()),
+    );
+    let final_master_beam_tag_rewrite = polish_musicxml(best.layout_xml()).with_context(|| {
+        "LowerStaffClefIslandDecompositionRule konnte finale Master-MusicXML nicht erneut polieren"
+    })?;
+    let mut final_master_beam_polish_receipts = master_state_identity::OwnerReceipts::default();
+    final_master_beam_polish_receipts.push_preserving(final_master_beam_tag_rewrite.preserving_receipt);
+    best.master_state.adopt_materialized_document(
+        final_master_beam_tag_rewrite.xml,
+        final_master_beam_polish_receipts,
+        "InitialRender/FinalMasterBeamPolish",
+    );
+    crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
+        "InitialRenderAfterFinalMasterBeamPolish",
+        best.layout_xml(),
+    );
+    let legacy_render_source_available = lower_staff_visible_rhythm_rest_lane_trial.written
+        || cross_staff_hand_role_materialization_trial.written
+        || behind_bars_rule_check_rest_and_tie_audit.written
+        || render_xml_pruned_pdf_trial.pdf_source_selected;
+    let mut final_render_source_available = legacy_render_source_available;
+    let should_write_render_xml = final_render_source_available;
+    let render_clef_island_root = should_write_render_xml.then(|| {
+        render_state.require_state_root("IR9 E051/E052 ClefIslandDecomposition")
+    });
+    let render_xml_before_beam_rewrite = render_clef_island_root
+        .as_ref()
+        .map(|root| root.document().to_owned())
+        .unwrap_or_else(|| best.layout_xml().to_owned());
+    let final_render_beam_tag_rewrite = polish_musicxml(&render_xml_before_beam_rewrite)
+        .with_context(|| "LowerStaffClefIslandDecompositionRule konnte finales Render-MusicXML nicht erneut polieren")?;
+    let (final_render_clef_island_decomposition, final_render_clef_island_receipt) =
+        decompose_lower_staff_clef_islands(&final_render_beam_tag_rewrite.xml);
+    let final_render_clef_island_decomposition = final_render_clef_island_decomposition
+        .with_context(|| "LowerStaffClefIslandDecompositionRule konnte kurze untere Staff-2-Schlüsselinseln nicht zerlegen")?;
+    let mut render_clef_island_receipts =
+        crate::master_state_identity::RenderTransitionReceipts::new();
+    render_clef_island_receipts.push_preserving(
+        final_render_beam_tag_rewrite.preserving_receipt,
+        &final_render_beam_tag_rewrite.xml,
+    );
+    render_clef_island_receipts.push_preserving(
+        final_render_clef_island_receipt,
+        &final_render_clef_island_decomposition,
+    );
+    if let Some(render_clef_island_root) = render_clef_island_root {
+        render_state
+            .adopt_transition(
+                render_clef_island_root,
+                &final_render_clef_island_decomposition,
+                render_clef_island_receipts,
+                structural_write_authority::RenderSinkKind::Checkpoint(
+                    structural_write_authority::RenderCheckpointSink::ClefIslandDecomposition,
+                ),
+                |path, _source_xml, candidate_xml| {
+                    crate::structural_write_authority::write_clef_island_decomposition_checkpoint_authorized(
+                        path,
+                        candidate_xml,
+                    )
+                },
+            )
+            .with_context(|| {
+                format!(
+                    "LowerStaffClefIslandDecompositionRule konnte Render-MusicXML nicht schreiben: {}",
+                    render_xml_trial_path.display()
+                )
+            })?;
+        final_render_source_available = true;
+    } else {
+        render_clef_island_receipts.discard_unadopted(
+            crate::master_state_identity::RenderDiscardReason::ReadOnlyProbe,
+        );
+    }
+    best.master_state.adopt_in_place_transformation("InitialRender/PartialBeatPostRestBeams", |xml| {
+        let partial_beat_beams = enforce_partial_beat_post_rest_beams_in_xml(xml);
+        let mut partial_beat_beam_receipts = master_state_identity::OwnerReceipts::default();
+        partial_beat_beam_receipts.push_preserving(partial_beat_beams.preserving_receipt);
+        ((), partial_beat_beam_receipts)
+    });
+    // PRESERVING E024 (Rustig clef course).
+    best.master_state
+        .adopt_in_place_transformation("InitialRender/RustigClefCourse", |xml| {
+            let (course, receipt) =
+                crate::structural_write_authority::apply_rustig_clef_course_to_buffer(xml);
+            let mut receipts = master_state_identity::OwnerReceipts::default();
+            receipts.push_preserving(receipt);
+            (course, receipts)
+        })
+        .map_err(|reason| {
+            anyhow::anyhow!("ClefReadabilityPrimaryCoursePlan konnte Master-XML nicht sicher materialisieren: {reason}")
+        })?;
+    best.master_state.adopt_in_place_transformation("InitialRender/BeatScopedBeamingAndRestCompletion", |xml| {
+        let mut beat_scoped_beaming_receipts = master_state_identity::OwnerReceipts::default();
+        beat_scoped_beaming_receipts
+            .push_block(enforce_beat_scoped_beaming_and_rest_completion_in_xml(xml));
+        ((), beat_scoped_beaming_receipts)
+    });
+    if final_render_source_available {
+        let root = render_state.require_state_root("IR10 E053/#53");
+        let mut candidate = root.document().to_owned();
+        let mut receipts = crate::master_state_identity::RenderTransitionReceipts::new();
+        let partial = enforce_partial_beat_post_rest_beams_in_xml(&mut candidate);
+        receipts.push_preserving(partial.preserving_receipt, &candidate);
+        let receipt = enforce_beat_scoped_beaming_and_rest_completion_in_xml(&mut candidate);
+        receipts.push_block(receipt, &candidate);
+        render_state.adopt_transition(root, &candidate, receipts,
+            structural_write_authority::RenderSinkKind::Checkpoint(structural_write_authority::RenderCheckpointSink::FinalNotation),
+            |path, _pre, post| crate::structural_write_authority::write_final_notation_checkpoint_authorized(path, post),
+        ).with_context(|| "Fruehe Rustig-FinalNotation konnte nicht adoptiert werden")?;
+    }
+    let pre_preview_render_xml_for_gap = render_state.observed_document_or(best.layout_xml()).to_owned();
+    if final_render_source_available {
+        let render_preview_source = render_state.require_document("Condensation preview").to_owned();
+        if let Some(measure) = select_single_condensation_preview_measure(
+            reference, &render_preview_source, best.reference_signature.measures.max(1),
+        ) {
+            let mut render_preview_probe = render_preview_source.clone();
+            if materialize_single_condensation_render_preview(&mut render_preview_probe, measure) {
+                println!("ETUSCHLOPF: SingleCondensationRenderPreviewAuditOnly: Takt {} waere ein Kandidat; produktiver Render-Write unterdrueckt, da die Preview-Note keine CandidateMaterial-Identity traegt", measure);
+            }
+        }
+    }
+    // #56 runs on the Master export source; its BLOCK_DOCUMENT receipt travels
+    // move-only with the export to the released-Master adoption.
+    let ((final_export_xml, master_cursor_lane_repair_audit), master_export_block_receipt) =
+        repair_cursor_lane_end_invariant_xml("MasterXML", best.layout_xml());
+    render_state.bind_late_master_epoch(
+        crate::master_state_identity::RenderMasterEpoch::after_cursor_lane_before_final_chord(
+            best.master_state.lineage(),
+            best.master_state.document(),
+            master_export_block_receipt.as_ref(),
+            &final_export_xml,
+        ),
+    );
+    let mut cursor_lane_repair_audits = vec![master_cursor_lane_repair_audit];
+    // Render #56 is consumed here, independently from the Master export receipt;
+    // no receipt remains to transport in InitialRenderTransaction.
+    if final_render_source_available {
+        let root = render_state.require_state_root("IR11 Render #56");
+        let ((candidate, audit), receipt) = repair_cursor_lane_end_invariant_xml("RenderXML", root.document());
+        let mut receipts = crate::master_state_identity::RenderTransitionReceipts::new();
+        receipts.push_block(receipt, &candidate);
+        if candidate != root.document() || !receipts.is_empty() {
+            render_state.adopt_transition(root, &candidate, receipts,
+                structural_write_authority::RenderSinkKind::Checkpoint(structural_write_authority::RenderCheckpointSink::CursorLaneRepair),
+                |path, _pre, post| crate::structural_write_authority::write_cursor_lane_repair_checkpoint_authorized(path, post),
+            ).with_context(|| "CursorLaneEndInvariantRepair konnte nicht adoptiert werden")?;
+        } else { render_state.decline_transition(root, receipts); }
+        cursor_lane_repair_audits.push(audit);
+    }
+    let cursor_lane_end_invariant_repair_audit =
+        merge_cursor_lane_end_invariant_repair_audits(cursor_lane_repair_audits);
+    let lower_staff_secondary_reanchored_lane_rest_visibility_suppression_trial =
+        if final_render_source_available {
+            let root = render_state.require_state_root("IR12 secondary rest");
+            let (trial, candidate, receipts) =
+                build_lower_staff_secondary_reanchored_lane_rest_visibility_suppression_trial_prepared(
+                    root.document(), "Render-XML nach CursorLaneEndInvariantRepair", &render_xml_trial_path,
+                )?;
+            if let Some(candidate) = candidate.as_deref() {
+                render_state.adopt_transition(root, candidate, receipts, structural_write_authority::RenderSinkKind::SecondaryReanchoredRestTrial,
+                    |path, pre, post| (crate::structural_write_authority::write_secondary_reanchored_rest_trial_authorized(pre, post, path), None),
+                ).with_context(|| "IR12 secondary rest adoption")?;
+            } else { render_state.decline_transition(root, receipts); }
+            trial
+        } else {
+            LowerStaffSecondaryReanchoredLaneRestVisibilitySuppressionTrial {
+            source_label: "keine finale Render-XML-Quelle".to_string(),
+            done_fragment: "LowerStaffSecondaryReanchoredLaneRestVisibilitySuppression: übersprungen, keine Render-XML-Quelle".to_string(),
+            pipeline_line: format!(
+                "ReanchorRestVisibilitySafetyNet v{}: übersprungen; keine finale Render-XML-Quelle; keine MusicXML-Änderung, MusicMutation nein.",
+                env!("CARGO_PKG_VERSION")
+            ),
+            verdict: "skipped_no_render_xml_source".to_string(),
+            ..LowerStaffSecondaryReanchoredLaneRestVisibilitySuppressionTrial::default()
+        }
+        };
+    let p2_assertive_return_write_audit = if final_render_source_available {
+        let root = render_state.require_state_root("IR13 P2 retention");
+        let ((candidate, audit), receipt) = apply_retention_first_p2_assertive_return_write_explicit_gate(
+            &final_export_xml, root.document(),
+        );
+        let mut receipts = crate::master_state_identity::RenderTransitionReceipts::new();
+        receipts.push_exact(receipt);
+        if audit.render_written {
+            render_state.adopt_transition(root, &candidate, receipts,
+                structural_write_authority::RenderSinkKind::Checkpoint(structural_write_authority::RenderCheckpointSink::RetentionReturn),
+                |path, _pre, post| crate::structural_write_authority::write_retention_return_checkpoint_authorized(path, post),
+            ).with_context(|| "IR13 P2 retention adoption")?;
+        } else { render_state.decline_transition(root, receipts); }
+        audit
+    } else {
+        RetentionFirstP2AssertiveReturnWriteAudit {
+            ..RetentionFirstP2AssertiveReturnWriteAudit::default()
+        }
+    };
+    let mut upper_staff_final_duplicate_rest_rewrite_written = false;
+    if final_render_source_available {
+            let root = render_state.require_state_root("IR14 upper duplicate rest");
+            let render_xml_before_upper_duplicate_rewrite = root.document().to_owned();
+            let (before_events, before_backup_forward_ok) =
+                collect_render_xml_note_events(&render_xml_before_upper_duplicate_rewrite);
+            let before_signature = render_visible_sounding_signature(&before_events);
+            let upper_staff_final_duplicate_rest_rewrite_visible_rests_before = before_events
+                .iter()
+                .filter(|event| !event.is_hidden && event.is_rest)
+                .count();
+            let upper_staff_final_duplicate_rest_rewrite_visible_pitched_before = before_events
+                .iter()
+                .filter(|event| !event.is_hidden && event.midi.is_some())
+                .count();
+            let upper_staff_final_duplicate_rest_rewrite_hidden_pitched_before = before_events
+                .iter()
+                .filter(|event| event.is_hidden && event.midi.is_some())
+                .count();
+            let upper_staff_final_duplicate_rest_rewrite_hidden_rests_before = before_events
+                .iter()
+                .filter(|event| event.is_hidden && event.is_rest)
+                .count();
+            let ((
+                render_xml_after_upper_duplicate_rewrite,
+                _seen,
+                suppressed,
+                _duration_to_forward,
+                _scopes,
+                _proof,
+            ), receipts) = apply_upper_staff_duplicate_visible_rest_suppression_with_receipts(
+                &render_xml_before_upper_duplicate_rewrite,
+                24,
+            );
+            let (after_events, after_backup_forward_ok) =
+                collect_render_xml_note_events(&render_xml_after_upper_duplicate_rewrite);
+            let after_signature = render_visible_sounding_signature(&after_events);
+            let upper_staff_final_duplicate_rest_rewrite_visible_rests_after = after_events
+                .iter()
+                .filter(|event| !event.is_hidden && event.is_rest)
+                .count();
+            let upper_staff_final_duplicate_rest_rewrite_visible_pitched_after = after_events
+                .iter()
+                .filter(|event| !event.is_hidden && event.midi.is_some())
+                .count();
+            let upper_staff_final_duplicate_rest_rewrite_hidden_pitched_after = after_events
+                .iter()
+                .filter(|event| event.is_hidden && event.midi.is_some())
+                .count();
+            let upper_staff_final_duplicate_rest_rewrite_hidden_rests_after = after_events
+                .iter()
+                .filter(|event| event.is_hidden && event.is_rest)
+                .count();
+            let upper_staff_final_duplicate_rest_rewrite_parse_after_ok =
+                parse_musicxml(&render_xml_after_upper_duplicate_rewrite).is_ok();
+            let upper_staff_final_duplicate_rest_rewrite_backup_forward_after_ok =
+                before_backup_forward_ok && after_backup_forward_ok;
+            let upper_staff_final_duplicate_rest_rewrite_sounding_stable =
+                before_signature == after_signature;
+            let invariant_ok = suppressed > 0
+                && upper_staff_final_duplicate_rest_rewrite_parse_after_ok
+                && upper_staff_final_duplicate_rest_rewrite_backup_forward_after_ok
+                && upper_staff_final_duplicate_rest_rewrite_sounding_stable
+                && upper_staff_final_duplicate_rest_rewrite_visible_pitched_before
+                    == upper_staff_final_duplicate_rest_rewrite_visible_pitched_after
+                && upper_staff_final_duplicate_rest_rewrite_hidden_pitched_before
+                    == upper_staff_final_duplicate_rest_rewrite_hidden_pitched_after
+                && upper_staff_final_duplicate_rest_rewrite_hidden_rests_before
+                    == upper_staff_final_duplicate_rest_rewrite_hidden_rests_after
+                && upper_staff_final_duplicate_rest_rewrite_visible_rests_after
+                    < upper_staff_final_duplicate_rest_rewrite_visible_rests_before;
+            if invariant_ok {
+                render_state.adopt_transition(root, &render_xml_after_upper_duplicate_rewrite, receipts,
+                    structural_write_authority::RenderSinkKind::Checkpoint(structural_write_authority::RenderCheckpointSink::DuplicateRestRewrite),
+                    |path, _pre, post| crate::structural_write_authority::write_duplicate_rest_rewrite_checkpoint_authorized(path, post),
+                ).with_context(|| "IR14 duplicate rest adoption")?;
+                upper_staff_final_duplicate_rest_rewrite_written = true;
+            } else { render_state.decline_transition(root, receipts); }
+        }
+    let strict_staff_local_release_completeness_trial = if final_render_source_available {
+        let root = render_state.require_state_root("IR15 StrictStaff");
+        let (trial, candidate, receipts) = build_strict_staff_local_release_completeness_with_transient_wav_gate_trial_prepared(
+            root.document(), "Render-XML nach finalen Render-Notation-Writes", &render_xml_trial_path,
+        )?;
+        if let Some(candidate) = candidate.as_deref() {
+            render_state.adopt_transition(root, candidate, receipts, structural_write_authority::RenderSinkKind::StrictStaffReleaseTrial,
+                |path, pre, post| (crate::structural_write_authority::write_strict_staff_release_trial_authorized(pre, post, path), None),
+            ).with_context(|| "IR15 StrictStaff adoption")?;
+        } else { render_state.decline_transition(root, receipts); }
+        trial
+    } else {
+        StrictStaffOverfullCoverageNormalizationTrial {
+            source_label: "keine finale Render-XML-Quelle".to_string(),
+            verdict: "strict_staff_local_release_skipped_no_render_source".to_string(),
+            done_fragment: "StrictStaffOverfullCoverageNormalization: uebersprungen; keine finale Render-XML-Quelle; WriteAllowed nein; MusicMutation nein".to_string(),
+            pipeline_line: format!("StrictStaffOverfullCoverageNormalization v{}: uebersprungen; keine finale Render-XML-Quelle; CrossStaffGluingUsedAsReleaseProof 0; WriteAllowed nein; MusicMutation nein.", env!("CARGO_PKG_VERSION")),
+            wav_gate_mode: "transient_attack_only_no_sustain_energy_no_overtone_block".to_string(),
+            ..StrictStaffOverfullCoverageNormalizationTrial::default()
+        }
+    };
+    // v0.10.1786: the dedicated post-Strict ShadowRest pre-owner is retired.
+    // StrictStaff may still materialize visible rest lanes, but the immediately following
+    // atomic FinalVisibleRestRole owner classifies the full role truth with a stricter,
+    // corpus-proven predicate. The old focused upper-staff selector had broader delete
+    // authority and could pre-empt that canonical role decision.
+    let final_visible_rest_role_purge_and_vertical_placement_write_audit =
+        if final_render_source_available {
+            let root = render_state.require_state_root("IR16 visible rest role");
+            let (candidate, audit, receipts) = apply_final_visible_rest_role_purge_and_vertical_placement_write_with_receipts(
+                root.document(), "Render-XML nach Oberhand-Schattenpausen-Fix und StrictStaff",
+            );
+            if audit.written {
+                render_state.adopt_transition(root, &candidate, receipts,
+                    structural_write_authority::RenderSinkKind::Checkpoint(structural_write_authority::RenderCheckpointSink::VisibleRestRole),
+                    |path, _pre, post| crate::structural_write_authority::write_visible_rest_role_checkpoint_authorized(path, post),
+                ).with_context(|| "IR16 visible rest role adoption")?;
+            } else { render_state.decline_transition(root, receipts); }
+            audit
+        } else {
+            UpperStaffShadowRestVoice1KeepWithoutShadowLaneFixAudit {
+            source_label: "keine finale Render-XML-Quelle".to_string(),
+            verdict: "final_visible_rest_role_purge_and_vertical_placement_write_skipped_no_render_source".to_string(),
+            pipeline_line: format!("RestGlyphVisualEnvelopeStandardFix v{}: uebersprungen; keine finale Render-XML-Quelle; kein Write.", env!("CARGO_PKG_VERSION")),
+            done_fragment: "RestGlyphVisualEnvelopeStandardFix: uebersprungen, keine Render-XML-Quelle".to_string(),
+            ..UpperStaffShadowRestVoice1KeepWithoutShadowLaneFixAudit::default()
+        }
+        };
+    let strict_visible_rest_arithmetic_materializer_trial = if final_render_source_available {
+        let root = render_state.require_state_root("IR17 final rest closure");
+        let (trial, candidate, receipts) = build_strict_visible_rest_arithmetic_materializer_trial_prepared(
+            root.document(), "finale Render-MusicXML vor FinalRestClosureByInvariantProof", &render_xml_trial_path,
+        )?;
+        if let Some(candidate) = candidate.as_deref() {
+            render_state.adopt_transition(root, candidate, receipts, structural_write_authority::RenderSinkKind::StrictVisibleRestArithmeticTrial,
+                |path, pre, post| (crate::structural_write_authority::write_strict_visible_rest_arithmetic_trial_authorized(pre, post, path), None),
+            ).with_context(|| "IR17 final rest closure adoption")?;
+        } else { render_state.decline_transition(root, receipts); }
+        trial
+    } else {
+        RenderXmlPianisticRestRepairTrial {
+            source_label: "keine finale Render-XML-Quelle".to_string(),
+            verdict: "strict_visible_rest_arithmetic_materializer_skipped_no_render_source".to_string(),
+            done_fragment: "FinalRestClosureByInvariantProof: uebersprungen; keine finale Render-XML-Quelle".to_string(),
+            pipeline_line: format!("FinalRestClosureByInvariantProof v{}: uebersprungen; keine finale Render-XML-Quelle; kein Write, keine Musikmutation.", env!("CARGO_PKG_VERSION")),
+            ..RenderXmlPianisticRestRepairTrial::default()
+        }
+    };
+    let external_feedback_safe_notation_write_audit = if final_render_source_available {
+        let root = render_state.require_state_root("IR18 external feedback");
+        let (_candidate_xml, audit, candidate, receipts) = build_external_notation_feedback_safe_write_audit_prepared(
+            root.document(), "Render-XML nach FinalRestClosureByInvariantProof vor ExternalNotationFeedback-SafeWrite", &render_xml_trial_path,
+        )?;
+        if let Some(candidate) = candidate.as_deref() {
+            render_state.adopt_transition(root, candidate, receipts, structural_write_authority::RenderSinkKind::ExternalNotationFeedbackAudit,
+                |path, _pre, post| (crate::structural_write_authority::write_external_notation_feedback_audit_candidate_authorized(path, post), None),
+            ).with_context(|| "IR18 external feedback adoption")?;
+        } else { render_state.decline_transition(root, receipts); }
+        audit
+    } else {
+        TieMergeAccountingAndTrueTransactionalRestCoalesceAudit {
+            source_label: "keine finale Render-XML-Quelle".to_string(),
+            verdict: "external_feedback_safe_write_skipped_no_render_source".to_string(),
+            done_fragment: "TieMergeAccountingAndTrueTransactionalRestCoalesce: uebersprungen; keine Render-XML-Quelle".to_string(),
+            pipeline_line: format!("TieMergeAccountingAndTrueTransactionalRestCoalesce v{}: uebersprungen; keine finale Render-XML-Quelle; geschrieben nein; MusicMutation nein.", env!("CARGO_PKG_VERSION")),
+            ..TieMergeAccountingAndTrueTransactionalRestCoalesceAudit::default()
+        }
+    };
+
+    complete_initial_render_transaction_stage(
+        best,
+        InitialRenderTransaction {
+            render_xml_trial_path,
+            render_xml_pruned_pdf_trial,
+            behind_bars_rule_check_rest_and_tie_audit,
+            cross_staff_hand_role_materialization_trial,
+            lower_staff_visible_rhythm_rest_lane_trial,
+            final_render_source_available,
+            pre_preview_render_xml_for_gap,
+            final_export_xml,
+            master_export_block_receipt,
+            frozen_sounding_temporal_lane_plan: FrozenSoundingTemporalLanePlan::default(),
+            frozen_sounding_material_attacks: std::sync::Arc::from(
+                Vec::<CandidateMaterialAttackState>::new(),
+            ),
+            cursor_lane_end_invariant_repair_audit,
+            lower_staff_secondary_reanchored_lane_rest_visibility_suppression_trial,
+            p2_assertive_return_write_audit,
+            render_pruned_final_chord_omissions: std::collections::BTreeSet::new(),
+            upper_staff_final_duplicate_rest_rewrite_written,
+            strict_staff_local_release_completeness_trial,
+            final_visible_rest_role_purge_and_vertical_placement_write_audit,
+            strict_visible_rest_arithmetic_materializer_trial,
+            external_feedback_safe_notation_write_audit,
+        },
+        render_state,
+    )
+}
+
+fn complete_initial_render_transaction_stage(
+    mut best: SolverCandidate,
+    mut transaction: InitialRenderTransaction,
+    render_state: structural_write_authority::RenderSovereignState,
+) -> anyhow::Result<InitialRenderTransactionStageOutcome> {
+    let final_export_xml = &transaction.final_export_xml;
+    let final_chord_original_evidence =
+        frozen_final_chord_original_evidence(&best.material_lineage)?;
+    let (final_chord_structural_plan, final_chord_sounding_plan) =
+        crate::structural_write_authority::plan_canonical_final_chord_structure_once(
+            final_export_xml,
+            &final_chord_original_evidence,
+        )
+        .with_context(|| {
+            "FinalChordEncodingSoundingMaterialization konnte kanonischen FinalChord-Plan nicht bilden"
+        })?;
+    let final_chord_sounding_projection_result =
+        crate::structural_write_authority::project_final_chord_encoding_plan_with_provenance(
+            final_export_xml,
+            &final_chord_sounding_plan,
+        )
+        .with_context(|| {
+            "FinalChordEncodingSoundingMaterialization konnte reine FinalChord-Projektion nicht bilden"
+        })?;
+    let final_chord_sounding_projection = final_chord_sounding_projection_result.xml;
+    let final_chord_source_notes = parse_atomic_notes(final_export_xml);
+    let mut final_chord_source_by_range = FinalChordSourceByRange::new();
+    let mut next_raw_by_measure = std::collections::BTreeMap::<usize, usize>::new();
+    for note in &final_chord_source_notes {
+        let measure = note.measure.parse::<usize>().map_err(|_| {
+            anyhow!(
+                "FinalChordEncodingSoundingMaterialization: non-numeric measure in FinalExport"
+            )
+        })?;
+        let raw_note_index = next_raw_by_measure.entry(measure).or_default();
+        if final_chord_source_by_range
+            .insert(
+                (note.note_start, note.note_end),
+                (
+                    measure,
+                    *raw_note_index,
+                    note.start,
+                    note.pitch.as_ref().map(|pitch| pitch.midi),
+                ),
+            )
+            .is_some()
+        {
+            return Err(anyhow!(
+                "FinalChordEncodingSoundingMaterialization: source note range is not unique"
+            ));
+        }
+        *raw_note_index = raw_note_index.saturating_add(1);
+    }
+    if final_chord_source_notes.len() != best.material_lineage.fragments.len()
+        || final_chord_source_by_range.len() != best.material_lineage.fragments.len()
+    {
+        return Err(anyhow!(
+            "FinalChordEncodingSoundingMaterialization: FinalExport note topology differs from CandidateMaterial fragments"
+        ));
+    }
+
+    let mut fragment_by_raw =
+        std::collections::BTreeMap::<(usize, usize), CandidateMaterialFragmentState>::new();
+    let mut fragment_id_by_raw =
+        std::collections::BTreeMap::<(usize, usize), usize>::new();
+    for (fragment_index, fragment) in best.material_lineage.fragments.iter().enumerate() {
+        let key = (fragment.measure, fragment.raw_note_index);
+        if fragment_by_raw.insert(key, fragment.clone()).is_some()
+            || fragment_id_by_raw
+                .insert(key, fragment_index.saturating_add(1))
+                .is_some()
+        {
+            return Err(anyhow!(
+                "FinalChordEncodingSoundingMaterialization: CandidateMaterial raw-note topology is not unique"
+            ));
+        }
+    }
+
+    let mut render_pruned_fragment_ids = Vec::new();
+    if transaction.render_xml_pruned_pdf_trial.pdf_source_selected {
+        let split_survivor_raw = transaction
+            .render_xml_pruned_pdf_trial
+            .p2_split_occurrences
+            .iter()
+            .map(|row| (row.scope, row.raw_note_index))
+            .collect::<std::collections::BTreeSet<_>>();
+        if split_survivor_raw.len()
+            != transaction
+                .render_xml_pruned_pdf_trial
+                .p2_split_occurrences
+                .len()
+            || transaction
+                .render_xml_pruned_pdf_trial
+                .p2_split_occurrences
+                .iter()
+                .any(|row| {
+                    fragment_by_raw
+                        .get(&(row.scope, row.raw_note_index))
+                        .is_none_or(|fragment| {
+                            fragment.onset != row.onset
+                                || fragment.pitch != Some(row.pitch)
+                                || fragment.staff != row.staff
+                                || fragment.is_chord != row.chord_syntax
+                        })
+                })
+        {
+            return Err(anyhow!(
+                "FinalChordRenderPruneDisposition: split survivor receipt does not match CandidateMaterial identity"
+            ));
+        }
+        render_pruned_fragment_ids = fragment_by_raw
+            .iter()
+            .filter_map(|(key, fragment)| {
+                (fragment.pitch.is_some() && !split_survivor_raw.contains(key))
+                    .then(|| fragment_id_by_raw.get(key).copied().map(|id| (id, fragment)))
+                    .flatten()
+            })
+            .collect::<Vec<_>>();
+        if render_pruned_fragment_ids.len()
+            != transaction
+                .render_xml_pruned_pdf_trial
+                .removed_safe_hidden_inner_chord_tones
+            || render_pruned_fragment_ids
+                .iter()
+                .any(|(_, fragment)| fragment.visible || !fragment.is_chord)
+        {
+            return Err(anyhow!(
+                "FinalChordRenderPruneDisposition: split receipt does not match the accepted hidden inner-chord prune"
+            ));
+        }
+    }
+
+    let attack_by_source = best
+        .material_lineage
+        .attacks
+        .iter()
+        .map(|attack| (attack.source_event_id, attack.clone()))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let mut final_chord_source_bindings =
+        std::collections::BTreeMap::<(usize, usize), FinalChordSourceBindingRow>::new();
+    for provenance in &final_chord_sounding_projection_result.provenance {
+        let binding = final_chord_source_binding(
+            &mut final_chord_source_bindings,
+            (provenance.source_note_start, provenance.source_note_end),
+            &final_chord_source_by_range,
+            &fragment_by_raw,
+            &fragment_id_by_raw,
+            "FinalChordProjectionIdentityTransport: projection provenance source range is absent from FinalExport",
+            "FinalChordProjectionIdentityTransport: projection provenance source note lost CandidateMaterial fragment",
+        )?;
+        let source_pitch = binding.source_pitch.ok_or_else(|| {
+            anyhow!(
+                "FinalChordProjectionIdentityTransport: projection provenance references non-pitched source note"
+            )
+        })?;
+        let fragment = &binding.fragment;
+        if fragment.onset != binding.source_onset || fragment.pitch != Some(source_pitch) {
+            return Err(anyhow!(
+                "FinalChordProjectionIdentityTransport: source topology disagrees with CandidateMaterial fragment"
+            ));
+        }
+        let source_event_id = fragment.source_event_id.ok_or_else(|| {
+            anyhow!(
+                "FinalChordProjectionIdentityTransport: source fragment has no SourceEventId"
+            )
+        })?;
+        let attack_id = fragment.attack_id.ok_or_else(|| {
+            anyhow!(
+                "FinalChordProjectionIdentityTransport: source fragment has no SoundingAttackId"
+            )
+        })?;
+        let attack = attack_by_source.get(&source_event_id).cloned().ok_or_else(|| {
+            anyhow!(
+                "FinalChordProjectionIdentityTransport: SourceEventId has no CandidateMaterial attack"
+            )
+        })?;
+        if attack.attack_id != attack_id || attack.pitch != source_pitch {
+            return Err(anyhow!(
+                "FinalChordProjectionIdentityTransport: source/attack receipt disagrees with CandidateMaterialState for SourceEventId {}; fragment_id={} measure={} raw_note_index={} source_onset={} fragment_onset={} attack_onset={} source_pitch={} fragment_pitch={:?} attack_pitch={} fragment_attack_id={} state_attack_id={} attack_exists={} fragment_tie_stop={}",
+                source_event_id.0,
+                binding.fragment_id,
+                binding.measure,
+                binding.raw_note_index,
+                binding.source_onset,
+                fragment.onset,
+                attack.onset,
+                source_pitch,
+                fragment.pitch,
+                attack.pitch,
+                attack_id.0,
+                attack.attack_id.0,
+                attack.exists,
+                fragment.tie_stop,
+            ));
+        }
+    }
+    let mut seen_source_ids = std::collections::BTreeSet::<MaterialSourceEventId>::new();
+    let mut seen_attack_ids = std::collections::BTreeSet::<SoundingAttackId>::new();
+    let mut final_chord_onset_translations =
+        Vec::<CandidateMaterialForwardOnsetTranslation>::new();
+
+    for provenance in final_chord_sounding_plan.forward_materializations() {
+        let binding = final_chord_source_binding(
+            &mut final_chord_source_bindings,
+            (provenance.source_note_start, provenance.source_note_end),
+            &final_chord_source_by_range,
+            &fragment_by_raw,
+            &fragment_id_by_raw,
+            "FinalChordEncodingSoundingMaterialization: planner provenance source range is absent from FinalExport",
+            "FinalChordEncodingSoundingMaterialization: provenance raw note lost CandidateMaterial fragment",
+        )?;
+        if binding.source_onset != provenance.source_onset {
+            return Err(anyhow!(
+                "FinalChordEncodingSoundingMaterialization: planner source onset disagrees with FinalExport"
+            ));
+        }
+        let source_pitch = binding.source_pitch.ok_or_else(|| {
+            anyhow!(
+                "FinalChordEncodingSoundingMaterialization: planner rematerialized a non-pitched source note"
+            )
+        })?;
+        let fragment = &binding.fragment;
+        if fragment.onset != binding.source_onset || fragment.pitch != Some(source_pitch) {
+            return Err(anyhow!(
+                "FinalChordEncodingSoundingMaterialization: forward source topology disagrees with CandidateMaterial fragment"
+            ));
+        }
+        let source_event_id = fragment.source_event_id.ok_or_else(|| {
+            anyhow!(
+                "FinalChordEncodingSoundingMaterialization: provenance source fragment has no SourceEventId"
+            )
+        })?;
+        let attack = attack_by_source.get(&source_event_id).cloned().ok_or_else(|| {
+            anyhow!(
+                "FinalChordEncodingSoundingMaterialization: provenance SourceEventId has no SoundingAttack"
+            )
+        })?;
+        let Some(translation) = final_chord_forward_attack_translation(
+            &binding, &attack, provenance.source_onset, provenance.projected_sounding_onset,
+        )? else {
+            continue;
+        };
+        if !seen_source_ids.insert(source_event_id) || !seen_attack_ids.insert(attack.attack_id) {
+            return Err(anyhow!(
+                "FinalChordEncodingSoundingMaterialization: planner provenance is not one-to-one in opaque identity"
+            ));
+        }
+        final_chord_onset_translations.push(translation);
+    }
+
+    reconcile_candidate_material_forward_onset_translations(
+        &mut best,
+        "FinalChordEncodingSoundingMaterialization",
+        CandidateMaterialDeclaredEffects::final_chord_sounding_materialization(),
+        &final_chord_onset_translations,
+    )?;
+
+    if transaction.final_render_source_available
+        && !transaction
+            .p2_assertive_return_write_audit
+            .occurrence_receipt_complete
+    {
+        return Err(anyhow!(
+            "RetentionFirstP2OccurrenceContinuation: P2 boundary did not produce a total retained+generated occurrence receipt"
+        ));
+    }
+    let mut p2_render_occurrence_witnesses =
+        Vec::<crate::structural_write_authority::FinalChordRenderOccurrenceWitness>::new();
+    for receipt in &transaction
+        .p2_assertive_return_write_audit
+        .generated_occurrences
+    {
+        let binding = final_chord_source_binding(
+            &mut final_chord_source_bindings,
+            (receipt.source_note_start, receipt.source_note_end),
+            &final_chord_source_by_range,
+            &fragment_by_raw,
+            &fragment_id_by_raw,
+            "RetentionFirstP2OccurrenceContinuation: P2 source range is absent from FinalExport",
+            "RetentionFirstP2OccurrenceContinuation: P2 source lost CandidateMaterial fragment",
+        )?;
+        if binding.measure != receipt.measure {
+            return Err(anyhow!(
+                "RetentionFirstP2OccurrenceContinuation: generated occurrence measure disagrees with source provenance"
+            ));
+        }
+        let fragment = &binding.fragment;
+        let source_event_id = fragment.source_event_id.ok_or_else(|| {
+            anyhow!(
+                "RetentionFirstP2OccurrenceContinuation: P2 source fragment has no SourceEventId"
+            )
+        })?;
+        let attack_id = fragment.attack_id.ok_or_else(|| {
+            anyhow!(
+                "RetentionFirstP2OccurrenceContinuation: P2 source fragment has no SoundingAttackId"
+            )
+        })?;
+        p2_render_occurrence_witnesses.push(
+            crate::structural_write_authority::FinalChordRenderOccurrenceWitness {
+                fragment_id: binding.fragment_id,
+                source_event_id: source_event_id.0,
+                attack_id: attack_id.0,
+                measure: binding.measure,
+                pitched_ordinal: receipt.pitched_ordinal,
+                representation_duration: None,
+                sequence_fingerprint_fnv64: receipt.sequence_fingerprint_fnv64,
+            },
+        );
+    }
+
+    if transaction.final_render_source_available {
+        // Continue a participating P2 boundary even without a new P2 write.
+        let retained_by_input = transaction
+            .p2_assertive_return_write_audit
+            .retained_occurrences
+            .iter()
+            .map(|row| ((row.input_scope, row.input_pitched_ordinal), row))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        if retained_by_input.len()
+            != transaction
+                .p2_assertive_return_write_audit
+                .retained_occurrences
+                .len()
+        {
+            return Err(anyhow!(
+                "RetentionFirstP2OccurrenceContinuation: retained writer receipt reused one input occurrence"
+            ));
+        }
+        if retained_by_input.len()
+            != transaction
+                .render_xml_pruned_pdf_trial
+                .p2_split_occurrences
+                .len()
+        {
+            return Err(anyhow!(
+                "RetentionFirstP2OccurrenceContinuation: pitched topology changed between the initial split and P2 input initial_split={} p2_input={}",
+                transaction
+                    .render_xml_pruned_pdf_trial
+                    .p2_split_occurrences
+                    .len(),
+                retained_by_input.len()
+            ));
+        }
+
+        let mut consumed_retained_occurrences =
+            std::collections::BTreeSet::<(usize, usize)>::new();
+        for split_row in &transaction
+            .render_xml_pruned_pdf_trial
+            .p2_split_occurrences
+        {
+            let receipt = retained_by_input
+                .get(&(split_row.scope, split_row.pitched_ordinal))
+                .copied()
+                .ok_or_else(|| {
+                    anyhow!(
+                        "RetentionFirstP2OccurrenceContinuation: split occurrence has no retained P2 writer receipt"
+                    )
+                })?;
+            if !consumed_retained_occurrences
+                .insert((split_row.scope, split_row.pitched_ordinal))
+            {
+                return Err(anyhow!(
+                    "RetentionFirstP2OccurrenceContinuation: split occurrence was consumed twice"
+                ));
+            }
+            // The initial split owns CandidateMaterial semantic time; the P2 input receipt
+            // owns the current render occurrence after authorized representation-only cursor/rest
+            // rewrites. Do not make the later render cursor a second semantic-onset authority.
+            // Stable retained-occurrence identity here is scope + input ordinal + pitch + chord
+            // syntax; exact persisted range and writer-sequence fingerprint are proven below.
+            if receipt.input_scope != split_row.scope
+                || receipt.input_pitched_ordinal != split_row.pitched_ordinal
+                || receipt.input_pitch != split_row.pitch
+                || receipt.input_chord_syntax != split_row.chord_syntax
+                || receipt.measure != split_row.scope
+            {
+                return Err(anyhow!(
+                    "RetentionFirstP2OccurrenceContinuation: occurrence topology drifted between the initial split and P2 writer; split(scope={}, raw={}, ordinal={}, onset={}, pitch={}, chord={}) receipt(input_scope={}, input_ordinal={}, input_onset={}, input_pitch={}, input_chord={}, output_measure={}, output_ordinal={})",
+                    split_row.scope,
+                    split_row.raw_note_index,
+                    split_row.pitched_ordinal,
+                    split_row.onset,
+                    split_row.pitch,
+                    split_row.chord_syntax,
+                    receipt.input_scope,
+                    receipt.input_pitched_ordinal,
+                    receipt.input_onset,
+                    receipt.input_pitch,
+                    receipt.input_chord_syntax,
+                    receipt.measure,
+                    receipt.pitched_ordinal,
+                ));
+            }
+            let fragment = fragment_by_raw
+                .get(&(split_row.scope, split_row.raw_note_index))
+                .cloned()
+                .ok_or_else(|| {
+                    anyhow!(
+                        "RetentionFirstP2OccurrenceContinuation: split occurrence lost CandidateMaterial fragment"
+                    )
+                })?;
+            let fragment_id = fragment_id_by_raw
+                .get(&(split_row.scope, split_row.raw_note_index))
+                .copied()
+                .ok_or_else(|| {
+                    anyhow!(
+                        "RetentionFirstP2OccurrenceContinuation: split occurrence lost canonical fragment id"
+                    )
+                })?;
+            if fragment.measure != split_row.scope
+                || fragment.raw_note_index != split_row.raw_note_index
+                || fragment.onset != split_row.onset
+                || fragment.pitch != Some(split_row.pitch)
+                || fragment.staff != split_row.staff
+                || fragment.is_chord != split_row.chord_syntax
+            {
+                return Err(anyhow!(
+                    "RetentionFirstP2OccurrenceContinuation: split locator disagrees with CandidateMaterial identity"
+                ));
+            }
+            let source_event_id = fragment.source_event_id.ok_or_else(|| {
+                anyhow!(
+                    "RetentionFirstP2OccurrenceContinuation: split fragment has no SourceEventId"
+                )
+            })?;
+            let attack_id = fragment.attack_id.ok_or_else(|| {
+                anyhow!(
+                    "RetentionFirstP2OccurrenceContinuation: split fragment has no SoundingAttackId"
+                )
+            })?;
+            p2_render_occurrence_witnesses.push(
+                crate::structural_write_authority::FinalChordRenderOccurrenceWitness {
+                    fragment_id,
+                    source_event_id: source_event_id.0,
+                    attack_id: attack_id.0,
+                    measure: receipt.measure,
+                    pitched_ordinal: receipt.pitched_ordinal,
+                    representation_duration: None,
+                    sequence_fingerprint_fnv64: receipt.sequence_fingerprint_fnv64,
+                },
+            );
+        }
+    }
+
+    let witnessed_fragment_ids = p2_render_occurrence_witnesses
+        .iter()
+        .map(|witness| witness.fragment_id)
+        .collect::<std::collections::BTreeSet<_>>();
+    transaction.render_pruned_final_chord_omissions = render_pruned_fragment_ids
+        .drain(..)
+        .map(|(fragment_id, _)| fragment_id)
+        .filter(|fragment_id| !witnessed_fragment_ids.contains(fragment_id))
+        .collect();
+
+    let mut provenance_by_projected_start = std::collections::BTreeMap::new();
+    for provenance in &final_chord_sounding_projection_result.provenance {
+        if provenance_by_projected_start
+            .insert(provenance.projected_note_start, provenance)
+            .is_some()
+        {
+            return Err(anyhow!(
+                "NotationVoicePreSerializationConstraintClosureAudit: projected pitched-note provenance start is not unique"
+            ));
+        }
+    }
+    let projected_notes = parse_atomic_notes(&final_chord_sounding_projection);
+    let mut next_pitched_ordinal_by_measure =
+        std::collections::BTreeMap::<usize, usize>::new();
+    let mut atomic_group_tracker =
+        crate::audit_only::notation_voice_pre_serialization_constraint_closure_audit::
+            PreSerializationAtomicGroupTracker::default();
+    let mut pre_serialization_occurrences = Vec::<
+        crate::audit_only::notation_voice_pre_serialization_constraint_closure_audit::
+            PreSerializationOccurrenceRow,
+    >::new();
+    let mut pre_serialization_occupancy = Vec::<
+        crate::audit_only::notation_voice_pre_serialization_constraint_closure_audit::
+            PreSerializationVisibleOccupancyRow,
+    >::new();
+    for note in &projected_notes {
+        let measure = note.measure.parse::<usize>().map_err(|_| {
+            anyhow!(
+                "NotationVoicePreSerializationConstraintClosureAudit: projected FinalChord note has non-numeric measure"
+            )
+        })?;
+        let staff = note.staff.parse::<u8>().map_err(|_| {
+            anyhow!(
+                "NotationVoicePreSerializationConstraintClosureAudit: projected FinalChord note has non-numeric staff"
+            )
+        })?;
+        if !matches!(staff, 1 | 2) {
+            return Err(anyhow!(
+                "NotationVoicePreSerializationConstraintClosureAudit: projected FinalChord note has unsupported staff {}",
+                staff
+            ));
+        }
+        let block = final_chord_sounding_projection
+            .get(note.note_start..note.note_end)
+            .ok_or_else(|| {
+                anyhow!(
+                    "NotationVoicePreSerializationConstraintClosureAudit: projected FinalChord note range is invalid"
+                )
+            })?;
+        let is_rest = block.contains("<rest");
+        let (atomic_group_id, atomic_group_kind) = atomic_group_tracker.assign(
+            measure,
+            note.visible,
+            is_rest,
+            note.is_chord,
+            note.pitch.is_some(),
+        );
+        let mut source_event_id = None;
+        let mut attack_id = None;
+        if let Some(pitch) = note.pitch.as_ref() {
+            let provenance = provenance_by_projected_start
+                .get(&note.note_start)
+                .copied()
+                .ok_or_else(|| {
+                    anyhow!(
+                        "NotationVoicePreSerializationConstraintClosureAudit: projected pitched note has no exact FinalChord provenance"
+                    )
+                })?;
+            let binding = final_chord_source_bindings
+                .get(&(provenance.source_note_start, provenance.source_note_end))
+                .ok_or_else(|| {
+                    anyhow!(
+                        "NotationVoicePreSerializationConstraintClosureAudit: FinalChord provenance lost source binding"
+                    )
+                })?;
+            let source_id = binding.fragment.source_event_id.ok_or_else(|| {
+                anyhow!(
+                    "NotationVoicePreSerializationConstraintClosureAudit: pitched source binding has no SourceEventId"
+                )
+            })?;
+            let sounding_attack_id = binding.fragment.attack_id.ok_or_else(|| {
+                anyhow!(
+                    "NotationVoicePreSerializationConstraintClosureAudit: pitched source binding has no SoundingAttackId"
+                )
+            })?;
+            source_event_id = Some(source_id.0);
+            attack_id = Some(sounding_attack_id.0);
+            let pitched_ordinal = next_pitched_ordinal_by_measure.entry(measure).or_default();
+            pre_serialization_occurrences.push(
+                crate::audit_only::notation_voice_pre_serialization_constraint_closure_audit::
+                    PreSerializationOccurrenceRow {
+                        source_event_id: source_id.0,
+                        attack_id: sounding_attack_id.0,
+                        measure,
+                        pitched_ordinal: *pitched_ordinal,
+                        represented_onset: note.start,
+                        represented_duration: note.duration,
+                        pitch_midi: pitch.midi,
+                        staff,
+                        current_voice: note.voice.clone(),
+                    },
+            );
+            *pitched_ordinal = (*pitched_ordinal).saturating_add(1);
+        }
+        pre_serialization_occupancy.push(
+            crate::audit_only::notation_voice_pre_serialization_constraint_closure_audit::
+                PreSerializationVisibleOccupancyRow {
+                    measure,
+                    staff,
+                    represented_onset: note.start,
+                    represented_duration: note.duration,
+                    visible: note.visible,
+                    is_rest,
+                    is_chord_member: note.is_chord,
+                    pitch_midi: note.pitch.as_ref().map(|pitch| pitch.midi),
+                    source_event_id,
+                    attack_id,
+                    atomic_group_id,
+                    atomic_group_kind,
+                },
+        );
+    }
+
+    freeze_final_sounding_material(
+        &mut best,
+        &final_chord_sounding_projection,
+        final_export_xml,
+        &final_chord_structural_plan,
+        &pre_serialization_occurrences,
+        &pre_serialization_occupancy,
+    )?;
+    crate::structural_write_authority::attach_final_chord_render_occurrence_witnesses(
+        &mut best
+            .material_lineage
+            .frozen_sounding_temporal_lane_plan
+            .final_chord_structural_plan,
+        p2_render_occurrence_witnesses,
+    )
+    .with_context(|| {
+        "RetentionFirstP2OccurrenceContinuation konnte Writer-Receipt nicht an den kanonischen FinalChord-Plan binden"
+    })?;
+    transaction.frozen_sounding_temporal_lane_plan =
+        best.material_lineage.frozen_sounding_temporal_lane_plan.clone();
+    transaction.frozen_sounding_material_attacks = best.material_lineage.attacks.clone();
+
+    Ok(InitialRenderTransactionStageOutcome {
+        best,
+        transaction,
+        render_state,
+    })
+}

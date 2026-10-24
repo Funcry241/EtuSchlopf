@@ -1,0 +1,10 @@
+SchemaSchlopf
+version=0.1.0
+revision=r021
+name=MusicXml40ProfileClosure
+base=0.1.0-r020-InstanceValidationClosure
+schema_bundle_qualified=true
+simple_type_profile_qualified=true
+complex_type_profile_qualified=true
+instance_validation_foundation_qualified=true
+instance_validation_qualified=true

@@ -1,0 +1,273 @@
+path	rust_loc	review_class	signals
+src/arrangement.rs	2371	GENERAL_REVIEW	
+src/audit_only/final_notation_accidental_state_clearance_geometry.rs	421	AUDIT_REVIEW	content:audit-only=1
+src/audit_only/final_notation_lower_staff_clef_beam_boundary_foreign_truth.rs	388	AUDIT_REVIEW	content:audit-only=1
+src/audit_only/format40_conformance_foundation.rs	1162	AUDIT_REVIEW	content:shadow=1
+src/audit_only/mod.rs	41	AUDIT_REVIEW	content:retirement=1;content:legacy=1;content:shadow=1
+src/audit_only/musicxml_generator_snapshot_identity.rs	375	AUDIT_REVIEW	
+src/audit_only/mutation_ownership_evidence.rs	221	PRIORITY_AUDIT_CONSOLIDATION_REVIEW	content:retired=19;content:retirement=1;content:legacy=4;content:shadow=23
+src/audit_only/oktavspannentopologie_pruefung.rs	753	AUDIT_REVIEW	
+src/audit_only/page_count_preference_projection.rs	278	AUDIT_REVIEW	content:legacy=3;content:shadow=5;content:audit-only=1
+src/audit_only/phrase_boundary_evidence.rs	4468	PRIORITY_AUDIT_CONSOLIDATION_REVIEW	content:legacy=35;content:audit-only=1
+src/audit_only/pianistic_capability_evidence_demand.rs	717	PROTECTED_PIANISTIC_CHAIN	
+src/audit_only/pianistic_capability_model_binding.rs	388	PROTECTED_PIANISTIC_CHAIN	
+src/audit_only/pianistic_configuration_constraint_kernel.rs	702	PROTECTED_PIANISTIC_CHAIN	
+src/audit_only/pianistic_empirical_calibration_profile_contract.rs	666	PROTECTED_PIANISTIC_CHAIN	
+src/audit_only/pianistic_execution_plan_witness.rs	2259	PROTECTED_PIANISTIC_CHAIN	
+src/audit_only/pianistic_execution_score.rs	862	PROTECTED_PIANISTIC_CHAIN	
+src/audit_only/pianistic_hand_configuration_reference_bracket.rs	588	PROTECTED_PIANISTIC_CHAIN	
+src/audit_only/pianistic_keyboard_state_transition_frontier.rs	647	PROTECTED_PIANISTIC_CHAIN	
+src/audit_only/pianistic_reference_assumption_model.rs	393	PROTECTED_PIANISTIC_CHAIN	
+src/audit_only/pianistic_reference_assumption_witness_integration.rs	393	PROTECTED_PIANISTIC_CHAIN	
+src/audit_only/pianistic_static_capability_frontier.rs	495	PROTECTED_PIANISTIC_CHAIN	
+src/audit_only/pianistic_symbolic_capability_reachability.rs	1849	PROTECTED_PIANISTIC_CHAIN	content:shadow=4
+src/audit_only/pianistic_temporal_transition_demand_frontier.rs	713	PROTECTED_PIANISTIC_CHAIN	
+src/audit_only/renderer_system_break_readback.rs	3020	AUDIT_REVIEW	content:legacy=2;content:shadow=168
+src/audit_only/run_outcome_release_projection.rs	194	AUDIT_REVIEW	
+src/audit_only/serialized_temporal_replay.rs	512	AUDIT_REVIEW	content:legacy=3
+src/audit_only/source_event_causal_ledger.rs	84	AUDIT_REVIEW	
+src/audit_only/source_selection_decision_reason_ledger.rs	84	AUDIT_REVIEW	
+src/audit_only/source_selection_full_causal_audit_shadow_plan.rs	2160	PRIORITY_AUDIT_CONSOLIDATION_REVIEW	name:shadow;content:legacy=27;content:shadow=97;content:audit-only=1;content:noop=2
+src/audit_only/source_selection_identity_transport.rs	60	AUDIT_REVIEW	
+src/audit_only/structure_to_system_break_retirement_guard.rs	66	PRIORITY_AUDIT_CONSOLIDATION_REVIEW	name:retire;name:retirement;content:retired=3;content:retirement=1
+src/audit_only/wav_attack_pulse_metric.rs	1817	PRIORITY_AUDIT_CONSOLIDATION_REVIEW	content:legacy=32;content:audit-only=1
+src/audit_only/wav_observation_legacy_oracle.rs	421	PRIORITY_AUDIT_CONSOLIDATION_REVIEW	name:legacy;content:legacy=23;content:audit-only=1
+src/audit_only/wav_pitch_external_sensor_benchmark.rs	394	AUDIT_REVIEW	content:audit-only=1
+src/audit_only/wav_pitch_harmonic_evidence.rs	717	PRIORITY_AUDIT_CONSOLIDATION_REVIEW	content:legacy=11;content:audit-only=1
+src/audit_only/wav_pitch_sensor_qualification.rs	125	AUDIT_REVIEW	content:audit-only=1
+src/audit_only/wav_signal_decode.rs	212	AUDIT_REVIEW	content:legacy=1;content:audit-only=1
+src/audit_only/writer_trace.rs	554	AUDIT_REVIEW	content:no-op=1
+src/bin/etuschlopf_launcher.rs	5186	CONTROL_PLANE_CONSOLIDATION_REVIEW	content:retired=9;content:retirement=1;content:legacy=17;content:shadow=12
+src/bin/etuschlopf_launcher/assistant_export.rs	4545	CONTROL_PLANE_CONSOLIDATION_REVIEW	content:retired=3;content:legacy=2;content:shadow=5;content:audit-only=1;content:noop=1
+src/bin/etuschlopf_launcher/launcher_build_control.rs	584	CONTROL_PLANE_CONSOLIDATION_REVIEW	
+src/bin/etuschlopf_launcher/launcher_hygiene.rs	708	CONTROL_PLANE_CONSOLIDATION_REVIEW	content:legacy=2;content:shadow=1
+src/bin/etuschlopf_launcher/launcher_visual_audit.rs	1872	CONTROL_PLANE_CONSOLIDATION_REVIEW	content:retired=1;content:shadow=2
+src/bin/etuschlopf_launcher/neuro_evidence_export.rs	2425	CONTROL_PLANE_CONSOLIDATION_REVIEW	content:retired=3;content:legacy=8;content:audit-only=1
+src/bin/etuschlopf_take_bootstrap.rs	2925	CONTROL_PLANE_CONSOLIDATION_REVIEW	content:noop=2
+src/build_gate/dead_code_detection_integrity.rs	1026	PROTECTED_TRUST_CORE	content:legacy=10
+src/build_gate/feedback_structuralization_kodex.rs	722	PROTECTED_TRUST_CORE	content:retired=1;content:legacy=24;content:audit-only=1
+src/build_gate/formal_green_contract.rs	101	PROTECTED_TRUST_CORE	
+src/build_gate/identity_debt_scan.rs	1454	PROTECTED_TRUST_CORE	
+src/build_gate/inventory_kodex.rs	333	PROTECTED_TRUST_CORE	content:retired=4
+src/build_gate/kodex_boundary_adversarial_kodex.rs	540	PROTECTED_TRUST_CORE	content:retired=8;content:retirement=5;content:legacy=2
+src/build_gate/kodex_build_context.rs	283	PROTECTED_TRUST_CORE	content:retirement=6
+src/build_gate/managed_source_tree_definition.rs	71	PROTECTED_TRUST_CORE	
+src/build_gate/multi_revision_evasion.rs	469	PROTECTED_TRUST_CORE	content:legacy=1
+src/build_gate/pinned_policy_kodex.rs	321	PROTECTED_TRUST_CORE	content:retired=7;content:retirement=27;content:legacy=1
+src/build_gate/productive_write_path_scan.rs	709	PROTECTED_TRUST_CORE	content:retired=2;content:legacy=6
+src/build_gate/recovery_transaction_order_kodex.rs	315	PROTECTED_TRUST_CORE	name:recovery;content:retired=1;content:retirement=2;content:legacy=2
+src/build_gate/rust_source_scan_primitives.rs	143	PROTECTED_TRUST_CORE	
+src/build_gate/semantic_capability_diff.rs	6267	PROTECTED_TRUST_CORE	content:retired=8;content:retirement=115;content:legacy=8;content:shadow=2
+src/build_gate/sha256.rs	141	PROTECTED_TRUST_CORE	
+src/build_gate/source_integrity_kodex.rs	319	PROTECTED_TRUST_CORE	
+src/build_gate/thirty_surface_batch_scan.rs	334	PROTECTED_TRUST_CORE	content:retired=5;content:legacy=2
+src/central_rulebook.rs	126	GENERAL_REVIEW	
+src/clef_readability_observation.rs	131	GENERAL_REVIEW	
+src/cli.rs	101	GENERAL_REVIEW	content:audit-only=1
+src/console_presentation_contract.rs	195	GENERAL_REVIEW	
+src/corpus_run_manifest.rs	1953	GENERAL_REVIEW	content:legacy=6
+src/feedback_proof_transport.rs	223	GENERAL_REVIEW	content:legacy=4
+src/feedback_structuralization_gate.rs	1464	GENERAL_REVIEW	content:legacy=7
+src/final_notation_timeline_facts.rs	472	GENERAL_REVIEW	
+src/final_report.rs	591	GENERAL_REVIEW	
+src/identity_debt_inventory.rs	426	GENERAL_REVIEW	content:retired=1;content:audit-only=1
+src/identity_gate_trust_anchor.rs	375	GENERAL_REVIEW	content:retired=6;content:retirement=22;content:legacy=5;content:noop=1
+src/kodex_build_orchestrator.rs	456	GENERAL_REVIEW	content:retired=4;content:retirement=10;content:legacy=1
+src/kodex_control_plane/public_artifact_recovery.rs	1307	GENERAL_REVIEW	name:recovery
+src/layout.rs	397	GENERAL_REVIEW	
+src/lib.rs	20	GENERAL_REVIEW	
+src/main.rs	73	GENERAL_REVIEW	
+src/midi.rs	568	GENERAL_REVIEW	
+src/midi_seed.rs	1821	GENERAL_REVIEW	content:legacy=1
+src/model.rs	196	GENERAL_REVIEW	
+src/model/metric_rest_notation.rs	337	GENERAL_REVIEW	
+src/musicxml.rs	410	GENERAL_REVIEW	
+src/notation.rs	1917	GENERAL_REVIEW	content:retirement=1
+src/observation.rs	501	GENERAL_REVIEW	
+src/observation_protocol.rs	405	GENERAL_REVIEW	
+src/observation_protocol_encoder.rs	229	GENERAL_REVIEW	
+src/observation_receiver.rs	236	GENERAL_REVIEW	
+src/observation_session_aggregator.rs	428	GENERAL_REVIEW	
+src/observation_snapshot_projection.rs	126	GENERAL_REVIEW	
+src/observation_transport.rs	180	GENERAL_REVIEW	
+src/persisted_schema_validation.rs	299	GENERAL_REVIEW	content:shadow=1
+src/pipeline.rs	184	GENERAL_REVIEW	
+src/pipeline_profile/catalog.rs	237	GENERAL_REVIEW	content:legacy=1
+src/pipeline_profile/legacy_name_projection.rs	108	GENERAL_REVIEW	name:legacy;content:legacy=1
+src/pipeline_profile/lineage.rs	94	GENERAL_REVIEW	
+src/pipeline_profile/mod.rs	16	GENERAL_REVIEW	content:legacy=2
+src/pipeline_profile/model.rs	475	GENERAL_REVIEW	content:legacy=1
+src/pipeline_shards/audio_salience_discrete_action_conflict_gate_tail.rs	1177	PRIORITY_RETIREMENT_REVIEW	name:tail;content:legacy=7;content:audit-only=3;content:noop=2;content:no-op=1
+src/pipeline_shards/audio_salience_discrete_translator_core.rs	1019	PIPELINE_REVIEW	content:noop=99
+src/pipeline_shards/candidate_material_lineage_spine_core.rs	2577	PIPELINE_REVIEW	content:legacy=8
+src/pipeline_shards/composer_beam_candidate_materialization_core.rs	371	PIPELINE_REVIEW	
+src/pipeline_shards/composer_beat_scoped_rest_completion_planning_core.rs	317	PIPELINE_REVIEW	content:shadow=1
+src/pipeline_shards/composer_metric_beam_observation_core.rs	169	PIPELINE_REVIEW	
+src/pipeline_shards/composer_metric_beam_planning_core.rs	648	PIPELINE_REVIEW	
+src/pipeline_shards/composer_recovery_hand_cause_core.rs	297	PRIORITY_RETIREMENT_REVIEW	name:recovery
+src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	4908	PRIORITY_RETIREMENT_REVIEW	name:tail;name:recovery;content:legacy=3;content:noop=1
+src/pipeline_shards/corpus_fastjump_human_potential_core.rs	964	PIPELINE_REVIEW	content:legacy=2
+src/pipeline_shards/corpus_fastjump_human_potential_repair_tail.rs	2948	PRIORITY_RETIREMENT_REVIEW	name:tail;name:repair
+src/pipeline_shards/cross_staff_editorial_voice_math_gate_tail.rs	1123	PRIORITY_RETIREMENT_REVIEW	name:tail
+src/pipeline_shards/final_report_projection_owner.rs	1730	PIPELINE_REVIEW	content:retired=2;content:legacy=5;content:shadow=29
+src/pipeline_shards/hidden_chord_math_reduction_core.rs	485	PIPELINE_REVIEW	
+src/pipeline_shards/hidden_chord_reduction_texture_rebuild_tail.rs	2790	PRIORITY_RETIREMENT_REVIEW	name:tail
+src/pipeline_shards/horizontal_layout_decision_plan.rs	531	PIPELINE_REVIEW	
+src/pipeline_shards/horizontal_layout_fact_extraction_core.rs	473	PIPELINE_REVIEW	content:legacy=26
+src/pipeline_shards/horizontal_layout_final_notation_snapshot.rs	111	PIPELINE_REVIEW	
+src/pipeline_shards/horizontal_layout_global_page_system.rs	1475	PIPELINE_REVIEW	content:retired=1;content:legacy=7
+src/pipeline_shards/horizontal_layout_global_reflow.rs	421	PIPELINE_REVIEW	content:retired=1
+src/pipeline_shards/horizontal_layout_page_count_preference.rs	531	PIPELINE_REVIEW	
+src/pipeline_shards/horizontal_layout_plan_contract_projection.rs	97	PIPELINE_REVIEW	
+src/pipeline_shards/human_pdf_pianistic_cross_staff_ledger_tail.rs	537	PRIORITY_RETIREMENT_REVIEW	name:tail;content:noop=3
+src/pipeline_shards/human_pdf_pianistic_quality_core.rs	655	PIPELINE_REVIEW	content:legacy=60;content:audit-only=1
+src/pipeline_shards/key_signature_enharmonic_report_core.rs	2690	PIPELINE_REVIEW	content:retired=7;content:legacy=8;content:audit-only=5
+src/pipeline_shards/lower_dual_edge_beat_beam_continuity_repair.rs	1010	PRIORITY_RETIREMENT_REVIEW	name:repair;content:retired=16;content:retirement=1;content:legacy=8;content:no-op=1
+src/pipeline_shards/lower_staff_register_feedback_gate_core.rs	340	PIPELINE_REVIEW	
+src/pipeline_shards/noether_register_articulation_readback_tail.rs	1935	PRIORITY_RETIREMENT_REVIEW	name:tail;content:legacy=31
+src/pipeline_shards/notation_endpoint_clef_layout_playability_tail.rs	578	PRIORITY_RETIREMENT_REVIEW	name:tail
+src/pipeline_shards/notation_endpoint_layout_core.rs	1388	PIPELINE_REVIEW	content:retirement=2;content:legacy=20;content:shadow=1;content:noop=1
+src/pipeline_shards/partial_beat_post_rest_triple_beam_final_repair.rs	725	PRIORITY_RETIREMENT_REVIEW	name:repair;content:retired=3;content:noop=1
+src/pipeline_shards/phrase_slur_register_octave_accent_stem_human_pdf_tail.rs	1450	PRIORITY_RETIREMENT_REVIEW	name:tail;content:retired=8;content:retirement=2;content:audit-only=2
+src/pipeline_shards/pipeline_foundation_runtime_passorder_tail.rs	114	PRIORITY_RETIREMENT_REVIEW	name:tail;content:legacy=2;content:noop=1
+src/pipeline_shards/pipeline_orchestrator_arrangement_solver_stage.rs	643	PIPELINE_REVIEW	content:shadow=4
+src/pipeline_shards/pipeline_orchestrator_clef_layout_support.rs	369	PIPELINE_REVIEW	
+src/pipeline_shards/pipeline_orchestrator_final_notation_support.rs	282	PIPELINE_REVIEW	content:retired=1;content:legacy=1;content:audit-only=3
+src/pipeline_shards/pipeline_orchestrator_initial_render_stage.rs	650	PIPELINE_REVIEW	content:retired=1;content:legacy=3;content:shadow=14
+src/pipeline_shards/pipeline_orchestrator_metric_final_notation_stage.rs	1007	PIPELINE_REVIEW	content:legacy=4;content:shadow=54
+src/pipeline_shards/pipeline_orchestrator_project_setup_stages.rs	288	PIPELINE_REVIEW	content:legacy=1
+src/pipeline_shards/pipeline_orchestrator_release_report_exit_stage.rs	179	PIPELINE_REVIEW	
+src/pipeline_shards/pipeline_orchestrator_release_support.rs	525	PIPELINE_REVIEW	content:legacy=5;content:shadow=28;content:audit-only=1
+src/pipeline_shards/pipeline_orchestrator_report_compaction.rs	527	PIPELINE_REVIEW	content:shadow=1
+src/pipeline_shards/pipeline_orchestrator_rest_articulation_render_stage.rs	304	PIPELINE_REVIEW	content:retired=2;content:legacy=18
+src/pipeline_shards/pipeline_runtime_progress_console_core.rs	422	PIPELINE_REVIEW	
+src/pipeline_shards/render_hidden_material_prune_core.rs	355	PIPELINE_REVIEW	content:audit-only=2
+src/pipeline_shards/render_polish_hidden_rest_readability_tail.rs	3395	PRIORITY_RETIREMENT_REVIEW	name:tail;content:legacy=1;content:audit-only=2
+src/pipeline_shards/render_write_pdf_source_adoption_truth_gate.rs	716	PIPELINE_REVIEW	content:retired=1
+src/pipeline_shards/render_xml_checkpoint.rs	119	PIPELINE_REVIEW	content:legacy=1
+src/pipeline_shards/report_compaction_summary_extract_core.rs	51	PIPELINE_REVIEW	
+src/pipeline_shards/report_hygiene_cursor_localbest_trace_tail.rs	685	PRIORITY_RETIREMENT_REVIEW	name:tail;content:audit-only=1
+src/pipeline_shards/report_key_signature_piano_voice_corpus_tail.rs	37	PRIORITY_RETIREMENT_REVIEW	name:tail
+src/pipeline_shards/rest_glyph_retention_batch_corpus_tail.rs	1232	PRIORITY_RETIREMENT_REVIEW	name:tail;content:retired=1;content:retirement=1;content:shadow=16
+src/pipeline_shards/retention_composer_limit_core.rs	208	PIPELINE_REVIEW	content:shadow=9
+src/pipeline_shards/rhythmic_spine_one_tenuto_apply.rs	391	PIPELINE_REVIEW	
+src/pipeline_shards/sheaf_noether_harmonic_micro_tail.rs	678	PRIORITY_RETIREMENT_REVIEW	name:tail;content:shadow=5;content:noop=10
+src/pipeline_shards/sheaf_noether_projection_core.rs	865	PIPELINE_REVIEW	content:noop=4
+src/pipeline_shards/staff_voice_atomic_move_patch_core.rs	1176	PIPELINE_REVIEW	
+src/pipeline_shards/staff_voice_move_restify_atomic_patch_tail.rs	910	PRIORITY_RETIREMENT_REVIEW	name:tail
+src/pipeline_shards/staff_voice_rest_glyph_topology_tail.rs	902	PRIORITY_RETIREMENT_REVIEW	name:tail;content:retirement=1;content:legacy=1;content:shadow=37;content:audit-only=1
+src/pipeline_shards/strict_staff_beat_local_rest_observation_core.rs	157	PIPELINE_REVIEW	
+src/pipeline_shards/strict_staff_local_release_core.rs	667	PIPELINE_REVIEW	
+src/pipeline_shards/strict_staff_rest_lane_planning_core.rs	850	PIPELINE_REVIEW	
+src/pipeline_shards/strict_staff_same_pitch_planning_core.rs	184	PIPELINE_REVIEW	
+src/pipeline_shards/strict_staff_visible_lane_rest_rewrite_tail.rs	2629	PRIORITY_RETIREMENT_REVIEW	name:tail;content:retired=1;content:legacy=1;content:shadow=43
+src/pipeline_shards/voice_fiber_human_pdf_decision_core.rs	205	PIPELINE_REVIEW	
+src/productive_write_path_inventory.rs	457	GENERAL_REVIEW	content:retired=6;content:legacy=6
+src/reference.rs	215	GENERAL_REVIEW	
+src/registernotation/mod.rs	3242	GENERAL_REVIEW	
+src/render.rs	1818	GENERAL_REVIEW	
+src/render/final_beam_observation_planning_core.rs	681	GENERAL_REVIEW	content:retired=2;content:retirement=1
+src/render/final_notation_readback_observation_core.rs	101	GENERAL_REVIEW	
+src/render/silent_voice_coverage_planning_core.rs	720	GENERAL_REVIEW	
+src/render/silent_voice_visible_measure_coverage_render_writer.rs	2187	GENERAL_REVIEW	content:retired=10;content:retirement=1;content:legacy=1;content:shadow=11
+src/report.rs	1374	GENERAL_REVIEW	content:legacy=41;content:shadow=3
+src/report_format.rs	80	GENERAL_REVIEW	
+src/rule_id.rs	377	GENERAL_REVIEW	
+src/rules.rs	954	GENERAL_REVIEW	
+src/run_outcome.rs	714	GENERAL_REVIEW	content:legacy=3
+src/source.rs	124	GENERAL_REVIEW	
+src/source_event.rs	495	GENERAL_REVIEW	
+src/source_selection.rs	2769	GENERAL_REVIEW	content:legacy=29;content:shadow=32
+src/structural_write_authority/authority_primitives.rs	155	PROTECTED_WRITER_CORE	
+src/structural_write_authority/authorization_verifier.rs	397	PROTECTED_WRITER_CORE	
+src/structural_write_authority/beam_plan.rs	282	PROTECTED_WRITER_CORE	
+src/structural_write_authority/bounded_semantic_rewrite_authority.rs	434	PROTECTED_WRITER_CORE	
+src/structural_write_authority/clef_surface_materialization.rs	335	PROTECTED_WRITER_CORE	
+src/structural_write_authority/detector.rs	180	PROTECTED_WRITER_CORE	content:legacy=5
+src/structural_write_authority/detector_boundary_audit.rs	196	PROTECTED_WRITER_CORE	
+src/structural_write_authority/final_barline.rs	196	PROTECTED_WRITER_CORE	content:legacy=3
+src/structural_write_authority/final_buffer_surface_authority.rs	474	PROTECTED_WRITER_CORE	
+src/structural_write_authority/final_complete_beat_primary_beam_continuity.rs	431	PROTECTED_WRITER_CORE	
+src/structural_write_authority/final_notation_phrase_projection_transaction.rs	719	PROTECTED_WRITER_CORE	
+src/structural_write_authority/final_pdf_source_commit.rs	43	PROTECTED_WRITER_CORE	
+src/structural_write_authority/final_short_system_break_neutralization.rs	132	PROTECTED_WRITER_CORE	
+src/structural_write_authority/gould_metric_beam_authorized_writer.rs	547	PROTECTED_WRITER_CORE	content:legacy=1
+src/structural_write_authority/gould_metric_beam_central_authorization.rs	1075	PROTECTED_WRITER_CORE	content:legacy=3
+src/structural_write_authority/gould_metric_beam_detector.rs	34	PROTECTED_WRITER_CORE	
+src/structural_write_authority/horizontal_layout_plan_materialization.rs	715	PROTECTED_WRITER_CORE	
+src/structural_write_authority/layout_system_break_suppression.rs	198	PROTECTED_WRITER_CORE	content:noop=1;content:no-op=1
+src/structural_write_authority/local_staff_distance_transaction.rs	331	PROTECTED_WRITER_CORE	content:legacy=7;content:no-op=2
+src/structural_write_authority/locator_resolution.rs	700	PROTECTED_WRITER_CORE	
+src/structural_write_authority/materialization_verifier.rs	548	PROTECTED_WRITER_CORE	
+src/structural_write_authority/measure_visual_width.rs	200	PROTECTED_WRITER_CORE	content:legacy=3;content:noop=1;content:no-op=1
+src/structural_write_authority/metamorphic_harness.rs	616	PROTECTED_WRITER_CORE	
+src/structural_write_authority/mod.rs	843	PROTECTED_WRITER_CORE	content:retired=1;content:legacy=4;content:shadow=7
+src/structural_write_authority/new_system_print_insertion.rs	165	PROTECTED_WRITER_CORE	content:noop=1;content:no-op=2
+src/structural_write_authority/orchestrator_artifact_sink_authority.rs	848	PROTECTED_WRITER_CORE	content:legacy=6
+src/structural_write_authority/page_break_layout_transaction.rs	230	PROTECTED_WRITER_CORE	content:legacy=3;content:no-op=1
+src/structural_write_authority/phrase_notation_policy.rs	377	PROTECTED_WRITER_CORE	
+src/structural_write_authority/remaining_atomic_patch_authority.rs	191	PROTECTED_WRITER_CORE	
+src/structural_write_authority/remaining_layout_writer_family.rs	598	PROTECTED_WRITER_CORE	content:legacy=2
+src/structural_write_authority/render_measure_articulation_authority.rs	577	PROTECTED_WRITER_CORE	
+src/structural_write_authority/renderer_cross_staff_beam_capability_audit.rs	396	PROTECTED_WRITER_CORE	content:audit-only=1
+src/structural_write_authority/renderer_direction_relocation_authorization.rs	1049	PROTECTED_WRITER_CORE	
+src/structural_write_authority/renderer_direction_relocation_plan.rs	430	PROTECTED_WRITER_CORE	content:audit-only=1
+src/structural_write_authority/renderer_direction_relocation_post_write_verifier.rs	352	PROTECTED_WRITER_CORE	
+src/structural_write_authority/renderer_direction_relocation_writer_boundary.rs	382	PROTECTED_WRITER_CORE	content:shadow=4
+src/structural_write_authority/rest_voice_family_authority.rs	622	PROTECTED_WRITER_CORE	
+src/structural_write_authority/retention_chord_authority.rs	40	PROTECTED_WRITER_CORE	
+src/structural_write_authority/rustig_clef_planning.rs	2268	PROTECTED_WRITER_CORE	content:retired=1;content:legacy=2;content:shadow=32
+src/structural_write_authority/scanner_truth_closure.rs	120	PROTECTED_WRITER_CORE	
+src/structural_write_authority/serialization_plan.rs	2675	PROTECTED_WRITER_CORE	
+src/structural_write_authority/snapshot_adapter.rs	527	PROTECTED_WRITER_CORE	name:adapter;content:audit-only=1
+src/structural_write_authority/staff_voice_atomic_authority.rs	127	PROTECTED_WRITER_CORE	
+src/structural_write_authority/strict_staff_visible_lane_authority.rs	413	PROTECTED_WRITER_CORE	content:shadow=4
+src/structural_write_authority/thirty_surface_productive_authority.rs	1561	PROTECTED_WRITER_CORE	content:legacy=1
+src/structural_write_authority/verified_render_candidate_sink_authority.rs	199	PROTECTED_WRITER_CORE	content:shadow=14
+src/structural_write_authority/visual_layout_defaults.rs	209	PROTECTED_WRITER_CORE	content:legacy=10;content:no-op=3
+src/structural_write_authority/writer_entry_boundary.rs	883	PROTECTED_WRITER_CORE	content:legacy=20
+src/take_change_control.rs	3289	GENERAL_REVIEW	content:retired=5;content:retirement=3;content:legacy=3;content:shadow=1
+src/visual_preflight.rs	355	GENERAL_REVIEW	
+src/visual_preflight/no_seed.rs	183	GENERAL_REVIEW	
+src/wav_truth_articulation.rs	293	GENERAL_REVIEW	content:audit-only=3
+tests/architecture_essence_cold_start_readback.rs	182	GENERAL_REVIEW	
+tests/bootstrap_gate_isolation.rs	56	GENERAL_REVIEW	
+tests/console_presentation_contract.rs	146	GENERAL_REVIEW	content:legacy=1;content:shadow=1
+tests/corpus_pdf_stability_projection_retirement.rs	53	GENERAL_REVIEW	name:retire;name:retirement;content:retired=5
+tests/global_identity_debt_inventory.rs	142	GENERAL_REVIEW	
+tests/persisted_schema_validation_gate.rs	63	GENERAL_REVIEW	
+tests/rust_2024_macro_expr_fragment_contract.rs	31	GENERAL_REVIEW	
+tests/source_selection_candidate_guard_differential_audit.rs	134	GENERAL_REVIEW	content:legacy=2
+tests/source_selection_canonical_identity_transport_contract.rs	30	GENERAL_REVIEW	
+tests/source_selection_decision_reason_ledger_contract.rs	44	GENERAL_REVIEW	
+tests/source_selection_full_causal_audit_shadow_plan_contract.rs	63	GENERAL_REVIEW	name:shadow;content:legacy=2;content:shadow=3
+tests/source_selection_plan_authority_cutover_contract.rs	58	GENERAL_REVIEW	content:legacy=1;content:shadow=1
+tests/source_selection_soft_register_deletion_retirement_contract.rs	55	GENERAL_REVIEW	name:retire;name:retirement
+tests/source_selection_staff_rhythm_authority_coupling_audit.rs	218	GENERAL_REVIEW	
+tests/wav_pitch_external_sensor_shared_source_audit_contract.rs	30	GENERAL_REVIEW	
+tests/wav_pitch_rescue_selector_retirement_closure.rs	122	GENERAL_REVIEW	name:retire;name:retirement;content:retired=9;content:retirement=4;content:legacy=8
+tools/RUST_KODEX_GATE_CORE/src/rust_source_fact_primitives.rs	49	GENERAL_REVIEW	
+tools/RUST_KODEX_GATE_CORE/src/rust_source_scan_primitives.rs	179	GENERAL_REVIEW	
+tools/etuschlopf_watch/src/main.rs	76	GENERAL_REVIEW	
+tools/etuschlopf_watch/src/mqtt_broker.rs	638	GENERAL_REVIEW	
+tools/etuschlopf_watch/src/mqtt_client.rs	227	GENERAL_REVIEW	
+tools/etuschlopf_watch/src/session_json.rs	728	GENERAL_REVIEW	
+tools/etuschlopf_watch/src/watch_ui.rs	355	GENERAL_REVIEW	
+tools/etuschlopf_watch/src/web_watch.rs	702	GENERAL_REVIEW	content:shadow=6;content:noop=1
+tools/qualified_components/schemaschlopf_r021/src/assistant_export.rs	364	GENERAL_REVIEW	
+tools/qualified_components/schemaschlopf_r021/src/bin/schemaschlopf_take_bootstrap.rs	65	GENERAL_REVIEW	
+tools/qualified_components/schemaschlopf_r021/src/complex_profile.rs	980	GENERAL_REVIEW	
+tools/qualified_components/schemaschlopf_r021/src/console.rs	664	GENERAL_REVIEW	
+tools/qualified_components/schemaschlopf_r021/src/instance_profile.rs	2781	GENERAL_REVIEW	
+tools/qualified_components/schemaschlopf_r021/src/lib.rs	97	GENERAL_REVIEW	
+tools/qualified_components/schemaschlopf_r021/src/main.rs	110	GENERAL_REVIEW	
+tools/qualified_components/schemaschlopf_r021/src/named_profile.rs	540	GENERAL_REVIEW	
+tools/qualified_components/schemaschlopf_r021/src/numeric_profile.rs	397	GENERAL_REVIEW	
+tools/qualified_components/schemaschlopf_r021/src/profile.rs	276	GENERAL_REVIEW	
+tools/qualified_components/schemaschlopf_r021/src/qualification.rs	1126	GENERAL_REVIEW	
+tools/qualified_components/schemaschlopf_r021/src/restriction_profile.rs	1114	GENERAL_REVIEW	
+tools/qualified_components/schemaschlopf_r021/src/simple.rs	2312	GENERAL_REVIEW	
+tools/qualified_components/schemaschlopf_r021/src/simple_profile.rs	516	GENERAL_REVIEW	
+tools/qualified_components/schemaschlopf_r021/src/take.rs	1195	GENERAL_REVIEW	
+tools/qualified_components/schemaschlopf_r021/src/union_profile.rs	1009	GENERAL_REVIEW	
+tools/wav_pitch_external_sensor_audit/src/main.rs	1254	GENERAL_REVIEW	content:legacy=1

@@ -1,0 +1,214 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SscEvidenceDomain {
+    Master,
+    Render,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SscReleasedEventRef<'event> {
+    domain: SscEvidenceDomain,
+    identity: &'event crate::master_state_identity::MintedIdentity,
+}
+
+
+pub(crate) struct SscOriginReceiptRef<'event> {
+    inner: SscOriginReceiptKind<'event>,
+}
+
+enum SscOriginReceiptKind<'event> {
+    Block(
+        &'event crate::master_state_identity::BlockTransformationReceipt
+    ),
+    Exact(
+        &'event crate::master_state_identity::ExactTransformationReceipt
+    ),
+    Preserving(
+        &'event crate::master_state_identity::PreservingTransformationReceipt
+    ),
+    Additive(
+        &'event crate::master_state_identity::AdditiveTransformationReceipt
+    ),
+}
+
+
+pub(crate) struct SscEventBinding<'event> {
+    released: SscReleasedEventRef<'event>,
+    pre_state: &'event str,
+    post_state: &'event str,
+}
+
+pub(crate) struct SscTransformationEvidence<'event> {
+    event: &'event SscEventBinding<'event>,
+    receipt: SscOriginReceiptRef<'event>,
+    scope: SscFamilyScope,
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SscEvidenceIntegrityFailure {
+    MissingEvidence,
+    DuplicateEvidence,
+    ReceiptIdentityMismatch,
+    DomainMismatch,
+    PreStateUnreadable,
+    PostStateUnreadable,
+    PreFingerprintMismatch,
+    PostFingerprintMismatch,
+    BindingMismatch,
+    ProofBindingMismatch,
+    ProofFamilyMismatch,
+    ContradictoryInvariantEvidence,
+    IllegalProofCombination,
+}
+
+
+pub(crate) enum SscEvidenceIntegrity<'event> {
+    Bound(&'event SscTransformationEvidence<'event>),
+
+    Missing,
+
+    Duplicate {
+        records: usize,
+    },
+
+    Invalid {
+        reason: SscEvidenceIntegrityFailure,
+    },
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SscProofFamily {
+    F7RestVoiceStrictStaff,
+    F5AtomicVoiceStaffVisibility,
+    F9AuthoritySerialization,
+    Additive,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SscFamilyScope {
+    OutOfScope,
+    InScope(SscProofFamily),
+}
+
+
+#[derive(Debug, Clone)]
+struct SscConstructiveInvariantCertificate {
+    preserved_structure: SscCheckedStructurePreservation,
+}
+
+#[derive(Debug, Clone)]
+struct SscCheckedStructurePreservation {
+    normalized_bytes: usize,
+}
+
+
+#[derive(Debug, Clone)]
+struct SscConstructiveInvariantCounterexample {
+    kind: SscInvariantFailureKind,
+    witness: SscExactDifferenceWitness,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SscInvariantFailureKind {
+    PreservedProjectionChanged,
+    NoteCardinalityChanged,
+    ForbiddenFieldChanged,
+    RequiredInsertionGeometryBroken,
+}
+
+#[derive(Debug, Clone)]
+struct SscExactDifferenceWitness {
+    pre_range: std::ops::Range<usize>,
+    post_range: std::ops::Range<usize>,
+    pre_bytes: std::sync::Arc<str>,
+    post_bytes: std::sync::Arc<str>,
+}
+
+
+pub(crate) struct SscInvariantProof<'event> {
+    event: &'event SscEventBinding<'event>,
+    family: SscProofFamily,
+    certificate: SscConstructiveInvariantCertificate,
+}
+
+pub(crate) struct SscInvariantCounterexample<'event> {
+    event: &'event SscEventBinding<'event>,
+    family: SscProofFamily,
+    counterexample: SscConstructiveInvariantCounterexample,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum SscInvariantAssessment<'event> {
+    Unproven,
+    Proven(&'event SscInvariantProof<'event>),
+    Refuted(&'event SscInvariantCounterexample<'event>),
+}
+
+
+#[derive(Debug, Clone)]
+struct SscConstructiveNecessityCertificate {
+    defect: SscStructuralDefect,
+}
+
+
+#[derive(Debug, Clone)]
+enum SscStructuralDefect {
+    InvisibleUncoveredRest {
+        note: usize,
+    },
+    MissingRequestedStaff {
+        note: usize,
+    },
+    MissingRequestedSerialization {
+        note: usize,
+    },
+    MissingFinalBarline {
+        boundary: usize,
+    },
+}
+
+
+pub(crate) struct SscNecessityWitness<'event> {
+    event: &'event SscEventBinding<'event>,
+    family: SscProofFamily,
+    certificate: SscConstructiveNecessityCertificate,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum SscNecessityAssessment<'event> {
+    Unproven,
+    Proven(&'event SscNecessityWitness<'event>),
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SscPermitVerdictV2 {
+    OutOfScope,
+    InvariantUnproven,
+    InvariantDenied,
+    NecessityUnproven,
+    Permit,
+}
+
+
+pub(crate) struct SscClassifiedObservationV2<'event> {
+    transformation: &'event SscTransformationEvidence<'event>,
+    scope: SscFamilyScope,
+    invariant: SscInvariantAssessment<'event>,
+    necessity: SscNecessityAssessment<'event>,
+    verdict: SscPermitVerdictV2,
+}
+
+
+pub(crate) enum SscReleasedObservationV2<'event> {
+    IntegrityFailure {
+        released: SscReleasedEventRef<'event>,
+        integrity: SscEvidenceIntegrityFailure,
+    },
+
+    Classified(
+        SscClassifiedObservationV2<'event>
+    ),
+}
+

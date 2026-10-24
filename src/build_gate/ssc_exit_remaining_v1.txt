@@ -1,0 +1,2 @@
+schema=ssc_exit_remaining_v1
+exit_claim=not_closed

@@ -1,0 +1,44 @@
+{
+  "schema_version": 3,
+  "artifact": "etuschlopf_source_inventory_contract",
+  "contract_version": "ESI-3",
+  "supersedes": "ESI-2",
+  "series_break": "ESI-2 -> ESI-3 is an explicit reference/ownership measurement-series break. CMS-1 remains unchanged.",
+  "authority": {
+    "class": "native_deterministic_repository_measurement",
+    "productive_music_authority": false,
+    "statement": "ESI-3 is the native deterministic source/symbol/static-reference inventory used by --inventory; it grants no MusicMutation, Writer, Repair, Selection or Release authority."
+  },
+  "source_scope": {
+    "inherit": "ESI-2 source scope and symbol identity",
+    "include": [
+      "src/**/*.rs",
+      "tests/**/*.rs",
+      "tools/RUST_KODEX_GATE_CORE/src/**/*.rs",
+      "tools/etuschlopf_watch/src/**/*.rs",
+      "tools/wav_pitch_external_sensor_audit/src/**/*.rs"
+    ]
+  },
+  "reference_contract": {
+    "lexical_only": "Simple-name occurrences that are not syntactically plausible references remain diagnostic only and do not create ambiguity/reachability.",
+    "resolved": "Calls, qualified paths, imports and function-value bindings are resolved only with deterministic evidence.",
+    "include_owner": "Static include!(\"relative.rs\") fragments inherit all proven enclosing function owners; multiple inclusion owners remain explicit rather than first-wins.",
+    "macro_owner": "macro_rules! body references inherit proven invocation-function owners; unbound macro bodies do not invent reachability.",
+    "self_method": "self.method() may resolve only to the unique same-impl method; other dot-member calls remain ambiguous without receiver proof.",
+    "value_binding": "Function values/callbacks, including qualified function values, propagate reachability.",
+    "ambiguous": "Unresolved plausible reference sites remain explicit and block removal proof."
+  },
+  "fingerprints": {
+    "signature": "name-sensitive signature fingerprint",
+    "signature_shape": "signature fingerprint with function-name placeholder for duplicate/replacement evidence",
+    "body": "normalized body fingerprint"
+  },
+  "projection": {
+    "json": "EtuSchlopf.inventory.json schema_version=3",
+    "xlsx": "XLSX-3 projection",
+    "assistant_export": "both artifacts included iff --inventory"
+  },
+  "comparability": {
+    "rule": "ESI-3 reference/reachability counts are not directly comparable to ESI-2; source symbol identity remains stable where path+qualified_symbol are unchanged."
+  }
+}

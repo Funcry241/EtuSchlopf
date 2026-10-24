@@ -1,0 +1,67 @@
+{
+  "schema_version": 4,
+  "artifact": "etuschlopf_architecture_classification_contract",
+  "contract_version": "ARCH-4",
+  "supersedes": "ARCH-3",
+  "series_break": "ARCH-3 -> ARCH-4 is explicit because A/B diagnostics and B proof consume ESI-3 ownership/reference evidence.",
+  "authority": {
+    "class": "native_deterministic_architecture_projection",
+    "productive_music_authority": false,
+    "statement": "ARCH-4 is advisory architecture evidence inside normal EtuSchlopf gates; it never authorizes deletion or mutation by itself."
+  },
+  "classes": {
+    "A": {
+      "label": "Loeschbar",
+      "meaning": "Same strict closed-unreachable private free-function proof, now with ESI-3 include/macro/self/reference ownership. Candidate component and exact blockers are exported."
+    },
+    "B": {
+      "label": "Zusammenfuehrbar / redundant",
+      "meaning": "Exact duplicate signature-shape+body evidence creates a B candidate only. B classification requires an explicit legacy/obsolete/deprecated/shadow name, exactly one productively reachable non-test/tool exact counterpart, and no fail-independent governance/audit boundary blocker."
+    },
+    "C": {
+      "label": "Notwendige Unterstuetzung",
+      "meaning": "Productively reachable support or explicitly bound test/tool support without D authority."
+    },
+    "D": {
+      "label": "Autoritativer Kern",
+      "meaning": "Same symbol-level ARCH-3 authority rules; path/module names alone do not establish D."
+    },
+    "OFFEN": {
+      "label": "Nicht sicher entscheidbar",
+      "meaning": "Mandatory fail-closed default when A/B/C/D proof is incomplete."
+    }
+  },
+  "diagnostics": {
+    "A": [
+      "candidate_symbols",
+      "candidate_components",
+      "closed_components",
+      "OWNERLESS_SOURCE",
+      "PRODUCTIVE_DEPENDENCY",
+      "TEST_DEPENDENCY",
+      "TOOL_DEPENDENCY",
+      "UNKNOWN_OWNER",
+      "OTHER_UNREACHABLE_COMPONENT"
+    ],
+    "B": [
+      "fingerprint_groups",
+      "candidate_symbols",
+      "cross_file_candidate_symbols",
+      "proven_symbols",
+      "INDEPENDENCE_NOT_PROVEN",
+      "RESPONSIBILITY_EQUIVALENCE_NOT_PROVEN"
+    ],
+    "reference": [
+      "lexical_only_sites",
+      "resolved_reference_sites",
+      "ambiguous_reference_sites",
+      "include_bound_reference_sites",
+      "macro_bound_reference_sites",
+      "self_method_resolved_sites"
+    ]
+  },
+  "comparability": {
+    "rule": "A/B/C/D/OFFEN counts are directly comparable only within identical ARCH contract versions."
+  },
+  "deletion_boundary": "Class A is static evidence only; actual deletion remains subject to normal Take Change Control, build, Clippy, tests, Kodex and runtime gates."
+}

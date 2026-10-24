@@ -1,0 +1,41 @@
+{
+  "schema_version": 2,
+  "artifact": "etuschlopf_inventory_xlsx_contract",
+  "contract_version": "XLSX-2",
+  "supersedes": "XLSX-1",
+  "series_break": "XLSX-1 -> XLSX-2 is a presentation/OOXML contract break only; it does not by itself change CMS measurement semantics.",
+  "authority": {
+    "class": "native_deterministic_outcome_projection",
+    "productive_music_authority": false
+  },
+  "workbook": {
+    "worksheets": 1,
+    "sheet_name": "Inventory",
+    "table_name": "EtuSchlopfInventory",
+    "table_start": "A1",
+    "header_filter": "provided by the real Excel table; no duplicate worksheet autoFilter and no explicit duplicate table autoFilter element",
+    "freeze": "row 1",
+    "summary_location": "same worksheet to the right of the table with one blank separator column",
+    "table_relationship_target": "/xl/tables/table1.xml",
+    "table_attributes": {
+      "headerRowCount": 1,
+      "totalsRowCount": 0,
+      "totalsRowShown": 0
+    }
+  },
+  "readback": {
+    "must_have": [
+      "exactly one Inventory worksheet",
+      "exactly one table relationship",
+      "frozen first row",
+      "table ref exactly matching row count and column contract",
+      "all declared table columns",
+      "absolute /xl/tables/table1.xml target"
+    ],
+    "must_not_have": [
+      "worksheet autoFilter overlapping the table",
+      "explicit table autoFilter duplicate"
+    ]
+  },
+  "incident_origin": "XLSX-1 was observed to trigger Excel repair that removed AutoFilter/Table from xl/tables/table1.xml. XLSX-2 follows the known-good table shape and rejects the former duplicate-filter shape during native readback."
+}

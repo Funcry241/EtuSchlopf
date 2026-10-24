@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "projection_id": "multiplicity_invariance_debt_live_status_r1044",
+  "historical_baseline": {
+    "inventory_id": "multiplicity_invariance_debt_r1035",
+    "path": "docs/assistant_memory/multiplicity_invariance_debt_inventory_v1.json",
+    "a_total": 12,
+    "b_total": 2,
+    "c_total": 4,
+    "baseline_is_immutable_history": true
+  },
+  "current_a_projection": {
+    "productively_closed": 3,
+    "productively_open": 9,
+    "entries": [
+      {
+        "id": "MI-A01",
+        "status": "retired_productive_authority",
+        "authority_retirement_revision": "r1037",
+        "physical_writer_surface_cleanup_revision": "r1039",
+        "report_verdict_cleanup_revision": "r1040"
+      },
+      {
+        "id": "MI-A02",
+        "status": "retired_productive_authority",
+        "authority_retirement_revision": "r1041",
+        "physical_writer_surface_cleanup_revision": null,
+        "note": "central authorized facade remains compile-live by non-invoking function-value reference; cleanup is a later separately classified transition"
+      },
+      {
+        "id": "MI-A03",
+        "status": "closed_measure_local_multiplicity_invariant",
+        "causal_class_revision": "r1042",
+        "closure_revision": "r1043",
+        "causal_class_contract": "docs/selector_derivation_contract_partial_beat_cursor_lane_serialization_split.md",
+        "repair_scope_contract": "docs/selector_derivation_contract_partial_beat_cursor_lane_serialization_split_repair_scope_r1043.md",
+        "candidate_duplication_regression": true,
+        "same_measure_ambiguity_fail_closed": true,
+        "current_r1043_corpus_written_total": 0,
+        "note": "closure is structurally regression-proven; the current ten-project corpus did not exercise a productive FragmentedRestChain write"
+      },
+      {
+        "id": "MI-A04",
+        "status": "open_causal_class_frozen",
+        "causal_class_revision": "r1044",
+        "causal_class_contract": "docs/selector_derivation_contract_upper_staff_initial_visible_silence.md",
+        "productive_selector_changed_in_r1044": false,
+        "current_global_authority_surfaces": [
+          "numeric score ranking",
+          "first_onset==24 bonus",
+          "source-offset tie break",
+          "max_initial_rests=1"
+        ],
+        "next_action": "remove scorewide ranking/cap as authority for already-eligible initial-rest candidates under candidate_duplication_v1 while preserving local eligibility, metric proof, overlap guards and all writer invariants; do not alter beat-local coalescing multiplicity in the same take"
+      }
+    ]
+  },
+  "current_r1043_parent_evidence": {
+    "strict_tests_passed": 1351,
+    "strict_tests_failed": 0,
+    "clippy_warnings": 0,
+    "projects_ok": 10,
+    "fragmented_rest_chain_written_total": 0,
+    "mi_a04_corpus_distribution_status": "not_exposed_as_stable_persisted_counter_surface_in_current_r1043_results",
+    "interpretation": "runtime evidence is descriptive only and does not define or narrow the r1044 causal class"
+  }
+}

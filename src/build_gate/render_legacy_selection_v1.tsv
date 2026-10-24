@@ -1,0 +1,5 @@
+rule	condition	obligation	state_reset
+LegacyAvailability	legacy avail/legacy flags	historical source selection only; never erase existing Render history	none
+WrittenTrialHistory	actual written trial states including V1/V2 and IR trials 2..5 with false legacy availability	retain actual Render history; B1 path.exists may read it	S4 only with preserved history
+ClassF	existing Render state or avail but missing state/readback	fatal sovereignty error in sovereign Render model	forbidden
+AuditReaders	lineage checkpoint; causal lane audit; E059 preview	read-only existing Render state or explicit no Render state	forbidden

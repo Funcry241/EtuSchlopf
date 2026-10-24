@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "projection_id": "beam_occurrence_cross_phase_identity_status_r1047",
+  "parent": {
+    "revision": "r1046",
+    "name": "CrossStaffVoiceLedgerMaterializerAuthorityRetirement",
+    "status": "accepted",
+    "strict_tests_passed": 1352,
+    "corpus_projects_ok": 10
+  },
+  "beam_parent_measurement": {
+    "same_line": 147,
+    "cross_voice": 144,
+    "legacy_occurrence_exact": 90,
+    "legacy_occurrence_unresolved": 54,
+    "pre_serialization_exact_within_legacy_unresolved": 41,
+    "pre_serialization_source_attack_multiplicity_within_legacy_unresolved": 13
+  },
+  "r1047": {
+    "name": "BeamOccurrenceCrossPhaseIdentityAudit",
+    "change_class": "AuditOnly",
+    "music_mutation": false,
+    "productive_selector_change": false,
+    "audit_error_classification_change": true,
+    "selector_derivation_role": "error_classification_measurement_only",
+    "parent_error_class_contract": "docs/selector_derivation_contract_final_primary_beam_serialization_voice_partition.md",
+    "writer_change": false,
+    "frozen_error_class_definition_change": false,
+    "bridge_key": "SourceEventId+SoundingAttackId",
+    "s0_evidence": "PreSerializationOccurrenceRow",
+    "canonical_evidence": "FinalChord transaction-local occurrence receipt",
+    "s1_evidence": "persisted final render MusicXML measure+pitched_ordinal+geometry",
+    "materialization_kind_fragment_ordinal_role": "reported_evidence_not_disambiguation_authority",
+    "goal": "classify the 54 legacy unresolved persisted occurrence bindings by exact cross-phase cause without changing their frozen classification",
+    "claims_beam_occurrence_closure": false,
+    "claims_repair_authority": false
+  },
+  "expected_validation": {
+    "required_run_scope": "--take --all",
+    "new_regression_tests": 4,
+    "expected_strict_tests_passed": 1356,
+    "product_musicxml_delta_expected": false,
+    "render_musicxml_delta_expected": false,
+    "visible_pdf_geometry_delta_expected": false
+  }
+}

@@ -1,0 +1,11 @@
+[package]
+name = "etuschlopf_wav_pitch_external_sensor_audit"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+
+[dependencies]
+anyhow = "=1.0.100"
+minreq = { version = "=2.14.1", default-features = false, features = ["https-rustls"] }
+sha2 = "=0.10.9"
+tract-onnx = "=0.22.1"

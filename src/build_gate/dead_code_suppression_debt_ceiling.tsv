@@ -1,0 +1,14 @@
+# EtuSchlopf dead-code suppression debt ceiling v1
+path	scope_kind	anchor	level	selector	cfg
+src/bin/etuschlopf_launcher.rs	item	mod console_presentation_contract;	allow	dead_code	-
+src/bin/etuschlopf_launcher.rs	item	mod corpus_run_manifest;	allow	dead_code	-
+src/bin/etuschlopf_take_bootstrap.rs	item	mod console_presentation_contract;	allow	dead_code	-
+src/bin/etuschlopf_take_bootstrap.rs	item	mod take_change_control;	allow	dead_code	-
+src/identity_debt_inventory.rs	item	mod identity_debt_scan_test_support;	allow	dead_code	test
+src/productive_write_path_inventory.rs	item	mod productive_write_path_scan_test_support;	allow	dead_code	test
+src/kodex_build_orchestrator.rs	item	mod identity_debt_scan;	allow	dead_code	-
+src/kodex_build_orchestrator.rs	item	mod productive_write_path_scan;	allow	dead_code	-
+src/kodex_build_orchestrator.rs	item	mod take_change_control;	allow	dead_code	-
+src/kodex_build_orchestrator.rs	item	mod thirty_surface_batch_scan;	allow	dead_code	-
+src/kodex_control_plane/public_artifact_recovery.rs	module	crate_module	allow	dead_code	-
+tests/global_identity_debt_inventory.rs	item	mod identity_debt_scan;	allow	dead_code	-

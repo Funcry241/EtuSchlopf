@@ -1,0 +1,87 @@
+{
+  "schema_version": 2,
+  "artifact": "etuschlopf_source_inventory_contract",
+  "contract_version": "ESI-2",
+  "supersedes": "ESI-1",
+  "series_break": "ESI-1 -> ESI-2 is an explicit source-inventory measurement-series break. CMS-1 remains unchanged.",
+  "authority": {
+    "class": "native_deterministic_repository_measurement",
+    "productive_music_authority": false,
+    "statement": "ESI-2 is the native deterministic source/symbol and static-reference inventory used by --inventory. It does not grant MusicMutation, Writer, Repair, Selection or Release authority."
+  },
+  "source_scope": {
+    "include": [
+      "src/**/*.rs",
+      "tests/**/*.rs",
+      "tools/RUST_KODEX_GATE_CORE/src/**/*.rs",
+      "tools/etuschlopf_watch/src/**/*.rs",
+      "tools/wav_pitch_external_sensor_audit/src/**/*.rs"
+    ],
+    "exclude": [
+      "target/**",
+      "tools/qualified_components/**",
+      "external dependencies",
+      "generated build artifacts",
+      "macro expansions as generated symbols",
+      "anonymous closures"
+    ],
+    "compatibility_origin": "ESI-1/AIC-1 source_scope",
+    "scope_hash": "SHA-256 over slash-normalized relative path + NUL + per-file SHA-256, ordered lexicographically"
+  },
+  "symbol_contract": {
+    "grain": "one named Rust function/method declaration",
+    "semantic_identity": [
+      "relative_source_path",
+      "qualified_symbol"
+    ],
+    "start_line_is_identity": false,
+    "duplicates": "fail_closed",
+    "ordering": [
+      "relative_source_path",
+      "qualified_symbol"
+    ],
+    "contexts": [
+      "Produktiv",
+      "Test",
+      "Tool",
+      "Launcher / Build",
+      "Governance / Gate"
+    ],
+    "test_scope": "Item attributes are parsed structurally from tokens. A cfg(test)-bound module/trait/impl/function propagates Test only into its syntactic descendants; attributes from a preceding sibling cannot leak into the next item.",
+    "sensitive_declaration": "cfg/cfg_attr/test/bench/dead_code/export/no_mangle/link_section/used/proc-macro evidence blocks a deletion proof where applicable.",
+    "fingerprints": {
+      "signature_fingerprint": "SHA-256 over normalized declaration tokens including literal-content hashes and excluding whitespace/comments",
+      "body_fingerprint": "SHA-256 over normalized body tokens including literal-content hashes and excluding whitespace/comments; declaration-only methods use none"
+    }
+  },
+  "reference_contract": {
+    "lexical_hits": "Diagnostic simple-name occurrences only; never interpreted as uniquely resolved references.",
+    "resolved_references": "Reference sites resolved to exactly one symbol by unique global identity, explicit qualified suffix or same-module free-function resolution.",
+    "ambiguous_references": "Reference sites for which the target cannot be proven uniquely. Ambiguity remains explicit and blocks removal proof.",
+    "incoming_calls": "Resolved direct function-call edges.",
+    "value_bindings": "Resolved function-value/callback bindings such as map/map_or arguments, assignment and collection/return positions; these edges propagate reachability.",
+    "method_receiver_rule": "A dot-member call is never resolved merely because its simple method name is globally unique; without receiver proof it remains ambiguous.",
+    "root_model": {
+      "entry_roots": "main in productive/launcher/governance contexts",
+      "public_api_roots": "unrestricted pub functions in the directly exported lib.rs module surface that ESI-2 can prove",
+      "restricted_visibility": "pub(crate), pub(super) and pub(in ...) are not automatic productive roots",
+      "uncertain_pub": "unrestricted pub outside a proven exported API surface is retained as uncertain reachability, not silently promoted to a productive root"
+    }
+  },
+  "run_binding": {
+    "project": "PROJECT with exact project and current observation run_id",
+    "corpus": "CORPUS with current completed full-corpus manifest plus the current observation run_id used by all ten CMS-1 snapshots; corpus_manifest_run_id and observation run_id are distinct authorities and are both retained",
+    "measurement_contract": "CMS-1",
+    "input_fingerprint": "scope-specific SHA-256 projection of current project input fingerprints",
+    "binary_fingerprint": "executed EtuSchlopf binary FNV64"
+  },
+  "projection": {
+    "json": "EtuSchlopf.inventory.json schema_version=2 is the machine-readable native record",
+    "xlsx": "EtuSchlopf.inventory.xlsx is XLSX-2 projection of the same model",
+    "assistant_export": "both files are included iff --inventory produced them",
+    "stale_current_artifacts": "normal runs without --inventory remove current root inventory artifacts; assistant exports remain historical evidence"
+  },
+  "comparability": {
+    "rule": "ESI source-inventory and reference/reachability counts are directly comparable only when inventory_contract_version is identical. ESI-1 and ESI-2 are intentionally not one direct measurement series."
+  }
+}

@@ -1,0 +1,25 @@
+# Existing writer scope restricted by same-beat input beam edges
+
+SelectorDerivationContract: causal_class_first_v1
+SelectorChange: yes
+SelectorRole: repair_scope
+KnownWitnessUsedForFeatureDerivation: no
+TargetConditionedFeatureNarrowing: no
+ClassDefinitionPrecedesCorpusDistribution: yes
+UniquenessIsOutcomeNotGoal: yes
+RepairSelectorSeparatedFromErrorClass: yes
+CausalFeatureNecessityReview: complete
+CorpusDistributionPurpose: measurement_only
+CorpusDistributionMayRefineClassToKnownWitness: no
+MultiplicityInvarianceContract: candidate_duplication_v1
+IndependentCandidateDuplicationInvariant: yes
+ScorewideMultiplicityAsWriteAuthority: forbidden
+GlobalRankingOfIndependentCandidates: forbidden
+MultiplicityDecisionScope: local_candidate_or_explicit_conflict_group
+CandidateDuplicationProbe: required_before_productive_write
+ParentErrorClassContract: docs/selector_derivation_contract_same_beat_partial_beam_group_overwrite.md
+ScopeNarrowingBasis: authority_or_safety_only
+DiscriminativeContextOnlyNarrowing: forbidden
+CausalFeature: reject the existing selected group when a claimed primary input edge crosses its boundary inside the same beat
+CausalFeature: retain the existing voice and both-group selection before the independent protection of each group
+NonCausalContextExcluded: project measure pitch numeric voice labels corpus counts clef positions and final PDF appearance

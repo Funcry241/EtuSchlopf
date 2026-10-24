@@ -1,0 +1,170 @@
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LowerStaffClefMoveRequest {
+    old_start: usize,
+    old_end: usize,
+    insert_at: usize,
+    block: String,
+}
+
+impl LowerStaffClefMoveRequest {
+    pub fn new(
+        old_start: usize,
+        old_end: usize,
+        insert_at: usize,
+        block: String,
+    ) -> Self {
+        Self {
+            old_start,
+            old_end,
+            insert_at,
+            block,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct AuthorizedLowerStaffClefMoveBatch {
+    source_fingerprint: u64,
+    moves: Vec<BoundClefMove>,
+}
+
+#[derive(Debug)]
+struct BoundClefMove {
+    old_start: usize,
+    old_end: usize,
+    insert_at: usize,
+    block: String,
+    block_fingerprint: u64,
+}
+
+impl AuthorizedLowerStaffClefMoveBatch {
+    fn issue(source_xml: &str, mut requests: Vec<LowerStaffClefMoveRequest>) -> Result<Option<Self>> {
+        if requests.is_empty() {
+            return Ok(None);
+        }
+        requests.sort_by_key(|left| std::cmp::Reverse(left.old_start));
+
+        let mut ascending_ranges: Vec<(usize, usize)> = requests
+            .iter()
+            .map(|request| (request.old_start, request.old_end))
+            .collect();
+        ascending_ranges.sort_unstable();
+        if ascending_ranges
+            .windows(2)
+            .any(|window| window[0].1 > window[1].0)
+        {
+            bail!("overlapping lower-staff clef move sources are not authorizable");
+        }
+
+        let mut moves = Vec::with_capacity(requests.len());
+        for request in requests {
+            verify_lower_staff_clef_move_request(source_xml, &request)?;
+            moves.push(BoundClefMove {
+                old_start: request.old_start,
+                old_end: request.old_end,
+                insert_at: request.insert_at,
+                block_fingerprint: source_fingerprint(&request.block),
+                block: request.block,
+            });
+        }
+        Ok(Some(Self {
+            source_fingerprint: source_fingerprint(source_xml),
+            moves,
+        }))
+    }
+}
+
+pub fn apply_lower_staff_clef_moves_authorized(
+    xml: &mut String,
+    requests: Vec<LowerStaffClefMoveRequest>,
+) -> Result<usize> {
+    let Some(token) = AuthorizedLowerStaffClefMoveBatch::issue(xml, requests)? else {
+        return Ok(0);
+    };
+    authorized_lower_staff_clef_move_writer(xml, token)
+}
+
+fn authorized_lower_staff_clef_move_writer(
+    xml: &mut String,
+    token: AuthorizedLowerStaffClefMoveBatch,
+) -> Result<usize> {
+    if source_fingerprint(xml) != token.source_fingerprint {
+        bail!("source changed after lower-staff clef move authorization");
+    }
+    for movement in &token.moves {
+        verify_bound_clef_move(xml, movement)?;
+    }
+
+    let changed = token.moves.len();
+    for movement in token.moves {
+        xml.replace_range(movement.old_start..movement.old_end, "");
+        xml.insert_str(movement.insert_at, &movement.block);
+    }
+    Ok(changed)
+}
+
+fn verify_lower_staff_clef_move_request(
+    source_xml: &str,
+    request: &LowerStaffClefMoveRequest,
+) -> Result<()> {
+    verify_range(source_xml, request.old_start, request.old_end, "clef source")?;
+    if request.insert_at >= request.old_start {
+        bail!("lower-staff clef insertion must precede its source block");
+    }
+    if request.insert_at > source_xml.len() || !source_xml.is_char_boundary(request.insert_at) {
+        bail!("lower-staff clef insertion offset is invalid");
+    }
+    if !source_xml[request.insert_at..].starts_with("<note") {
+        bail!("lower-staff clef insertion is not bound to a note event boundary");
+    }
+    if &source_xml[request.old_start..request.old_end] != request.block.as_str() {
+        bail!("lower-staff clef source bytes differ from the planned block");
+    }
+    if !is_safe_lower_staff_bass_clef_attributes(&request.block) {
+        bail!("lower-staff clef move block is outside the allowed structural class");
+    }
+    Ok(())
+}
+
+fn verify_bound_clef_move(source_xml: &str, movement: &BoundClefMove) -> Result<()> {
+    verify_range(source_xml, movement.old_start, movement.old_end, "bound clef source")?;
+    if movement.insert_at >= movement.old_start
+        || movement.insert_at > source_xml.len()
+        || !source_xml.is_char_boundary(movement.insert_at)
+        || !source_xml[movement.insert_at..].starts_with("<note")
+    {
+        bail!("bound lower-staff clef move lost its structural insertion boundary");
+    }
+    let current = &source_xml[movement.old_start..movement.old_end];
+    if current != movement.block.as_str()
+        || source_fingerprint(current) != movement.block_fingerprint
+        || !is_safe_lower_staff_bass_clef_attributes(current)
+    {
+        bail!("bound lower-staff clef source changed before writer consumption");
+    }
+    Ok(())
+}
+
+fn is_safe_lower_staff_bass_clef_attributes(block: &str) -> bool {
+    block.starts_with("<attributes")
+        && block.ends_with("</attributes>")
+        && block.contains("<clef")
+        && (block.contains("number=\"2\"") || block.contains("number='2'"))
+        && block.contains("<sign>F</sign>")
+        && !block.contains("<divisions")
+        && !block.contains("<key")
+        && !block.contains("<time")
+        && !block.contains("<staves")
+        && !block.contains("<transpose")
+}
+
+fn verify_range(source: &str, start: usize, end: usize, label: &str) -> Result<()> {
+    if start >= end
+        || end > source.len()
+        || !source.is_char_boundary(start)
+        || !source.is_char_boundary(end)
+    {
+        bail!("{label} range is invalid");
+    }
+    Ok(())
+}

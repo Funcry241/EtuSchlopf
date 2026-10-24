@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "projection_id": "multiplicity_invariance_debt_live_status_r1084",
+  "historical_baseline": {
+    "inventory_id": "multiplicity_invariance_debt_r1035",
+    "path": "docs/assistant_memory/multiplicity_invariance_debt_inventory_v1.json",
+    "a_total": 12,
+    "b_total": 2,
+    "c_total": 4,
+    "baseline_is_immutable_history": true
+  },
+  "current_a_projection": {
+    "productively_closed_if_r1084_accepted": 11,
+    "productively_open_if_r1084_accepted": 1,
+    "newly_closed": [
+      {
+        "id": "MI-A05",
+        "status": "retired_print_cleanup_one_safe_rest_materialization_authority_observation_preserved",
+        "authority_retirement_revision": "r1084",
+        "candidate_detector_preserved": true,
+        "candidate_count_preserved": true,
+        "productive_rest_materialization_removed": true,
+        "independent_clef_cleanup_preserved": true
+      }
+    ],
+    "remaining_open": [
+      "MI-A12"
+    ],
+    "a12_causal_class_frozen_if_r1084_accepted": "docs/selector_derivation_contract_tied_tail_accent_attack_ownership.md",
+    "previously_closed": [
+      {
+        "id": "MI-A01",
+        "closure_revision": "r1037"
+      },
+      {
+        "id": "MI-A02",
+        "closure_revision": "r1041"
+      },
+      {
+        "id": "MI-A03",
+        "closure_revision": "r1043"
+      },
+      {
+        "id": "MI-A04",
+        "closure_revision": "r1045"
+      },
+      {
+        "id": "MI-A06",
+        "closure_revision": "r1046"
+      },
+      {
+        "id": "MI-A11",
+        "closure_revision": "r1081"
+      },
+      {
+        "id": "MI-A07",
+        "closure_revision": "r1082"
+      },
+      {
+        "id": "MI-A08",
+        "closure_revision": "r1082"
+      },
+      {
+        "id": "MI-A09",
+        "closure_revision": "r1082"
+      },
+      {
+        "id": "MI-A10",
+        "closure_revision": "r1082"
+      }
+    ]
+  },
+  "accepted_parent": {
+    "revision": "r1082",
+    "sha256": "75a6659268667e1c4bd79f8a5b01c983a0ce9d6c9a20549276072fa751c2221d"
+  },
+  "rejected_evidence": [
+    {
+      "revision": "r1083",
+      "sha256": "676ce856b893d79b878e60e5529b801795ce14e357607aacddd634f47ba7ebd7",
+      "authority": "none",
+      "lesson": "retirement must preserve full candidate observation instead of collapsing candidates_seen to zero"
+    }
+  ],
+  "validation": {
+    "required_run_scope": "--take --all",
+    "authority_change": "MI-A05 retirement_only",
+    "observation_change": "candidate_class_and_count_preserved",
+    "selector_change": "none_in_r1084",
+    "a12_next_stage": "selector_sensitive_per_candidate_blocker_implementation"
+  },
+  "parent_projection_path": "docs/assistant_memory/multiplicity_invariance_debt_live_status_r1082.json"
+}

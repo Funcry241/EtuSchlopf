@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "projection_id": "multiplicity_invariance_debt_live_status_r1045",
+  "historical_baseline": {
+    "inventory_id": "multiplicity_invariance_debt_r1035",
+    "path": "docs/assistant_memory/multiplicity_invariance_debt_inventory_v1.json",
+    "a_total": 12,
+    "b_total": 2,
+    "c_total": 4,
+    "baseline_is_immutable_history": true
+  },
+  "current_a_projection": {
+    "productively_closed": 4,
+    "productively_open": 8,
+    "entries": [
+      {
+        "id": "MI-A01",
+        "status": "retired_productive_authority",
+        "authority_retirement_revision": "r1037",
+        "physical_writer_surface_cleanup_revision": "r1039",
+        "report_verdict_cleanup_revision": "r1040"
+      },
+      {
+        "id": "MI-A02",
+        "status": "retired_productive_authority",
+        "authority_retirement_revision": "r1041",
+        "physical_writer_surface_cleanup_revision": null,
+        "note": "central authorized facade remains compile-live by non-invoking function-value reference; cleanup is a later separately classified transition"
+      },
+      {
+        "id": "MI-A03",
+        "status": "closed_measure_local_multiplicity_invariant",
+        "causal_class_revision": "r1042",
+        "closure_revision": "r1043",
+        "causal_class_contract": "docs/selector_derivation_contract_partial_beat_cursor_lane_serialization_split.md",
+        "repair_scope_contract": "docs/selector_derivation_contract_partial_beat_cursor_lane_serialization_split_repair_scope_r1043.md",
+        "candidate_duplication_regression": true,
+        "same_measure_ambiguity_fail_closed": true,
+        "current_r1043_corpus_written_total": 0,
+        "note": "closure is structurally regression-proven; the current ten-project corpus did not exercise a productive FragmentedRestChain write"
+      },
+      {
+        "id": "MI-A04",
+        "status": "closed_measure_local_multiplicity_invariant",
+        "causal_class_revision": "r1044",
+        "closure_revision": "r1045",
+        "causal_class_contract": "docs/selector_derivation_contract_upper_staff_initial_visible_silence.md",
+        "repair_scope_contract": "docs/selector_derivation_contract_upper_staff_initial_visible_silence_repair_scope_r1045.md",
+        "candidate_duplication_regression": true,
+        "same_measure_ambiguity_fail_closed": true,
+        "measure_local_conflict_group_authority": true,
+        "scorewide_ranking_authority_removed": true,
+        "first_onset_24_bonus_authority_removed": true,
+        "source_offset_tie_break_authority_removed": true,
+        "max_initial_rests_authority_removed": true,
+        "beat_local_coalescing_scope_unchanged": true
+      }
+    ]
+  },
+  "r1045_expected_validation": {
+    "accepted_parent_revision": "r1044",
+    "parent_strict_tests_passed": 1351,
+    "new_regression_tests": 1,
+    "expected_strict_tests_passed": 1352,
+    "required_run_scope": "--take --all",
+    "corpus_distribution_claim_before_run": "none",
+    "regression_topology": "one new pure selector test; existing writer-reaching initial-rest test extended in-place for candidate duplication and byte-stability proof"
+  },
+  "r1045_candidate_recovery": {
+    "r1045_first_candidate_status": "rejected_proxy_identity_selector_contract_mismatch",
+    "r1045_r02_status": "rejected_no_new_repair_authority_test_callers",
+    "r1045_r03_strategy": "productive r02 closure retained; writer-reaching candidate-duplication checks folded into pre-existing writer-caller test; only new test is pure local selector ambiguity guard"
+  }
+}

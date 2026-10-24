@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "artifact": "etuschlopf_source_inventory_contract",
+  "contract_version": "ESI-1",
+  "authority": {
+    "class": "native_deterministic_repository_measurement",
+    "productive_music_authority": false,
+    "statement": "ESI-1 is the native deterministic source/symbol inventory used by --inventory. It does not grant MusicMutation, Writer, Repair, Selection or Release authority."
+  },
+  "source_scope": {
+    "include": [
+      "src/**/*.rs",
+      "tests/**/*.rs",
+      "tools/RUST_KODEX_GATE_CORE/src/**/*.rs",
+      "tools/etuschlopf_watch/src/**/*.rs",
+      "tools/wav_pitch_external_sensor_audit/src/**/*.rs"
+    ],
+    "exclude": [
+      "target/**",
+      "tools/qualified_components/**",
+      "external dependencies",
+      "generated build artifacts",
+      "macro expansions as generated symbols",
+      "anonymous closures"
+    ],
+    "compatibility_origin": "AIC-1 source_scope",
+    "scope_hash": "SHA-256 over slash-normalized relative path + NUL + per-file SHA-256, ordered lexicographically"
+  },
+  "symbol_contract": {
+    "grain": "one named Rust function/method declaration",
+    "semantic_identity": [
+      "relative_source_path",
+      "qualified_symbol"
+    ],
+    "start_line_is_identity": false,
+    "duplicates": "fail_closed",
+    "ordering": [
+      "relative_source_path",
+      "qualified_symbol"
+    ],
+    "contexts": [
+      "Produktiv",
+      "Test",
+      "Tool",
+      "Launcher / Build",
+      "Governance / Gate"
+    ]
+  },
+  "run_binding": {
+    "project": "PROJECT with exact project and current observation run_id",
+    "corpus": "CORPUS with current completed full-corpus manifest plus the current observation run_id used by all ten CMS-1 snapshots; corpus_manifest_run_id and observation run_id are distinct authorities and are both retained",
+    "measurement_contract": "CMS-1",
+    "input_fingerprint": "scope-specific SHA-256 projection of current project input fingerprints",
+    "binary_fingerprint": "executed EtuSchlopf binary FNV64"
+  },
+  "projection": {
+    "json": "EtuSchlopf.inventory.json is the machine-readable native record",
+    "xlsx": "EtuSchlopf.inventory.xlsx is XLSX-1 projection of the same model",
+    "assistant_export": "both files are included iff --inventory produced them",
+    "stale_current_artifacts": "normal runs without --inventory remove current root inventory artifacts; assistant exports remain historical evidence"
+  },
+  "comparability": {
+    "rule": "ESI-1 source-inventory counts are directly comparable only when the ESI contract and source-scope semantics are equal; a future ESI-N contract is an explicit series break."
+  }
+}

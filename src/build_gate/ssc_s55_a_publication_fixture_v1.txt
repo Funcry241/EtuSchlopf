@@ -1,0 +1,161 @@
+fn build_render_xml_hidden_rest_forward_collapse_trial(
+    xml: &str,
+    audit: &RenderXmlHiddenRestDependencyAudit,
+    _render_xml_path: &Path,
+    render_state: &mut structural_write_authority::RenderSovereignState,
+    render_root: structural_write_authority::RenderTrialRoot,
+) -> anyhow::Result<RenderXmlHiddenRestForwardCollapseTrial> {
+    let (before_events, before_backup_ok) = collect_render_xml_note_events(xml);
+    let mut trial = RenderXmlHiddenRestForwardCollapseTrial {
+        hidden_rests_before: before_events.iter().filter(|event| event.is_hidden && event.is_rest).count(),
+        visible_pitched_before: before_events.iter().filter(|event| !event.is_hidden && event.midi.is_some()).count(),
+        visible_rests_before: before_events.iter().filter(|event| !event.is_hidden && event.is_rest).count(),
+        hidden_pitched_before: before_events.iter().filter(|event| event.is_hidden && event.midi.is_some()).count(),
+        visible_signature_before: render_visible_signature(&before_events, false),
+        backup_forward_before_ok: before_backup_ok,
+        ..RenderXmlHiddenRestForwardCollapseTrial::default()
+    };
+    if !audit.forward_possible || trial.hidden_rests_before == 0 {
+        trial.attempted = false;
+        trial.hidden_rests_after = trial.hidden_rests_before;
+        trial.visible_pitched_after = trial.visible_pitched_before;
+        trial.visible_rests_after = trial.visible_rests_before;
+        trial.hidden_pitched_after = trial.hidden_pitched_before;
+        trial.visible_signature_after = trial.visible_signature_before;
+        trial.visible_signature_stable = true;
+        trial.backup_forward_after_ok = trial.backup_forward_before_ok;
+        trial.parse_ok = parse_musicxml(xml).is_ok();
+        trial.export_semantics_ok = false;
+        trial.verdict = "hidden_rest_forward_collapse_trial_not_attempted".to_string();
+        trial.done_fragment = "RenderXmlHiddenRestForwardCollapseTrial: nicht ausgeführt; Audit gab Forward-Collapse nicht frei".to_string();
+        trial.pipeline_line = format!(
+            "RenderXmlHiddenRestForwardCollapseTrial v{}: nicht ausgeführt; forward_possible {}, versteckte Pausen {}; Master-XML unverändert, Render-XML unverändert.",
+            env!("CARGO_PKG_VERSION"),
+            if audit.forward_possible { "ja" } else { "nein" },
+            trial.hidden_rests_before
+        );
+        return Ok(trial);
+    }
+    trial.attempted = true;
+    let ((collapsed_xml, stats), collapse_receipt) = collapse_hidden_timeline_rests_to_forward(xml);
+    let mut render_receipts = crate::master_state_identity::RenderTransitionReceipts::new();
+    render_receipts.push_block(collapse_receipt, &collapsed_xml);
+    trial.changed_events = stats.changed_events;
+    let (after_events, after_backup_ok) = collect_render_xml_note_events(&collapsed_xml);
+    trial.hidden_rests_after = after_events.iter().filter(|event| event.is_hidden && event.is_rest).count();
+    trial.visible_pitched_after = after_events.iter().filter(|event| !event.is_hidden && event.midi.is_some()).count();
+    trial.visible_rests_after = after_events.iter().filter(|event| !event.is_hidden && event.is_rest).count();
+    trial.hidden_pitched_after = after_events.iter().filter(|event| event.is_hidden && event.midi.is_some()).count();
+    trial.visible_signature_after = render_visible_signature(&after_events, false);
+    trial.visible_signature_stable = trial.visible_signature_after == trial.visible_signature_before;
+    trial.backup_forward_after_ok = after_backup_ok;
+    trial.parse_ok = parse_musicxml(&collapsed_xml).is_ok();
+    let invariants_ok = trial.changed_events == trial.hidden_rests_before
+        && trial.hidden_rests_after == 0
+        && trial.visible_signature_stable
+        && trial.backup_forward_before_ok
+        && trial.backup_forward_after_ok
+        && trial.parse_ok
+        && trial.visible_pitched_after == trial.visible_pitched_before
+        && trial.visible_rests_after == trial.visible_rests_before
+        && trial.hidden_pitched_after == trial.hidden_pitched_before;
+    if invariants_ok {
+        let published = render_state.adopt_trial_publication_transition(
+            render_root,
+            &collapsed_xml,
+            render_receipts,
+            structural_write_authority::RenderSinkKind::HiddenRestForwardCollapse,
+            |artifact_path, source_xml, candidate_xml| {
+                let tmp_path = artifact_path.with_file_name(format!(
+                    "{}.hidden_rest_forward_trial.tmp",
+                    artifact_path
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("render.musicxml")
+                ));
+                crate::structural_write_authority::write_hidden_rest_forward_collapse_trial_authorized(
+                    source_xml,
+                    candidate_xml,
+                    &tmp_path,
+                )
+                .with_context(|| {
+                    format!(
+                        "Konnte temporäre Render-XML für Hidden-Rest-Forward-Collapse nicht schreiben: {}",
+                        tmp_path.display()
+                    )
+                })?;
+                let export_semantics_ok = validate_musicxml_export_semantics(&tmp_path).is_ok();
+                if !export_semantics_ok {
+                    std::fs::remove_file(&tmp_path).ok();
+                    return Ok::<bool, anyhow::Error>(false);
+                }
+                crate::structural_write_authority::write_hidden_rest_forward_collapse_trial_authorized(
+                    source_xml,
+                    candidate_xml,
+                    artifact_path,
+                )?;
+                std::fs::remove_file(&tmp_path).ok();
+                Ok(true)
+            },
+        )?;
+        trial.export_semantics_ok = published;
+        trial.written = published;
+        if published {
+            crate::audit_only::destructive_edit_attribution::observe_selected_state_successor(
+                xml,
+                &collapsed_xml,
+            );
+        }
+    } else {
+        render_state.decline_transition(render_root, render_receipts);
+    }
+    trial.verdict = if trial.written {
+        "hidden_rest_forward_collapse_trial_written_render_xml_only".to_string()
+    } else if invariants_ok {
+        "hidden_rest_forward_collapse_trial_blocked_by_export_guard".to_string()
+    } else {
+        "hidden_rest_forward_collapse_trial_blocked_by_invariance".to_string()
+    };
+    trial.examples.push(format!(
+        "Forward-Collapse ersetzte {} versteckte Timeline-Pausen nur im Render-Pfad durch äquivalente <forward>-Dauern; Master-XML bleibt unverändert.",
+        trial.changed_events
+    ));
+    trial.examples.push(format!(
+        "Sichtbare klingende Noten {}/{}, sichtbare Pausen {}/{}, versteckte Pausen {}/{}.",
+        trial.visible_pitched_before,
+        trial.visible_pitched_after,
+        trial.visible_rests_before,
+        trial.visible_rests_after,
+        trial.hidden_rests_before,
+        trial.hidden_rests_after
+    ));
+    if !trial.written {
+        trial.examples.push("Keine produktive Render-XML-Aktualisierung, weil mindestens ein Guard nicht vollständig grün war.".to_string());
+    }
+    trial.done_fragment = format!(
+        "RenderXmlHiddenRestForwardCollapseTrial: geändert {}, geschrieben {}, Hidden-Rests {}→{}",
+        trial.changed_events,
+        if trial.written { "ja" } else { "nein" },
+        trial.hidden_rests_before,
+        trial.hidden_rests_after
+    );
+    trial.pipeline_line = format!(
+        "RenderXmlHiddenRestForwardCollapseTrial v{}: Render-XML-only; changed {}, written {}; hidden rests {}→{}; sichtbar Noten {}/{}; sichtbare Pausen {}/{}; Signatur stabil {}; backup-forward {}/{}; parse/export {}/{}; Master-XML unverändert; Urteil {}.",
+        env!("CARGO_PKG_VERSION"),
+        trial.changed_events,
+        if trial.written { "ja" } else { "nein" },
+        trial.hidden_rests_before,
+        trial.hidden_rests_after,
+        trial.visible_pitched_before,
+        trial.visible_pitched_after,
+        trial.visible_rests_before,
+        trial.visible_rests_after,
+        if trial.visible_signature_stable { "ja" } else { "nein" },
+        if trial.backup_forward_before_ok { "ja" } else { "nein" },
+        if trial.backup_forward_after_ok { "ja" } else { "nein" },
+        if trial.parse_ok { "ja" } else { "nein" },
+        if trial.export_semantics_ok { "ja" } else { "nein" },
+        trial.verdict
+    );
+    Ok(trial)
+}

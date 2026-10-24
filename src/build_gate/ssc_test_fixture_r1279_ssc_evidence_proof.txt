@@ -1,0 +1,1898 @@
+//! Read-only evidence of the original owner execution, retained only after adoption.
+//! No selector, writer, proof-diagnostic adapter or permit enforcement lives here.
+use crate::master_state_identity::{
+    AdditiveTransformationReceipt, BlockTransformationReceipt, ExactTransformationReceipt,
+    MintedIdentity, PreservingTransformationReceipt, SscReceiptOriginAccess,
+};
+use std::sync::Arc;
+#[cfg(not(test))]
+use std::sync::Mutex;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SscEvidenceDomain {
+    Master,
+    Render,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SscReleasedEventRef<'event> {
+    domain: SscEvidenceDomain,
+    identity: &'event crate::master_state_identity::MintedIdentity,
+}
+
+
+pub(crate) struct SscOriginReceiptRef<'event> {
+    inner: SscOriginReceiptKind<'event>,
+}
+
+enum SscOriginReceiptKind<'event> {
+    Block(
+        &'event crate::master_state_identity::BlockTransformationReceipt
+    ),
+    Exact(
+        &'event crate::master_state_identity::ExactTransformationReceipt
+    ),
+    Preserving(
+        &'event crate::master_state_identity::PreservingTransformationReceipt
+    ),
+    Additive(
+        &'event crate::master_state_identity::AdditiveTransformationReceipt
+    ),
+}
+
+
+pub(crate) struct SscEventBinding<'event> {
+    released: SscReleasedEventRef<'event>,
+    pre_state: &'event str,
+    post_state: &'event str,
+}
+
+pub(crate) struct SscTransformationEvidence<'event> {
+    event: &'event SscEventBinding<'event>,
+    receipt: SscOriginReceiptRef<'event>,
+    scope: SscFamilyScope,
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SscEvidenceIntegrityFailure {
+    MissingEvidence,
+    DuplicateEvidence,
+    ReceiptIdentityMismatch,
+    DomainMismatch,
+    PreStateUnreadable,
+    PostStateUnreadable,
+    PreFingerprintMismatch,
+    PostFingerprintMismatch,
+    BindingMismatch,
+    ProofBindingMismatch,
+    ProofFamilyMismatch,
+    ContradictoryInvariantEvidence,
+    IllegalProofCombination,
+}
+
+
+pub(crate) enum SscEvidenceIntegrity<'event> {
+    Bound(&'event SscTransformationEvidence<'event>),
+
+    Missing,
+
+    Duplicate {
+        records: usize,
+    },
+
+    Invalid {
+        reason: SscEvidenceIntegrityFailure,
+    },
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SscProofFamily {
+    F7RestVoiceStrictStaff,
+    F5AtomicVoiceStaffVisibility,
+    F9AuthoritySerialization,
+    Additive,
+    Preserving,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SscFamilyScope {
+    OutOfScope,
+    InScope(SscProofFamily),
+}
+
+
+#[derive(Debug, Clone)]
+struct SscConstructiveInvariantCertificate {
+    preserved_structure: SscCheckedStructurePreservation,
+}
+
+#[derive(Debug, Clone)]
+struct SscCheckedStructurePreservation {
+    normalized_bytes: usize,
+}
+
+
+#[derive(Debug, Clone)]
+struct SscConstructiveInvariantCounterexample {
+    kind: SscInvariantFailureKind,
+    witness: SscExactDifferenceWitness,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SscInvariantFailureKind {
+    PreservedProjectionChanged,
+    NoteCardinalityChanged,
+    ForbiddenFieldChanged,
+    RequiredInsertionGeometryBroken,
+}
+
+#[derive(Debug, Clone)]
+struct SscExactDifferenceWitness {
+    pre_range: std::ops::Range<usize>,
+    post_range: std::ops::Range<usize>,
+    pre_bytes: std::sync::Arc<str>,
+    post_bytes: std::sync::Arc<str>,
+}
+
+
+pub(crate) struct SscInvariantProof<'event> {
+    event: &'event SscEventBinding<'event>,
+    family: SscProofFamily,
+    certificate: SscConstructiveInvariantCertificate,
+}
+
+pub(crate) struct SscInvariantCounterexample<'event> {
+    event: &'event SscEventBinding<'event>,
+    family: SscProofFamily,
+    counterexample: SscConstructiveInvariantCounterexample,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum SscInvariantAssessment<'event> {
+    Unproven,
+    Proven(&'event SscInvariantProof<'event>),
+    Refuted(&'event SscInvariantCounterexample<'event>),
+}
+
+
+#[derive(Debug, Clone)]
+struct SscConstructiveNecessityCertificate {
+    defect: SscStructuralDefect,
+}
+
+
+#[derive(Debug, Clone)]
+enum SscStructuralDefect {
+    InvisibleUncoveredRest {
+        note: usize,
+    },
+    MissingRequestedStaff {
+        note: usize,
+    },
+    MissingRequestedSerialization {
+        note: usize,
+    },
+    MissingFinalBarline {
+        boundary: usize,
+    },
+    BrokenBeamChain {
+        note: usize,
+    },
+}
+
+
+pub(crate) struct SscNecessityWitness<'event> {
+    event: &'event SscEventBinding<'event>,
+    family: SscProofFamily,
+    certificate: SscConstructiveNecessityCertificate,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum SscNecessityAssessment<'event> {
+    Unproven,
+    Proven(&'event SscNecessityWitness<'event>),
+}
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SscPermitVerdictV2 {
+    OutOfScope,
+    InvariantUnproven,
+    InvariantDenied,
+    NecessityUnproven,
+    Permit,
+}
+
+
+pub(crate) struct SscClassifiedObservationV2<'event> {
+    transformation: &'event SscTransformationEvidence<'event>,
+    scope: SscFamilyScope,
+    invariant: SscInvariantAssessment<'event>,
+    necessity: SscNecessityAssessment<'event>,
+    verdict: SscPermitVerdictV2,
+}
+
+
+pub(crate) enum SscReleasedObservationV2<'event> {
+    IntegrityFailure {
+        released: SscReleasedEventRef<'event>,
+        integrity: SscEvidenceIntegrityFailure,
+    },
+
+    Classified(
+        SscClassifiedObservationV2<'event>
+    ),
+}
+
+
+#[derive(Debug, Clone)]
+enum CapturedPreState {
+    Raw(Arc<str>),
+    Deflated(Arc<[u8]>),
+}
+impl CapturedPreState {
+    fn capture(pre: &str) -> Self {
+        use std::io::Read;
+        if pre.len() > 4096 {
+            let mut encoded = Vec::new();
+            let mut encoder =
+                flate2::read::ZlibEncoder::new(pre.as_bytes(), flate2::Compression::fast());
+            if encoder.read_to_end(&mut encoded).is_ok() && encoded.len() < pre.len() {
+                return Self::Deflated(Arc::from(encoded));
+            }
+        }
+        Self::Raw(Arc::from(pre))
+    }
+    fn exact_bytes(&self) -> Option<String> {
+        use std::io::Read;
+        match self {
+            Self::Raw(pre) => Some(pre.to_string()),
+            Self::Deflated(bytes) => {
+                let mut pre = String::new();
+                flate2::read::ZlibDecoder::new(bytes.as_ref())
+                    .read_to_string(&mut pre)
+                    .ok()?;
+                Some(pre)
+            }
+        }
+    }
+}
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SscOriginScope {
+    F7,
+    F5,
+    F9,
+    FinalBarline,
+    DirectionInsertion,
+    Preserving(SscPreservingOrigin),
+    Unproved,
+}
+/// Necessity contract of a PRESERVING exclusion, bound by its sealed mint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SscPreservingNecessity {
+    BeamChainRepair,
+    Unbound,
+}
+/// Origin of one PRESERVING owner execution: its frozen descriptor, the
+/// owner's own conserved projection and its necessity contract. Only the
+/// sealed receipt origin can bind it.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SscPreservingOrigin {
+    descriptor: &'static crate::master_state_identity::PreservingDescriptor,
+    projection: fn(&str) -> Option<String>,
+    necessity: SscPreservingNecessity,
+}
+impl SscPreservingOrigin {
+    pub(crate) fn bind(
+        _origin: &SscReceiptOriginAccess,
+        descriptor: &'static crate::master_state_identity::PreservingDescriptor,
+        projection: fn(&str) -> Option<String>,
+        necessity: SscPreservingNecessity,
+    ) -> Self {
+        Self { descriptor, projection, necessity }
+    }
+}
+#[derive(Debug, Clone)]
+pub(crate) struct SscOriginState {
+    pre_state: CapturedPreState,
+    post_state: CapturedPreState,
+    scope: SscOriginScope,
+}
+impl SscOriginState {
+    #[cfg(test)]
+    pub(crate) fn captured_pre_for_test(&self) -> Option<String> {
+        self.pre_state.exact_bytes()
+    }
+
+    pub(crate) fn capture(
+        _origin: &SscReceiptOriginAccess,
+        pre: &str,
+        post: &str,
+        scope: SscOriginScope,
+    ) -> Self {
+        Self {
+            pre_state: CapturedPreState::capture(pre),
+            post_state: CapturedPreState::capture(post),
+            scope,
+        }
+    }
+}
+
+// Compare complete parsed structure, preserving order, content, all attributes
+// and timing/cursor elements, except the explicitly named representation fields.
+fn structure(xml: &str, scope: SscOriginScope) -> Option<String> {
+    structure_skipping(xml, scope, None)
+}
+fn structure_skipping(
+    xml: &str,
+    scope: SscOriginScope,
+    skip: Option<std::ops::Range<usize>>,
+) -> Option<String> {
+    let document = roxmltree::Document::parse(xml).ok()?;
+    fn visit(
+        node: roxmltree::Node<'_, '_>,
+        scope: SscOriginScope,
+        skip: &Option<std::ops::Range<usize>>,
+        out: &mut String,
+    ) {
+        if skip.as_ref().is_some_and(|range| *range == node.range()) {
+            return;
+        }
+        if node.is_element() {
+            let name = node.tag_name().name();
+            if matches!(scope, SscOriginScope::F5 | SscOriginScope::F9)
+                && matches!(name, "voice" | "staff")
+                && node.parent().is_some_and(|n| n.has_tag_name("note"))
+            {
+                return;
+            }
+            out.push('<');
+            out.push_str(&format!("{:?}:", node.tag_name().namespace()));
+            out.push_str(name);
+            let rest = node.has_tag_name("note") && node.children().any(|n| n.has_tag_name("rest"));
+            let mut attrs: Vec<_> = node
+                .attributes()
+                .filter(|a| {
+                    !(matches!(scope, SscOriginScope::F7)
+                        && rest
+                        && matches!(a.name(), "print-object" | "print-spacing"))
+                })
+                .map(|a| (a.namespace(), a.name(), a.value()))
+                .collect();
+            attrs.sort_unstable();
+            for (namespace, name, value) in attrs {
+                out.push_str(&format!("|{namespace:?}:{name}={value:?}"));
+            }
+            out.push('>');
+            for child in node.children() {
+                visit(child, scope, skip, out);
+            }
+            out.push_str("</");
+            out.push_str(name);
+            out.push('>');
+        } else if node.is_text()
+            && let Some(text) = node.text().filter(|text| !text.trim().is_empty())
+        {
+            out.push_str(&format!("{text:?}"));
+        }
+    }
+    let mut out = String::new();
+    visit(document.root_element(), scope, &skip, &mut out);
+    Some(out)
+}
+fn positive(
+    family: SscProofFamily,
+    structure: String,
+    defect: SscStructuralDefect,
+) -> Option<(
+    SscProofFamily,
+    SscConstructiveInvariantCertificate,
+    SscConstructiveNecessityCertificate,
+)> {
+    Some((
+        family,
+        SscConstructiveInvariantCertificate {
+            preserved_structure: SscCheckedStructurePreservation {
+                normalized_bytes: structure.len(),
+            },
+        },
+        SscConstructiveNecessityCertificate { defect },
+    ))
+}
+fn child<'a, 'input>(
+    node: roxmltree::Node<'a, 'input>,
+    tag: &str,
+) -> Option<roxmltree::Node<'a, 'input>> {
+    node.children().find(|n| n.has_tag_name(tag))
+}
+fn scalar(node: roxmltree::Node<'_, '_>, tag: &str) -> Option<String> {
+    child(node, tag)?.text().map(|text| text.trim().to_owned())
+}
+fn prove_origin(
+    pre: &str,
+    post: &str,
+    scope: SscOriginScope,
+) -> Option<(
+    SscProofFamily,
+    SscConstructiveInvariantCertificate,
+    SscConstructiveNecessityCertificate,
+)> {
+    if pre == post || matches!(scope, SscOriginScope::Unproved) {
+        return None;
+    }
+    let before = roxmltree::Document::parse(pre).ok()?;
+    let after = roxmltree::Document::parse(post).ok()?;
+    if matches!(scope, SscOriginScope::FinalBarline) {
+        // The sealed E004 owner has already proved insertion-only geometry and
+        // conserved-content subsequence. Independently bind its missing-final
+        // boundary defect and exact sole light-heavy barline insertion.
+        let boundary = pre.rfind("</measure>")?;
+        if before
+            .descendants()
+            .any(|n| n.has_tag_name("bar-style") && n.text().map(str::trim) == Some("light-heavy"))
+        {
+            return None;
+        }
+        let inserted = after
+            .descendants()
+            .filter(|n| n.has_tag_name("barline"))
+            .filter(|n| {
+                n.attribute("location") == Some("right")
+                    && child(*n, "bar-style").and_then(|n| n.text()).map(str::trim) == Some("light-heavy")
+            })
+            .collect::<Vec<_>>();
+        if inserted.len() != 1 {
+            return None;
+        }
+        let barline = inserted[0];
+        let last_measure = after
+            .descendants()
+            .rfind(|n| n.has_tag_name("measure"))?;
+        if barline.parent() != Some(last_measure)
+            || last_measure
+                .children()
+                .rfind(roxmltree::Node::is_element)
+                != Some(barline)
+        {
+            return None;
+        }
+        let unchanged = structure(pre, SscOriginScope::Unproved)?;
+        if unchanged != structure_skipping(post, SscOriginScope::Unproved, Some(barline.range()))? {
+            return None;
+        }
+        return positive(
+            SscProofFamily::Additive,
+            unchanged,
+            SscStructuralDefect::MissingFinalBarline { boundary },
+        );
+    }
+    let unchanged = structure(pre, scope)?;
+    if unchanged != structure(post, scope)? {
+        return None;
+    }
+    let before_notes: Vec<_> = before
+        .descendants()
+        .filter(|n| n.has_tag_name("note"))
+        .collect();
+    let after_notes: Vec<_> = after
+        .descendants()
+        .filter(|n| n.has_tag_name("note"))
+        .collect();
+    if before_notes.len() != after_notes.len() {
+        return None;
+    }
+    match scope {
+        SscOriginScope::F5 | SscOriginScope::F9 => {
+            // Only missing fields of the existing sealed owner's bound request
+            // can witness necessity. Already-present lane changes are Unknown.
+            let mut missing = None;
+            for (index, (old, new)) in before_notes.into_iter().zip(after_notes).enumerate() {
+                for field in ["voice", "staff"] {
+                    let left = scalar(old, field);
+                    let right = scalar(new, field);
+                    if left == right {
+                        continue;
+                    }
+                    if left.is_some()
+                        || right.as_deref().is_none_or(|value| {
+                            value.parse::<u32>().ok().is_none_or(|value| value == 0)
+                        })
+                    {
+                        return None;
+                    }
+                    if matches!(scope, SscOriginScope::F5) && field != "staff" {
+                        return None;
+                    }
+                    if old.children().filter(|n| n.has_tag_name(field)).count() != 0
+                        || new.children().filter(|n| n.has_tag_name(field)).count() != 1
+                    {
+                        return None;
+                    }
+                    missing = Some(index);
+                }
+            }
+            let note = missing?;
+            if matches!(scope, SscOriginScope::F5) {
+                positive(
+                    SscProofFamily::F5AtomicVoiceStaffVisibility,
+                    unchanged,
+                    SscStructuralDefect::MissingRequestedStaff { note },
+                )
+            } else {
+                positive(
+                    SscProofFamily::F9AuthoritySerialization,
+                    unchanged,
+                    SscStructuralDefect::MissingRequestedSerialization { note },
+                )
+            }
+        }
+        SscOriginScope::F7 => {
+            let intervals = rest_intervals(&before)?;
+            let mut restored = None;
+            for (index, (old, new)) in before_notes.into_iter().zip(after_notes).enumerate() {
+                let old_visible = old.attribute("print-object") != Some("no");
+                let new_visible = new.attribute("print-object") != Some("no");
+                if old_visible == new_visible {
+                    continue;
+                }
+                if old_visible || !new_visible || child(old, "rest").is_none() {
+                    return None;
+                }
+                let interval = intervals.get(index)?;
+                if interval.end <= interval.start || interval.start < 0 || interval.chord {
+                    return None;
+                }
+                if intervals.iter().enumerate().any(|(other, value)| {
+                    other != index
+                        && value.measure == interval.measure
+                        && value.voice == interval.voice
+                        && value.staff == interval.staff
+                        && value.visible
+                        && value.start < interval.end
+                        && interval.start < value.end
+                }) {
+                    return None;
+                }
+                restored = Some(index);
+            }
+            positive(
+                SscProofFamily::F7RestVoiceStrictStaff,
+                unchanged,
+                SscStructuralDefect::InvisibleUncoveredRest { note: restored? },
+            )
+        }
+        _ => None,
+    }
+}
+struct NoteInterval {
+    measure: usize,
+    start: i64,
+    end: i64,
+    voice: String,
+    staff: String,
+    visible: bool,
+    chord: bool,
+}
+fn rest_intervals(document: &roxmltree::Document<'_>) -> Option<Vec<NoteInterval>> {
+    let mut result = Vec::new();
+    for (measure_index, measure) in document
+        .descendants()
+        .filter(|n| n.has_tag_name("measure"))
+        .enumerate()
+    {
+        let mut cursor = 0_i64;
+        let mut last_onset = 0_i64;
+        for node in measure.children().filter(roxmltree::Node::is_element) {
+            match node.tag_name().name() {
+                "backup" => {
+                    cursor = cursor.checked_sub(scalar(node, "duration")?.parse::<i64>().ok()?)?;
+                }
+                "forward" => {
+                    cursor = cursor.checked_add(scalar(node, "duration")?.parse::<i64>().ok()?)?;
+                }
+                "note" => {
+                    if child(node, "grace").is_some() {
+                        return None;
+                    }
+                    let duration = scalar(node, "duration")?.parse::<i64>().ok()?;
+                    if duration <= 0 {
+                        return None;
+                    }
+                    let chord = child(node, "chord").is_some();
+                    let start = if chord { last_onset } else { cursor };
+                    let end = start.checked_add(duration)?;
+                    result.push(NoteInterval {
+                        measure: measure_index,
+                        start,
+                        end,
+                        voice: scalar(node, "voice")?,
+                        staff: scalar(node, "staff")?,
+                        visible: node.attribute("print-object") != Some("no"),
+                        chord,
+                    });
+                    if !chord {
+                        last_onset = start;
+                        cursor = end;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    Some(result)
+}
+
+// E036 insertion geometry, re-derived from the exact captured bytes only: post
+// is pre with exactly one contiguous insertion, and that insertion is
+// whitespace, at most one comment and exactly one <direction> element that is
+// a direct child of a <measure>. Returns the inserted byte span in post.
+enum DirectionGeometry {
+    Inserted(std::ops::Range<usize>),
+    Broken(std::ops::Range<usize>, std::ops::Range<usize>),
+    Unreadable,
+}
+fn direction_insertion_geometry(pre: &str, post: &str) -> DirectionGeometry {
+    let (a, b) = (pre.as_bytes(), post.as_bytes());
+    let prefix = a.iter().zip(b).take_while(|(x, y)| x == y).count();
+    let suffix = a.iter().rev().zip(b.iter().rev()).take_while(|(x, y)| x == y).count();
+    let broken = || {
+        let start = prefix.min(a.len()).min(b.len());
+        DirectionGeometry::Broken(start..a.len().saturating_sub(suffix).max(start), start..b.len().saturating_sub(suffix).max(start))
+    };
+    if b.len() <= a.len() || prefix + suffix < a.len() {
+        return broken();
+    }
+    let Ok(document) = roxmltree::Document::parse(post) else {
+        return DirectionGeometry::Unreadable;
+    };
+    let inserted = b.len() - a.len();
+    let first = a.len() - suffix.min(a.len());
+    for start in first..=prefix.min(a.len()) {
+        let span = start..start + inserted;
+        if !post.is_char_boundary(span.start) || !post.is_char_boundary(span.end) {
+            continue;
+        }
+        let mut elements = document
+            .descendants()
+            .filter(|node| node.is_element() && node.range().start >= span.start && node.range().end <= span.end);
+        let Some(direction) = elements.next() else { continue };
+        let others = document.root().descendants().filter(|node| {
+            node.range().start >= span.start
+                && node.range().end <= span.end
+                && !(node.is_text() && node.text().is_some_and(|text| text.trim().is_empty()))
+                && !node.ancestors().skip(1).any(|ancestor| ancestor == direction)
+                && *node != direction
+        });
+        let comments = others.clone().filter(roxmltree::Node::is_comment).count();
+        if direction.has_tag_name("direction")
+            && direction.parent().is_some_and(|parent| parent.has_tag_name("measure"))
+            && comments <= 1
+            && others.count() == comments
+        {
+            return DirectionGeometry::Inserted(span);
+        }
+    }
+    broken()
+}
+// Canonical structure without the <beam> children of notes; everything else
+// (order, content, attributes, timing) must be byte-structurally identical.
+fn structure_without_note_beams(xml: &str) -> Option<String> {
+    let document = roxmltree::Document::parse(xml).ok()?;
+    fn visit(node: roxmltree::Node<'_, '_>, out: &mut String) {
+        if node.is_element() {
+            if node.has_tag_name("beam") && node.parent().is_some_and(|n| n.has_tag_name("note")) {
+                return;
+            }
+            out.push_str(&format!("<{:?}:{}", node.tag_name().namespace(), node.tag_name().name()));
+            let mut attrs: Vec<_> = node.attributes().map(|a| (a.namespace(), a.name(), a.value())).collect();
+            attrs.sort_unstable();
+            for (namespace, name, value) in attrs {
+                out.push_str(&format!("|{namespace:?}:{name}={value:?}"));
+            }
+            out.push('>');
+            for child in node.children() {
+                visit(child, out);
+            }
+            out.push_str(&format!("</{}>", node.tag_name().name()));
+        } else if node.is_text()
+            && let Some(text) = node.text().filter(|text| !text.trim().is_empty())
+        {
+            out.push_str(&format!("{text:?}"));
+        }
+    }
+    let mut out = String::new();
+    visit(document.root_element(), &mut out);
+    Some(out)
+}
+// One beam chain: (part, measure, voice, beam number, grace).
+type BeamChainKey = (usize, usize, String, String, bool);
+struct BeamedNote {
+    chord: bool,
+    keys: Vec<BeamChainKey>,
+    beams: Vec<(String, String)>,
+}
+// MusicXML beam chains are balanced per voice and beam number inside one
+// measure: begin opens, continue requires an open chain, end closes it, a
+// hook never changes it. Returns all notes and the set of malformed chains.
+fn beam_chains(document: &roxmltree::Document<'_>) -> (Vec<BeamedNote>, std::collections::BTreeSet<BeamChainKey>) {
+    let mut notes = Vec::new();
+    let mut malformed = std::collections::BTreeSet::new();
+    for (part_index, part) in document.descendants().filter(|n| n.has_tag_name("part")).enumerate() {
+        for (measure_index, measure) in part.children().filter(|n| n.has_tag_name("measure")).enumerate() {
+            let mut open = std::collections::BTreeMap::<BeamChainKey, bool>::new();
+            for note in measure.children().filter(|n| n.has_tag_name("note")) {
+                let voice = scalar(note, "voice").unwrap_or_default();
+                let grace = child(note, "grace").is_some();
+                let chord = child(note, "chord").is_some();
+                let mut beams = note
+                    .children()
+                    .filter(|n| n.has_tag_name("beam"))
+                    .map(|beam| (beam.attribute("number").unwrap_or("1").to_owned(), beam.text().unwrap_or("").trim().to_owned()))
+                    .collect::<Vec<_>>();
+                let mut keys = Vec::new();
+                let mut seen = std::collections::BTreeSet::new();
+                for (number, value) in &beams {
+                    let key = (part_index, measure_index, voice.clone(), number.clone(), grace);
+                    keys.push(key.clone());
+                    if chord {
+                        continue;
+                    }
+                    let state = open.entry(key.clone()).or_insert(false);
+                    let valid = seen.insert(number.clone())
+                        && match value.as_str() {
+                            "begin" => !std::mem::replace(state, true),
+                            "continue" => *state,
+                            "end" => std::mem::replace(state, false),
+                            "forward hook" | "backward hook" => true,
+                            _ => false,
+                        };
+                    if !valid {
+                        malformed.insert(key);
+                    }
+                }
+                beams.sort();
+                notes.push(BeamedNote { chord, keys, beams });
+            }
+            malformed.extend(open.into_iter().filter(|(_, is_open)| *is_open).map(|(key, _)| key));
+        }
+    }
+    (notes, malformed)
+}
+// Constructive necessity of a beam-only PRESERVING transition: the pre-state
+// has at least one malformed beam chain, the post-state has none, nothing but
+// note beams changed, and every changed note beam belongs to a chain that was
+// malformed in the pre-state. Witness: the first such repaired note.
+fn beam_chain_repair_note(pre: &str, post: &str) -> Option<usize> {
+    if structure_without_note_beams(pre)? != structure_without_note_beams(post)? {
+        return None;
+    }
+    let before = roxmltree::Document::parse(pre).ok()?;
+    let after = roxmltree::Document::parse(post).ok()?;
+    let (old_notes, broken) = beam_chains(&before);
+    let (new_notes, still_broken) = beam_chains(&after);
+    if broken.is_empty() || !still_broken.is_empty() || old_notes.len() != new_notes.len() {
+        return None;
+    }
+    let mut repaired = None;
+    for (index, (old, new)) in old_notes.iter().zip(&new_notes).enumerate() {
+        if old.beams == new.beams {
+            continue;
+        }
+        if old.chord || new.chord {
+            return None;
+        }
+        let changed = old.keys.iter().chain(&new.keys).filter(|key| {
+            let number = &key.3;
+            old.beams.iter().find(|(n, _)| n == number) != new.beams.iter().find(|(n, _)| n == number)
+        });
+        for key in changed {
+            if !broken.contains(key) {
+                return None;
+            }
+        }
+        repaired.get_or_insert(index);
+    }
+    repaired
+}
+type OriginAssessment<'event> = (
+    Option<SscInvariantProof<'event>>,
+    Option<SscInvariantCounterexample<'event>>,
+    Option<SscNecessityWitness<'event>>,
+);
+fn difference_witness(pre: &str, post: &str, pre_range: std::ops::Range<usize>, post_range: std::ops::Range<usize>) -> SscExactDifferenceWitness {
+    SscExactDifferenceWitness { pre_range, post_range, pre_bytes: Arc::from(pre), post_bytes: Arc::from(post) }
+}
+fn direction_assessment<'event>(event: &'event SscEventBinding<'event>, family: SscProofFamily) -> OriginAssessment<'event> {
+    if family != SscProofFamily::Additive {
+        return (None, None, None);
+    }
+    match direction_insertion_geometry(event.pre_state, event.post_state) {
+        DirectionGeometry::Inserted(_) => {
+            let Some(unchanged) = structure(event.pre_state, SscOriginScope::Unproved) else { return (None, None, None) };
+            // Insertion geometry is proven; no direction necessity contract is
+            // bound (the tempo obligation is WAV-conditional and WAV is no
+            // certificate source), so necessity stays unproven.
+            let certificate = SscConstructiveInvariantCertificate { preserved_structure: SscCheckedStructurePreservation { normalized_bytes: unchanged.len() } };
+            (Some(SscInvariantProof { event, family, certificate }), None, None)
+        }
+        DirectionGeometry::Broken(pre_range, post_range) => {
+            let witness = difference_witness(event.pre_state, event.post_state, pre_range, post_range);
+            let counterexample = SscConstructiveInvariantCounterexample { kind: SscInvariantFailureKind::RequiredInsertionGeometryBroken, witness };
+            (None, Some(SscInvariantCounterexample { event, family, counterexample }), None)
+        }
+        DirectionGeometry::Unreadable => (None, None, None),
+    }
+}
+fn preserving_assessment<'event>(event: &'event SscEventBinding<'event>, origin: SscPreservingOrigin, family: SscProofFamily) -> OriginAssessment<'event> {
+    if family != SscProofFamily::Preserving {
+        return (None, None, None);
+    }
+    let (Some(before), Some(after)) = ((origin.projection)(event.pre_state), (origin.projection)(event.post_state)) else {
+        return (None, None, None);
+    };
+    if before != after {
+        let start = before.bytes().zip(after.bytes()).take_while(|(x, y)| x == y).count();
+        let witness = difference_witness(&before, &after, start..before.len(), start..after.len());
+        let counterexample = SscConstructiveInvariantCounterexample { kind: SscInvariantFailureKind::PreservedProjectionChanged, witness };
+        return (None, Some(SscInvariantCounterexample { event, family, counterexample }), None);
+    }
+    let certificate = SscConstructiveInvariantCertificate { preserved_structure: SscCheckedStructurePreservation { normalized_bytes: before.len() } };
+    let necessity = match origin.necessity {
+        SscPreservingNecessity::BeamChainRepair => beam_chain_repair_note(event.pre_state, event.post_state)
+            .map(|note| SscNecessityWitness { event, family, certificate: SscConstructiveNecessityCertificate { defect: SscStructuralDefect::BrokenBeamChain { note } } }),
+        SscPreservingNecessity::Unbound => None,
+    };
+    (Some(SscInvariantProof { event, family, certificate }), None, necessity)
+}
+// A sealed origin scope is evidence only for the receipt kind and descriptor
+// that bound it at mint.
+fn scope_bound_to_receipt(receipt: &SscOriginReceiptKind<'_>, scope: SscOriginScope) -> bool {
+    use crate::master_state_identity::AdditiveInsertionClass;
+    match (scope, receipt) {
+        (SscOriginScope::Preserving(origin), SscOriginReceiptKind::Preserving(receipt)) => {
+            *origin.descriptor == *crate::master_state_identity::ssc_preserving_descriptor(receipt)
+        }
+        (SscOriginScope::DirectionInsertion, SscOriginReceiptKind::Additive(receipt)) => {
+            crate::master_state_identity::ssc_additive_insertion_class(receipt) == AdditiveInsertionClass::Direction
+        }
+        (SscOriginScope::FinalBarline, SscOriginReceiptKind::Additive(receipt)) => {
+            crate::master_state_identity::ssc_additive_insertion_class(receipt) == AdditiveInsertionClass::FinalBarline
+        }
+        (SscOriginScope::Preserving(_) | SscOriginScope::DirectionInsertion | SscOriginScope::FinalBarline, _) => false,
+        _ => true,
+    }
+}
+// Measurement label only; never an input to a certificate.
+fn scope_label(scope: SscOriginScope, pre: &str, post: &str) -> Option<&'static str> {
+    match scope {
+        SscOriginScope::Preserving(origin) => Some(match origin.necessity {
+            SscPreservingNecessity::BeamChainRepair => "PRESERVING_BEAM_CHAIN",
+            SscPreservingNecessity::Unbound => "PRESERVING_UNBOUND",
+        }),
+        SscOriginScope::DirectionInsertion => Some(match direction_insertion_geometry(pre, post) {
+            DirectionGeometry::Inserted(span) => {
+                let fragment = &post[span];
+                if fragment.contains("<dynamics") {
+                    "DIRECTION_DYNAMICS"
+                } else if fragment.contains("<sound") || fragment.contains("<metronome") {
+                    "DIRECTION_TEMPO"
+                } else if fragment.contains("<words") {
+                    "DIRECTION_WORDS"
+                } else {
+                    "DIRECTION_OTHER"
+                }
+            }
+            _ => "DIRECTION_OTHER",
+        }),
+        _ => None,
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SscAdoptionDomain {
+    Master,
+    Render,
+}
+enum AdoptedReceipt {
+    Block(BlockTransformationReceipt),
+    Exact(ExactTransformationReceipt),
+    Preserving(PreservingTransformationReceipt),
+    Additive(AdditiveTransformationReceipt),
+}
+struct AdoptedEvidence {
+    receipt: AdoptedReceipt,
+    domain: SscAdoptionDomain,
+    additive_origin: Option<SscOriginState>,
+}
+impl AdoptedReceipt {
+    fn identity(&self) -> &MintedIdentity {
+        match self {
+            Self::Block(receipt) => receipt.ssc_bound_origin().0,
+            Self::Exact(receipt) => receipt.ssc_bound_origin().0,
+            Self::Preserving(receipt) => receipt.ssc_bound_origin().0,
+            Self::Additive(receipt) => crate::master_state_identity::ssc_additive_identity(receipt),
+        }
+    }
+    fn borrowed<'a>(
+        &'a self,
+        additive_origin: Option<&'a SscOriginState>,
+    ) -> Option<(
+        SscOriginReceiptKind<'a>,
+        &'a MintedIdentity,
+        &'a SscOriginState,
+    )> {
+        match self {
+            Self::Block(receipt) => {
+                let (identity, origin) = receipt.ssc_bound_origin();
+                Some((SscOriginReceiptKind::Block(receipt), identity, origin))
+            }
+            Self::Exact(receipt) => {
+                let (identity, origin) = receipt.ssc_bound_origin();
+                Some((SscOriginReceiptKind::Exact(receipt), identity, origin))
+            }
+            Self::Preserving(receipt) => {
+                let (identity, origin) = receipt.ssc_bound_origin();
+                Some((SscOriginReceiptKind::Preserving(receipt), identity, origin))
+            }
+            Self::Additive(receipt) => Some((
+                SscOriginReceiptKind::Additive(receipt),
+                crate::master_state_identity::ssc_additive_identity(receipt),
+                additive_origin?,
+            )),
+        }
+    }
+}
+#[cfg(not(test))]
+static ADOPTED_EVIDENCE: Mutex<Vec<AdoptedEvidence>> = Mutex::new(Vec::new());
+#[cfg(test)]
+thread_local! { static ADOPTED_EVIDENCE: std::cell::RefCell<Vec<AdoptedEvidence>> = const { std::cell::RefCell::new(Vec::new()) }; }
+fn with_records(operation: impl FnOnce(&mut Vec<AdoptedEvidence>)) {
+    #[cfg(not(test))]
+    operation(
+        &mut ADOPTED_EVIDENCE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()),
+    );
+    #[cfg(test)]
+    ADOPTED_EVIDENCE.with_borrow_mut(operation);
+}
+pub(crate) fn reset_origin_measurement(_origin: &SscReceiptOriginAccess) {
+    with_records(Vec::clear);
+    with_pending(Vec::clear);
+    with_scopes(|scopes| *scopes = (None, None));
+}
+// The existing released lineage supplies opaque event identities. This only
+// drops observation records of losing Master candidates; Render is unchanged.
+pub(crate) fn retain_released_master_evidence(
+    _origin: &SscReceiptOriginAccess,
+    identities: &[MintedIdentity],
+) {
+    with_scopes(|scopes| scopes.0 = Some(identities.to_vec()));
+    with_records(|records| {
+        records.retain(|record| {
+            matches!(record.domain, SscAdoptionDomain::Render)
+                || identities.contains(record.receipt.identity())
+        });
+    });
+}
+macro_rules! record_commit {
+    ($function:ident, $type:ty, $variant:ident) => {
+        pub(crate) fn $function(
+            _origin: &SscReceiptOriginAccess,
+            receipt: $type,
+            domain: SscAdoptionDomain,
+        ) {
+            with_records(|records| {
+                records.push(AdoptedEvidence {
+                    receipt: AdoptedReceipt::$variant(receipt),
+                    domain,
+                    additive_origin: None,
+                })
+            });
+        }
+    };
+}
+record_commit!(record_block_commit, BlockTransformationReceipt, Block);
+record_commit!(record_exact_commit, ExactTransformationReceipt, Exact);
+record_commit!(
+    record_preserving_commit,
+    PreservingTransformationReceipt,
+    Preserving
+);
+#[cfg(not(test))]
+static PENDING_ADDITIVE: Mutex<Vec<(MintedIdentity, SscOriginState)>> = Mutex::new(Vec::new());
+#[cfg(test)]
+thread_local! { static PENDING_ADDITIVE: std::cell::RefCell<Vec<(MintedIdentity, SscOriginState)>> = const { std::cell::RefCell::new(Vec::new()) }; }
+fn with_pending(operation: impl FnOnce(&mut Vec<(MintedIdentity, SscOriginState)>)) {
+    #[cfg(not(test))]
+    operation(
+        &mut PENDING_ADDITIVE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()),
+    );
+    #[cfg(test)]
+    PENDING_ADDITIVE.with_borrow_mut(operation);
+}
+pub(crate) fn register_additive_origin(
+    _origin: &SscReceiptOriginAccess,
+    identity: &MintedIdentity,
+    origin: SscOriginState,
+) {
+    with_pending(|pending| {
+        if !pending.iter().any(|(existing, _)| existing == identity) {
+            pending.push((*identity, origin));
+        }
+    });
+}
+pub(crate) fn record_additive_commit(
+    _origin: &SscReceiptOriginAccess,
+    receipt: AdditiveTransformationReceipt,
+    domain: SscAdoptionDomain,
+) {
+    let identity = crate::master_state_identity::ssc_additive_identity(&receipt);
+    let mut additive_origin = None;
+    with_pending(|pending| {
+        if let Some(index) = pending
+            .iter()
+            .position(|(existing, _)| existing == identity)
+        {
+            additive_origin = Some(pending.swap_remove(index).1);
+        }
+    });
+    with_records(|records| {
+        records.push(AdoptedEvidence {
+            receipt: AdoptedReceipt::Additive(receipt),
+            domain,
+            additive_origin,
+        })
+    });
+}
+
+pub(crate) fn observe_ssc_event_v2<'event>(
+    transformation: &'event SscTransformationEvidence<'event>,
+    invariant: SscInvariantAssessment<'event>,
+    necessity: SscNecessityAssessment<'event>,
+) -> Result<
+    SscClassifiedObservationV2<'event>,
+    SscEvidenceIntegrityFailure,
+> {
+    let scope = transformation.scope;
+    let same_event = |event: &SscEventBinding<'event>| {
+        std::ptr::eq(transformation.event, event)
+    };
+
+    match (scope, invariant, necessity) {
+        (
+            SscFamilyScope::OutOfScope,
+            SscInvariantAssessment::Unproven,
+            SscNecessityAssessment::Unproven,
+        ) => Ok(SscClassifiedObservationV2 {
+            transformation,
+            scope,
+            invariant,
+            necessity,
+            verdict: SscPermitVerdictV2::OutOfScope,
+        }),
+
+        (
+            SscFamilyScope::OutOfScope,
+            _,
+            _,
+        ) => Err(
+            SscEvidenceIntegrityFailure::IllegalProofCombination
+        ),
+
+        (
+            SscFamilyScope::InScope(_),
+            SscInvariantAssessment::Unproven,
+            SscNecessityAssessment::Unproven,
+        ) => Ok(SscClassifiedObservationV2 {
+            transformation,
+            scope,
+            invariant,
+            necessity,
+            verdict: SscPermitVerdictV2::InvariantUnproven,
+        }),
+
+        (
+            SscFamilyScope::InScope(_),
+            SscInvariantAssessment::Unproven,
+            SscNecessityAssessment::Proven(_),
+        ) => Err(
+            SscEvidenceIntegrityFailure::IllegalProofCombination
+        ),
+
+        (
+            SscFamilyScope::InScope(family),
+            SscInvariantAssessment::Refuted(counterexample),
+            SscNecessityAssessment::Unproven,
+        ) => {
+            if !same_event(counterexample.event) {
+                return Err(
+                    SscEvidenceIntegrityFailure::ProofBindingMismatch
+                );
+            }
+
+            if counterexample.family != family {
+                return Err(
+                    SscEvidenceIntegrityFailure::ProofFamilyMismatch
+                );
+            }
+
+            Ok(SscClassifiedObservationV2 {
+                transformation,
+                scope,
+                invariant,
+                necessity,
+                verdict: SscPermitVerdictV2::InvariantDenied,
+            })
+        }
+
+        (
+            SscFamilyScope::InScope(_),
+            SscInvariantAssessment::Refuted(_),
+            SscNecessityAssessment::Proven(_),
+        ) => Err(
+            SscEvidenceIntegrityFailure::IllegalProofCombination
+        ),
+
+        (
+            SscFamilyScope::InScope(family),
+            SscInvariantAssessment::Proven(proof),
+            SscNecessityAssessment::Unproven,
+        ) => {
+            if !same_event(proof.event) {
+                return Err(
+                    SscEvidenceIntegrityFailure::ProofBindingMismatch
+                );
+            }
+
+            if proof.family != family {
+                return Err(
+                    SscEvidenceIntegrityFailure::ProofFamilyMismatch
+                );
+            }
+
+            Ok(SscClassifiedObservationV2 {
+                transformation,
+                scope,
+                invariant,
+                necessity,
+                verdict: SscPermitVerdictV2::NecessityUnproven,
+            })
+        }
+
+        (
+            SscFamilyScope::InScope(family),
+            SscInvariantAssessment::Proven(proof),
+            SscNecessityAssessment::Proven(witness),
+        ) => {
+            if !same_event(proof.event)
+                || !same_event(witness.event)
+            {
+                return Err(
+                    SscEvidenceIntegrityFailure::ProofBindingMismatch
+                );
+            }
+
+            if proof.family != family
+                || witness.family != family
+            {
+                return Err(
+                    SscEvidenceIntegrityFailure::ProofFamilyMismatch
+                );
+            }
+
+            Ok(SscClassifiedObservationV2 {
+                transformation,
+                scope,
+                invariant,
+                necessity,
+                verdict: SscPermitVerdictV2::Permit,
+            })
+        }
+    }
+}
+
+
+// Released domains are independent; identity values are never decoded or reminted.
+type ReleasedScopes = (Option<Vec<MintedIdentity>>, Option<Vec<MintedIdentity>>);
+#[cfg(not(test))]
+static RELEASED_SCOPES: Mutex<ReleasedScopes> = Mutex::new((None, None));
+#[cfg(test)]
+thread_local! { static RELEASED_SCOPES: std::cell::RefCell<ReleasedScopes> = const { std::cell::RefCell::new((None, None)) }; }
+fn with_scopes(operation: impl FnOnce(&mut ReleasedScopes)) {
+    #[cfg(not(test))]
+    operation(&mut RELEASED_SCOPES.lock().unwrap_or_else(|poisoned| poisoned.into_inner()));
+    #[cfg(test)]
+    RELEASED_SCOPES.with_borrow_mut(operation);
+}
+pub(crate) fn retain_released_render_evidence(_origin: &SscReceiptOriginAccess, identities: Option<&[MintedIdentity]>) {
+    with_scopes(|scopes| scopes.1 = identities.map(<[MintedIdentity]>::to_vec));
+}
+fn proof_scope(scope: SscOriginScope) -> SscFamilyScope {
+    match scope {
+        SscOriginScope::F7 => SscFamilyScope::InScope(SscProofFamily::F7RestVoiceStrictStaff),
+        SscOriginScope::F5 => SscFamilyScope::InScope(SscProofFamily::F5AtomicVoiceStaffVisibility),
+        SscOriginScope::F9 => SscFamilyScope::InScope(SscProofFamily::F9AuthoritySerialization),
+        SscOriginScope::FinalBarline | SscOriginScope::DirectionInsertion => SscFamilyScope::InScope(SscProofFamily::Additive),
+        SscOriginScope::Preserving(_) => SscFamilyScope::InScope(SscProofFamily::Preserving),
+        SscOriginScope::Unproved => SscFamilyScope::OutOfScope,
+    }
+}
+impl SscOriginReceiptKind<'_> {
+    fn bound_identity(&self) -> &MintedIdentity {
+        match self {
+            Self::Block(receipt) => receipt.ssc_bound_origin().0,
+            Self::Exact(receipt) => receipt.ssc_bound_origin().0,
+            Self::Preserving(receipt) => receipt.ssc_bound_origin().0,
+            Self::Additive(receipt) => crate::master_state_identity::ssc_additive_identity(receipt),
+        }
+    }
+    fn fingerprints(&self, pre: &str, post: &str) -> (bool, bool) {
+        match self {
+            Self::Block(receipt) => crate::master_state_identity::ssc_block_origin_fingerprints(receipt, pre, post),
+            Self::Exact(receipt) => crate::master_state_identity::ssc_exact_origin_fingerprints(receipt, pre, post),
+            Self::Preserving(receipt) => crate::master_state_identity::ssc_preserving_origin_fingerprints(receipt, pre, post),
+            Self::Additive(receipt) => crate::master_state_identity::ssc_additive_origin_fingerprints(receipt, pre, post),
+        }
+    }
+}
+#[derive(Default)]
+struct ObservationCounts {
+    released: usize,
+    master: usize,
+    render: usize,
+    missing: usize,
+    duplicate: usize,
+    invalid: usize,
+    out_of_scope: usize,
+    invariant_unproven: usize,
+    invariant_denied: usize,
+    necessity_unproven: usize,
+    permit: usize,
+    integrity: std::collections::BTreeMap<String, usize>,
+    families: std::collections::BTreeMap<&'static str, [usize; 4]>,
+    scopes: std::collections::BTreeMap<&'static str, [usize; 4]>,
+}
+impl ObservationCounts {
+    fn fail(&mut self, reason: SscEvidenceIntegrityFailure) {
+        match reason {
+            SscEvidenceIntegrityFailure::MissingEvidence => self.missing += 1,
+            SscEvidenceIntegrityFailure::DuplicateEvidence => self.duplicate += 1,
+            _ => self.invalid += 1,
+        }
+        *self.integrity.entry(format!("{reason:?}")).or_default() += 1;
+    }
+    fn observe(&mut self, observation: SscReleasedObservationV2<'_>) {
+        match observation {
+            SscReleasedObservationV2::IntegrityFailure { released, integrity } => {
+                let _bound_domain = released.domain;
+                let _opaque_identity = released.identity;
+                self.fail(integrity);
+            }
+            SscReleasedObservationV2::Classified(observation) => {
+                // Access every constructive component without exposing it to writers.
+                let binding = observation.transformation.event;
+                let _exact_origin = (binding.released.domain, binding.released.identity, binding.pre_state, binding.post_state);
+                let _original_receipt = observation.transformation.receipt.inner.bound_identity();
+                if let SscFamilyScope::InScope(family) = observation.scope {
+                    let label = match family { SscProofFamily::F7RestVoiceStrictStaff => "F7", SscProofFamily::F5AtomicVoiceStaffVisibility => "F5", SscProofFamily::F9AuthoritySerialization => "F9", SscProofFamily::Additive => "ADDITIVE", SscProofFamily::Preserving => "PRESERVING" };
+                    let slot = match observation.verdict { SscPermitVerdictV2::InvariantUnproven => Some(0), SscPermitVerdictV2::InvariantDenied => Some(1), SscPermitVerdictV2::NecessityUnproven => Some(2), SscPermitVerdictV2::Permit => Some(3), SscPermitVerdictV2::OutOfScope => None };
+                    if let Some(slot) = slot { self.families.entry(label).or_default()[slot] += 1; }
+                }
+                match observation.invariant {
+                    SscInvariantAssessment::Unproven => {},
+                    SscInvariantAssessment::Proven(proof) => { let _checked = proof.certificate.preserved_structure.normalized_bytes; },
+                    SscInvariantAssessment::Refuted(counterexample) => {
+                        let exact = &counterexample.counterexample;
+                        let _witness = (exact.kind, &exact.witness.pre_range, &exact.witness.post_range, &exact.witness.pre_bytes, &exact.witness.post_bytes);
+                    },
+                }
+                if let SscNecessityAssessment::Proven(witness) = observation.necessity {
+                    let _defect = match witness.certificate.defect {
+                        SscStructuralDefect::InvisibleUncoveredRest { note }
+                        | SscStructuralDefect::MissingRequestedStaff { note }
+                        | SscStructuralDefect::MissingRequestedSerialization { note } => note,
+                        SscStructuralDefect::MissingFinalBarline { boundary } => boundary,
+                        SscStructuralDefect::BrokenBeamChain { note } => note,
+                    };
+                }
+                match observation.verdict {
+                    SscPermitVerdictV2::OutOfScope => self.out_of_scope += 1,
+                    SscPermitVerdictV2::InvariantUnproven => self.invariant_unproven += 1,
+                    SscPermitVerdictV2::InvariantDenied => self.invariant_denied += 1,
+                    SscPermitVerdictV2::NecessityUnproven => self.necessity_unproven += 1,
+                    SscPermitVerdictV2::Permit => self.permit += 1,
+                }
+            }
+        }
+    }
+    fn classified(&self) -> usize {
+        self.out_of_scope + self.invariant_unproven + self.invariant_denied + self.necessity_unproven + self.permit
+    }
+}
+fn invariant_from_exact_origin<'event>(event: &'event SscEventBinding<'event>, origin: &SscOriginState, family: SscProofFamily) -> (Option<SscInvariantProof<'event>>, Option<SscInvariantCounterexample<'event>>, Option<SscNecessityWitness<'event>>) {
+    match origin.scope {
+        SscOriginScope::DirectionInsertion => return direction_assessment(event, family),
+        SscOriginScope::Preserving(preserving) => return preserving_assessment(event, preserving, family),
+        _ => {}
+    }
+    // Fresh constructive issuance from the receipt-bound bytes, not V1 verdict reuse.
+    if let Some((checked_family, certificate, necessity)) = prove_origin(event.pre_state, event.post_state, origin.scope) {
+        if checked_family != family { return (None, None, None); }
+        return (Some(SscInvariantProof { event, family, certificate }), None, Some(SscNecessityWitness { event, family, certificate: necessity }));
+    }
+    let before = structure(event.pre_state, origin.scope);
+    let after = structure(event.post_state, origin.scope);
+    let (Some(before), Some(after)) = (before, after) else { return (None, None, None); };
+    if matches!(family, SscProofFamily::Additive) && event.pre_state != event.post_state {
+        // An absent necessity certificate is not a refutation of insertion geometry.
+        return (None, None, None);
+    }
+    if before == after && !matches!(family, SscProofFamily::Additive) {
+        return (Some(SscInvariantProof { event, family, certificate: SscConstructiveInvariantCertificate { preserved_structure: SscCheckedStructurePreservation { normalized_bytes: before.len() } } }), None, None);
+    }
+    let note_count = |xml| roxmltree::Document::parse(xml).ok().map(|document| document.descendants().filter(|node| node.has_tag_name("note")).count());
+    let kind = if matches!(family, SscProofFamily::Additive) {
+        SscInvariantFailureKind::RequiredInsertionGeometryBroken
+    } else if note_count(event.pre_state) != note_count(event.post_state) {
+        SscInvariantFailureKind::NoteCardinalityChanged
+    } else if matches!(family, SscProofFamily::F5AtomicVoiceStaffVisibility | SscProofFamily::F9AuthoritySerialization) {
+        SscInvariantFailureKind::ForbiddenFieldChanged
+    } else {
+        SscInvariantFailureKind::PreservedProjectionChanged
+    };
+    let counterexample = SscInvariantCounterexample { event, family, counterexample: SscConstructiveInvariantCounterexample { kind, witness: SscExactDifferenceWitness { pre_range: 0..event.pre_state.len(), post_range: 0..event.post_state.len(), pre_bytes: Arc::from(event.pre_state), post_bytes: Arc::from(event.post_state) } } };
+    (None, Some(counterexample), None)
+}
+fn classify_record(released: SscReleasedEventRef<'_>, record: &AdoptedEvidence, counts: &mut ObservationCounts) {
+    let Some((receipt, identity, origin)) = record.receipt.borrowed(record.additive_origin.as_ref()) else {
+        counts.observe(SscReleasedObservationV2::IntegrityFailure { released, integrity: SscEvidenceIntegrityFailure::MissingEvidence }); return;
+    };
+    classify_bound_origin(released, receipt, identity, origin, counts);
+}
+fn classify_bound_origin(released: SscReleasedEventRef<'_>, receipt: SscOriginReceiptKind<'_>, identity: &MintedIdentity, origin: &SscOriginState, counts: &mut ObservationCounts) {
+    let failed = |counts: &mut ObservationCounts, integrity| counts.observe(SscReleasedObservationV2::IntegrityFailure { released, integrity });
+    if identity != released.identity { failed(counts, SscEvidenceIntegrityFailure::ReceiptIdentityMismatch); return; }
+    if !scope_bound_to_receipt(&receipt, origin.scope) { failed(counts, SscEvidenceIntegrityFailure::ProofFamilyMismatch); return; }
+    let Some(pre) = origin.pre_state.exact_bytes() else { failed(counts, SscEvidenceIntegrityFailure::PreStateUnreadable); return; };
+    let Some(post) = origin.post_state.exact_bytes() else { failed(counts, SscEvidenceIntegrityFailure::PostStateUnreadable); return; };
+    let (pre_matches, post_matches) = receipt.fingerprints(&pre, &post);
+    if !pre_matches { failed(counts, SscEvidenceIntegrityFailure::PreFingerprintMismatch); return; }
+    if !post_matches { failed(counts, SscEvidenceIntegrityFailure::PostFingerprintMismatch); return; }
+    let event = SscEventBinding { released, pre_state: &pre, post_state: &post };
+    let transformation = SscTransformationEvidence { event: &event, receipt: SscOriginReceiptRef { inner: receipt }, scope: proof_scope(origin.scope) };
+    let integrity = SscEvidenceIntegrity::Bound(&transformation);
+    let SscEvidenceIntegrity::Bound(bound) = integrity else { unreachable!() };
+    let (proof, counterexample, witness) = match bound.scope {
+        SscFamilyScope::OutOfScope => (None, None, None),
+        SscFamilyScope::InScope(family) => invariant_from_exact_origin(&event, origin, family),
+    };
+    if proof.is_some() && counterexample.is_some() { failed(counts, SscEvidenceIntegrityFailure::ContradictoryInvariantEvidence); return; }
+    let invariant = match (&proof, &counterexample) {
+        (Some(proof), None) => SscInvariantAssessment::Proven(proof),
+        (None, Some(counterexample)) => SscInvariantAssessment::Refuted(counterexample),
+        _ => SscInvariantAssessment::Unproven,
+    };
+    let necessity = witness.as_ref().map_or(SscNecessityAssessment::Unproven, SscNecessityAssessment::Proven);
+    let label = scope_label(origin.scope, &pre, &post);
+    match observe_ssc_event_v2(bound, invariant, necessity) {
+        Ok(classified) => {
+            let slot = match classified.verdict { SscPermitVerdictV2::InvariantUnproven => Some(0), SscPermitVerdictV2::InvariantDenied => Some(1), SscPermitVerdictV2::NecessityUnproven => Some(2), SscPermitVerdictV2::Permit => Some(3), SscPermitVerdictV2::OutOfScope => None };
+            if let (Some(label), Some(slot)) = (label, slot) { counts.scopes.entry(label).or_default()[slot] += 1; }
+            counts.observe(SscReleasedObservationV2::Classified(classified));
+        }
+        Err(integrity) => failed(counts, integrity),
+    }
+}
+fn count_released(scopes: &ReleasedScopes, records: &[&AdoptedEvidence]) -> ObservationCounts {
+    let mut counts = ObservationCounts::default();
+    for (domain, identities) in [(SscAdoptionDomain::Master, &scopes.0), (SscAdoptionDomain::Render, &scopes.1)] {
+        let Some(identities) = identities else { continue; };
+        let mut seen = Vec::new();
+        for identity in identities {
+            if seen.contains(identity) { continue; }
+            seen.push(*identity);
+            counts.released += 1;
+            match domain { SscAdoptionDomain::Master => counts.master += 1, SscAdoptionDomain::Render => counts.render += 1 };
+            let released = SscReleasedEventRef { domain: match domain { SscAdoptionDomain::Master => SscEvidenceDomain::Master, SscAdoptionDomain::Render => SscEvidenceDomain::Render }, identity };
+            let matching: Vec<_> = records.iter().filter(|record| record.domain == domain && record.receipt.identity() == identity).collect();
+            let integrity = match matching.len() {
+                0 if records.iter().any(|record| record.receipt.identity() == identity) => SscEvidenceIntegrity::Invalid { reason: SscEvidenceIntegrityFailure::DomainMismatch },
+                0 => SscEvidenceIntegrity::Missing,
+                1 => { classify_record(released, matching[0], &mut counts); continue; },
+                records => SscEvidenceIntegrity::Duplicate { records },
+            };
+            let failure = match integrity {
+                SscEvidenceIntegrity::Missing => SscEvidenceIntegrityFailure::MissingEvidence,
+                SscEvidenceIntegrity::Duplicate { records } => { assert!(records > 1); SscEvidenceIntegrityFailure::DuplicateEvidence },
+                SscEvidenceIntegrity::Invalid { reason } => reason,
+                SscEvidenceIntegrity::Bound(_) => SscEvidenceIntegrityFailure::BindingMismatch,
+            };
+            counts.observe(SscReleasedObservationV2::IntegrityFailure { released, integrity: failure });
+        }
+    }
+    counts
+}
+pub(crate) fn append_capture_coverage(_access: &crate::final_report::SscObservationReadAccess, out: &mut String) {
+    let mut scopes = (None, None);
+    with_scopes(|released| scopes = released.clone());
+    let mut counts = ObservationCounts::default();
+    with_records(|records| counts = count_released(&scopes, &records.iter().collect::<Vec<_>>()));
+    let missing_scope = usize::from(scopes.0.is_none()) + usize::from(scopes.1.is_none());
+    let balance = counts.released == counts.missing + counts.duplicate + counts.invalid + counts.classified();
+    out.push_str(&format!("ReleaseScopeMissing: {missing_scope}\nMasterReleaseScope: {}\nRenderReleaseScope: {}\nReleasedOwnerEvents: {}\nMasterOwnerEvents: {}\nRenderOwnerEvents: {}\nMissingEvidence: {}\nDuplicateEvidenceIdentities: {}\nInvalidEvidenceIdentities: {}\nOutOfScope: {}\nInvariantUnproven: {}\nInvariantDenied: {}\nNecessityUnproven: {}\nPermit: {}\nClassifiedOwnerEvents: {}\nReleasedBalance: {}\nEnforcementReadiness: blocked_shadow_only\n", if scopes.0.is_some() { "released" } else { "missing" }, if scopes.1.is_some() { "released" } else { "missing" }, counts.released, counts.master, counts.render, counts.missing, counts.duplicate, counts.invalid, counts.out_of_scope, counts.invariant_unproven, counts.invariant_denied, counts.necessity_unproven, counts.permit, counts.classified(), if balance { "complete" } else { "invalid" }));
+    for (reason, count) in counts.integrity { out.push_str(&format!("Integrity{reason}: {count}\n")); }
+    for family in ["F7", "F5", "F9", "ADDITIVE", "PRESERVING"] {
+        let classes = counts.families.get(family).copied().unwrap_or_default();
+        for (label, count) in ["InvariantUnproven", "InvariantDenied", "NecessityUnproven", "Permit"].into_iter().zip(classes) {
+            out.push_str(&format!("Family{family}{label}: {count}\n"));
+        }
+    }
+    for scope in ["PRESERVING_BEAM_CHAIN", "PRESERVING_UNBOUND", "DIRECTION_TEMPO", "DIRECTION_WORDS", "DIRECTION_DYNAMICS", "DIRECTION_OTHER"] {
+        let classes = counts.scopes.get(scope).copied().unwrap_or_default();
+        for (label, count) in ["InvariantUnproven", "InvariantDenied", "NecessityUnproven", "Permit"].into_iter().zip(classes) {
+            out.push_str(&format!("Scope{scope}{label}: {count}\n"));
+        }
+    }
+}
+
+#[cfg(test)]
+mod truth_closure_tests {
+    use super::*;
+    fn record() -> AdoptedEvidence {
+        let receipt = crate::master_state_identity::tests::synthetic_exact_receipt_for_tests("<d>0</d>", "<d>1</d>", 3, 4, "1");
+        AdoptedEvidence { receipt: AdoptedReceipt::Exact(receipt), domain: SscAdoptionDomain::Master, additive_origin: None }
+    }
+    #[test]
+    fn released_denominator_survives_missing_record_and_excludes_orphans() {
+        let record = record();
+        let identity = *record.receipt.identity();
+        let released = (Some(vec![identity]), Some(Vec::new()));
+        let missing = count_released(&released, &[]);
+        assert_eq!((missing.released, missing.missing, missing.classified()), (1, 1, 0));
+        let orphan = count_released(&(Some(Vec::new()), Some(Vec::new())), &[&record]);
+        assert_eq!((orphan.released, orphan.classified()), (0, 0));
+    }
+    #[test]
+    fn no_release_scope_has_no_candidate_fallback() {
+        let record = record();
+        let missing = count_released(&(None, None), &[&record]);
+        assert_eq!((missing.released, missing.classified()), (0, 0));
+    }
+    #[test]
+    fn duplicate_records_are_one_released_integrity_class() {
+        let record = record();
+        let identity = *record.receipt.identity();
+        let duplicate = count_released(&(Some(vec![identity, identity]), Some(Vec::new())), &[&record, &record]);
+        assert_eq!((duplicate.released, duplicate.duplicate, duplicate.classified()), (1, 1, 0));
+    }
+    #[test]
+    fn domains_are_not_interchangeable_and_render_scope_is_independent() {
+        let mut record = record();
+        let identity = *record.receipt.identity();
+        let wrong = count_released(&(Some(Vec::new()), Some(vec![identity])), &[&record]);
+        assert_eq!((wrong.released, wrong.invalid, wrong.classified()), (1, 1, 0));
+        assert_eq!(wrong.integrity.get("DomainMismatch"), Some(&1));
+        record.domain = SscAdoptionDomain::Render;
+        let correct = count_released(&(Some(Vec::new()), Some(vec![identity])), &[&record]);
+        assert_eq!((correct.master, correct.render, correct.out_of_scope), (0, 1, 1));
+    }
+    #[test]
+    fn unreadable_and_changed_origin_states_are_explicit_integrity_classes() {
+        let record = record();
+        let identity = *record.receipt.identity();
+        for (which, expected) in [(0, "PreStateUnreadable"), (1, "PostStateUnreadable"), (2, "PreFingerprintMismatch"), (3, "PostFingerprintMismatch")] {
+            let (receipt, original_identity, origin) = record.receipt.borrowed(None).unwrap();
+            let mut corrupt = origin.clone();
+            match which {
+                0 => corrupt.pre_state = CapturedPreState::Deflated(Arc::from([0_u8, 1, 2])),
+                1 => corrupt.post_state = CapturedPreState::Deflated(Arc::from([0_u8, 1, 2])),
+                2 => corrupt.pre_state = CapturedPreState::Raw(Arc::from("<foreign/>")),
+                _ => corrupt.post_state = CapturedPreState::Raw(Arc::from("<foreign/>")),
+            }
+            let released = SscReleasedEventRef { domain: SscEvidenceDomain::Master, identity: &identity };
+            let mut counts = ObservationCounts::default();
+            classify_bound_origin(released, receipt, original_identity, &corrupt, &mut counts);
+            assert_eq!((counts.invalid, counts.classified()), (1, 0));
+            assert_eq!(counts.integrity.get(expected), Some(&1));
+        }
+    }
+    #[test]
+    fn exact_invariant_refutation_is_distinct_from_missing_necessity() {
+        let record = record(); let identity = *record.receipt.identity();
+        let before = "<score><note><pitch>C</pitch></note></score>";
+        let after = "<score><note><pitch>D</pitch></note></score>";
+        let event = SscEventBinding { released: SscReleasedEventRef { domain: SscEvidenceDomain::Master, identity: &identity }, pre_state: before, post_state: after };
+        let origin = SscOriginState { pre_state: CapturedPreState::capture(before), post_state: CapturedPreState::capture(after), scope: SscOriginScope::F5 };
+        let (proof, counterexample, necessity) = invariant_from_exact_origin(&event, &origin, SscProofFamily::F5AtomicVoiceStaffVisibility);
+        assert!(proof.is_none() && counterexample.is_some() && necessity.is_none());
+        let exact = &counterexample.as_ref().unwrap().counterexample.witness;
+        assert_eq!((&*exact.pre_bytes, &*exact.post_bytes), (before, after));
+        let unchanged = SscEventBinding { pre_state: before, post_state: before, ..event };
+        let (proof, counterexample, necessity) = invariant_from_exact_origin(&unchanged, &origin, SscProofFamily::F5AtomicVoiceStaffVisibility);
+        assert!(proof.is_some() && counterexample.is_none() && necessity.is_none());
+    }
+    #[test]
+    fn observer_rejects_foreign_proof_and_out_of_scope_proofs() {
+        let record = record(); let identity = *record.receipt.identity();
+        let event = SscEventBinding { released: SscReleasedEventRef { domain: SscEvidenceDomain::Master, identity: &identity }, pre_state: "<d/>", post_state: "<d/>" };
+        let other = SscEventBinding { released: event.released, pre_state: event.pre_state, post_state: event.post_state };
+        let family = SscProofFamily::F5AtomicVoiceStaffVisibility;
+        let proof = SscInvariantProof { event: &other, family, certificate: SscConstructiveInvariantCertificate { preserved_structure: SscCheckedStructurePreservation { normalized_bytes: 4 } } };
+        let (receipt, _, _) = record.receipt.borrowed(None).unwrap();
+        let transformation = SscTransformationEvidence { event: &event, receipt: SscOriginReceiptRef { inner: receipt }, scope: SscFamilyScope::InScope(family) };
+        assert!(matches!(observe_ssc_event_v2(&transformation, SscInvariantAssessment::Proven(&proof), SscNecessityAssessment::Unproven), Err(SscEvidenceIntegrityFailure::ProofBindingMismatch)));
+        let outside = SscTransformationEvidence { scope: SscFamilyScope::OutOfScope, ..transformation };
+        assert!(matches!(observe_ssc_event_v2(&outside, SscInvariantAssessment::Proven(&proof), SscNecessityAssessment::Unproven), Err(SscEvidenceIntegrityFailure::IllegalProofCombination)));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn score(note: &str) -> String {
+        format!(
+            "<score-partwise><part id=\"P\"><measure><attributes><divisions>1</divisions></attributes>{note}</measure></part></score-partwise>"
+        )
+    }
+    const NOTE: &str = "<note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice></note>";
+    #[test]
+    fn missing_requested_staff_has_structural_certificate() {
+        let pre = score(NOTE);
+        let post = pre.replace("</note>", "<staff>2</staff></note>");
+        assert!(matches!(
+            prove_origin(&pre, &post, SscOriginScope::F5),
+            Some((SscProofFamily::F5AtomicVoiceStaffVisibility, _, _))
+        ));
+    }
+    #[test]
+    fn existing_staff_move_is_not_rebranded_as_necessity() {
+        let pre = score(&NOTE.replace("</note>", "<staff>1</staff></note>"));
+        let post = pre.replace("<staff>1</staff>", "<staff>2</staff>");
+        assert!(prove_origin(&pre, &post, SscOriginScope::F5).is_none());
+    }
+    #[test]
+    fn serialized_missing_voice_is_distinct_from_lane_reassignment() {
+        let pre = score(&NOTE.replace("<voice>1</voice>", ""));
+        let post = score(NOTE);
+        assert!(matches!(
+            prove_origin(&pre, &post, SscOriginScope::F9),
+            Some((SscProofFamily::F9AuthoritySerialization, _, _))
+        ));
+        assert!(
+            prove_origin(
+                &post,
+                &post.replace("<voice>1</voice>", "<voice>2</voice>"),
+                SscOriginScope::F9
+            )
+            .is_none()
+        );
+    }
+    #[test]
+    fn changed_pitch_duration_cursor_and_namespace_never_pass_lane_proof() {
+        let pre = score(NOTE);
+        let valid = pre.replace("</note>", "<staff>2</staff></note>");
+        for post in [
+            valid.replace("<step>C</step>", "<step>D</step>"),
+            valid.replace("<duration>4</duration>", "<duration>3</duration>"),
+            valid.replace(
+                "</measure>",
+                "<backup><duration>1</duration></backup></measure>",
+            ),
+            valid.replace("<score-partwise>", "<score-partwise xmlns=\"foreign\">"),
+        ] {
+            assert!(prove_origin(&pre, &post, SscOriginScope::F5).is_none());
+        }
+    }
+    #[test]
+    fn unproved_scope_is_unknown_even_for_a_structurally_valid_change() {
+        let pre = score(NOTE);
+        let post = pre.replace("</note>", "<staff>2</staff></note>");
+        assert!(prove_origin(&pre, &post, SscOriginScope::Unproved).is_none());
+    }
+    #[test]
+    fn hidden_uncovered_rest_has_a_voice_staff_bound_witness() {
+        let rest = "<note print-object=\"no\"><rest/><duration>4</duration><voice>1</voice><staff>1</staff></note>";
+        let pre = score(rest);
+        let post = pre.replace(" print-object=\"no\"", "");
+        assert!(matches!(
+            prove_origin(&pre, &post, SscOriginScope::F7),
+            Some((SscProofFamily::F7RestVoiceStrictStaff, _, _))
+        ));
+    }
+    #[test]
+    fn overlapping_visible_note_or_rest_is_not_a_coverage_defect() {
+        let rest = "<note print-object=\"no\"><rest/><duration>4</duration><voice>1</voice><staff>1</staff></note>";
+        for other in [
+            NOTE.replace("</note>", "<staff>1</staff></note>"),
+            rest.replace(" print-object=\"no\"", ""),
+        ] {
+            let pre = score(&format!(
+                "{rest}<backup><duration>4</duration></backup>{other}"
+            ));
+            let post = pre.replacen(" print-object=\"no\"", "", 1);
+            assert!(prove_origin(&pre, &post, SscOriginScope::F7).is_none());
+        }
+    }
+    #[test]
+    fn rest_removal_timing_voice_and_chord_changes_remain_unknown() {
+        let rest = "<note print-object=\"no\"><rest/><duration>4</duration><voice>1</voice><staff>1</staff></note>";
+        let pre = score(rest);
+        let post = pre.replace(" print-object=\"no\"", "");
+        for changed in [
+            post.replace("<duration>4</duration>", "<duration>3</duration>"),
+            post.replace("<voice>1</voice>", "<voice>2</voice>"),
+            post.replace("<rest/>", "<chord/><rest/>"),
+        ] {
+            assert!(prove_origin(&pre, &changed, SscOriginScope::F7).is_none());
+        }
+    }
+    #[test]
+    fn final_barline_insertion_is_positive_only_for_the_sealed_scope() {
+        let pre = score(NOTE);
+        let post = pre.replace(
+            "</measure>",
+            "<barline location=\"right\"><bar-style>light-heavy</bar-style></barline></measure>",
+        );
+        assert!(matches!(
+            prove_origin(&pre, &post, SscOriginScope::FinalBarline),
+            Some((SscProofFamily::Additive, _, _))
+        ));
+        assert!(prove_origin(&pre, &post, SscOriginScope::Unproved).is_none());
+        assert!(
+            prove_origin(
+                &pre,
+                &post.replace("<step>C</step>", "<step>D</step>"),
+                SscOriginScope::FinalBarline
+            )
+            .is_none()
+        );
+    }
+    #[test]
+    fn malformed_unchanged_or_duplicate_lane_fields_cannot_issue_certificates() {
+        assert!(prove_origin("broken", "other", SscOriginScope::F5).is_none());
+        let pre = score(NOTE);
+        assert!(prove_origin(&pre, &pre, SscOriginScope::F5).is_none());
+        let post = pre.replace("</note>", "<staff>2</staff><staff>2</staff></note>");
+        assert!(prove_origin(&pre, &post, SscOriginScope::F5).is_none());
+    }
+    #[test]
+    fn duplication_and_unrelated_metadata_do_not_change_local_certificate() {
+        let pre = score(NOTE);
+        let post = pre.replace("</note>", "<staff>2</staff></note>");
+        for (before, after) in [
+            (pre.clone(), post.clone()),
+            (
+                pre.replace("id=\"P\"", "id=\"other\""),
+                post.replace("id=\"P\"", "id=\"other\""),
+            ),
+            (pre.clone(), post.clone()),
+        ] {
+            assert!(prove_origin(&before, &after, SscOriginScope::F5).is_some());
+        }
+    }
+}
+
+#[cfg(test)]
+mod snapshot_tests {
+    use super::*;
+    #[test]
+    fn ssc_compressed_snapshot_is_lossless_with_multibyte_original_bytes() {
+        let pre = format!("<score>{}</score>", "Äß🎵<note/>".repeat(2500));
+        let captured = CapturedPreState::capture(&pre);
+        assert!(matches!(captured, CapturedPreState::Deflated(_)));
+        assert_eq!(captured.exact_bytes().as_deref(), Some(pre.as_str()));
+    }
+    #[test]
+    fn ssc_invalid_compressed_capture_is_not_reconstructed_from_a_fingerprint() {
+        let captured = CapturedPreState::Deflated(Arc::from([1_u8, 2, 3]));
+        assert!(captured.exact_bytes().is_none());
+    }
+}
+
+pub(crate) fn release_unadopted_additive_origin(
+    _origin: &SscReceiptOriginAccess,
+    identity: &MintedIdentity,
+) {
+    fn remove(pending: &mut Vec<(MintedIdentity, SscOriginState)>, identity: &MintedIdentity) {
+        if let Some(index) = pending
+            .iter()
+            .position(|(existing, _)| existing == identity)
+        {
+            pending.swap_remove(index);
+        }
+    }
+    #[cfg(not(test))]
+    with_pending(|pending| remove(pending, identity));
+    // Test TLS stores may be destroyed before adopted receipts at thread exit.
+    #[cfg(test)]
+    let _ = PENDING_ADDITIVE.try_with(|slot| {
+        if let Ok(mut pending) = slot.try_borrow_mut() {
+            remove(&mut pending, identity);
+        }
+    });
+}
+
+
+
+// Test-only probe for the PRESERVING/E036 proof bundle. Real receipts are
+// produced by their owners in structural_write_authority tests and handed over
+// by value; this probe only replays the private classification with one named
+// corruption. It returns plain counts, never a proof carrier.
+#[cfg(test)]
+pub(crate) enum SscBundleProbeReceipt {
+    Preserving(PreservingTransformationReceipt),
+    Additive(AdditiveTransformationReceipt),
+}
+#[cfg(test)]
+pub(crate) enum SscBundleProbeCase {
+    Released,
+    Missing,
+    Duplicate,
+    WrongDomain,
+    ForeignIdentity,
+    StalePre(String),
+    WrongPost(String),
+    CorruptPre,
+    CorruptPost,
+    ForeignScope,
+    ChangedProjection(String),
+}
+#[cfg(test)]
+impl SscBundleProbeReceipt {
+    fn adopted(self) -> AdoptedEvidence {
+        match self {
+            Self::Preserving(receipt) => AdoptedEvidence { receipt: AdoptedReceipt::Preserving(receipt), domain: SscAdoptionDomain::Master, additive_origin: None },
+            Self::Additive(receipt) => {
+                let identity = *crate::master_state_identity::ssc_additive_identity(&receipt);
+                let mut origin = None;
+                with_pending(|pending| origin = pending.iter().find(|(existing, _)| *existing == identity).map(|(_, origin)| origin.clone()));
+                AdoptedEvidence { receipt: AdoptedReceipt::Additive(receipt), domain: SscAdoptionDomain::Master, additive_origin: origin }
+            }
+        }
+    }
+}
+#[cfg(test)]
+pub(crate) fn ssc_bundle_probe_for_test(
+    receipt: SscBundleProbeReceipt,
+    foreign: SscBundleProbeReceipt,
+    case: SscBundleProbeCase,
+) -> std::collections::BTreeMap<String, usize> {
+    let record = receipt.adopted();
+    let foreign = foreign.adopted();
+    let identity = *record.receipt.identity();
+    let mut counts = match &case {
+        SscBundleProbeCase::Released => count_released(&(Some(vec![identity]), Some(Vec::new())), &[&record]),
+        SscBundleProbeCase::Missing => count_released(&(Some(vec![identity]), Some(Vec::new())), &[]),
+        SscBundleProbeCase::Duplicate => count_released(&(Some(vec![identity]), Some(Vec::new())), &[&record, &record]),
+        SscBundleProbeCase::WrongDomain => count_released(&(Some(Vec::new()), Some(vec![identity])), &[&record]),
+        _ => ObservationCounts::default(),
+    };
+    let Some((kind, own_identity, origin)) = record.receipt.borrowed(record.additive_origin.as_ref()) else {
+        return std::collections::BTreeMap::from([("NoOrigin".to_owned(), 1)]);
+    };
+    let released = SscReleasedEventRef { domain: SscEvidenceDomain::Master, identity: &identity };
+    let mut corrupt = origin.clone();
+    match case {
+        SscBundleProbeCase::ForeignIdentity => {
+            let foreign_released = SscReleasedEventRef { domain: SscEvidenceDomain::Master, identity: foreign.receipt.identity() };
+            classify_bound_origin(foreign_released, kind, own_identity, origin, &mut counts);
+        }
+        SscBundleProbeCase::ForeignScope => {
+            let (_, _, foreign_origin) = foreign.receipt.borrowed(foreign.additive_origin.as_ref()).expect("foreign origin");
+            classify_bound_origin(released, kind, own_identity, foreign_origin, &mut counts);
+        }
+        SscBundleProbeCase::StalePre(bytes) | SscBundleProbeCase::WrongPost(bytes) | SscBundleProbeCase::ChangedProjection(bytes) if bytes.is_empty() => {}
+        SscBundleProbeCase::StalePre(bytes) => {
+            corrupt.pre_state = CapturedPreState::Raw(Arc::from(bytes.as_str()));
+            classify_bound_origin(released, kind, own_identity, &corrupt, &mut counts);
+        }
+        SscBundleProbeCase::WrongPost(bytes) => {
+            corrupt.post_state = CapturedPreState::Raw(Arc::from(bytes.as_str()));
+            classify_bound_origin(released, kind, own_identity, &corrupt, &mut counts);
+        }
+        SscBundleProbeCase::CorruptPre => {
+            corrupt.pre_state = CapturedPreState::Deflated(Arc::from([9_u8, 9, 9]));
+            classify_bound_origin(released, kind, own_identity, &corrupt, &mut counts);
+        }
+        SscBundleProbeCase::CorruptPost => {
+            corrupt.post_state = CapturedPreState::Deflated(Arc::from([9_u8, 9, 9]));
+            classify_bound_origin(released, kind, own_identity, &corrupt, &mut counts);
+        }
+        SscBundleProbeCase::ChangedProjection(post) => {
+            // Bypasses the fingerprint barrier on purpose: it isolates the
+            // constructive invariant refutation for the exact captured pre.
+            let pre = origin.pre_state.exact_bytes().expect("captured pre");
+            let event = SscEventBinding { released, pre_state: &pre, post_state: &post };
+            let scope = proof_scope(origin.scope);
+            if let SscFamilyScope::InScope(family) = scope {
+                let (proof, counterexample, necessity) = invariant_from_exact_origin(&event, origin, family);
+                let transformation = SscTransformationEvidence { event: &event, receipt: SscOriginReceiptRef { inner: kind }, scope };
+                let invariant = match (&proof, &counterexample) {
+                    (Some(proof), None) => SscInvariantAssessment::Proven(proof),
+                    (None, Some(counterexample)) => SscInvariantAssessment::Refuted(counterexample),
+                    _ => SscInvariantAssessment::Unproven,
+                };
+                let necessity = necessity.as_ref().map_or(SscNecessityAssessment::Unproven, SscNecessityAssessment::Proven);
+                match observe_ssc_event_v2(&transformation, invariant, necessity) {
+                    Ok(classified) => counts.observe(SscReleasedObservationV2::Classified(classified)),
+                    Err(integrity) => counts.fail(integrity),
+                }
+            }
+        }
+        _ => {}
+    }
+    let mut out = counts.integrity.clone();
+    for (label, value) in [
+        ("Released", counts.released), ("Missing", counts.missing), ("Duplicate", counts.duplicate), ("Invalid", counts.invalid),
+        ("OutOfScope", counts.out_of_scope), ("InvariantUnproven", counts.invariant_unproven), ("InvariantDenied", counts.invariant_denied),
+        ("NecessityUnproven", counts.necessity_unproven), ("Permit", counts.permit), ("Classified", counts.classified()),
+    ] {
+        out.insert(label.to_owned(), value);
+    }
+    out
+}
+
+// Pure byte-level classes of the bundle; no owner or writer is reachable here.
+#[cfg(test)]
+mod proof_bundle_class_tests {
+    use super::*;
+    fn score(notes: &str) -> String {
+        format!("<score-partwise version=\"4.0\"><part-list><score-part id=\"P1\"><part-name>P</part-name></score-part></part-list><part id=\"P1\"><measure><attributes><divisions>2</divisions></attributes>{notes}</measure></part></score-partwise>")
+    }
+    fn eighth(step: &str, beam: Option<&str>) -> String {
+        let beam = beam.map_or_else(String::new, |value| format!("<beam number=\"1\">{value}</beam>"));
+        format!("<note><pitch><step>{step}</step><octave>4</octave></pitch><duration>1</duration><voice>1</voice><type>eighth</type><staff>1</staff>{beam}</note>")
+    }
+    fn four(beams: [Option<&str>; 4]) -> String {
+        score(&["C", "D", "E", "F"].iter().zip(beams).map(|(step, beam)| eighth(step, beam)).collect::<String>())
+    }
+    #[test]
+    fn beam_chain_necessity_requires_a_real_defect_and_full_attribution() {
+        let broken = four([Some("begin"), Some("continue"), None, None]);
+        let closed = four([Some("begin"), Some("continue"), Some("continue"), Some("end")]);
+        assert_eq!(beam_chain_repair_note(&broken, &closed), Some(2));
+        let well_formed = four([Some("begin"), Some("end"), Some("begin"), Some("end")]);
+        assert_eq!(beam_chain_repair_note(&well_formed, &closed), None, "no defect, no necessity");
+        let still_broken = four([Some("begin"), Some("continue"), Some("continue"), None]);
+        assert_eq!(beam_chain_repair_note(&broken, &still_broken), None, "unresolved defect");
+        assert_eq!(beam_chain_repair_note(&broken, &closed.replacen("<step>F</step>", "<step>G</step>", 1)), None, "non-beam change");
+        let orphan_end = four([Some("begin"), Some("end"), Some("end"), None]);
+        let wider = four([Some("begin"), Some("continue"), Some("end"), None]);
+        assert_eq!(beam_chain_repair_note(&orphan_end, &wider), Some(1), "change inside the malformed sequence");
+        let second_voice = |beams: [Option<&str>; 2]| ["E", "F"].iter().zip(beams).map(|(step, beam)| eighth(step, beam).replace("<voice>1</voice>", "<voice>2</voice>")).collect::<String>();
+        let pre = score(&format!("{}{}<backup><duration>2</duration></backup>{}", eighth("C", Some("begin")), eighth("D", None), second_voice([Some("begin"), Some("end")])));
+        let post = score(&format!("{}{}<backup><duration>2</duration></backup>{}", eighth("C", Some("begin")), eighth("D", Some("end")), second_voice([None, None])));
+        assert_eq!(beam_chain_repair_note(&pre, &post), None, "a change in a well-formed foreign sequence is not attributed");
+        let chord = |beam: Option<&str>| eighth("G", beam).replace("<pitch>", "<chord/><pitch>");
+        let pre = score(&format!("{}{}{}", eighth("C", Some("begin")), chord(None), eighth("D", None)));
+        let post = score(&format!("{}{}{}", eighth("C", Some("begin")), chord(Some("begin")), eighth("D", Some("end"))));
+        assert_eq!(beam_chain_repair_note(&pre, &post), None, "chord-member beam changes are not attributed");
+        assert_eq!(beam_chain_repair_note("broken", &closed), None);
+    }
+    #[test]
+    fn direction_geometry_accepts_only_one_measure_bound_direction_insertion() {
+        let pre = four([None, None, None, None]);
+        let at = pre.find("<note>").unwrap();
+        let insert = |offset: usize, fragment: &str| format!("{}{fragment}{}", &pre[..offset], &pre[offset..]);
+        let direction = "\n<direction><direction-type><words>x</words></direction-type></direction>";
+        assert!(matches!(direction_insertion_geometry(&pre, &insert(at, direction)), DirectionGeometry::Inserted(_)));
+        assert!(matches!(direction_insertion_geometry(&pre, &insert(at, &format!("\n<!-- m -->{direction}"))), DirectionGeometry::Inserted(_)));
+        let part_list = pre.find("<part-list>").unwrap();
+        for broken in [
+            insert(at, &format!("{direction}{direction}")),
+            insert(at, &format!("\n<!-- a --><!-- b -->{direction}")),
+            insert(at, "\n<barline><bar-style>light-heavy</bar-style></barline>"),
+            insert(part_list, direction),
+            insert(at, direction).replacen("<step>C</step>", "<step>D</step>", 1),
+            pre.replacen("<note>", "<note print-object=\"no\">", 1),
+        ] {
+            assert!(matches!(direction_insertion_geometry(&pre, &broken), DirectionGeometry::Broken(..)), "{broken}");
+        }
+        assert!(matches!(direction_insertion_geometry(&pre, "<unterminated"), DirectionGeometry::Unreadable | DirectionGeometry::Broken(..)));
+    }
+}

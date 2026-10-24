@@ -1,0 +1,41 @@
+{
+  "schema_version": 3,
+  "artifact": "etuschlopf_inventory_xlsx_contract",
+  "contract_version": "XLSX-3",
+  "supersedes": "XLSX-2",
+  "series_break": "XLSX-2 -> XLSX-3 is a presentation/OOXML break only.",
+  "authority": {
+    "class": "native_deterministic_outcome_projection",
+    "productive_music_authority": false
+  },
+  "workbook": {
+    "worksheets": 1,
+    "sheet_name": "Inventory",
+    "table_name": "EtuSchlopfInventory",
+    "table_start": "A1",
+    "freeze": "row 1",
+    "header_filter": "exactly one autoFilter inside xl/tables/table1.xml with ref exactly equal to the table ref; no worksheet autoFilter",
+    "summary_location": "same worksheet right of table with one blank separator column"
+  },
+  "table_columns": [
+    "ESI/ARCH facts",
+    "A candidate/component/closure/blocker",
+    "B candidate/counterpart/evidence/blocker",
+    "stable symbol id"
+  ],
+  "readback": {
+    "must_have": [
+      "one worksheet",
+      "one table relationship",
+      "frozen row 1",
+      "exact table ref",
+      "exactly one table autoFilter with same ref",
+      "all table columns"
+    ],
+    "must_not_have": [
+      "worksheet autoFilter",
+      "second/overlapping table autoFilter"
+    ]
+  },
+  "incident_origin": "XLSX-2 removed the conflicting worksheet/table filter shape but also removed visible filter buttons. XLSX-3 restores exactly one table-owned autoFilter and rejects both zero-filter and duplicate-filter shapes."
+}

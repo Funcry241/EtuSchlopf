@@ -1,0 +1,184 @@
+{
+  "parent_windows_all_targets_clippy": {
+    "exit": 101,
+    "errors": 11,
+    "warnings": 9
+  },
+  "candidate_windows_all_targets_clippy": {
+    "exit": 0,
+    "errors": 0,
+    "warnings": 5
+  },
+  "linux_tests": {
+    "exit": 0,
+    "passed": 1536,
+    "failed": 0,
+    "targets": 15,
+    "target_counts": [
+      41,
+      1013,
+      193,
+      235,
+      7,
+      2,
+      7,
+      25,
+      2,
+      1,
+      2,
+      3,
+      2,
+      2,
+      1
+    ]
+  },
+  "parent_linux_check": {
+    "exit": 101,
+    "errors": [
+      "dead_code parse_kv",
+      "dead_code get_u64"
+    ]
+  },
+  "fmt": {
+    "parent_exit": 1,
+    "candidate_exit": 1,
+    "baseline_diff_blocks": 3330,
+    "candidate_diff_blocks": 3330,
+    "repository_formatting_applied": false
+  },
+  "linux_commands": [
+    {
+      "name": "check",
+      "command": [
+        "cargo",
+        "--config",
+        "profile.strict.package.etuschlopf.opt-level=0",
+        "--config",
+        "profile.strict.package.etuschlopf.codegen-units=1",
+        "check",
+        "--manifest-path",
+        "th/Cargo.toml",
+        "--locked",
+        "--profile",
+        "strict",
+        "--jobs",
+        "1",
+        "--color",
+        "never",
+        "--all-targets"
+      ],
+      "exit": 0,
+      "seconds": 125.07
+    },
+    {
+      "name": "build",
+      "command": [
+        "cargo",
+        "--config",
+        "profile.strict.package.etuschlopf.opt-level=0",
+        "--config",
+        "profile.strict.package.etuschlopf.codegen-units=1",
+        "build",
+        "--manifest-path",
+        "th/Cargo.toml",
+        "--locked",
+        "--profile",
+        "strict",
+        "--jobs",
+        "1",
+        "--color",
+        "never"
+      ],
+      "exit": 0,
+      "seconds": 95.43
+    },
+    {
+      "name": "clippy_product",
+      "command": [
+        "cargo",
+        "--config",
+        "profile.strict.package.etuschlopf.opt-level=0",
+        "--config",
+        "profile.strict.package.etuschlopf.codegen-units=1",
+        "clippy",
+        "--manifest-path",
+        "th/Cargo.toml",
+        "--locked",
+        "--profile",
+        "strict",
+        "--jobs",
+        "1",
+        "--color",
+        "never",
+        "--",
+        "-D",
+        "clippy::correctness",
+        "-D",
+        "clippy::suspicious",
+        "-D",
+        "clippy::perf"
+      ],
+      "exit": 0,
+      "seconds": 76.31
+    },
+    {
+      "name": "clippy_all",
+      "command": [
+        "cargo",
+        "--config",
+        "profile.strict.package.etuschlopf.opt-level=0",
+        "--config",
+        "profile.strict.package.etuschlopf.codegen-units=1",
+        "clippy",
+        "--manifest-path",
+        "th/Cargo.toml",
+        "--locked",
+        "--profile",
+        "strict",
+        "--jobs",
+        "1",
+        "--color",
+        "never",
+        "--all-targets",
+        "--",
+        "-D",
+        "clippy::correctness",
+        "-D",
+        "clippy::suspicious",
+        "-D",
+        "clippy::perf"
+      ],
+      "exit": 0,
+      "seconds": 52.52
+    }
+  ],
+  "windows_commands": [
+    {
+      "name": "clippy_product",
+      "command": [
+        "cargo",
+        "clippy",
+        "--manifest-path",
+        "th/Cargo.toml",
+        "--locked",
+        "--profile",
+        "strict",
+        "--jobs",
+        "1",
+        "--color",
+        "never",
+        "--target",
+        "x86_64-pc-windows-msvc",
+        "--",
+        "-D",
+        "clippy::correctness",
+        "-D",
+        "clippy::suspicious",
+        "-D",
+        "clippy::perf"
+      ],
+      "exit": 0,
+      "seconds": 74.47
+    }
+  ]
+}

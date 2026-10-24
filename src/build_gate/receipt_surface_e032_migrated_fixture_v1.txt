@@ -1,0 +1,40 @@
+fn add_tie_markup_authorized(source: &str, start: bool, stop: bool) -> (String, Option<AdditiveTransformationReceipt>) {
+    let geometry = bound_tie_fragment_insertions(source, start, stop);
+    let output = (|| {
+    let token = TieMarkupCapability {
+        source: ExactSourceBinding::issue(source),
+        start,
+        stop,
+    };
+    let Some(mut out) = token.source.into_verified_string(source) else {
+        return source.to_string();
+    };
+    if let Some(position) = out.find("</duration>") {
+        let insert_at = position + "</duration>".len();
+        let mut ties = String::new();
+        if token.stop {
+            ties.push_str("\n        <tie type=\"stop\"/>");
+        }
+        if token.start {
+            ties.push_str("\n        <tie type=\"start\"/>");
+        }
+        out.insert_str(insert_at, &ties);
+    }
+    let Some(close_pos) = out.rfind("</note>") else {
+        return out;
+    };
+    let mut notations = String::from("        <notations>\n");
+    if token.stop {
+        notations.push_str("          <tied type=\"stop\"/>\n");
+    }
+    if token.start {
+        notations.push_str("          <tied type=\"start\"/>\n");
+    }
+    notations.push_str("        </notations>\n");
+    out.insert_str(close_pos, &notations);
+    out
+})();
+    let receipt = crate::master_state_identity::AdditiveTransformationReceipt::mint_tie_fragment_receipt(super::TieFragmentAdditiveMint, source, &output, geometry);
+    assert!(output == source || receipt.is_some(), "fragment owner changed bytes without additive receipt");
+    (output, receipt)
+}

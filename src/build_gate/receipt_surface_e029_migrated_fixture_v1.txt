@@ -1,0 +1,59 @@
+fn add_articulation_mark_to_note_fragment_authorized(
+    source: &str,
+    mark: &str,
+) -> (Option<String>, Option<AdditiveTransformationReceipt>) {
+    let geometry = bound_articulation_fragment_insertions(source, mark);
+    let output = (|| {
+    let clean_mark = match mark {
+        "tenuto" => "tenuto",
+        "accent" => "accent",
+        _ => return None,
+    };
+    if [
+        "<staccato",
+        "<staccatissimo",
+        "<tenuto",
+        "<detached-legato",
+        "<accent",
+        "<strong-accent",
+        "<sfz",
+        "<sforzando",
+    ]
+    .iter()
+    .any(|token| source.contains(token))
+    {
+        return None;
+    }
+    let token = ArticulationMarkCapability {
+        source: ExactSourceBinding::issue(source),
+        mark: clean_mark,
+    };
+    let mut out = token.source.into_verified_string(source)?;
+    let new_token = format!("<{} />", token.mark);
+    if let Some(position) = out.find("</articulations>") {
+        out.insert_str(position, &format!("\n            {new_token}"));
+        Some(out)
+    } else if let Some(position) = out.find("</notations>") {
+        out.insert_str(
+            position,
+            &format!(
+                "\n          <articulations>\n            {new_token}\n          </articulations>"
+            ),
+        );
+        Some(out)
+    } else if let Some(position) = out.rfind("</note>") {
+        out.insert_str(
+            position,
+            &format!(
+                "\n        <notations>\n          <articulations>\n            {new_token}\n          </articulations>\n        </notations>"
+            ),
+        );
+        Some(out)
+    } else {
+        None
+    }
+})();
+    let receipt = crate::master_state_identity::AdditiveTransformationReceipt::mint_articulation_fragment_receipt(super::ArticulationFragmentAdditiveMint, source, output.as_deref().unwrap_or(source), geometry);
+    assert!(output.as_deref().is_none_or(|post| post == source) || receipt.is_some(), "fragment owner changed bytes without additive receipt");
+    (output, receipt)
+}

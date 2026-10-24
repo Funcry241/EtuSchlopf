@@ -1,0 +1,28 @@
+v0.10.1215: Der Standard-Take-Bootstrap liegt in Rust unter src/bin/etuschlopf_take_bootstrap.rs.
+Seine Kompilation ist durch einen exakt gebundenen Build-Kontext vom produktiven Architektur-Gate isoliert.
+Nach dem Update startet der normale Build ohne diesen Kontext und prueft alle Architektur-Gates vollstaendig.
+Ein PowerShell-Fallback oder Recovery-Skript ist nicht Bestandteil des Quellstands.
+
+v0.10.1512: Ein identischer Same-Version-Take bleibt ein Schutz-Noop und endet vor dem Launcher.
+Die Ausgabe muss deshalb ausdruecklich sagen, dass ein angehaengter Strict-/Projektlauf noch nicht ausgefuehrt wurde.
+Sie zeigt den exakten Folgebefehl ohne --take und ohne --force; Argumente mit Leerzeichen werden zitiert.
+--force ist kein Ersatz fuer den anschliessenden normalen Strict-Lauf.
+
+v0.10.1513: Dokumentation trennt Versionswechsel/Produktivnachweis, direkten Strict-Lauf und identischen Same-Version-Schutz-Noop formal voneinander.
+Ein identischer Noop mit Exit 2 belegt ausschliesslich Schutzwirkung und Bedienausgabe; er darf nicht als ausgefuehrter oder fehlgeschlagener Strict-Lauf interpretiert werden.
+Verbindliche technische Grundlage der Revision ist v0.10.1512 r01.
+
+v0.10.1514: Die zuvor getrennten Take-/Strict- und Evidenzdokumente wurden in einer kanonischen Quelle konsolidiert.
+Der unter v0.10.1513 real bestaetigte Same-Version-Schutzvertrag ist als geschlossener Referenznachweis dokumentiert; bei bytegleicher Rust-Implementierung entsteht daraus keine erneute Pflichtpruefung.
+README und Uebergaben sollen nur noch den notwendigen Kurzkontext tragen und auf die kanonische Dokumentation verweisen.
+
+v0.10.1516: Die Ein-Befehl-Regel gilt nun auch fuer ein identisches, bereits installiertes Paket.
+Sind nach Entfernung von --take und --force weitere Argumente vorhanden, wird nichts kopiert und run.cmd automatisch mit genau diesen Argumenten fortgesetzt.
+Nur ein reiner identischer --take ohne Folgelauf bleibt ein Schutz-Noop mit Exit 2.
+Die fruehere Folgebefehl-Ausgabe aus v0.10.1512 bis v0.10.1514 ist damit fuer Aufrufe mit Laufargumenten abgeloest.
+Die beiden bestehenden Negativtests zur Entfernung von --take, korrekten Projektquotierung und zum Ausschluss von --force bleiben wortgleich erhalten; die neue Fortsetzung wird nur additiv getestet. Der verworfene v0.10.1515-Kandidat wurde wegen fehlender semantischer Schutzabdeckung nicht installiert und ist kein Ausgangsstand.
+
+v0.10.1517: Die identische Ein-Befehl-Fortsetzung ist nun bis hinter den Launcher-Buildmarker geschlossen.
+Der Bootstrap uebergibt keinen allgemeinen Bypass, sondern ein an installierte Version und gespeicherte Buildsignatur gebundenes Fortsetzungstoken.
+Der Launcher akzeptiert die Wiederverwendung nur, wenn Rust-Bootstrap-Markierung, Tokenversion, Buildmarker, gespeicherte Signatur, aktuelle Quellsignatur und vorhandenes Zielprogramm uebereinstimmen.
+Ein direkter normaler Same-Version-Lauf bleibt gesperrt; --force und manuelle Markerloeschung sind fuer die Take-Fortsetzung nicht erforderlich.

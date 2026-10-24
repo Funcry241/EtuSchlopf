@@ -1,0 +1,82 @@
+fn write_render_checkpoint(
+    path: &Path,
+    candidate_xml: &str,
+    stage: RenderCheckpointStage,
+) -> (io::Result<()>, Option<ExactTransformationReceipt>) {
+    let mut applied_geometry = Vec::new();
+    let mut realized_post = None;
+    
+    let output = (|| {
+    // v0.10.1715: ClefReadability planning remains writer-free; the existing
+    // FinalNotation checkpoint is still the only render materialization boundary.
+    // It now commits the complete F4/G2 course (safe removals plus pure-clef
+    // insertions) rather than merely cleaning legacy surfaces.
+    let planned_xml = if stage == RenderCheckpointStage::FinalNotation {
+        let plan = derive_clef_readability_primary_course_plan(candidate_xml);
+        let insertions = plan.insertion_blocks();
+        if plan.removal_ranges().is_empty() && insertions.is_empty() {
+            None
+        } else {
+            let mut edits = plan
+                .removal_ranges()
+                .iter()
+                .map(|&(start, end)| (start, Some(end), None))
+                .chain(
+                    insertions
+                        .iter()
+                        .map(|&(start, block)| (start, None, Some(block))),
+                )
+                .collect::<Vec<_>>();
+            edits.sort_unstable_by_key(|(start, _, _)| *start);
+            let mut xml = candidate_xml.to_string();
+            for (start, end, block) in edits.into_iter().rev() {
+                if let Some(end) = end {
+                    if start > end || end > xml.len() {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "ClefReadability plan contains an invalid removal range",
+                        ));
+                    }
+                    applied_geometry.push((start, end, String::new()));
+                    xml.replace_range(start..end, "");
+                } else if let Some(block) = block {
+                    if start > xml.len() || !xml.is_char_boundary(start) {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "ClefReadability plan contains an invalid insertion point",
+                        ));
+                    }
+                    applied_geometry.push((start, start, block.to_string()));
+                    xml.insert_str(start, block);
+                }
+            }
+            if !plan.verifies(&xml) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "ClefReadability plan violated note or clef invariants",
+                ));
+            }
+            Some(xml)
+        }
+    } else {
+        None
+    };
+    let effective_xml = planned_xml.as_deref().unwrap_or(candidate_xml);
+
+    // r462: FinalChordEncoding is an explicit writer-free SerializationPlan projection
+    // before this sink. The same FinalNotation capability must never change behavior
+    // based on whichever checkpoint happened to run immediately before it.
+    // v0.10.1308: DirectionRelocation is the final Render-MusicXML checkpoint
+    // in the orchestrator. It may move only direction payloads and must preserve
+    // every note ordinal and Beam state already committed by preceding writers.
+    // The capability write still performs its exact byte readback afterwards.
+    if stage == RenderCheckpointStage::DirectionRelocation {
+        validate_direction_relocation_preserves_note_beams(path, effective_xml)?;
+    }
+    realized_post = Some(effective_xml.to_string());
+    OrchestratedRenderCheckpointCapability::issue(path, effective_xml, stage)?.write()
+})();
+    let geometry = crate::master_state_identity::exact_script_from_descending_application(applied_geometry);
+    let receipt = realized_post.as_deref().filter(|post| output.is_ok() && *post != candidate_xml).map(|post| crate::master_state_identity::ExactTransformationReceipt::mint_exact_receipt(RenderRow58ExactMint { _private: () }, candidate_xml, post, geometry).expect("frozen owner changed bytes without receipt"));
+    (output, receipt)
+}

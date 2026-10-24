@@ -1,0 +1,21 @@
+/// Move-only companion; the pinned original BLOCK receipt is unchanged.
+#[derive(Debug)]
+pub(crate) struct CapturedBlockReceiptInput {
+    receipt: Option<BlockTransformationReceipt>,
+    beam: Option<Result<std::sync::Arc<crate::pipeline::ActualCanonicalBeamCapture>,String>>,
+}
+impl From<Option<BlockTransformationReceipt>> for CapturedBlockReceiptInput {
+    fn from(receipt: Option<BlockTransformationReceipt>) -> Self {Self{receipt,beam:None}}
+}
+impl CapturedBlockReceiptInput {
+    pub(crate) fn observed_beam(receipt: BlockTransformationReceipt,
+        capture: anyhow::Result<crate::pipeline::ActualCanonicalBeamCapture>) -> Self {
+        let beam=capture.and_then(|capture| {capture.binds_original_receipt(&receipt)?;Ok(std::sync::Arc::new(capture))})
+            .map_err(|e|e.to_string());
+        Self{receipt:Some(receipt),beam:Some(beam)}
+    }
+    #[cfg(test)]
+    pub(crate) fn into_parts_for_test(self) -> (Option<BlockTransformationReceipt>,Option<Result<std::sync::Arc<crate::pipeline::ActualCanonicalBeamCapture>,String>>) {
+        (self.receipt,self.beam)
+    }
+}

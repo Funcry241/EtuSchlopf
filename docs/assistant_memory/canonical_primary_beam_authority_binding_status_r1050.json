@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "projection_id": "canonical_primary_beam_authority_binding_status_r1050",
+  "parent": {
+    "revision": "r1049",
+    "name": "BeamOccurrenceIdentityClosure",
+    "status": "accepted",
+    "strict_tests_passed": 1363,
+    "corpus_projects_ok": 10,
+    "cross_voice_observations": 144,
+    "occurrence_identity_exact": 144,
+    "occurrence_identity_unresolved": 0
+  },
+  "r1050": {
+    "name": "CanonicalPrimaryBeamAuthorityBindingAudit",
+    "change_class": "AuditOnly",
+    "music_mutation": false,
+    "productive_selector_change": false,
+    "audit_error_classification_change": true,
+    "writer_change": false,
+    "frozen_error_class_definition_change": false,
+    "encoding_witness_is_authority": false,
+    "required_authority_evidence": "typed existing canonical Beam owner receipt bound to exact occurrence cohort",
+    "claims_primary_beam_authority_closure": false,
+    "claims_renderer_visible_beam_geometry": false,
+    "claims_repair_authority": false
+  },
+  "expected_validation": {
+    "required_run_scope": "--take --all",
+    "new_regression_tests": 3,
+    "expected_strict_tests_passed": 1366,
+    "expected_cross_voice_observations": 144,
+    "expected_occurrence_identity_bound": 144,
+    "expected_pre_final_chord_exact_encoding_witnesses": 144,
+    "expected_typed_owner_receipts_available": 0,
+    "expected_canonical_authority_bindings_proven": 0,
+    "expected_canonical_authority_bindings_unresolved": 144,
+    "product_musicxml_delta_expected": false,
+    "render_musicxml_delta_expected": false,
+    "visible_pdf_geometry_delta_expected": false
+  }
+}

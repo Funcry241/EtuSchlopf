@@ -1,0 +1,26 @@
+fn add_tenuto_to_note_fragment_authorized(source: &str) -> Option<String> {
+    if source.contains("<tenuto") {
+        return Some(source.to_string());
+    }
+    let token = TenutoCapability {
+        source: ExactSourceBinding::issue(source),
+    };
+    let mut out = token.source.into_verified_string(source)?;
+    if let Some(start) = out.find("<articulations>") {
+        out.insert_str(start + "<articulations>".len(), "\n        <tenuto/>");
+        return Some(out);
+    }
+    if let Some(position) = out.rfind("</notations>") {
+        out.insert_str(
+            position,
+            "      <articulations>\n        <tenuto/>\n      </articulations>\n",
+        );
+        return Some(out);
+    }
+    let position = out.rfind("</note>")?;
+    out.insert_str(
+        position,
+        "      <notations>\n        <articulations>\n          <tenuto/>\n        </articulations>\n      </notations>\n",
+    );
+    Some(out)
+}

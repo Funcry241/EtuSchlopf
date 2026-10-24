@@ -1,0 +1,49 @@
+{
+  "wav_entire_source_after_removing_exact_three_annotations_sha256": "39e41387596692e76db36d51fa74c2b62c1e2f79068eec26a99bb9f9853180ec",
+  "src/registernotation/mod.rs": {
+    "mechanical_sites": 6,
+    "test_functions": [
+      "fn klingende_fuenfzehnma_zwischeninsel_darf_dieselbe_darstellung_fortsetzen() {",
+      "fn zwei_extreme_einzeltoene_erzeugen_keine_randinsel_sonderregel() {",
+      "fn sicherer_schnitt_darf_keinen_hineinragenden_ton_zerschneiden() {",
+      "fn sichtanker_stop_folgt_dem_chordhost_und_nicht_einem_laengeren_chordmember() {",
+      "fn optimale_spanne_waehlt_keinen_nicht_materialisierbaren_chordmember_stop() {",
+      "fn optimale_spanne_behaelt_materialisierbaren_chordhost_stop() {"
+    ]
+  },
+  "src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs": {
+    "mechanical_sites": 5,
+    "test_functions": [
+      "fn already_normalized_pair_is_idempotent() {",
+      "fn missing_beams_require_normalization() {",
+      "fn shared_metric_hierarchy_plan_preserves_early_four_level_semantics() {",
+      "fn upper_projection_is_exact_level_two_view_of_shared_metric_plan() {",
+      "fn mixed_upper_group_uses_same_plan_for_detection() {"
+    ]
+  },
+  "src/audit_only/notation_voice_pre_serialization_constraint_closure_audit.rs": {
+    "mechanical_sites": 1,
+    "exact_inverse_restores_parent": true
+  },
+  "src/structural_write_authority/serialization_plan.rs": {
+    "mechanical_sites": 1,
+    "exact_inverse_restores_parent": true
+  },
+  "src/structural_write_authority/rustig_clef_planning.rs": {
+    "mechanical_sites": 2,
+    "exact_inverse_restores_parent": true
+  },
+  "rust_files_changed": [
+    "src/audit_only/notation_voice_pre_serialization_constraint_closure_audit.rs",
+    "src/audit_only/wav_pitch_external_sensor_benchmark.rs",
+    "src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs",
+    "src/structural_write_authority/rustig_clef_planning.rs",
+    "src/structural_write_authority/serialization_plan.rs",
+    "src/registernotation/mod.rs"
+  ],
+  "h1_sites": 15,
+  "cfg_sites": 3,
+  "deleted_functions": 0,
+  "assertion_changes": 0,
+  "governance_receipts_source_byte_equal": true
+}

@@ -1,0 +1,13 @@
+schema=ssc_exit_closure_v1
+contract=docs/ssc_contract_v4_containment_governed_change_r1277.md
+exit_claim=closed
+closed_revision=r1288
+condition=remaining_set_empty:src/build_gate/ssc_exit_remaining_v1.txt
+condition=a7_wired_and_enforcing:src/master_state_identity.rs::commit_owner_receipts
+condition=a7_wired_and_enforcing:src/master_state_identity/render_lineage.rs::commit
+condition=report_permit_enforcement_active:src/ssc_shadow_report.rs
+condition=single_permit_decision_over_report_classifier:src/ssc_evidence_proof.rs
+remaining_schema_token=exit_claim=not_closed stays the frozen r1238 schema token of the runtime-pinned A4 projection; this record carries the exit claim
+superseded_shadow_statement=src/build_gate/ssc_evidence_proof_shadow_contract_v1.txt:runtime_permit_enforcement=forbidden,exit_claim=not_closed (parent-compiled frozen document)
+superseded_shadow_statement=src/build_gate/ssc_reference_firewall_v2.txt:enforcement=forbidden (parent-compiled frozen document)
+withdrawal=forbidden

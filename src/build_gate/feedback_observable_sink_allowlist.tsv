@@ -1,0 +1,6 @@
+# EtuSchlopf feedback observable sink allowlist v1
+path	role
+src/feedback_structuralization_gate.rs	canonical_result_report_projection
+src/feedback_proof_transport.rs	fail_closed_minimal_transport_parser
+src/pipeline_shards/key_signature_enharmonic_report_core.rs	read_only_release_consumer
+src/build_gate/feedback_structuralization_kodex.rs	compile_time_kodex_policy

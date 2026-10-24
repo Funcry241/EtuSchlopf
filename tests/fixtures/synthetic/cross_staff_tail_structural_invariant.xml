@@ -1,0 +1,89 @@
+<measure number="synthetic">
+  <note>
+    <pitch><step>B</step><octave>3</octave></pitch>
+    <duration>24</duration>
+    <voice>2</voice>
+    <staff>2</staff>
+    <beam number="1">begin</beam>
+    <beam number="2">begin</beam>
+  </note>
+  <note>
+    <pitch><step>C</step><octave>4</octave></pitch>
+    <duration>24</duration>
+    <voice>2</voice>
+    <staff>2</staff>
+    <beam number="1">continue</beam>
+    <beam number="2">continue</beam>
+  </note>
+  <note>
+    <pitch><step>D</step><octave>4</octave></pitch>
+    <duration>24</duration>
+    <voice>2</voice>
+    <staff>2</staff>
+    <beam number="1">continue</beam>
+    <beam number="2">continue</beam>
+  </note>
+  <note>
+    <pitch><step>E</step><octave>4</octave></pitch>
+    <duration>24</duration>
+    <voice>2</voice>
+    <staff>2</staff>
+    <beam number="1">end</beam>
+    <beam number="2">end</beam>
+  </note>
+
+  <forward><duration>96</duration><voice>2</voice><staff>2</staff></forward>
+
+  <note>
+    <pitch><step>F</step><octave>4</octave></pitch>
+    <duration>72</duration>
+    <voice>2</voice>
+    <staff>2</staff>
+    <beam number="1">begin</beam>
+  </note>
+  <note>
+    <pitch><step>G</step><octave>4</octave></pitch>
+    <duration>24</duration>
+    <voice>2</voice>
+    <staff>2</staff>
+    <beam number="1">end</beam>
+  </note>
+  <note>
+    <pitch><step>A</step><octave>4</octave></pitch>
+    <duration>48</duration>
+    <voice>2</voice>
+    <staff>2</staff>
+  </note>
+  <direction placement="below">
+    <direction-type><dynamics><mf/></dynamics></direction-type>
+    <staff>1</staff>
+  </direction>
+  <note>
+    <pitch><step>C</step><octave>5</octave></pitch>
+    <duration>24</duration>
+    <voice>2</voice>
+    <staff>1</staff>
+  </note>
+  <note print-object="no">
+    <rest/>
+    <duration>24</duration>
+    <voice>2</voice>
+    <staff>2</staff>
+  </note>
+  <note>
+    <chord/>
+    <pitch><step>E</step><octave>4</octave></pitch>
+    <duration>24</duration>
+    <voice>2</voice>
+    <staff>2</staff>
+  </note>
+
+  <backup><duration>384</duration></backup>
+  <forward><duration>336</duration><voice>2</voice><staff>2</staff></forward>
+  <note>
+    <rest/>
+    <duration>48</duration>
+    <voice>2</voice>
+    <staff>2</staff>
+  </note>
+</measure>

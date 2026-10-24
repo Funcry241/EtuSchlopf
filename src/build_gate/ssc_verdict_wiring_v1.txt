@@ -1,0 +1,4 @@
+schema=ssc_verdict_wiring_v1
+# wiring=<contract v4 A7 adoption boundary path>
+wiring=src/master_state_identity.rs::commit_owner_receipts
+wiring=src/master_state_identity/render_lineage.rs::commit

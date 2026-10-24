@@ -1,0 +1,5 @@
+# EtuSchlopf v0.10.1240 hard productive-write bypass shrink register.
+# Final bounded buffer cutover: 1 external surface; previous scanner-true baseline 6.
+# Columns: path, function, max_xml_buffer_mutations, max_xml_file_writes, direct_from_real_main_allowed, owner, decision.
+# Current external surfaces must remain a subset. Counts and real_main reachability may not increase.
+src/pipeline_shards/pipeline_orchestrator_report_compaction.rs	real_main	0	33	ja	PangolinGoal2	migrate_to_central_authority_or_delete

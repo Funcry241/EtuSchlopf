@@ -1,0 +1,40 @@
+pub(crate) enum SscOriginReceiptRef<'event> {
+    Block(&'event crate::master_state_identity::BlockTransformationReceipt),
+    Exact(&'event crate::master_state_identity::ExactTransformationReceipt),
+    Preserving(&'event crate::master_state_identity::PreservingTransformationReceipt),
+    Additive(&'event crate::master_state_identity::AdditiveTransformationReceipt),
+}
+pub(crate) struct SscEventBinding<'event> {
+    identity: &'event crate::master_state_identity::MintedIdentity,
+    pre_state: &'event str,
+}
+pub(crate) struct SscTransformationEvidence<'event> {
+    event: &'event SscEventBinding<'event>,
+    receipt: SscOriginReceiptRef<'event>,
+}
+pub(crate) enum SscProofFamily {
+    F7RestVoiceStrictStaff,
+    F5AtomicVoiceStaffVisibility,
+    F9AuthoritySerialization,
+    Additive,
+}
+pub(crate) struct SscInvariantProof<'event> {
+    event: &'event SscEventBinding<'event>,
+    family: SscProofFamily,
+    certificate: SscConstructiveInvariantCertificate,
+}
+pub(crate) struct SscNecessityWitness<'event> {
+    event: &'event SscEventBinding<'event>,
+    certificate: SscConstructiveNecessityCertificate,
+}
+pub(crate) enum ShadowPermitVerdict {
+    WouldPermit,
+    WouldDeny,
+    Unknown,
+}
+pub(crate) struct SscShadowObservation<'event> {
+    transformation: &'event SscTransformationEvidence<'event>,
+    invariant: Option<&'event SscInvariantProof<'event>>,
+    necessity: Option<&'event SscNecessityWitness<'event>>,
+    verdict: ShadowPermitVerdict,
+}

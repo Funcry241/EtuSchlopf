@@ -1,0 +1,17 @@
+pub(crate) fn observe_ssc_event<'event>(
+    transformation: &'event SscTransformationEvidence<'event>,
+    invariant: Option<&'event SscInvariantProof<'event>>,
+    necessity: Option<&'event SscNecessityWitness<'event>>,
+) -> SscShadowObservation<'event> {
+    let verdict = match (invariant, necessity) {
+        (Some(proof), Some(witness))
+            if std::ptr::eq(transformation.event_binding(), proof.event_binding())
+                && std::ptr::eq(transformation.event_binding(), witness.event_binding()) =>
+        {
+            ShadowPermitVerdict::WouldPermit
+        }
+        (Some(_), Some(_)) => ShadowPermitVerdict::WouldDeny,
+        _ => ShadowPermitVerdict::Unknown,
+    };
+    SscShadowObservation { transformation, invariant, necessity, verdict }
+}

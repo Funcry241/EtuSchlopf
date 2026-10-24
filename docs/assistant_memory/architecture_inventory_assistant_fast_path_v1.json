@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "artifact": "etuschlopf_architecture_inventory_assistant_fast_path",
+  "profile_version": "AIF-1",
+  "authority": {
+    "class": "advisory_only",
+    "normative": false,
+    "productive_authority": [],
+    "runtime_implementation": "none",
+    "statement": "This profile optimizes assistant-side AIC-1 execution only. It does not define symbol existence, classification truth, runtime behavior or productive authority."
+  },
+  "semantic_dependency": {
+    "architecture_inventory_contract": "docs/assistant_memory/architecture_inventory_contract_v1.json",
+    "required_contract_version": "AIC-1",
+    "may_change_aic_semantics": false
+  },
+  "cache_identity": {
+    "owner": "bound_physical_source_snapshot",
+    "key": "source_snapshot_sha256",
+    "cacheable": [
+      "managed_source_scope_resolution",
+      "rust_ast_symbol_universe",
+      "qualified_symbol_identity",
+      "source_location_metadata",
+      "repository_token_call_index"
+    ],
+    "never_cache_as_truth": [
+      "A_B_C_N_OFFEN_classification",
+      "primary_topic",
+      "architecture_role",
+      "authority_interpretation",
+      "truth_state_interpretation",
+      "cause_symptom_interpretation",
+      "evidence_judgement",
+      "next_step"
+    ]
+  },
+  "execution_order": [
+    "read_assistant_context_once",
+    "resolve_bound_physical_source_snapshot_once",
+    "verify_source_snapshot_sha256_before_reuse",
+    "resolve_AIC_1_scope_once",
+    "single_rust_syntax_pass_build_symbol_universe_and_repository_token_call_index",
+    "reuse_mechanical_index_only_when_source_snapshot_sha256_matches",
+    "perform_current_assistant_interpretation_over_complete_symbol_universe",
+    "derive_inventory_counts_from_final_rows",
+    "read_native_metrics_only_from_bound_CMS_snapshot_when_present",
+    "render_exactly_one_AIC_1_workbook",
+    "validate_workbook_structure_without_reclassifying_or_reconstructing_truth"
+  ],
+  "complexity_guards": {
+    "whole_repository_rescan_per_symbol": false,
+    "second_full_source_pass_for_call_index": false,
+    "old_xlsx_as_cache_or_truth": false,
+    "log_reconstruction_of_native_metrics": false,
+    "preview_render_required": false,
+    "multiple_xlsx_exports_required": false,
+    "assistant_cache_may_create_product_authority": false
+  },
+  "render_policy": {
+    "semantic_render_contract": "AIC-1 render_profile",
+    "preferred_data_transfer": "single_bulk_or_bounded_block_write",
+    "preferred_export_count": 1,
+    "formatting": "only_required_or_readability_critical",
+    "on_renderer_failure": "retry_renderer_from_unchanged_final_inventory_rows_without_rescanning_source_or_changing_classification"
+  },
+  "cold_start_evidence_2026_09_18": {
+    "physical_source_revision": "r964",
+    "rust_files_in_scope": 253,
+    "qualified_symbols": 5770,
+    "identity_duplicates": 0,
+    "observed_old_two_source_pass_seconds": 8.88,
+    "observed_single_pass_cold_seconds": 4.56,
+    "observed_cached_warm_seconds": 1.45,
+    "note": "Timing is observational evidence only, not a normative performance threshold."
+  }
+}

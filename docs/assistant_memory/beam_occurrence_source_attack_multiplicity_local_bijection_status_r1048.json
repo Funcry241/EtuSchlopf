@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "projection_id": "beam_occurrence_source_attack_multiplicity_local_bijection_status_r1048",
+  "parent": {
+    "revision": "r1047",
+    "name": "BeamOccurrenceCrossPhaseIdentityAudit",
+    "status": "accepted",
+    "strict_tests_passed": 1356,
+    "corpus_projects_ok": 10
+  },
+  "accepted_parent_beam_measurement": {
+    "cross_voice": 144,
+    "frozen_legacy_occurrence_exact": 90,
+    "frozen_legacy_occurrence_unresolved": 54,
+    "source_attack_bridge_explained_within_legacy_unresolved": 41,
+    "s0_source_attack_multiplicity_remaining": 13
+  },
+  "r1048": {
+    "name": "BeamOccurrenceSourceAttackMultiplicityLocalBijectionAudit",
+    "change_class": "AuditOnly",
+    "music_mutation": false,
+    "productive_selector_change": false,
+    "audit_error_classification_change": true,
+    "writer_change": false,
+    "frozen_error_class_definition_change": false,
+    "conflict_group": "exact SourceEventId+SoundingAttackId occurrence group",
+    "edge_authority": "exact S0 versus canonical-located S1 staff+onset+duration+pitch geometry",
+    "ranking": "none",
+    "tie_break": "none",
+    "materialization_kind_fragment_ordinal_role": "reported provenance evidence only",
+    "goal": "measure whether each of the 13 remaining source-attack multiplicity observations has exactly one local perfect bijection without changing frozen Beam classification",
+    "claims_beam_occurrence_closure": false,
+    "claims_repair_authority": false
+  },
+  "expected_validation": {
+    "required_run_scope": "--take --all",
+    "new_regression_tests": 4,
+    "expected_strict_tests_passed": 1360,
+    "product_musicxml_delta_expected": false,
+    "render_musicxml_delta_expected": false,
+    "visible_pdf_geometry_delta_expected": false
+  }
+}

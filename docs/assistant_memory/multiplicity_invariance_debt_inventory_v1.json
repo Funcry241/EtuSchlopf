@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "inventory_id": "multiplicity_invariance_debt_r1035",
+  "parent_revision": "r1034",
+  "contract": "candidate_duplication_v1",
+  "scope": "productive_or_production_near_decision_surfaces_where_scorewide_cardinality_global_ranking_or_action_caps_can_change_a_local_music_decision; parser_identity_disambiguation_and_whole_score_alternative_search_are classified separately",
+  "classes": {
+    "A": "independent_candidate_multiplicity_violation_or_high_confidence_proxy_selection_debt",
+    "B": "legitimate_same_transaction_or_identity_ambiguity_guard",
+    "C": "unresolved_requires_conflict_group_or_authority_proof_before_change"
+  },
+  "entries": [
+    {
+      "id": "MI-A01",
+      "class": "A",
+      "path": "src/pipeline_shards/rhythmic_spine_one_tenuto_apply.rs",
+      "function": "apply_rhythmic_spine_one_tenuto_render_write / rhythmic_spine_lane_candidates / select_rhythmic_spine_tenuto_target",
+      "pattern": "global candidate ranking -> candidates.into_iter().next(); measure order tie-break; midpoint hinge target",
+      "reason": "multiple independent lanes exist but only the global first receives a tenuto; target identity changes with corpus multiplicity/order",
+      "current_runtime_evidence": "r1034 corpus: E1 candidates 0/write no; E2..E10 candidates 8,2,5,15,6,9,11,10,5 and write yes exactly once per project",
+      "next_action": "r1036 retirement; do not broaden to all candidates without a causal articulation class"
+    },
+    {
+      "id": "MI-A02",
+      "class": "A",
+      "path": "src/pipeline_shards/noether_register_articulation_readback_tail.rs",
+      "function": "apply_single_clear_staccato_render_write_with_placement_readback",
+      "pattern": "clear_rows.len()==1 + clear_rows.first()",
+      "reason": "scorewide uniqueness authorizes one local staccato write; an independent second clear row vetoes the first",
+      "next_action": "retire or replace with per-candidate local authority"
+    },
+    {
+      "id": "MI-A03",
+      "class": "A",
+      "path": "src/pipeline_shards/partial_beat_post_rest_triple_beam_final_repair.rs",
+      "function": "human_bound_cursor_lane_owner_transfer_xml",
+      "pattern": "scorewide candidates.len()!=1 veto followed by target_measure rewrite",
+      "reason": "independent measure-local candidates become scorewide ambiguity and the surviving structural fingerprint becomes a hidden locator",
+      "next_action": "localize authority per independent candidate/conflict group"
+    },
+    {
+      "id": "MI-A04",
+      "class": "A",
+      "path": "src/pipeline_shards/lower_staff_register_feedback_gate_core.rs + src/pipeline_shards/strict_staff_visible_lane_rest_rewrite_tail.rs",
+      "function": "apply_upper_staff_initial_rest_and_beat_local_coalescing",
+      "pattern": "global ranking + max_initial_rests=1 + first_onset==24 bonus + measure-position tie-break via source offsets",
+      "reason": "structural feature weighting selects one scorewide winner among otherwise local rest candidates",
+      "next_action": "separate local eligibility from any presentation ordering; remove cap as authority only after local safety is proven"
+    },
+    {
+      "id": "MI-A05",
+      "class": "A",
+      "path": "src/pipeline_shards/human_pdf_pianistic_cross_staff_ledger_tail.rs",
+      "function": "build_render_xml_print_cleanup_one_safe_visual_trial -> apply_pianistic_rest_consolidation",
+      "pattern": "productive max_actions=1",
+      "reason": "one independently safe rest consolidation can suppress equivalent later candidates",
+      "next_action": "prove per-candidate independence then remove cap-as-authority or retire caller"
+    },
+    {
+      "id": "MI-A06",
+      "class": "A",
+      "path": "src/pipeline_shards/human_pdf_pianistic_quality_core.rs",
+      "function": "apply_cross_staff_voice_ledger_materializer call",
+      "pattern": "productive max_actions=1",
+      "reason": "global action cap chooses one cross-staff ledger materialization without a shared conflict proof",
+      "next_action": "local authority/multiplicity proof"
+    },
+    {
+      "id": "MI-A07",
+      "class": "A",
+      "path": "src/pipeline_shards/strict_staff_visible_lane_rest_rewrite_tail.rs",
+      "function": "apply_structural_same_pitch_tie_merge_render_write call",
+      "pattern": "productive max_actions=1",
+      "reason": "independent tie-merge candidates are throttled by scorewide count rather than local conflict authority",
+      "next_action": "localize or retire"
+    },
+    {
+      "id": "MI-A08",
+      "class": "A",
+      "path": "src/pipeline_shards/strict_staff_visible_lane_rest_rewrite_tail.rs",
+      "function": "apply_structural_upper_terminal_shadow_rest_forward_write call",
+      "pattern": "productive max_actions=1",
+      "reason": "highly specific structural candidates are globally capped without an explicit shared conflict group",
+      "next_action": "localize or retire"
+    },
+    {
+      "id": "MI-A09",
+      "class": "A",
+      "path": "src/pipeline_shards/strict_staff_visible_lane_rest_rewrite_tail.rs",
+      "function": "build_cross_staff_hand_role_materialization_trial -> apply_cross_staff_hand_role_materialization_trial",
+      "pattern": "productive max_actions=1",
+      "reason": "one cross-staff hand-role candidate wins by cap rather than candidate-local authority",
+      "next_action": "prove independence and remove cap-as-authority or retire"
+    },
+    {
+      "id": "MI-A10",
+      "class": "A",
+      "path": "src/pipeline_shards/lower_staff_register_feedback_gate_core.rs",
+      "function": "apply_lower_staff_visible_rhythm_rest_lane_trial call",
+      "pattern": "productive max_actions=1",
+      "reason": "one lower-staff rest-lane candidate is admitted globally; multiplicity changes which local candidates can write",
+      "next_action": "local authority/multiplicity proof"
+    },
+    {
+      "id": "MI-A11",
+      "class": "A",
+      "path": "src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs",
+      "function": "close_structural_accent_tenuto",
+      "pattern": "candidates.len()!=1 veto before one articulation replacement",
+      "reason": "measure-local candidates are collected scorewide and an independent second occurrence vetoes the first",
+      "next_action": "inspect current runtime reachability then retire or localize"
+    },
+    {
+      "id": "MI-A12",
+      "class": "A",
+      "path": "src/pipeline_shards/phrase_slur_register_octave_accent_stem_human_pdf_tail.rs",
+      "function": "unique_confusing_tied_tail_accent_key_with_planned",
+      "pattern": "candidates.len()==1 selects exactly one blocker key",
+      "reason": "with one confusing tied-tail occurrence the attack is blocked; duplicating an independent occurrence can remove the block from both",
+      "next_action": "convert blocker semantics to per-candidate or explicit conflict-group logic"
+    },
+    {
+      "id": "MI-B01",
+      "class": "B",
+      "path": "src/pipeline_shards/candidate_material_lineage_spine_core.rs",
+      "function": "lineage exact/reverse unique-match checks",
+      "pattern": "matches.len()==1 / reverse_matches.len()==1",
+      "reason": "uniqueness disambiguates occurrence identity mapping for one lineage relation; it does not rank independent musical repair candidates",
+      "next_action": "retain; duplication of identity hypotheses must remain fail-closed"
+    },
+    {
+      "id": "MI-B02",
+      "class": "B",
+      "path": "src/pipeline_shards/sheaf_noether_projection_core.rs",
+      "function": "owner_approved_materialized selection",
+      "pattern": "sort whole-score materialized variants then into_iter().next()",
+      "reason": "variants are mutually exclusive whole-score alternatives for one solver transaction, not independent local writes",
+      "next_action": "retain while transaction scope remains explicit"
+    },
+    {
+      "id": "MI-C01",
+      "class": "C",
+      "path": "src/structural_write_authority/authorization_verifier.rs",
+      "function": "authorize_repair_candidate_for_writer",
+      "pattern": "repair_intents.len()==1 -> unique_candidate_green",
+      "reason": "could be legitimate ambiguity if all intents are alternatives in one transaction, or a systemic multiplicity violation if independent local intents are aggregated scorewide",
+      "next_action": "r1037: prove conflict grouping and replace scorewide uniqueness with conflict-local authorization where needed"
+    },
+    {
+      "id": "MI-C02",
+      "class": "C",
+      "path": "src/structural_write_authority/serialization_plan.rs",
+      "function": "audit_identity_free_semantic_event_equivalence / serialization intent planning",
+      "pattern": "intents.len()==1 / unique_repair_intent",
+      "reason": "appears coupled to the same central transaction model as MI-C01; independence semantics must be reconstructed before changing it",
+      "next_action": "analyze together with MI-C01 rather than deleting the guard locally"
+    },
+    {
+      "id": "MI-C03",
+      "class": "C",
+      "path": "src/structural_write_authority/authorization_verifier.rs",
+      "function": "issue_authorized_repair_candidate",
+      "pattern": "serialization plan admits exact full_backups_to_measure_start==2 and partial_backups_to_nonzero==0 shape",
+      "reason": "not a multiplicity primitive by itself; may be a real serialization invariant or a frozen fingerprint of an old witness",
+      "next_action": "counterexample/relocation/duplication analysis; do not remove blindly"
+    },
+    {
+      "id": "MI-C04",
+      "class": "C",
+      "path": "src/structural_write_authority/rustig_clef_planning.rs",
+      "function": "RustigClefSurfaceDecision::materialization_plan",
+      "pattern": "self.candidates.len()==1",
+      "reason": "likely alternatives within one clef-surface decision, but current inventory has not yet proven that candidate vector cannot contain independent surfaces",
+      "next_action": "prove decision-scope ownership before classifying B or A"
+    }
+  ],
+  "summary": {
+    "A": 12,
+    "B": 2,
+    "C": 4,
+    "total": 18,
+    "first_retirement_target": "MI-A01",
+    "systemic_authority_target_after_first_retirement": "MI-C01"
+  }
+}

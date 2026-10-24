@@ -1,0 +1,1421 @@
+--- a/src/pipeline.rs
++++ b/src/pipeline.rs
+@@ -63,10 +63,6 @@
+ }
+ #[path = "wav_truth_articulation.rs"]
+ mod wav_truth_articulation;
+-#[cfg(test)]
+-#[path = "pipeline_shards/render_xml_checkpoint.rs"]
+-mod render_xml_checkpoint;
+-
+ use etuschlopf::console_presentation_contract::{
+     resolve_stream_render_policy, ColorPreference, ConsolePreferences, GlyphCapability, GlyphMode,
+     GlyphPreference, ProgressMode, ProgressPreference, StreamCapability, StreamDestination,
+--- a/src/pipeline_shards/human_pdf_pianistic_quality_core.rs
++++ b/src/pipeline_shards/human_pdf_pianistic_quality_core.rs
+@@ -236,9 +236,6 @@
+         legacy_candidate_xml = suppressed_xml;
+         actions.append(&mut suppress_actions);
+ 
+-        let _retired_cross_staff_voice_ledger_materializer_keepalive =
+-            apply_cross_staff_voice_ledger_materializer;
+-
+         let ((duplicate_xml, mut duplicate_actions, duplicate_seen), duplicate_receipts) =
+             apply_duplicate_stem_same_pitch_render_suppression(&legacy_candidate_xml, 8);
+         accepted_receipts.append(duplicate_receipts);
+--- a/src/pipeline_shards/lower_staff_register_feedback_gate_core.rs
++++ b/src/pipeline_shards/lower_staff_register_feedback_gate_core.rs
+@@ -45,8 +45,6 @@
+     let mut candidate_xml = xml.to_string();
+     if trial.parse_before_ok && trial.backup_forward_before_ok {
+         trial.attempted = true;
+-        let _retired_lower_staff_visible_rhythm_rest_lane_keepalive =
+-            apply_lower_staff_visible_rhythm_rest_lane_trial;
+         trial.candidates_seen = 0;
+         trial.candidate_attempted = 0;
+ 
+--- a/src/pipeline_shards/render_xml_checkpoint.rs
++++ /dev/null
+@@ -1,69 +0,0 @@
+-//! Read-only owner for Render-MusicXML checkpoint selection and sequential state.
+-//!
+-//! The owner reads the materialized checkpoint only after a caller-reported write.
+-//! A no-write transition leaves the existing `String` untouched. It has no writer,
+-//! musical policy, report-selection, pass-order, repair, or PDF-source authority.
+-
+-use std::path::Path;
+-
+-#[derive(Debug, Clone, Copy)]
+-pub(super) struct RenderXmlSnapshotReader<'a> {
+-    checkpoint_path: &'a Path,
+-}
+-
+-impl<'a> RenderXmlSnapshotReader<'a> {
+-    pub(super) const fn new(checkpoint_path: &'a Path) -> Self {
+-        Self { checkpoint_path }
+-    }
+-
+-    fn read(&self) -> std::io::Result<String> {
+-        std::fs::read_to_string(self.checkpoint_path)
+-    }
+-
+-    pub(super) fn read_optional(&self) -> Option<String> {
+-        self.read().ok()
+-    }
+-
+-    pub(super) fn read_or_fallback(&self, fallback_xml: &str) -> String {
+-        self.read().unwrap_or_else(|_| fallback_xml.to_string())
+-    }
+-
+-    pub(super) fn select_after_write(&self, written: bool, fallback_xml: &str) -> String {
+-        if written {
+-            self.read_or_fallback(fallback_xml)
+-        } else {
+-            fallback_xml.to_string()
+-        }
+-    }
+-}
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-
+-    fn fixture_path(name: &str) -> std::path::PathBuf {
+-        let nonce = std::time::SystemTime::now()
+-            .duration_since(std::time::UNIX_EPOCH)
+-            .expect("clock after epoch")
+-            .as_nanos();
+-        std::env::temp_dir().join(format!(
+-            "etuschlopf-{name}-{}-{nonce}.render.musicxml",
+-            std::process::id(),
+-        ))
+-    }
+-
+-    #[test]
+-    fn reader_preserves_the_legacy_write_and_fallback_contract() {
+-        let path = fixture_path("render-snapshot-reader");
+-        let reader = RenderXmlSnapshotReader::new(&path);
+-        assert_eq!(reader.read_optional(), None);
+-        assert_eq!(reader.select_after_write(false, "fallback"), "fallback");
+-        assert_eq!(reader.select_after_write(true, "fallback"), "fallback");
+-        std::fs::write(&path, "materialized").expect("write checkpoint fixture");
+-        assert_eq!(reader.read_optional().as_deref(), Some("materialized"));
+-        assert_eq!(reader.read_or_fallback("fallback"), "materialized");
+-        assert_eq!(reader.select_after_write(true, "fallback"), "materialized");
+-        let _ = std::fs::remove_file(path);
+-    }
+-
+-}
+--- a/src/pipeline_shards/strict_staff_local_release_core.rs
++++ b/src/pipeline_shards/strict_staff_local_release_core.rs
+@@ -1,24 +1,6 @@
+ type RenderTickInterval = (i32, i32);
+ type StrictStaffOverlayRestLayer = (String, usize, i32, Vec<RenderTickInterval>);
+ type RenderNoteIdentityKey = (usize, String, String, i32, i32, i32);
+-type CrossStaffVoiceLedgerCandidate = (
+-    usize,
+-    i32,
+-    String,
+-    BTreeSet<String>,
+-    Vec<RenderXmlTimelineFragmentSpan>,
+-    usize,
+-);
+-type CrossStaffHandRoleCandidate = (
+-    i64,
+-    RenderXmlTimelineFragmentSpan,
+-    String,
+-    Vec<RenderXmlTimelineFragmentSpan>,
+-    usize,
+-    usize,
+-    usize,
+-    String,
+-);
+ type UpperStaffDuplicateVisibleRestSuppressionCandidate = (
+     i64,
+     usize,
+--- a/src/pipeline_shards/strict_staff_rest_lane_planning_core.rs
++++ b/src/pipeline_shards/strict_staff_rest_lane_planning_core.rs
+@@ -1,30 +1,8 @@
+ // Writer-free strict-staff lower/upper rest-lane planning.
+-
+-type LowerStaffRestLaneSequence = (
+-    String,
+-    usize,
+-    usize,
+-    i32,
+-    i32,
+-    Vec<RenderTickInterval>,
+-    Vec<RenderTickInterval>,
+-);
+-
+-struct LowerStaffGapWithRestLanePolishState<'a> {
+-    out: &'a mut String,
+-    rest_parts_report: &'a mut Vec<(i32, i32)>,
+-    forward_parts_report: &'a mut Vec<(i32, i32)>,
+-    rest_total: &'a mut i32,
+-    forward_total: &'a mut i32,
+-    rest_count: &'a mut usize,
+-    forward_count: &'a mut usize,
+-}
+ 
+ #[derive(Debug, Clone)]
+ struct StrictStaffRestLaneMeasureObservation {
+     scope: usize,
+-    start: usize,
+-    end: usize,
+     expected: i32,
+     fragments: Vec<RenderXmlTimelineFragmentSpan>,
+ }
+@@ -40,8 +18,6 @@
+         let measure = &xml[measure_start..measure_end];
+         observations.push(StrictStaffRestLaneMeasureObservation {
+             scope: scope_number,
+-            start: measure_start,
+-            end: measure_end,
+             expected: infer_measure_duration_from_measure_xml(measure)
+                 .unwrap_or(384)
+                 .max(1),
+@@ -72,160 +48,6 @@
+         out.push('\n');
+     }
+     out.push_str(piece);
+-}
+-
+-fn append_lower_staff_gap_with_rest_lane_polish(
+-    state: LowerStaffGapWithRestLanePolishState<'_>,
+-    rest_staff: &str,
+-    rest_voice: &str,
+-    gap_start: i32,
+-    gap_duration: i32,
+-    expected: i32,
+-    beat_unit: i32,
+-) -> Option<()> {
+-    let LowerStaffGapWithRestLanePolishState {
+-        out,
+-        rest_parts_report,
+-        forward_parts_report,
+-        rest_total,
+-        forward_total,
+-        rest_count,
+-        forward_count,
+-    } = state;
+-    if gap_duration <= 0 {
+-        return Some(());
+-    }
+-    let parts = crate::model::metric_rest_notation::plan_partial_visible_rest_durations(
+-        i64::from(gap_start),
+-        i64::from(gap_duration),
+-        i64::from(expected),
+-        i64::from(beat_unit),
+-    );
+-    if parts.is_empty() {
+-        return None;
+-    }
+-    let mut part_cursor = gap_start;
+-    for part in parts {
+-        let part = i32::try_from(part).ok()?;
+-        // RestLane-Politur: sehr kleine Restfragmente unter einer Achtel werden
+-        // nicht als eigene sichtbare Mini-Pause betont, sondern als Forward-Zeit
+-        // ruhig weitergeführt. Große Lücken bleiben sichtbar erklärt.
+-        if part < 48 {
+-            push_render_xml_timeline_piece(out, &render_forward_fragment(part));
+-            forward_parts_report.push((part_cursor, part));
+-            *forward_total = forward_total.saturating_add(part);
+-            *forward_count += 1;
+-        } else {
+-            let rest = missing_rest_visible_template(rest_staff, rest_voice, part)?;
+-            push_render_xml_timeline_piece(out, &rest);
+-            rest_parts_report.push((part_cursor, part));
+-            *rest_total = rest_total.saturating_add(part);
+-            *rest_count += 1;
+-        }
+-        part_cursor = part_cursor.saturating_add(part);
+-    }
+-    Some(())
+-}
+-
+-fn render_lower_staff_visible_rest_lane_sequence(
+-    expected: i32,
+-    beat_unit: i32,
+-    rest_staff: &str,
+-    rest_voice: &str,
+-    lower_note_intervals: &[RenderTickInterval],
+-) -> Option<LowerStaffRestLaneSequence> {
+-    if expected <= 0 || lower_note_intervals.is_empty() {
+-        return None;
+-    }
+-    let mut merged: Vec<(i32, i32)> = Vec::new();
+-    for (start, duration) in lower_note_intervals.iter().copied() {
+-        if duration <= 0 || start < 0 || start >= expected {
+-            continue;
+-        }
+-        let end = start.saturating_add(duration).min(expected);
+-        if end <= start {
+-            continue;
+-        }
+-        if let Some(last) = merged.last_mut() {
+-            let last_end = last.0.saturating_add(last.1);
+-            if start <= last_end {
+-                let new_end = last_end.max(end);
+-                last.1 = new_end.saturating_sub(last.0);
+-                continue;
+-            }
+-        }
+-        merged.push((start, end.saturating_sub(start)));
+-    }
+-    if merged.is_empty() {
+-        return None;
+-    }
+-
+-    let mut cursor = 0_i32;
+-    let mut out = String::new();
+-    let mut rest_count = 0_usize;
+-    let mut forward_count = 0_usize;
+-    let mut rest_total = 0_i32;
+-    let mut forward_total = 0_i32;
+-    let mut rest_parts_report = Vec::<(i32, i32)>::new();
+-    let mut forward_parts_report = Vec::<(i32, i32)>::new();
+-
+-    for (note_start, note_duration) in &merged {
+-        if *note_start > cursor {
+-            let gap = note_start.saturating_sub(cursor);
+-            append_lower_staff_gap_with_rest_lane_polish(
+-                LowerStaffGapWithRestLanePolishState {
+-                    out: &mut out,
+-                    rest_parts_report: &mut rest_parts_report,
+-                    forward_parts_report: &mut forward_parts_report,
+-                    rest_total: &mut rest_total,
+-                    forward_total: &mut forward_total,
+-                    rest_count: &mut rest_count,
+-                    forward_count: &mut forward_count,
+-                },
+-                rest_staff,
+-                rest_voice,
+-                cursor,
+-                gap,
+-                expected,
+-                beat_unit,
+-            )?;
+-            cursor = *note_start;
+-        }
+-        if *note_duration > 0 {
+-            push_render_xml_timeline_piece(&mut out, &render_forward_fragment(*note_duration));
+-            forward_parts_report.push((cursor, *note_duration));
+-            forward_total = forward_total.saturating_add(*note_duration);
+-            forward_count += 1;
+-            cursor = cursor.saturating_add(*note_duration).min(expected);
+-        }
+-    }
+-
+-    if cursor < expected {
+-        let gap = expected.saturating_sub(cursor);
+-        append_lower_staff_gap_with_rest_lane_polish(
+-            LowerStaffGapWithRestLanePolishState {
+-                out: &mut out,
+-                rest_parts_report: &mut rest_parts_report,
+-                forward_parts_report: &mut forward_parts_report,
+-                rest_total: &mut rest_total,
+-                forward_total: &mut forward_total,
+-                rest_count: &mut rest_count,
+-                forward_count: &mut forward_count,
+-            },
+-            rest_staff,
+-            rest_voice,
+-            cursor,
+-            gap,
+-            expected,
+-            beat_unit,
+-        )?;
+-        cursor = expected;
+-    }
+-
+-    if cursor != expected || rest_count == 0 || rest_total <= 0 || rest_total.saturating_add(forward_total) != expected {
+-        return None;
+-    }
+-    Some((out, rest_count, forward_count, rest_total, forward_total, rest_parts_report, forward_parts_report))
+ }
+ 
+ fn lower_staff_rest_visual_cluster_key(onset: i32) -> i32 {
+@@ -736,180 +558,6 @@
+     candidates
+ }
+ 
+-#[derive(Debug, Clone)]
+-struct LowerStaffVisibleRhythmRestLanePlan {
+-    score: i64,
+-    scope: usize,
+-    start: usize,
+-    end: usize,
+-    source_voice: String,
+-    rest_voice: String,
+-    replacement: String,
+-    lower_intervals: Vec<RenderTickInterval>,
+-    staff_switches: usize,
+-    rest_parts: String,
+-    forward_parts: String,
+-    rest_total: i32,
+-    forward_total: i32,
+-}
+-
+-fn plan_lower_staff_visible_rhythm_rest_lane(
+-    xml: &str,
+-) -> Vec<LowerStaffVisibleRhythmRestLanePlan> {
+-    let metric_by_scope = render_scope_metric_expected_and_beat_map(xml);
+-    let mut candidates = Vec::new();
+-    for observation in collect_strict_staff_rest_lane_measure_observations(xml) {
+-        let scope_number = observation.scope;
+-        let measure = &xml[observation.start..observation.end];
+-        let expected = observation.expected;
+-        let beat_unit = metric_by_scope
+-            .get(&scope_number)
+-            .map(|(_, beat_unit)| *beat_unit)
+-            .filter(|beat_unit| *beat_unit > 0)
+-            .unwrap_or(expected);
+-        let fragments = &observation.fragments;
+-
+-        let mut notes_by_voice: BTreeMap<String, Vec<RenderXmlTimelineFragmentSpan>> =
+-            BTreeMap::new();
+-        for frag in fragments
+-            .iter()
+-            .filter(|frag| frag.is_visible_pitched && !frag.is_chord && !frag.is_hidden)
+-        {
+-            notes_by_voice
+-                .entry(frag.voice.clone())
+-                .or_default()
+-                .push((*frag).clone());
+-        }
+-
+-        for (voice, mut notes) in notes_by_voice {
+-            notes.sort_by_key(|frag| (frag.onset, frag.start));
+-            let staff1_visible = notes
+-                .iter()
+-                .filter(|frag| frag.staff.trim() == "1")
+-                .count();
+-            let staff2_visible = notes
+-                .iter()
+-                .filter(|frag| frag.staff.trim() == "2")
+-                .count();
+-            if staff1_visible == 0 || staff2_visible < 2 {
+-                continue;
+-            }
+-            let total_duration: i32 =
+-                notes.iter().map(|frag| frag.duration.max(0)).sum();
+-            if total_duration != expected {
+-                continue;
+-            }
+-            let staff_switches = notes
+-                .windows(2)
+-                .filter(|pair| pair[0].staff != pair[1].staff)
+-                .count();
+-            if staff_switches == 0 {
+-                continue;
+-            }
+-            let visible_staff2_rests_in_scope = fragments
+-                .iter()
+-                .filter(|frag| frag.is_visible_rest && frag.staff.trim() == "2")
+-                .count();
+-            if visible_staff2_rests_in_scope > 0 {
+-                continue;
+-            }
+-            let lower_intervals: Vec<RenderTickInterval> = notes
+-                .iter()
+-                .filter(|frag| frag.staff.trim() == "2")
+-                .map(|frag| (frag.onset, frag.duration.max(0)))
+-                .collect();
+-            let lower_duration: i32 =
+-                lower_intervals.iter().map(|(_, duration)| *duration).sum();
+-            if lower_duration <= 0 || lower_duration >= expected {
+-                continue;
+-            }
+-            let lower_gap_duration = expected.saturating_sub(lower_duration);
+-            if lower_gap_duration < expected / 4 {
+-                continue;
+-            }
+-            let rest_voice = if !fragments.iter().any(|frag| {
+-                frag.staff.trim() == "2"
+-                    && frag.voice == "2"
+-                    && (frag.is_visible_pitched || frag.is_visible_rest)
+-            }) {
+-                "2".to_string()
+-            } else if !fragments.iter().any(|frag| {
+-                frag.staff.trim() == "2"
+-                    && frag.voice == "3"
+-                    && (frag.is_visible_pitched || frag.is_visible_rest)
+-            }) {
+-                "3".to_string()
+-            } else {
+-                continue;
+-            };
+-
+-            let after_full_backup =
+-                format!("<backup><duration>{expected}</duration></backup>");
+-            let Some(backup_pos_relative) = measure.find(&after_full_backup) else {
+-                continue;
+-            };
+-            let after_backup_relative =
+-                backup_pos_relative + after_full_backup.len();
+-            let after_backup = &measure[after_backup_relative..];
+-            let full_forward =
+-                format!("<forward><duration>{expected}</duration></forward>");
+-            let Some(forward_relative) = after_backup.find(&full_forward) else {
+-                continue;
+-            };
+-            let forward_start =
+-                observation.start + after_backup_relative + forward_relative;
+-            let forward_end = forward_start + full_forward.len();
+-
+-            let Some((
+-                replacement,
+-                _rest_count,
+-                _forward_count,
+-                rest_total,
+-                forward_total,
+-                rest_parts,
+-                forward_parts,
+-            )) = render_lower_staff_visible_rest_lane_sequence(
+-                expected,
+-                beat_unit,
+-                "2",
+-                &rest_voice,
+-                &lower_intervals,
+-            )
+-            else {
+-                continue;
+-            };
+-
+-            let score = (lower_gap_duration as i64)
+-                + (staff_switches as i64 * 100)
+-                + (staff2_visible as i64 * 80)
+-                + if staff2_visible <= 4 { 160 } else { 0 };
+-            candidates.push(LowerStaffVisibleRhythmRestLanePlan {
+-                score,
+-                scope: scope_number,
+-                start: forward_start,
+-                end: forward_end,
+-                source_voice: voice,
+-                rest_voice,
+-                replacement,
+-                lower_intervals,
+-                staff_switches,
+-                rest_parts: format_interval_parts(&rest_parts),
+-                forward_parts: format_interval_parts(&forward_parts),
+-                rest_total,
+-                forward_total,
+-            });
+-        }
+-    }
+-
+-    candidates.sort_by(|left, right| {
+-        right
+-            .score
+-            .cmp(&left.score)
+-            .then_with(|| left.start.cmp(&right.start))
+-    });
+-    candidates
+-}
+-
+ #[cfg(test)]
+ mod lower_staff_visible_rest_lane_anchor_bound_obligation_tests {
+     use super::lower_staff_visible_rest_lane_anchor_elision_permitted;
+--- a/src/pipeline_shards/strict_staff_visible_lane_rest_rewrite_tail.rs
++++ b/src/pipeline_shards/strict_staff_visible_lane_rest_rewrite_tail.rs
+@@ -909,291 +909,13 @@
+ 
+ 
+ 
+-fn set_pitched_note_duration_type_clear_tie_and_beams(fragment: &str, duration: i32) -> Option<String> {
+-    crate::structural_write_authority::set_pitched_note_duration_type_clear_tie_and_beams_authorized(fragment, duration)
+-}
+-
+-fn has_same_pitch_tie_merge_boundary(first: &str, second: &str) -> bool {
+-    let first_tie_start =
+-        first.contains("<tie type=\"start\"") || first.contains("<tied type=\"start\"");
+-    let first_tie_stop =
+-        first.contains("<tie type=\"stop\"") || first.contains("<tied type=\"stop\"");
+-    let second_tie_start =
+-        second.contains("<tie type=\"start\"") || second.contains("<tied type=\"start\"");
+-    let second_tie_stop =
+-        second.contains("<tie type=\"stop\"") || second.contains("<tied type=\"stop\"");
+-
+-    first_tie_start && !first_tie_stop && second_tie_stop && !second_tie_start
+-}
+-
+-fn same_pitch_tie_merge_anchor_pair_has_immediate_chord_dependency(
+-    xml: &str,
+-    first_note_end: usize,
+-    second_note_end: usize,
+-    measure_end: usize,
+-) -> bool {
+-    note_is_followed_by_chord_note(xml, first_note_end, measure_end)
+-        || note_is_followed_by_chord_note(xml, second_note_end, measure_end)
+-}
+-
+-#[cfg(test)]
+-mod same_pitch_tie_merge_closed_chain_tests {
+-    use super::{
+-        collect_render_timeline_fragments_in_segment,
+-        has_same_pitch_tie_merge_boundary,
+-        same_pitch_tie_merge_anchor_pair_has_immediate_chord_dependency,
+-    };
+-
+-    #[test]
+-    fn closed_two_note_tie_is_mergeable() {
+-        let first =
+-            r#"<note><tie type="start"/><notations><tied type="start"/></notations></note>"#;
+-        let second =
+-            r#"<note><tie type="stop"/><notations><tied type="stop"/></notations></note>"#;
+-        assert!(has_same_pitch_tie_merge_boundary(first, second));
+-    }
+-
+-    #[test]
+-    fn incoming_tie_stop_cannot_be_erased_by_merging_with_an_untied_reattack() {
+-        let first =
+-            r#"<note><tie type="stop"/><notations><tied type="stop"/></notations></note>"#;
+-        let second = "<note></note>";
+-        assert!(!has_same_pitch_tie_merge_boundary(first, second));
+-    }
+-
+-    #[test]
+-    fn merge_cannot_cut_a_longer_tie_chain_at_either_edge() {
+-        let middle = r#"<note><tie type="stop"/><tie type="start"/><notations><tied type="stop"/><tied type="start"/></notations></note>"#;
+-        let start =
+-            r#"<note><tie type="start"/><notations><tied type="start"/></notations></note>"#;
+-        let stop =
+-            r#"<note><tie type="stop"/><notations><tied type="stop"/></notations></note>"#;
+-        assert!(!has_same_pitch_tie_merge_boundary(middle, stop));
+-        assert!(!has_same_pitch_tie_merge_boundary(start, middle));
+-    }
+-
+-    #[test]
+-    fn tie_merge_chord_dependency_guard_covers_first_second_both_and_none() {
+-        fn measure(first_member: bool, second_member: bool) -> String {
+-            let first_member_xml = if first_member {
+-                r#"<note><chord/><pitch><step>E</step><octave>4</octave></pitch><duration>48</duration><voice>1</voice><type>eighth</type><staff>1</staff></note>"#
+-            } else {
+-                ""
+-            };
+-            let second_member_xml = if second_member {
+-                r#"<note><chord/><pitch><step>G</step><octave>4</octave></pitch><duration>48</duration><voice>1</voice><type>eighth</type><staff>1</staff></note>"#
+-            } else {
+-                ""
+-            };
+-            format!(
+-                "<measure number=\"\
+-1\"><attributes><divisions>96</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes><note><pitch><step>C</step><octave>4</octave></pitch><duration>48</duration><tie type=\"start\"/><voice>1</voice><type>eighth</type><staff>1</staff><notations><tied type=\"start\"/></notations></note>{first_member_xml}<note><pitch><step>C</step><octave>4</octave></pitch><duration>48</duration><tie type=\"stop\"/><voice>1</voice><type>eighth</type><staff>1</staff><notations><tied type=\"stop\"/></notations></note>{second_member_xml}<forward><duration>288</duration></forward></measure>"
+-            )
+-        }
+-
+-        for (first_member, second_member, expected) in [
+-            (false, false, false),
+-            (true, false, true),
+-            (false, true, true),
+-            (true, true, true),
+-        ] {
+-            let xml = measure(first_member, second_member);
+-            let anchors = collect_render_timeline_fragments_in_segment(&xml, 0, 1)
+-                .into_iter()
+-                .filter(|frag| frag.is_visible_pitched && !frag.is_chord && !frag.is_hidden)
+-                .collect::<Vec<_>>();
+-            assert_eq!(anchors.len(), 2);
+-            assert_eq!(
+-                same_pitch_tie_merge_anchor_pair_has_immediate_chord_dependency(
+-                    &xml,
+-                    anchors[0].end,
+-                    anchors[1].end,
+-                    xml.len(),
+-                ),
+-                expected
+-            );
+-        }
+-    }
+-}
+-
+-fn apply_structural_same_pitch_tie_merge_render_write(
+-    xml: &str,
+-    max_actions: usize,
+-) -> (String, Vec<BehindBarsRuleCheckRestAndTieAction>, usize) {
+-    let metric = render_scope_metric_expected_and_beat_map(xml);
+-    let mut candidates: Vec<(i64, RenderXmlTimelineFragmentSpan, RenderXmlTimelineFragmentSpan, i32)> = Vec::new();
+-    let mut scan = 0_usize;
+-    while let Some((measure_start, measure_end, scope_number)) = find_next_measure_bounds(xml, scan) {
+-        let measure = &xml[measure_start..measure_end];
+-        let beat_unit = metric.get(&scope_number).map_or(96, |(_, beat)| *beat).max(1);
+-        let mut notes = collect_render_timeline_fragments_in_segment(measure, measure_start, scope_number)
+-            .into_iter()
+-            .filter(|frag| frag.is_visible_pitched && frag.duration > 0 && !frag.is_hidden && !frag.is_chord)
+-            .filter_map(|frag| midi_from_note_fragment(&frag.fragment).map(|midi| (midi, frag)))
+-            .collect::<Vec<_>>();
+-        notes.sort_by_key(|(midi, frag)| (frag.staff.clone(), frag.voice.clone(), *midi, frag.onset, frag.duration, frag.start));
+-        for pair in notes.windows(2) {
+-            let (midi_a, a) = (&pair[0].0, &pair[0].1);
+-            let (midi_b, b) = (&pair[1].0, &pair[1].1);
+-            if midi_a != midi_b || a.scope != b.scope || a.staff != b.staff || a.voice != b.voice {
+-                continue;
+-            }
+-            if a.onset.saturating_add(a.duration) != b.onset {
+-                continue;
+-            }
+-            let total = a.duration.saturating_add(b.duration);
+-            if total <= 0 || duration_to_rest_type_and_dots(total).is_none() {
+-                continue;
+-            }
+-            if !same_beat_interval_dynamic(a.onset, a.onset.saturating_add(total), beat_unit) {
+-                continue;
+-            }
+-            if !has_same_pitch_tie_merge_boundary(&a.fragment, &b.fragment) {
+-                continue;
+-            }
+-            // r627: SamePitchTieMerge retimes the first note and deletes the second.
+-            // Immediate <chord/> dependents therefore belong to the anchor transaction.
+-            // This writer has no chord-aware tie-merge plan, so the candidate is
+-            // admitted only when both anchors are chord-independent.
+-            if same_pitch_tie_merge_anchor_pair_has_immediate_chord_dependency(
+-                xml,
+-                a.end,
+-                b.end,
+-                measure_end,
+-            ) {
+-                continue;
+-            }
+-            let strong_tie = if a.fragment.contains("<tie type=\"start\"") && b.fragment.contains("<tie type=\"stop\"") { 1_i64 } else { 0_i64 };
+-            let score = strong_tie * 1_000_000 - (scope_number as i64) * 1_000 - (a.onset as i64);
+-            candidates.push((score, a.clone(), b.clone(), *midi_a));
+-        }
+-        scan = measure_end;
+-    }
+-    let candidates_seen = candidates.len();
+-    candidates.sort_by_key(|a| std::cmp::Reverse(a.0));
+-
+-    let mut replacements = Vec::<(usize, usize, String)>::new();
+-    let mut occupied = Vec::<(usize, usize)>::new();
+-    let mut actions = Vec::new();
+-    for (_score, first, second, _) in candidates {
+-        if actions.len() >= max_actions { break; }
+-        if occupied.iter().any(|(s, e)| first.start < *e && first.end > *s) { continue; }
+-        if occupied.iter().any(|(s, e)| second.start < *e && second.end > *s) { continue; }
+-        let total = first.duration.saturating_add(second.duration);
+-        let Some(new_first) = set_pitched_note_duration_type_clear_tie_and_beams(&first.fragment, total) else { continue; };
+-        occupied.push((first.start, first.end));
+-        occupied.push((second.start, second.end));
+-        replacements.push((first.start, first.end, new_first));
+-        replacements.push((second.start, second.end, String::new()));
+-        actions.push(BehindBarsRuleCheckRestAndTieAction {
+-            action_kind: "external_feedback_same_pitch_tie_merge_render_write".to_string(),
+-            old_rest_count: 2,
+-            new_rest_count: 1,
+-            verdict: "adopted_if_parse_and_cursor_green".to_string(),
+-        });
+-    }
+-
+-    replacements.sort_by_key(|a| std::cmp::Reverse(a.0));
+-    let out = crate::structural_write_authority::apply_same_pitch_tie_merge_authorized(
+-        xml,
+-        replacements,
+-    )
+-    .unwrap_or_else(|| xml.to_string());
+-    (out, actions, candidates_seen)
+-}
+-
+-
+-fn select_generic_upper_terminal_shadow_rest_scope(xml: &str) -> Option<usize> {
+-    let metric = render_scope_metric_expected_and_beat_map(xml);
+-    let mut candidates: Vec<(i64, usize)> = Vec::new();
+-    let mut scan = 0_usize;
+-    while let Some((measure_start, measure_end, scope_number)) = find_next_measure_bounds(xml, scan) {
+-        let measure = &xml[measure_start..measure_end];
+-        let (expected, beat_unit) = metric.get(&scope_number).copied().unwrap_or((384, 96));
+-        let beat = beat_unit.max(1);
+-        let fragments = collect_render_timeline_fragments_in_segment(measure, measure_start, scope_number);
+-        let upper_visible: Vec<RenderXmlTimelineFragmentSpan> = fragments
+-            .iter()
+-            .filter(|frag| frag.staff.trim() == "1" && !frag.is_hidden)
+-            .cloned()
+-            .collect();
+-        for rest in upper_visible.iter().filter(|frag| frag.is_visible_rest && !frag.is_chord && frag.duration > 0 && frag.voice.trim() != "1") {
+-            let pitched_other = upper_visible
+-                .iter()
+-                .filter(|frag| {
+-                    frag.is_visible_pitched
+-                        && frag.voice != rest.voice
+-                        && upper_staff_rest_stack_intervals_overlap(rest.onset as i64, rest.duration as i64, frag.onset as i64, frag.duration as i64)
+-                })
+-                .count();
+-            if pitched_other == 0 { continue; }
+-            let terminal = rest.onset.saturating_add(rest.duration.max(0)) == expected;
+-            let beat_local = same_beat_interval_dynamic(rest.onset, rest.onset.saturating_add(rest.duration.max(0)), beat);
+-            if !terminal || !beat_local { continue; }
+-            let score = 10_000_000_i64
+-                + (rest.duration as i64) * 10_000
+-                + (pitched_other as i64) * 1_000
+-                - (scope_number as i64);
+-            candidates.push((score, scope_number));
+-        }
+-        scan = measure_end;
+-    }
+-    candidates.sort_by_key(|a| std::cmp::Reverse(a.0));
+-    candidates.first().map(|(_, scope)| *scope)
+-}
+-
+-fn apply_structural_upper_terminal_shadow_rest_forward_write(
+-    xml: &str,
+-    max_actions: usize,
+-) -> (String, Vec<BehindBarsRuleCheckRestAndTieAction>, usize, Option<usize>) {
+-    let focus_scope = select_generic_upper_terminal_shadow_rest_scope(xml);
+-    let mut seen = 0usize;
+-    let mut actions = Vec::new();
+-    let mut replacements = Vec::<(usize, usize, String)>::new();
+-    let Some(target_scope) = focus_scope else { return (xml.to_string(), actions, seen, None); };
+-    let mut scan = 0_usize;
+-    while let Some((measure_start, measure_end, scope_number)) = find_next_measure_bounds(xml, scan) {
+-        let measure = &xml[measure_start..measure_end];
+-        let (expected, beat_unit) = render_scope_metric_expected_and_beat_map(xml).get(&scope_number).copied().unwrap_or((384, 96));
+-        let fragments = collect_render_timeline_fragments_in_segment(measure, measure_start, scope_number);
+-        let upper_visible: Vec<RenderXmlTimelineFragmentSpan> = fragments
+-            .iter()
+-            .filter(|frag| frag.staff.trim() == "1" && !frag.is_hidden)
+-            .cloned()
+-            .collect();
+-        for rest in upper_visible.iter().filter(|frag| frag.is_visible_rest && !frag.is_chord && frag.duration > 0 && frag.voice.trim() != "1") {
+-            let pitched_other = upper_visible
+-                .iter()
+-                .filter(|frag| {
+-                    frag.is_visible_pitched
+-                        && frag.voice != rest.voice
+-                        && upper_staff_rest_stack_intervals_overlap(rest.onset as i64, rest.duration as i64, frag.onset as i64, frag.duration as i64)
+-                })
+-                .count();
+-            if pitched_other == 0 { continue; }
+-            if rest.onset.saturating_add(rest.duration.max(0)) != expected { continue; }
+-            if !same_beat_interval_dynamic(rest.onset, rest.onset.saturating_add(rest.duration.max(0)), beat_unit.max(1)) { continue; }
+-            seen += 1;
+-            if scope_number != target_scope { continue; }
+-            if actions.len() >= max_actions { continue; }
+-            replacements.push((rest.start, rest.end, render_staff_voice_forward_fragment(rest.duration, &rest.staff, &rest.voice)));
+-            actions.push(BehindBarsRuleCheckRestAndTieAction {
+-                action_kind: "external_feedback_generic_upper_shadow_rest_forward_write".to_string(),
+-                old_rest_count: 1,
+-                new_rest_count: 0,
+-                verdict: "adopted_if_invariants_hold".to_string(),
+-            });
+-        }
+-        scan = measure_end;
+-    }
+-    replacements.sort_by_key(|a| std::cmp::Reverse(a.0));
+-    let out = crate::structural_write_authority::apply_terminal_shadow_rest_forward_authorized(
+-        xml,
+-        replacements,
+-    )
+-    .unwrap_or_else(|| xml.to_string());
+-    (out, actions, seen, focus_scope)
+-}
++
++
++
++
++
++
++
+ 
+ fn set_pitched_note_duration_type_add_staccato(fragment: &str, duration: i32) -> Option<String> {
+     let _retired_writer_keepalive =
+@@ -1472,271 +1194,11 @@
+ }
+ 
+ 
+-fn add_cross_staff_voice_ledger_beams_to_note(fragment: &str, beam_value: &str) -> String {
+-    crate::structural_write_authority::add_cross_staff_voice_ledger_beams_to_note_authorized(fragment, beam_value)
+-}
+-
+-
+-fn apply_cross_staff_voice_ledger_materializer(
+-    xml: &str,
+-    max_actions: usize,
+-) -> (String, Vec<BehindBarsRuleCheckRestAndTieAction>, usize) {
+-    let mut candidates: Vec<CrossStaffVoiceLedgerCandidate> = Vec::new();
+-    let mut scan = 0_usize;
+-    while let Some((measure_start, measure_end, scope_number)) = find_next_measure_bounds(xml, scan) {
+-        let measure = &xml[measure_start..measure_end];
+-        let expected = infer_measure_duration_from_measure_xml(measure).unwrap_or(384).max(1);
+-        let backup_full = measure.contains(&format!("<backup><duration>{expected}</duration></backup>"));
+-        let forward_full = measure.contains(&format!("<forward><duration>{expected}</duration></forward>"));
+-        if !backup_full || !forward_full {
+-            scan = measure_end;
+-            continue;
+-        }
+-        let fragments = collect_render_timeline_fragments_in_segment(measure, measure_start, scope_number);
+-        let mut notes_by_voice: BTreeMap<String, Vec<RenderXmlTimelineFragmentSpan>> = BTreeMap::new();
+-        for frag in fragments.into_iter().filter(|frag| frag.is_note && frag.is_visible_pitched && !frag.is_chord && !frag.is_hidden) {
+-            notes_by_voice.entry(frag.voice.clone()).or_default().push(frag);
+-        }
+-        for (voice, mut notes) in notes_by_voice {
+-            notes.sort_by_key(|frag| (frag.onset, frag.start));
+-            let total_duration: i32 = notes.iter().map(|frag| frag.duration.max(0)).sum();
+-            if total_duration != expected || notes.len() < 8 || notes.len() % 4 != 0 {
+-                continue;
+-            }
+-            if !notes.iter().all(|frag| frag.duration == 24) {
+-                continue;
+-            }
+-            let staffs: BTreeSet<String> = notes.iter().map(|frag| frag.staff.clone()).collect();
+-            if !staffs.contains("1") || !staffs.contains("2") {
+-                continue;
+-            }
+-            let staff_switches = notes.windows(2).filter(|pair| pair[0].staff != pair[1].staff).count();
+-            let staff2_count = notes.iter().filter(|frag| frag.staff.trim() == "2").count();
+-            let missing_beam_count = notes.iter().filter(|frag| !frag.fragment.contains("<beam")).count();
+-            let score = staff_switches.saturating_mul(10)
+-                .saturating_add(staff2_count.saturating_mul(4))
+-                .saturating_add(missing_beam_count);
+-            if score == 0 {
+-                continue;
+-            }
+-            candidates.push((score, expected, voice, staffs, notes, staff_switches));
+-        }
+-        scan = measure_end;
+-    }
+-
+-    let candidates_seen = candidates.len();
+-    candidates.sort_by(|a, b| {
+-        b.0.cmp(&a.0)
+-            .then_with(|| a.4.first().map_or(0, |frag| frag.scope).cmp(&b.4.first().map_or(0, |frag| frag.scope)))
+-    });
+-
+-    let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+-    let mut actions = Vec::new();
+-    for (_, _, _, _, notes, _) in candidates.into_iter().take(max_actions) {
+-        if notes.is_empty() { continue; }
+-        let mut local_replacements = Vec::<(usize, usize, String)>::new();
+-        for chunk in notes.chunks(4) {
+-            if chunk.len() != 4 {
+-                local_replacements.clear();
+-                break;
+-            }
+-            let has_cross_staff = chunk.iter().map(|frag| frag.staff.clone()).collect::<BTreeSet<_>>().len() > 1;
+-            let all_16th = chunk.iter().all(|frag| frag.duration == 24);
+-            if !has_cross_staff || !all_16th {
+-                local_replacements.clear();
+-                break;
+-            }
+-            // Legacy materialization eligibility remains narrow, but BeamHierarchy
+-            // state is no longer decided here. All-16th chunks consume the same
+-            // structural metric DecisionOwner as every other beam projection.
+-            let plan_infos = chunk
+-                .iter()
+-                .map(|frag| PartialBeatNoteInfo {
+-                    index: frag.start,
+-                    start: i64::from(frag.onset),
+-                    duration: i64::from(frag.duration),
+-                    staff: frag.staff.clone(),
+-                    voice: frag.voice.clone(),
+-                    note_type: "16th".to_string(),
+-                    is_rest: false,
+-                    is_chord: false,
+-                    is_hidden: false,
+-                    existing_beams: frag.fragment.match_indices("<beam").count(),
+-                })
+-                .collect::<Vec<_>>();
+-            let plan_group = plan_infos.iter().collect::<Vec<_>>();
+-            let Some(plan) = structural_metric_beam_hierarchy_plan(&plan_group, 2) else {
+-                local_replacements.clear();
+-                break;
+-            };
+-            let mut primary_states = vec![None; chunk.len()];
+-            for edit in plan.edits().iter().copied().filter(|edit| edit.level() == 1) {
+-                if let Some(slot) = primary_states.get_mut(edit.event_ordinal()) {
+-                    *slot = Some(edit.state().as_musicxml_text());
+-                }
+-            }
+-            if primary_states.iter().any(|state| state.is_none()) {
+-                local_replacements.clear();
+-                break;
+-            }
+-            for (frag, value) in chunk.iter().zip(primary_states.into_iter().flatten()) {
+-                local_replacements.push((
+-                    frag.start,
+-                    frag.end,
+-                    add_cross_staff_voice_ledger_beams_to_note(&frag.fragment, value),
+-                ));
+-            }
+-        }
+-        if local_replacements.is_empty() {
+-            continue;
+-        }
+-        replacements.extend(local_replacements);
+-        actions.push(BehindBarsRuleCheckRestAndTieAction {
+-            action_kind: "cross_staff_voice_ledger_beam_materialization".to_string(),
+-            old_rest_count: notes.len(),
+-            new_rest_count: notes.len(),
+-            verdict: "adopted_if_rest_delta_adoption_gate_holds".to_string(),
+-        });
+-    }
+-
+-    replacements.sort_by_key(|a| std::cmp::Reverse(a.0));
+-    let out = crate::structural_write_authority::apply_cross_staff_voice_ledger_authorized(
+-        xml,
+-        replacements,
+-    )
+-    .unwrap_or_else(|| xml.to_string());
+-    (out, actions, candidates_seen)
+-}
+-
+-
+-fn render_staff_run_sequence(notes: &[RenderXmlTimelineFragmentSpan]) -> String {
+-    if notes.is_empty() {
+-        return "-".to_string();
+-    }
+-    let mut parts = Vec::<String>::new();
+-    let mut start = notes[0].onset;
+-    let mut end = notes[0].onset.saturating_add(notes[0].duration.max(0));
+-    let mut current_staff = notes[0].staff.clone();
+-    let mut count = 1_usize;
+-    for frag in notes.iter().skip(1) {
+-        let frag_end = frag.onset.saturating_add(frag.duration.max(0));
+-        if frag.staff == current_staff && frag.onset == end {
+-            end = frag_end;
+-            count += 1;
+-        } else {
+-            parts.push(format!("S{current_staff}:{start}-{end}({count})"));
+-            current_staff = frag.staff.clone();
+-            start = frag.onset;
+-            end = frag_end;
+-            count = 1;
+-        }
+-    }
+-    parts.push(format!("S{current_staff}:{start}-{end}({count})"));
+-    parts.join("; ")
+-}
+-
+-fn apply_cross_staff_hand_role_materialization_trial(
+-    xml: &str,
+-    max_actions: usize,
+-) -> (String, Vec<CrossStaffHandRoleMaterializationAction>, usize) {
+-    let mut candidates_seen = 0_usize;
+-    let mut candidates: Vec<CrossStaffHandRoleCandidate> = Vec::new();
+-    let mut scan = 0_usize;
+-    while let Some((measure_start, measure_end, scope_number)) = find_next_measure_bounds(xml, scan) {
+-        let measure = &xml[measure_start..measure_end];
+-        let expected = infer_measure_duration_from_measure_xml(measure).unwrap_or(384).max(1);
+-        let fragments = collect_render_timeline_fragments_in_segment(measure, measure_start, scope_number);
+-
+-        let mut visible_notes_by_voice: BTreeMap<String, Vec<RenderXmlTimelineFragmentSpan>> = BTreeMap::new();
+-        for frag in fragments.iter().filter(|frag| frag.is_visible_pitched && !frag.is_chord && !frag.is_hidden) {
+-            visible_notes_by_voice.entry(frag.voice.clone()).or_default().push(frag.clone());
+-        }
+-
+-        let mut cross_staff_sources = Vec::<(String, Vec<RenderXmlTimelineFragmentSpan>, usize, usize, usize, String, i64)>::new();
+-        for (voice, mut notes) in visible_notes_by_voice {
+-            notes.sort_by_key(|frag| (frag.onset, frag.start));
+-            let staff1_visible = notes.iter().filter(|frag| frag.staff.trim() == "1").count();
+-            let staff2_visible = notes.iter().filter(|frag| frag.staff.trim() == "2").count();
+-            if staff1_visible == 0 || staff2_visible == 0 {
+-                continue;
+-            }
+-            let boundary_count = notes.windows(2).filter(|pair| pair[0].staff != pair[1].staff).count();
+-            if boundary_count == 0 {
+-                continue;
+-            }
+-            let staff_sequence = render_staff_run_sequence(&notes);
+-            let score = (notes.len() as i64 * 40)
+-                + (boundary_count as i64 * 90)
+-                + (staff2_visible as i64 * 55)
+-                + if notes.iter().map(|frag| frag.duration.max(0)).sum::<i32>() >= expected { 250 } else { 0 };
+-            cross_staff_sources.push((voice, notes, staff1_visible, staff2_visible, boundary_count, staff_sequence, score));
+-        }
+-        if cross_staff_sources.is_empty() {
+-            scan = measure_end;
+-            continue;
+-        }
+-
+-        for rest in fragments.iter().filter(|frag| frag.is_visible_rest && !frag.is_chord && frag.staff.trim() == "2") {
+-            if rest.onset != 0 || rest.duration != expected {
+-                continue;
+-            }
+-            if fragments.iter().any(|frag| frag.is_visible_pitched && !frag.is_hidden && frag.staff == rest.staff && frag.voice == rest.voice) {
+-                continue;
+-            }
+-            if let Some((voice, notes, staff1_visible, staff2_visible, boundary_count, staff_sequence, source_score)) = cross_staff_sources
+-                .iter()
+-                .max_by_key(|(_, _notes, _s1, _s2, boundary_count, _seq, score)| (*score, *boundary_count as i64))
+-            {
+-                candidates_seen += 1;
+-                let score = *source_score
+-                    + (rest.duration as i64)
+-                    + if rest.voice.as_str() != voice.as_str() { 180 } else { 60 };
+-                candidates.push((
+-                    score,
+-                    rest.clone(),
+-                    voice.clone(),
+-                    notes.clone(),
+-                    *staff1_visible,
+-                    *staff2_visible,
+-                    *boundary_count,
+-                    staff_sequence.clone(),
+-                ));
+-            }
+-        }
+-        scan = measure_end;
+-    }
+-
+-    candidates.sort_by(|a, b| {
+-        b.0.cmp(&a.0)
+-            .then_with(|| a.1.scope.cmp(&b.1.scope))
+-            .then_with(|| a.1.start.cmp(&b.1.start))
+-    });
+-
+-    let mut replacements = Vec::<(usize, usize, String)>::new();
+-    let mut actions = Vec::<CrossStaffHandRoleMaterializationAction>::new();
+-    let mut occupied = Vec::<(usize, usize)>::new();
+-    for (_, rest, _, _, _, _, _, _) in candidates {
+-        if actions.len() >= max_actions {
+-            break;
+-        }
+-        if occupied.iter().any(|(used_start, used_end)| rest.start < *used_end && rest.end > *used_start) {
+-            continue;
+-        }
+-        occupied.push((rest.start, rest.end));
+-        replacements.push((rest.start, rest.end, render_forward_fragment(rest.duration)));
+-        actions.push(CrossStaffHandRoleMaterializationAction {
+-            verdict: "adopted_if_rest_delta_adoption_gate_holds".to_string(),
+-        });
+-    }
+-
+-    replacements.sort_by_key(|a| std::cmp::Reverse(a.0));
+-    let out = crate::structural_write_authority::apply_hand_role_rest_materialization_authorized(
+-        xml,
+-        replacements,
+-    )
+-    .unwrap_or_else(|| xml.to_string());
+-    (out, actions, candidates_seen)
+-}
++
++
++
++
++
+ 
+ fn build_cross_staff_hand_role_materialization_trial(
+     xml: &str,
+@@ -1764,8 +1226,6 @@
+     let candidate_xml = xml.to_string();
+     if trial.parse_before_ok && trial.backup_forward_before_ok {
+         trial.attempted = true;
+-        let _retired_cross_staff_hand_role_materialization_keepalive =
+-            apply_cross_staff_hand_role_materialization_trial;
+         trial.candidates_seen = 0;
+         trial.candidate_attempted = 0;
+     }
+@@ -1852,49 +1312,6 @@
+     Ok(trial)
+ }
+ 
+-
+-fn apply_lower_staff_visible_rhythm_rest_lane_trial(
+-    xml: &str,
+-    max_actions: usize,
+-) -> (String, Vec<UpperStaffLocalVisualRestLedgerProofAction>, usize) {
+-    let candidates = plan_lower_staff_visible_rhythm_rest_lane(xml);
+-    let candidates_seen = candidates.len();
+-    let mut replacements = Vec::<(usize, usize, String)>::new();
+-    let mut proof_actions = Vec::<UpperStaffLocalVisualRestLedgerProofAction>::new();
+-    let mut occupied = Vec::<(usize, usize)>::new();
+-
+-    for candidate in candidates {
+-        if proof_actions.len() >= max_actions {
+-            break;
+-        }
+-        if occupied.iter().any(|(used_start, used_end)| {
+-            candidate.start < *used_end && candidate.end > *used_start
+-        }) {
+-            continue;
+-        }
+-        replacements.push((candidate.start, candidate.end, candidate.replacement));
+-        occupied.push((candidate.start, candidate.end));
+-        proof_actions.push(UpperStaffLocalVisualRestLedgerProofAction {
+-            scope: candidate.scope,
+-            source_voice: candidate.source_voice,
+-            rest_voice: candidate.rest_voice,
+-            lower_staff_notes: candidate.lower_intervals.len(),
+-            staff_switches: candidate.staff_switches,
+-            rest_parts: candidate.rest_parts,
+-            forward_parts: candidate.forward_parts,
+-            rest_duration: candidate.rest_total,
+-            forward_duration: candidate.forward_total,
+-        });
+-    }
+-
+-    replacements.sort_by_key(|a| std::cmp::Reverse(a.0));
+-    let out = crate::structural_write_authority::apply_lower_visible_rhythm_rest_lane_authorized(
+-        xml,
+-        replacements,
+-    )
+-    .unwrap_or_else(|| xml.to_string());
+-    (out, proof_actions, candidates_seen)
+-}
+ 
+ fn apply_lower_staff_visible_rest_lane_anchor_suppression(
+     xml: &str,
+--- a/src/structural_write_authority/mod.rs
++++ b/src/structural_write_authority/mod.rs
+@@ -368,7 +368,6 @@
+ pub use final_barline::ensure_final_barline_authorized;
+ pub use thirty_surface_productive_authority::{
+     add_articulation_mark_to_note_fragment_authorized,
+-    add_cross_staff_voice_ledger_beams_to_note_authorized,
+     add_tenuto_to_note_fragment_authorized,
+     add_tie_markup_authorized,
+     apply_harmonic_pitch_swap_authorized,
+@@ -386,7 +385,6 @@
+     restify_atomic_move_note_authorized,
+     restify_rhythm_ledger_note_authorized,
+     set_pitched_note_duration_type_add_staccato_authorized,
+-    set_pitched_note_duration_type_clear_tie_and_beams_authorized,
+     set_rest_note_duration_type_authorized,
+     sync_arrangement_note_type_and_dots_authorized,
+     sync_atomic_move_note_type_and_dots_authorized,
+@@ -418,16 +416,11 @@
+ pub use strict_staff_visible_lane_authority::{
+     write_cross_staff_hand_role_trial_authorized,
+     apply_backup_anchor_rewrite_authorized,
+-    apply_cross_staff_voice_ledger_authorized,
+     apply_duplicate_same_pitch_suppression_authorized,
+     apply_empty_voice_rest_suppression_authorized,
+-    apply_hand_role_rest_materialization_authorized,
+     apply_hidden_rest_visibility_rewrite_authorized,
+     apply_lower_visible_rest_suppression_authorized,
+-    apply_lower_visible_rhythm_rest_lane_authorized,
+     apply_rest_beat_materialization_authorized,
+-    apply_same_pitch_tie_merge_authorized,
+-    apply_terminal_shadow_rest_forward_authorized,
+     apply_upper_duplicate_rest_suppression_authorized,
+     apply_upper_initial_rest_coalescing_authorized,
+     insert_missing_staff_edge_rest_authorized,
+--- a/src/structural_write_authority/strict_staff_visible_lane_authority.rs
++++ b/src/structural_write_authority/strict_staff_visible_lane_authority.rs
+@@ -23,14 +23,19 @@
+     BackupAnchor,
+     HiddenRestVisibility,
+     MissingStaffEdgeRest,
++    #[cfg(test)]
+     HandRoleRestToForward,
++    #[cfg(test)]
+     CrossStaffVoiceLedger,
+     DuplicateSamePitchSuppression,
++    #[cfg(test)]
+     TerminalShadowRestToForward,
+     RestBeatMaterialization,
++    #[cfg(test)]
+     SamePitchTieMerge,
+     EmptyVoiceRestSuppression,
+     LowerVisibleRestSuppression,
++    #[cfg(test)]
+     LowerVisibleRhythmRestLane,
+     UpperDuplicateRestSuppression,
+     UpperInitialRestCoalescing,
+@@ -184,9 +189,7 @@
+                 && replacement.contains("<rest")
+                 && (replacement.contains("<backup") || replacement.contains("<note"))
+         }
+-        VisibleLaneEffect::HandRoleRestToForward
+-        | VisibleLaneEffect::TerminalShadowRestToForward
+-        | VisibleLaneEffect::EmptyVoiceRestSuppression
++        VisibleLaneEffect::EmptyVoiceRestSuppression
+         | VisibleLaneEffect::LowerVisibleRestSuppression
+         | VisibleLaneEffect::UpperDuplicateRestSuppression => {
+             !insertion
+@@ -195,6 +198,16 @@
+                     || exact_forward(replacement)
+                     || exact_rest_note(replacement))
+         }
++        #[cfg(test)]
++        VisibleLaneEffect::HandRoleRestToForward
++        | VisibleLaneEffect::TerminalShadowRestToForward => {
++            !insertion
++                && exact_rest_note(original)
++                && (replacement.is_empty()
++                    || exact_forward(replacement)
++                    || exact_rest_note(replacement))
++        }
++        #[cfg(test)]
+         VisibleLaneEffect::CrossStaffVoiceLedger => {
+             !insertion
+                 && exact_note(original)
+@@ -207,8 +220,13 @@
+                 && exact_note(replacement)
+                 && preserved_sounding_note_ledger(original, replacement)
+         }
+-        VisibleLaneEffect::RestBeatMaterialization
+-        | VisibleLaneEffect::LowerVisibleRhythmRestLane => {
++        VisibleLaneEffect::RestBeatMaterialization => {
++            !insertion
++                && rest_timeline_fragment(original)
++                && (replacement.is_empty() || rest_timeline_fragment(replacement))
++        }
++        #[cfg(test)]
++        VisibleLaneEffect::LowerVisibleRhythmRestLane => {
+             !insertion
+                 && rest_timeline_fragment(original)
+                 && (replacement.is_empty() || rest_timeline_fragment(replacement))
+@@ -223,6 +241,7 @@
+                     && (replacement.is_empty() || rest_timeline_fragment(replacement))
+             }
+         }
++        #[cfg(test)]
+         VisibleLaneEffect::SamePitchTieMerge => {
+             !insertion
+                 && exact_note(original)
+@@ -291,6 +310,7 @@
+ 
+ 
+ 
++#[cfg(test)]
+ macro_rules! define_replacement_authority {
+     ($function_name:ident, $effect:expr) => {
+         #[track_caller]
+@@ -327,10 +347,12 @@
+     let receipt = output.as_deref().filter(|post| *post != source).map(|post| crate::master_state_identity::ExactTransformationReceipt::mint_exact_receipt(super::VisibleLane44RenderExactMint, source, post, geometry).expect("EXACT owner changed bytes without receipt"));
+     (output, receipt)
+ }
++#[cfg(test)]
+ define_replacement_authority!(
+     apply_hand_role_rest_materialization_authorized,
+     VisibleLaneEffect::HandRoleRestToForward
+ );
++#[cfg(test)]
+ define_replacement_authority!(
+     apply_cross_staff_voice_ledger_authorized,
+     VisibleLaneEffect::CrossStaffVoiceLedger
+@@ -345,6 +367,7 @@
+     let receipt = output.as_deref().filter(|post| *post != source).map(|post| crate::master_state_identity::ExactTransformationReceipt::mint_exact_receipt(super::VisibleLane42RenderExactMint, source, post, geometry).expect("EXACT owner changed bytes without receipt"));
+     (output, receipt)
+ }
++#[cfg(test)]
+ define_replacement_authority!(
+     apply_terminal_shadow_rest_forward_authorized,
+     VisibleLaneEffect::TerminalShadowRestToForward
+@@ -359,6 +382,7 @@
+     let receipt = output.as_deref().filter(|post| *post != source).map(|post| crate::master_state_identity::ExactTransformationReceipt::mint_exact_receipt(super::VisibleLane46RenderExactMint, source, post, geometry).expect("EXACT owner changed bytes without receipt"));
+     (output, receipt)
+ }
++#[cfg(test)]
+ define_replacement_authority!(
+     apply_same_pitch_tie_merge_authorized,
+     VisibleLaneEffect::SamePitchTieMerge
+@@ -383,6 +407,7 @@
+     let receipt = output.as_deref().filter(|post| *post != source).map(|post| crate::master_state_identity::ExactTransformationReceipt::mint_exact_receipt(super::VisibleLane45RenderExactMint, source, post, geometry).expect("EXACT owner changed bytes without receipt"));
+     (output, receipt)
+ }
++#[cfg(test)]
+ define_replacement_authority!(
+     apply_lower_visible_rhythm_rest_lane_authorized,
+     VisibleLaneEffect::LowerVisibleRhythmRestLane
+@@ -515,6 +540,22 @@
+     fn legacy(source: &str, edits: Vec<(usize, usize, String)>, effect: VisibleLaneEffect) -> Option<String> {
+         let attribution = DestructiveEditBatchAttribution::begin_destructive_edit_batch_attribution(edits.len());
+         VisibleLaneEditBatch::issue(source, edits, effect, attribution)?.apply(source)
++    }
++    #[test]
++    fn retired_macro_witnesses_reject_foreign_and_invalid_ranges() {
++        let source = "<note><rest/><duration>4</duration><voice>1</voice><staff>1</staff></note>";
++        let replacement = "<forward><duration>4</duration><voice>1</voice><staff>1</staff></forward>";
++        for owner in [
++            apply_hand_role_rest_materialization_authorized as fn(&str, Vec<(usize, usize, String)>) -> Option<String>,
++            apply_cross_staff_voice_ledger_authorized,
++            apply_terminal_shadow_rest_forward_authorized,
++            apply_same_pitch_tie_merge_authorized,
++            apply_lower_visible_rhythm_rest_lane_authorized,
++        ] {
++            assert_eq!(owner(source, Vec::new()), Some(source.to_owned()));
++            assert!(owner(source, vec![(0, source.len() + 1, replacement.to_owned())]).is_none());
++            assert!(owner(source, vec![(source.len(), 0, replacement.to_owned())]).is_none());
++        }
+     }
+     #[test]
+     fn all_eight_owners_replay_their_own_unchanged_legacy_event() {
+--- a/src/structural_write_authority/strict_staff_visible_lane_rest_rewrite_tail_receipt_ownership.rs
++++ b/src/structural_write_authority/strict_staff_visible_lane_rest_rewrite_tail_receipt_ownership.rs
+@@ -98,8 +98,6 @@
+     let (candidate_xml_after_duplicate, mut actions, seen, mut receipts) = apply_structural_duplicate_same_pitch_exact_render_write_with_receipts(xml, 8);
+     audit.duplicate_candidates_seen = seen;
+     audit.duplicate_attempted = actions.len();
+-
+-    let _retired_same_pitch_tie_merge_keepalive = apply_structural_same_pitch_tie_merge_render_write;
+     let candidate_xml_after_tie = candidate_xml_after_duplicate.clone();
+     let mut tie_actions = Vec::<BehindBarsRuleCheckRestAndTieAction>::new();
+     let tie_seen = 0_usize;
+@@ -107,8 +105,6 @@
+     audit.tie_merge_attempted = tie_actions.len();
+     audit.tie_merge_equivalent_contractions = tie_actions.len();
+     audit.retention_neutralized_pitched_delta = tie_actions.len();
+-
+-    let _retired_upper_terminal_shadow_rest_keepalive = apply_structural_upper_terminal_shadow_rest_forward_write;
+     let candidate_xml_after_shadow = candidate_xml_after_tie.clone();
+     let mut shadow_actions = Vec::<BehindBarsRuleCheckRestAndTieAction>::new();
+     let shadow_seen = 0_usize;
+--- a/src/structural_write_authority/thirty_surface_productive_authority.rs
++++ b/src/structural_write_authority/thirty_surface_productive_authority.rs
+@@ -236,6 +236,7 @@
+ }
+ 
+ 
++#[cfg(test)]
+ fn strip_beam_tags(fragment: &str) -> String {
+     let mut out = String::new();
+     let mut scan = 0usize;
+@@ -709,6 +710,7 @@
+     Some(out)
+ }
+ 
++#[cfg(test)]
+ #[derive(Debug)]
+ struct PitchedDurationClearCapability {
+     source: ExactSourceBinding,
+@@ -717,6 +719,7 @@
+     dots: usize,
+ }
+ 
++#[cfg(test)]
+ pub fn set_pitched_note_duration_type_clear_tie_and_beams_authorized(
+     source: &str,
+     duration: i32,
+@@ -1158,12 +1161,14 @@
+     out
+ }
+ 
++#[cfg(test)]
+ #[derive(Debug)]
+ struct CrossStaffBeamCapability {
+     source: ExactSourceBinding,
+     beam_value: String,
+ }
+ 
++#[cfg(test)]
+ pub fn add_cross_staff_voice_ledger_beams_to_note_authorized(
+     source: &str,
+     beam_value: &str,
+@@ -1562,6 +1567,16 @@
+     }
+ 
+     #[test]
++    fn retired_clear_duration_witness_preserves_voice_and_removes_tie_beams() {
++        let source = "<note><pitch><step>C</step><octave>4</octave></pitch><duration>48</duration><tie type=\"start\"/><voice>1</voice><type>eighth</type><staff>1</staff><beam number=\"1\">begin</beam></note>";
++        let output = set_pitched_note_duration_type_clear_tie_and_beams_authorized(source, 96).expect("bound duration witness");
++        assert!(output.contains("<duration>96</duration>"));
++        assert!(output.contains("<voice>1</voice>"));
++        assert!(!output.contains("<tie") && !output.contains("<beam"));
++        assert!(output.find("<voice>").unwrap() < output.find("<type>").unwrap());
++    }
++
++    #[test]
+     fn duration_rewrite_variants_keep_voice_before_type() {
+         let rest = "<note><rest/><duration>48</duration><voice>2</voice><staff>2</staff></note>";
+         let rest_out = set_rest_note_duration_type_authorized(rest, 48).0.expect("rest rewrite");
+@@ -1597,7 +1612,8 @@
+     #[test]
+     fn capability_types_are_move_only_by_contract() {
+         let source = include_str!("thirty_surface_productive_authority.rs");
+-        let production = source.split("#[cfg(test)]").next().unwrap_or(source);
++        let production = source.split("#[cfg(test)]
++mod tests {").next().unwrap_or(source);
+         for name in [
+             "ChildTextValueCapability",
+             "NoteStartAttributeCapability",

@@ -1,0 +1,12 @@
+schema=1
+base=r1225 ToolchainSignalHygiene
+base_sha256=04002dc4d49c28f4cd55494dfa4dc2929f5730361c01cd1f954c054fff4617cb
+permit=r1226 RenderReceiptSurfaceNormalizationPermit
+consumer=immediate RefactorOnly RenderReceiptSurfaceNormalization
+scope=population 41..48 same path same owner EXACT; exclusions E029 E031 E032 ADDITIVE
+atomic=all eleven boundaries; no partial or reverse migration
+geometry=prebound existing edits and owner-specific original insertion coordinates
+legacy=byte-identical original algorithm inside each closed wrapper
+runtime=three sealed typed fragment minters; E004/E036 existing verifier unchanged
+no_capability=generic macro migration; generic additive fragment; owner relocation; nested receipt; state; genesis; substitution; musical fix
+fragment_classes=ArticulationFragment TenutoFragment TieFragment; generic element_name sentinel __owner_local_fragment_only; no new generic AdditiveMintOwner binding

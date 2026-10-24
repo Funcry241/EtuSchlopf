@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "projection_id": "multiplicity_invariance_debt_live_status_r1087",
+  "historical_baseline": {
+    "inventory_id": "multiplicity_invariance_debt_r1035",
+    "path": "docs/assistant_memory/multiplicity_invariance_debt_inventory_v1.json",
+    "a_total": 12,
+    "b_total": 2,
+    "c_total": 4,
+    "baseline_is_immutable_history": true
+  },
+  "current_a_projection": {
+    "productively_closed_if_r1087_accepted": 12,
+    "productively_open_if_r1087_accepted": 0,
+    "newly_closed": [
+      {
+        "id": "MI-A12",
+        "status": "closed_local_candidate_multiplicity_invariant",
+        "closure_revision": "r1087",
+        "scorewide_uniqueness_removed": true,
+        "local_blockers": true,
+        "candidate_duplication_probe": true,
+        "historical_uniqueness_tests_removed": true,
+        "new_legacy_shard_test_functions_added": false,
+        "legacy_readback_callable_identity_retained": true,
+        "legacy_readback_semantics": "full_local_candidate_count"
+      }
+    ],
+    "remaining_open": [],
+    "parent_closure": {
+      "id": "MI-A05",
+      "closure_revision": "r1084"
+    }
+  },
+  "accepted_parent": {
+    "revision": "r1084",
+    "sha256": "f98701891a94f92402826f07ea81e063aeab864b301dddd57518d75c5172d484"
+  },
+  "rejected_evidence": [
+    {
+      "revision": "r1085",
+      "sha256": "58575357cb4e980cc8e8e69e2b15e21bf618c90080bfb401e17e228e52cec709",
+      "authority": "none",
+      "stage": "dependency_preflight"
+    },
+    {
+      "revision": "r1086",
+      "sha256": "160fd79f0ba19bcf493f3ccf67655bb4153293275afb5e57ca7f4c93db32efcf",
+      "authority": "none",
+      "stage": "incoming_take",
+      "lesson": "do not introduce new callable functions in legacy writer-reachable pipeline shard"
+    }
+  ],
+  "validation": {
+    "required_run_scope": "--take --all",
+    "selector_contract": "docs/selector_derivation_contract_tied_tail_accent_attack_ownership_local_blocker.md",
+    "multiplicity_contract": "candidate_duplication_v1",
+    "expected_after_acceptance": "MI-A 12/12 closed"
+  },
+  "parent_projection_path": "docs/assistant_memory/multiplicity_invariance_debt_live_status_r1084.json"
+}

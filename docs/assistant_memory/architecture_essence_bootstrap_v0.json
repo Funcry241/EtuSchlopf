@@ -1,0 +1,434 @@
+{
+  "schema_version": 1,
+  "artifact": "etuschlopf_architecture_essence_bootstrap",
+  "essence_version": "v0",
+  "authority": {
+    "class": "advisory_only",
+    "normative": false,
+    "productive_authority": [],
+    "statement": "This artifact may guide pre-patch reasoning but never grants MusicMutation, Writer, Repair, Release, Proof or other productive authority."
+  },
+  "sources": {
+    "start_here": "docs/assistant_memory/000_start_here.md",
+    "essence": "docs/assistant_memory/020_architecture_essence_v0.md",
+    "architecture_inventory_contract": "docs/assistant_memory/architecture_inventory_contract_v1.json",
+    "known_failure_patterns": "docs/assistant_memory/010_known_failure_patterns.md",
+    "historical_external_memory": "docs/assistant_external_memory.md",
+    "architecture_inventory_assistant_fast_path": "docs/assistant_memory/architecture_inventory_assistant_fast_path_v1.json"
+  },
+  "truth_boundaries": {
+    "architecture_truth": "canonical_contracts_authorities_and_gates_in_current_repository",
+    "runtime_truth": "fresh_current_artifacts_bound_to_current_run",
+    "advisory_project_experience": "architecture_essence_v0",
+    "non_authoritative_context": [
+      "handover_text",
+      "assistant_memory",
+      "human_memory",
+      "historical_case_memory"
+    ]
+  },
+  "cold_start": {
+    "assistant_export_entry": [
+      "read assistant_context.json",
+      "resolve the embedded source snapshot named by the current export",
+      "treat that repository snapshot as the architecture-history base"
+    ],
+    "repository_read_order": [
+      "docs/assistant_memory/000_start_here.md",
+      "docs/assistant_memory/architecture_essence_bootstrap_v0.json",
+      "docs/assistant_memory/020_architecture_essence_v0.md",
+      "docs/assistant_memory/architecture_inventory_contract_v1.json",
+      "docs/assistant_memory/architecture_inventory_assistant_fast_path_v1.json",
+      "task-relevant canonical contracts, authorities and gates",
+      "fresh task-relevant runtime artifacts",
+      "historical failure memory only when useful"
+    ]
+  },
+  "pre_patch_sequence": [
+    "cause",
+    "define_error_class_from_causal_features_without_known_witness_narrowing",
+    "measure_corpus_distribution_only_after_error_class_definition",
+    "separate_error_class_from_later_repair_scope",
+    "domain_owner",
+    "capability_class",
+    "canonical_authority",
+    "real_productive_call_site",
+    "productive_caller",
+    "writer_root",
+    "known_failure_patterns",
+    "patch",
+    "freeze_causal_error_class_definition_in_prior_parent_before_selector_code"
+  ],
+  "pre_candidate_sequence": [
+    "final_planned_diff",
+    "selector_derivation_contract_for_selector_sensitive_new_decision_logic",
+    "change_class_x_path_role_x_change_kind",
+    "resolve_owner_vs_canonical_path_role_contradictions_without_class_escalation_or_cosmetic_rename",
+    "only_then_build_candidate_or_zip",
+    "verify_selector_implementation_references_unchanged_parent_error_class_contract"
+  ],
+  "post_patch_sequence": [
+    "materialized_candidate",
+    "determine_planned_take_files",
+    "materialize_planned_incoming_zip_content_tree",
+    "take_tree_integrity_allowed_top_level_roles_and_unknown_zero",
+    "final_actual_diff_vs_take_declaration",
+    "undeclared_zero_and_declared_but_unchanged_zero",
+    "change_class_x_path_role_x_change_kind_on_final_package_diff",
+    "capability_semantic_diff",
+    "productive_call_graph",
+    "writer_root_reachability_parent_vs_candidate",
+    "no_new_noncanonical_reachability",
+    "no_new_identity_or_feedback_capability",
+    "real_productive_integration_no_unintended_dead_code",
+    "actual_last_write",
+    "final_persisted_snapshot",
+    "read_only_readback",
+    "strict_clippy_build_tests",
+    "candidate_fingerprint_unchanged",
+    "final_zip_from_prechecked_content_tree",
+    "take_gates_fail_closed",
+    "targeted_regression",
+    "corpus"
+  ],
+  "architecture_inventory_contract": {
+    "path": "docs/assistant_memory/architecture_inventory_contract_v1.json",
+    "contract_version": "AIC-1",
+    "class": "advisory_only",
+    "normative": false,
+    "productive_authority": [],
+    "runtime_implementation": "none",
+    "symbol_universe_owner": "assistant_side_ast_extraction_from_bound_physical_source_snapshot",
+    "row_grain": "one_qualified_symbol_exactly_once"
+  },
+  "rules_index": [
+    {
+      "id": "E00",
+      "title": "Repository vor Erinnerung",
+      "source_heading": "# E00 – "
+    },
+    {
+      "id": "E01",
+      "title": "Ursache vor Reparatur",
+      "source_heading": "# E01 – "
+    },
+    {
+      "id": "E02",
+      "title": "Fachlicher Owner vor technischer Naehe",
+      "source_heading": "# E02 – "
+    },
+    {
+      "id": "E03",
+      "title": "Detection != Decision != Materialization",
+      "source_heading": "# E03 – "
+    },
+    {
+      "id": "E04",
+      "title": "Proof erzeugt keine Wahrheit",
+      "source_heading": "# E04 – "
+    },
+    {
+      "id": "E05",
+      "title": "Capability ist graphbasiert",
+      "source_heading": "# E05 – "
+    },
+    {
+      "id": "E06",
+      "title": "Keine neue nichtkanonische Writer-Erreichbarkeit",
+      "source_heading": "# E06 – "
+    },
+    {
+      "id": "E07",
+      "title": "Authority muss tatsaechlich leben",
+      "source_heading": "# E07 – "
+    },
+    {
+      "id": "E08",
+      "title": "Dead Code zuerst verstehen",
+      "source_heading": "# E08 – "
+    },
+    {
+      "id": "E09",
+      "title": "Identity ist keine versteckte Entscheidungs-Capability",
+      "source_heading": "# E09 – "
+    },
+    {
+      "id": "E10",
+      "title": "Diagnose darf den Gegenstand nicht veraendern",
+      "source_heading": "# E10 – "
+    },
+    {
+      "id": "E11",
+      "title": "Letzter Write ist eine reale Eigenschaft",
+      "source_heading": "# E11 – "
+    },
+    {
+      "id": "E12",
+      "title": "Persistierte Bytes sind die finale Wahrheit",
+      "source_heading": "# E12 – "
+    },
+    {
+      "id": "E13",
+      "title": "Reader nicht an gewuenschte Wahrheit anpassen",
+      "source_heading": "# E13 – "
+    },
+    {
+      "id": "E14",
+      "title": "Keine neue Repair-Schicht",
+      "source_heading": "# E14 – "
+    },
+    {
+      "id": "E15",
+      "title": "Keine etuedenspezifische produktive Logik",
+      "source_heading": "# E15 – "
+    },
+    {
+      "id": "E16",
+      "title": "Kleine zentrale Aenderung vor grosser lokaler Reparatur",
+      "source_heading": "# E16 – "
+    },
+    {
+      "id": "E17",
+      "title": "Finaler Diff schlaegt urspruenglichen Plan",
+      "source_heading": "# E17 – "
+    },
+    {
+      "id": "E18",
+      "title": "Candidate nach Beweis einfrieren",
+      "source_heading": "# E18 – "
+    },
+    {
+      "id": "E19",
+      "title": "Gate-Fehler nicht einzeln wegoptimieren",
+      "source_heading": "# E19 – "
+    },
+    {
+      "id": "E20",
+      "title": "Gate nicht umgehen, sondern vorwegnehmen",
+      "source_heading": "# E20 – "
+    },
+    {
+      "id": "E21",
+      "title": "Negative Erfahrung braucht einen positiven Nachbarn",
+      "source_heading": "# E21 – "
+    },
+    {
+      "id": "E22",
+      "title": "Historie abstrahieren, nicht konservieren",
+      "source_heading": "# E22 – "
+    },
+    {
+      "id": "E23",
+      "title": "Fallwissen bleibt Fallwissen",
+      "source_heading": "# E23 – "
+    },
+    {
+      "id": "E24",
+      "title": "Korpus beweist Breite, nicht Ursache",
+      "source_heading": "# E24 – "
+    },
+    {
+      "id": "E25",
+      "title": "Strukturelle Aenderung ohne Klangaenderung bevorzugen, wenn fachlich passend",
+      "source_heading": "# E25 – "
+    },
+    {
+      "id": "E26",
+      "title": "Structural Carrier sind semantisch relevant",
+      "source_heading": "# E26 – "
+    },
+    {
+      "id": "E27",
+      "title": "Architekturgrenzen vor Implementierungsdetails",
+      "source_heading": "# E27 – "
+    },
+    {
+      "id": "E28",
+      "title": "Keine zweite Wahrheit fuer die Essenz",
+      "source_heading": "# E28 – "
+    },
+    {
+      "id": "E29",
+      "title": "Essenz muss handlungswirksam sein",
+      "source_heading": "# E29 – "
+    },
+    {
+      "id": "E30",
+      "title": "Cold-Start ist eine Projektanforderung",
+      "source_heading": "# E30 – "
+    },
+    {
+      "id": "E31",
+      "title": "Billige fail-closed Strukturchecks vor teuren Beweisen",
+      "source_heading": "# E31 – "
+    },
+    {
+      "id": "E32",
+      "title": "Corpus Independence ist eine Systemgrenze",
+      "source_heading": "# E32 – "
+    }
+  ],
+  "take_identity_lifecycle": {
+    "authority": "advisory_index_only_canonical_behavior_lives_in_take_bootstrap_and_kodex",
+    "identity": "version_revision_with_unique_payload_identity",
+    "accepted": "accepted_payload_sha_is_revision_bound_and_canonical_only_for_that_version_revision_identity",
+    "failed_candidate": "gate_apply_lock_reexec_or_interrupted_transaction_failure_must_become_rejected_only_after_safe_rollback_and_keep_recovery_provenance_until_ledger_commit",
+    "rejection_learning": "rejection_provenance_is_diagnostic_learning_evidence_only_and_may_be_abstracted_into_general_failure_patterns_but_must_never_become_parent_ranking_selector_writer_repair_or_release_authority",
+    "peer_conflict": "accepted_payload_wins_and_different_same_identity_peers_are_superseded; otherwise ambiguity_remains_fail_closed",
+    "recovery": "normal_failed_candidate_states_must_return_to_one_command_take_continuation_without_manual_zip_deletion_or_renaming",
+    "negative_check_preservation": "lifecycle_provenance_may_resolve_known_identity_states_but_must_not_replace_path_stable_fail_closed_ambiguity_checks_when_provenance_does_not_decide",
+    "public_recovery_order_preservation": "provenance_helpers_may_share_one_source_rollback_core_but_must_not_move_the_bound_public_recovery_before_source_mutation_edge_out_of_its_authorized_public_entrypoint",
+    "bound_source_witness_preservation": "path_callsite_order_fnv_and_literal_adversarial_witnesses_are_part_of_the_owner_contract_until_explicit_kodex_migration_and_functional_equivalence_does_not_authorize_relocation",
+    "kodex_owner_preflight": "before_packaging_a_kodex_or_bootstrap_change_inventory_all_build_adversarial_and_source_integrity_gates_that_consume_or_pin_each_changed_owner"
+  },
+  "musical_conservation_and_metric_semantics": {
+    "authority": "advisory_only_no_music_solver_playability_writer_or_proof_authority",
+    "conservation": "existing_sounding_music_wins_over_new_representation_unless_an_independently_authorized_music_mutation_is_proven",
+    "provenance": "known_source_and_attack_identity_moves_forward_and_is_not_reconstructed_from_pitch_onset_staff_voice_or_layout",
+    "metric_separation": "canonical_source_retention_arrangement_visible_retention_and_human_playability_are_distinct_claims",
+    "metric_evidence": "a_metric_becomes_evidence_only_with_explicit_meaning_denominator_and_calculation",
+    "playability_uncertainty": "uncertain_or_unbound_playability_evidence_alone_is_not_a_note_deletion_or_music_mutation_authority",
+    "owner_boundary": "each_writing_step_is_reconciled_against_its_own_owner_boundary"
+  },
+  "admission_rule": "Never infer permission from this bootstrap or from the essence. Resolve permission in the task-relevant canonical contracts, authorities and gates of the current repository.",
+  "drift_rule": "The JSON is an index/bootstrap only. Full rule rationale, failure form, preferred solution space and pre-patch questions live in the single essence markdown source and must not be duplicated here.",
+  "canonical_discovery_hints": {
+    "note": "Discovery hints only. The current repository source decides whether a path still owns the named contract; these paths grant no authority by being listed here.",
+    "take_change_control": "src/take_change_control.rs",
+    "semantic_capability_diff": "src/build_gate/semantic_capability_diff.rs",
+    "productive_write_path_scan": "src/build_gate/productive_write_path_scan.rs",
+    "structural_write_authority_root": "src/structural_write_authority/",
+    "identity_trust_anchor": "src/identity_gate_trust_anchor.rs",
+    "formal_green_contract": "src/build_gate/formal_green_contract.rs",
+    "managed_source_tree_definition": "src/build_gate/managed_source_tree_definition.rs",
+    "take_bootstrap": "src/bin/etuschlopf_take_bootstrap.rs",
+    "multi_revision_provenance": "src/build_gate/multi_revision_evasion.rs"
+  },
+  "integrity_readback": {
+    "class": "read_only_regression",
+    "normative": false,
+    "grants_authority": false,
+    "contract": "docs/assistant_memory/030_cold_start_readback_contract.md",
+    "test": "tests/architecture_essence_cold_start_readback.rs",
+    "proves": [
+      "bootstrap sources resolve in the current repository",
+      "rules_index resolves exactly E00 through E32 against the single essence markdown source",
+      "discovery hints resolve as repository paths without granting ownership or permission",
+      "repository-first cold-start ordering remains explicit",
+      "retirement guidance separates productive reachability capability surface destructive owners and contract witness roles",
+      "identity continuation states provenance carries known identity while readback proves persisted state",
+      "source snapshot and incoming take tree remain distinct artifacts with physical start resolved from current repository evidence",
+      "proof preservation states proof validity follows actual dependencies and validators bind to persisted bytes of their claimed representation epoch",
+      "AIC-1 path/version resolves and remains advisory-only/nonproductive; its complete symbol universe is assistant-side and one qualified symbol maps to exactly one inventory row",
+      "AIF-1 path/version resolves after AIC-1 and remains advisory-only/nonproductive; cache identity is source_snapshot_sha256, only mechanical repository facts may be reused, interpretation is never cached as truth, and the preferred execution uses one source pass plus one final workbook export"
+    ],
+    "does_not_prove": [
+      "architectural permission",
+      "current capability ownership",
+      "music correctness",
+      "release permission"
+    ]
+  },
+  "retirement_preflight": {
+    "authority": "advisory_only_current_repository_contracts_decide",
+    "separate_proofs": [
+      "productive_reachability_absent_or_cutover_proven",
+      "legacy_capability_surface_absent_including_keepalive_reexport_and_function_pointer_liveness",
+      "all_destructive_or_cleanup_owners_inventoried_including_launcher_and_custom_output_derived_paths",
+      "apparent_rollout_switch_checked_for_independent_single_owner_literal_or_source_witness_role"
+    ],
+    "rule": "retire_control_or_authority_only_after_its_distinct_product_capability_cleanup_and_contract_witness_roles_are_separated"
+  },
+  "identity_continuation": {
+    "authority": "advisory_only_no_identity_or_writer_authority",
+    "rule": "provenance_carries_known_identity_readback_proves_persisted_state",
+    "representation_epoch": "legitimate_representation_change_may_renew_state_seal_but_must_not_mint_known_identity_from_output",
+    "anti_pattern": "late_output_search_as_replacement_for_already_known_occurrence_or_owner_identity"
+  },
+  "proof_preservation": {
+    "authority": "advisory_only_no_proof_writer_or_gate_authority",
+    "rule": "proof_validity_follows_actual_dependencies_not_every_representation_boundary",
+    "effective_inputs": "compare_explicit_args_filesystem_environment_global_mutable_authority_epoch_trust_state_and_relevant_concurrency",
+    "persisted_epoch_binding": "validator_consumes_persisted_bytes_of_the_representation_epoch_it_claims_to_prove",
+    "independent_assurance": "retain_checks_that_add_distinct_evidence_failure_class_or_trust_boundary",
+    "anti_amplification": "do_not_reconstruct_full_proof_world_when_only_a_locally_authorized_dependency_changed",
+    "kodex_byte_identity": "whole_byte_identity_has_one_clear_trust_anchor_owner_sub_gates_validate_only_their_actual_semantic_dependencies_unless_distinct_assurance_is_proven"
+  },
+  "source_snapshot_vs_take_tree": {
+    "authority": "advisory_only_current_managed_tree_contract_decides",
+    "source_snapshot": "may_be_repository_complete_and_not_take_compatible",
+    "take_tree": "must_be_materialized_and_checked_separately_before_other_expensive_take_proofs",
+    "physical_start": "resolve_from_current_repository_and_take_gate_evidence_not_from_handover_revision_memory_alone"
+  },
+  "architecture_inventory_assistant_fast_path": {
+    "path": "docs/assistant_memory/architecture_inventory_assistant_fast_path_v1.json",
+    "profile_version": "AIF-1",
+    "class": "advisory_only",
+    "normative": false,
+    "productive_authority": [],
+    "runtime_implementation": "none",
+    "requires_aic": "AIC-1",
+    "cache_key": "source_snapshot_sha256",
+    "mechanical_index_only": true,
+    "interpretation_cache_as_truth": false,
+    "single_source_pass": "symbol_universe_plus_repository_token_call_index",
+    "preferred_workbook_export_count": 1
+  },
+  "selector_derivation": {
+    "authority": "advisory_index_of_executable_take_change_control_kodex",
+    "contract_version": "causal_class_first_v1",
+    "executable_owner": "src/take_change_control.rs",
+    "contract_path_pattern": "docs/selector_derivation_contract_*.md",
+    "identity_free_syntax_is_sufficient": false,
+    "error_class_rule": "define_from_causal_features_before_corpus_distribution_without_using_known_witness_to_choose_features",
+    "corpus_rule": "distribution_measures_or_falsifies_a_predefined_class_and_must_not_optimize_features_toward_known_witness_uniqueness",
+    "uniqueness_rule": "uniqueness_may_be_an_observed_result_never_a_design_goal",
+    "repair_scope_rule": "repair_scope_is_separate_and_may_narrow_only_for_authority_safety_materialization_or_invariant_reasons",
+    "repair_parent_rule": "repair_scope_contract_must_reference_an_unchanged_error_class_definition_contract_already_present_in_the_installed_parent",
+    "proxy_identity_rule": "target_conditioned_context_feature_conjunction_is_identity_even_without_project_or_measure_literals",
+    "definition_freeze_rule": "error_class_definition_must_be_accepted_without_new_selector_sensitive_code_before_any_classifier_or_repair_scope_may_reference_it",
+    "classification_parent_rule": "error_classification_contract_must_reference_an_unchanged_error_class_definition_contract_already_present_in_the_installed_parent",
+    "multiplicity_contract": "candidate_duplication_v1",
+    "independent_candidate_rule": "adding_an_independent_equivalent_candidate_must_not_change_the_existing_candidate_decision_or_redirect_authority_to_a_global_first_winner",
+    "scorewide_uniqueness_rule": "scorewide_len_eq_1_may_not_authorize_independent_local_music_writes",
+    "global_ranking_rule": "global_ranking_first_next_take1_or_max_actions1_may_not_select_between_independent_local_candidates",
+    "ambiguity_exception": "uniqueness_may_remain_fail_closed_only_inside_an_explicitly_proven_shared_conflict_or_transaction_group",
+    "duplication_probe": "Decision_a_given_a_equals_Decision_a_given_a_b_and_symmetrically_for_b_when_candidates_are_independent"
+  },
+  "multiplicity_invariance": {
+    "authority": "advisory_index_of_executable_take_change_control_kodex",
+    "contract_version": "candidate_duplication_v1",
+    "executable_owner": "src/take_change_control.rs",
+    "debt_inventory": "docs/assistant_memory/multiplicity_invariance_debt_inventory_v1.json",
+    "independent_candidate_rule": "local_decision_is_invariant_under_duplication_of_an_independent_equivalent_candidate",
+    "forbidden_as_write_authority": [
+      "scorewide_unique_candidate",
+      "global_first_or_next_after_ranking",
+      "take_1",
+      "max_actions_1_without_shared_conflict_proof",
+      "measure_order_tiebreak_between_independent_candidates"
+    ],
+    "legitimate_exception": "alternative_hypotheses_inside_one_explicitly_bound_conflict_or_transaction_group_may_require_uniqueness_fail_closed",
+    "legacy_policy": "inventory_and_retire_or_localize_existing_debt_do_not_blindly_broaden_caps_to_all_candidates"
+  },
+  "authority_retirement": {
+    "authority": "advisory_index_of_executable_take_change_control_and_semantic_capability_diff_kodex",
+    "contract_version": "authority_retirement_v1",
+    "executable_owners": [
+      "src/take_change_control.rs",
+      "src/build_gate/semantic_capability_diff.rs"
+    ],
+    "contract_path_pattern": "docs/authority_retirement_contract_*.md",
+    "change_class": "MusicMutation",
+    "writer_rule": "productive_writer_authority_may_only_disappear_or_writer_reachability_may_strictly_narrow",
+    "replacement_writer": "forbidden",
+    "candidate_class_change": "forbidden",
+    "selector_relation_change": "forbidden",
+    "target_selection_change": "forbidden",
+    "multiplicity_decision_change": "forbidden",
+    "calibration_threshold_change": "forbidden",
+    "causal_class_first_bypass": "forbidden",
+    "candidate_duplication_bypass": "forbidden",
+    "sequencing": "retire_writer_first_then_handle_read_only_selector_or_threshold_debt_in_separate_take"
+  }
+}
