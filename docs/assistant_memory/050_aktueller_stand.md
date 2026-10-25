@@ -5,7 +5,7 @@ Lifecycle-/Acceptance-Belege und die Runtime-Belege des Exports, nicht dieser Te
 
 ## Jetzt
 
-- Angenommen bis r1507 / 0.10.1839 (Kandidat 2a2ce714...): 10/10 dunkelgruen,
+- Angenommen bis r1511 / 0.10.1839 (6aaf1fd7...): 10/10 dunkelgruen,
   2465 Tests bestanden, 0 fehlgeschlagen, 1 ignoriert (15 Testprogramme); Build/Clippy Exit 0.
   Alle MuseScore-Aufrufe ohne `-f`,
   erste Variante erfolgreich (`VariantsAttempted 1/7; FailedBeforeSuccess 0`).
@@ -160,3 +160,58 @@ r1508 installs license notices and exact third-party license texts under docs/, 
 The two additional Cargo resolutions are audit snapshots only, not installed component/runtime locks.
 All Rust source files except the required change-manifest text, qualified component bytes, root Cargo.toml/Cargo.lock, gates and music logic remain unchanged.
 Native acceptance and the fresh Windows full-corpus comparison remain pending. See ../license_take_r1508.md.
+
+
+## r1509 - RegisterGestureContextDefinition (Stage A candidate)
+
+Parent r1508 accepted: `2b5b26a70bf1e4807a56ad25bea036fab31b2854d063de297712637df0450144`.
+Native 2465 passed, 0 failed, 1 ignored; build/clippy green; 10/10 corpus.
+All 20 XMLs byte-identical and all 50 PDF pages pixel-identical at 144 dpi to r1507.
+r1509 freezes only the causal definition of an octave-display choice omitting independently bound rhythmic-gesture context, and the work/acceptance plan.
+The actual pre-K00 group evidence and its phase binding must be established before productive repair; final PDF beams are not retroactive authority.
+All Rust sources, musical decisions, gates, tests and Cargo files remained unchanged. Native r1509 accepted; see the r1510 parent record below.
+See ../register_gesture_work_plan_r1509.md and ../selector_derivation_contract_register_gesture_context.md.
+
+
+## r1510 - RegisterPlannerInputReadback (RefactorOnly candidate)
+
+Parent r1509 accepted: `e16ca7354500e6076ea9b701ec2d6f51ef7cb7db297756857b9bc745e92bf783`.
+Export: native 2465 passed, 0 failed, 1 ignored; build/clippy 0; corpus 10/10; final exit 0.
+r1510 captures the exact existing pre-K00 planner input into the current result report,
+with byte count, SHA-256 and recoverable hex. No musical selector or writer changes.
+An endpoint replay exposed segmentation and the four-object eligibility rule as a
+serious alternative explanation; it does not prove the real pre-K00 cause.
+Essence E01 gains two advisory sentences on alternatives and falsifying experiments.
+Native r1510 accepted; see the r1511 parent record below. See ../register_planner_input_readback_r1510.md.
+
+
+## r1511 - RegisterCommonSpanExclusionDefinition (Stage A candidate)
+
+Parent r1510 accepted: `a2612a9712bdc01d6345c203242acfc12d16e706253e8266bcca4f241eb34187`.
+Export: 2469 passed, 0 failed, 1 ignored; build/clippy passed; corpus 10/10; final exit 0.
+All 20 XMLs were byte-identical to r1509; all 50 PDF pages matched at 144 dpi.
+All 10 exact captured inputs replayed their native plan hash through r1510 source.
+The blanket removal of pitch-only segment boundaries failed an independent synthetic
+counterexample: two existing octave spans became one, leaving a high island unserved.
+A read-only guarded comparison passed 13 synthetic expectations, including coverage,
+strict whole-context cost, pause, incoming-tie, overlap, scaling and independent duplication.
+This defines a different cause from the accepted r1509 gesture-context class.
+r1511 freezes that class only. Rust sources and all musical decisions remain unchanged;
+no classifier or repair is installed. Native r1511 accepted; see the r1512 parent record below.
+See ../selector_derivation_contract_register_common_span_exclusion.md.
+
+
+## r1512 - RegisterCommonSpanClosedComparison (MusicMutation candidate)
+
+Parent r1511 accepted: `6aaf1fd728c6000a41f51b085628c1127793b7584fc3bd36213fb8dafe81965b`.
+Export: 2469 passed, 0 failed, 1 ignored; build/clippy passed; corpus 10/10; final exit 0.
+All 20 XMLs remain byte-identical to r1510. r1511 definition bytes remain unchanged.
+r1512 compares a common octave window with the entire frozen baseline inside closed
+pitch-only components. Baseline octave coverage is mandatory within window search;
+strict whole-context improvement, anchor/tie safety and topology remain required.
+Actual input replay: all 10 baseline hashes match; 16 logical replacements in 7 pieces.
+Lower-clef comparison authority remains explicitly unresolved; its baseline is preserved.
+Register tests: 73 local real-module cases passed. A separate real-writer/receipt/adoption
+binary integration probe uses synthetic test genesis. Windows/native corpus acceptance,
+actual downstream output comparison and new PDF readback remain pending.
+See ../register_common_span_closed_comparison_r1512.md.

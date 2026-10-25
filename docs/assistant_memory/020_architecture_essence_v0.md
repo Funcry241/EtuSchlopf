@@ -148,6 +148,8 @@ Den Owner identifizieren, der den benötigten strukturellen Zustand unzulässig 
 
 Welcher erste produktive Write erzeugt den ungültigen Zustand?
 
+Welche ernsthafte Alternativerklärung erklärt denselben Endbefund, und welcher kleinste Versuch würde die bevorzugte Ursachenannahme widerlegen? Vor einem zusätzlichen Transportpfad prüfen, ob die betroffene Entscheidung die verlorene Information tatsächlich benötigt.
+
 **Harter Bezug**
 
 Keine neue Repair-Schicht. Keine neue **nichtkanonische** Late-Writer-Autorität; eine fachlich kanonische Materialisierung ist nicht allein wegen ihrer späten Pipelineposition verboten.

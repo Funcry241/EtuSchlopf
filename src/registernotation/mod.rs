@@ -6,6 +6,8 @@
 //! als typisierten Sichtmaterialisierungsauftrag; die MusicXML-Schreibbefugnis bleibt beim
 //! bestehenden zentralen StructuralWriteAuthority-Writer.
 
+mod gemeinsame_spanne;
+
 use crate::model::{EventKind, Score};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
@@ -122,6 +124,7 @@ pub(crate) enum RegisterPlanGrund {
     KlingendeZwischeninselKontinuitaet,
     LokaleLesbarkeitsspanne,
     UnteresSystemSchluesselvorrang,
+    GemeinsameAbschnittsAlternative,
 }
 
 impl RegisterPlanGrund {
@@ -135,6 +138,7 @@ impl RegisterPlanGrund {
             Self::KlingendeZwischeninselKontinuitaet => "KlingendeZwischeninselKontinuitaet",
             Self::LokaleLesbarkeitsspanne => "LokaleLesbarkeitsspanne",
             Self::UnteresSystemSchluesselvorrang => "UnteresSystemSchluesselvorrang",
+            Self::GemeinsameAbschnittsAlternative => "GemeinsameAbschnittsAlternative",
         }
     }
 }
@@ -273,10 +277,13 @@ struct RegisternotationsBeweis {
     widerspruechliche_ueberlappungen: usize,
     nicht_klassifizierte_abweichungen: usize,
     plan_fingerabdruck: String,
+    basis_plan_fingerabdruck: String,
+    gemeinsame_spannen: Vec<gemeinsame_spanne::Vergleich>,
 }
 
 #[derive(Debug, Clone, Default)]
 struct Sitzung {
+    eingang: Option<crate::audit_only::register_planner_input::InputSnapshot>,
     beweis: Option<Result<RegisternotationsBeweis, String>>,
     materialisierung: Option<RegisternotationsMaterialisierungsZeugnis>,
 }
@@ -287,6 +294,12 @@ fn sitzung() -> &'static Mutex<Sitzung> {
     SITZUNG.get_or_init(|| Mutex::new(Sitzung::default()))
 }
 
+#[cfg(test)]
+pub(crate) fn sperre_fuer_tests() -> std::sync::MutexGuard<'static, ()> {
+    static SPERRE: Mutex<()> = Mutex::new(());
+    SPERRE.lock().unwrap_or_else(|vergiftet| vergiftet.into_inner())
+}
+
 pub(crate) fn loesche() {
     let mut zustand = sitzung()
         .lock()
@@ -295,12 +308,14 @@ pub(crate) fn loesche() {
 }
 
 pub(crate) fn beobachte_vor_k00(xml: &str) {
+    let eingang = crate::audit_only::register_planner_input::InputSnapshot::capture(xml);
     let beweis = crate::musicxml::parse_musicxml(xml)
         .map_err(|fehler| format!("Score-Projektion vor K00 fehlgeschlagen: {fehler:#}"))
         .and_then(|score| analysiere_score(&score));
     let mut zustand = sitzung()
         .lock()
         .unwrap_or_else(|vergiftet| vergiftet.into_inner());
+    zustand.eingang = Some(eingang);
     zustand.beweis = Some(beweis);
 }
 
@@ -371,31 +386,17 @@ fn analysiere_score(score: &Score) -> Result<RegisternotationsBeweis, String> {
     // This only refuses an already planned display span. It neither joins ties
     // nor invents source identity, a new boundary or an alternative register span.
     plaene.retain(|plan| oktavspanne_hat_ueberbindungsfreie_grenzen(plan, &ereignisse));
+    sortiere_plaene(&mut plaene);
+    let basis_plan_fingerabdruck = plan_fingerabdruck(&plaene);
+    let (mut plaene, gemeinsame_spannen) = gemeinsame_spanne::select_closed_common_spans(
+        &systemfolgen, &grenzen, &ereignisse, plaene,
+    );
     let klingende_zwischeninsel_kontinuitaetsplaene = plaene.iter()
         .filter(|plan| plan.gruende.contains(&RegisterPlanGrund::KlingendeZwischeninselKontinuitaet))
         .count();
     let kurze_randinsel_kontinuitaetsplaene = 0usize;
 
-    plaene.sort_by(|links, rechts| {
-        (
-            &links.teil,
-            links.beginn_takt_ordinal,
-            links.ende_takt_ordinal,
-            &links.system,
-            links.beginn,
-            links.ende,
-            links.darstellung,
-        )
-            .cmp(&(
-                &rechts.teil,
-                rechts.beginn_takt_ordinal,
-                rechts.ende_takt_ordinal,
-                &rechts.system,
-                rechts.beginn,
-                rechts.ende,
-                rechts.darstellung,
-            ))
-    });
+    sortiere_plaene(&mut plaene);
 
     let mut abweichungsgruende = BTreeMap::new();
     let mut nicht_klassifizierte_abweichungen = 0usize;
@@ -473,7 +474,32 @@ fn analysiere_score(score: &Score) -> Result<RegisternotationsBeweis, String> {
         widerspruechliche_ueberlappungen: topologie.widerspruechliche_ueberlappungen,
         nicht_klassifizierte_abweichungen,
         plan_fingerabdruck,
+        basis_plan_fingerabdruck,
+        gemeinsame_spannen,
     })
+}
+
+fn sortiere_plaene(plaene: &mut [RegisterNotationPlan]) {
+    plaene.sort_by(|links, rechts| {
+        (
+            &links.teil,
+            links.beginn_takt_ordinal,
+            links.ende_takt_ordinal,
+            &links.system,
+            links.beginn,
+            links.ende,
+            links.darstellung,
+        )
+            .cmp(&(
+                &rechts.teil,
+                rechts.beginn_takt_ordinal,
+                rechts.ende_takt_ordinal,
+                &rechts.system,
+                rechts.beginn,
+                rechts.ende,
+                rechts.darstellung,
+            ))
+    });
 }
 
 fn kanonische_taktzeiten(score: &Score) -> Result<KanonischeTaktzeitAchse, String> {
@@ -1146,10 +1172,25 @@ fn plane_segment_optimal_zusammenhaengend(
     segment: &[&RegisternotationsEreignis],
     grenzen: &[RegisternotationsGrenzenEvidenz],
 ) -> Option<RegisterNotationPlan> {
+    plane_segment_mit_pflichtabdeckung(schluessel, segment, grenzen, &BTreeSet::new())
+}
+
+fn plane_segment_mit_pflichtabdeckung(
+    schluessel: &SystemFolgeSchluessel,
+    segment: &[&RegisternotationsEreignis],
+    grenzen: &[RegisternotationsGrenzenEvidenz],
+    pflicht: &BTreeSet<RegisternotationsEreignisId>,
+) -> Option<RegisterNotationPlan> {
     if segment.len() < MINDEST_TONOBJEKTE {
         return None;
     }
 
+    let pflicht_indizes = segment.iter().enumerate()
+        .filter(|(_, ereignis)| pflicht.contains(&ereignis.id))
+        .map(|(index, _)| index).collect::<Vec<_>>();
+    if pflicht_indizes.len() != pflicht.len() {
+        return None;
+    }
     let schnitte = lokale_sichere_schnittindizes(segment);
     if schnitte.len() < 2 {
         return None;
@@ -1218,6 +1259,11 @@ fn plane_segment_optimal_zusammenhaengend(
     let mut bestes = None::<OptimalesSpanfenster>;
     for (rechter_schnitt_index, roh_rechts) in schnitte.iter().copied().enumerate().skip(1) {
         for roh_links in schnitte[..rechter_schnitt_index].iter().copied() {
+            if pflicht_indizes.first().is_some_and(|index| roh_links > *index)
+                || pflicht_indizes.last().is_some_and(|index| roh_rechts <= *index)
+            {
+                continue;
+            }
             let strukturelle_anzahl = roh_rechts.saturating_sub(roh_links);
             if strukturelle_anzahl < MINDEST_TONOBJEKTE
                 || sichtbare[roh_rechts].saturating_sub(sichtbare[roh_links]) == 0
@@ -2286,6 +2332,22 @@ pub(crate) fn beobachte_materialisierung(
     Ok(())
 }
 
+pub(crate) fn fuege_eingangsbeobachtung_hinzu(out: &mut String) {
+    let zustand = sitzung()
+        .lock()
+        .unwrap_or_else(|vergiftet| vergiftet.into_inner())
+        .clone();
+    match zustand.eingang {
+        Some(eingang) => eingang.append_report(out),
+        None => out.push_str("InputCapture: NOT_OBSERVED.\n"),
+    }
+    if let Some(Ok(beweis)) = zustand.beweis {
+        let _ = writeln!(out, "InputPlanSha256: {}.", beweis.plan_fingerabdruck);
+        let _ = writeln!(out, "InputBaselinePlanSha256: {}.", beweis.basis_plan_fingerabdruck);
+        gemeinsame_spanne::fuege_bericht_hinzu(out, &beweis.gemeinsame_spannen);
+    }
+}
+
 pub(crate) fn fuege_berichtsteil_hinzu(out: &mut String) {
     let zustand = sitzung()
         .lock()
@@ -3336,6 +3398,32 @@ mod pruefungen {
                 assert!(oktavspanne_hat_ueberbindungsfreie_grenzen(&plan, &[unabhaengig]));
             }
         }
+    }
+
+    #[test]
+    fn eingangsbeobachtung_bindet_plan_und_verwirft_alten_sitzungszustand() {
+        let _sperre = sperre_fuer_tests();
+        let note = "<note><pitch><step>C</step><octave>7</octave></pitch><duration>1</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>";
+        let xml = format!("<score-partwise><part-list><score-part id=\"P\"><part-name>Piano</part-name></score-part></part-list><part id=\"P\"><measure number=\"SyntheticAlpha\"><attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>{}</measure></part></score-partwise>", note.repeat(4));
+        let direkt = analysiere_score(&crate::musicxml::parse_musicxml(&xml).unwrap()).unwrap();
+        assert!(!direkt.plaene.is_empty());
+        loesche();
+        beobachte_vor_k00(&xml);
+        let vorher = format!("{:?}", materialisierungsauftrag().unwrap());
+        let mut out = String::new();
+        fuege_eingangsbeobachtung_hinzu(&mut out);
+        assert!(out.contains(&format!("InputSha256: {}.", crate::sha256::hex(xml.as_bytes()))));
+        assert!(out.contains(&format!("InputPlanSha256: {}.", direkt.plan_fingerabdruck)));
+        assert_eq!(vorher, format!("{:?}", materialisierungsauftrag().unwrap()));
+        beobachte_vor_k00("<broken");
+        out.clear();
+        fuege_eingangsbeobachtung_hinzu(&mut out);
+        assert!(out.contains(&format!("InputSha256: {}.", crate::sha256::hex(b"<broken"))));
+        assert!(!out.contains("InputPlanSha256:"));
+        loesche();
+        out.clear();
+        fuege_eingangsbeobachtung_hinzu(&mut out);
+        assert_eq!(out, "InputCapture: NOT_OBSERVED.\n");
     }
 
 }

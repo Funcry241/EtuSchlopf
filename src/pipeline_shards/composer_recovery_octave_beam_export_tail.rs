@@ -875,6 +875,7 @@ fn xml_kind_dauer(kind: roxmltree::Node<'_, '_>) -> i64 {
 mod registernotations_besitzumschaltung_tests {
     use super::*;
 
+
     fn richtung(
         einsatz: i64,
         art: RegisternotationsGrenzart,
@@ -4247,3 +4248,7 @@ mod behind_bars_beam_single_owner_tests {
         ));
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/register_common_span_owner.rs"]
+mod register_common_span_owner_tests;

@@ -53,3 +53,5 @@ pub(crate) mod voice_run_collision_origin;
 pub(crate) mod import_channel_profile_readback;
 
 pub(crate) mod panic_origin_observation;
+
+pub(crate) mod register_planner_input;

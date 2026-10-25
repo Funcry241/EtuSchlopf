@@ -123,6 +123,12 @@ fn append_repair_loop_invocation_evidence_body(
     // projection is forced through the exact-heading section ledger; retired historical
     // sections cannot recreate release gates by being absent from the standard report.
     text.project_owned_section(
+        "register_planner_input",
+        crate::audit_only::register_planner_input::SECTION,
+        crate::audit_only::register_planner_input::SECTION_RULE,
+        crate::registernotation::fuege_eingangsbeobachtung_hinzu,
+    )?;
+    text.project_owned_section(
         "final_chord_visible_rest_interval_epoch_witness_audit",
         crate::audit_only::final_chord_visible_rest_interval_epoch_witness_audit::SECTION,
         crate::audit_only::final_chord_visible_rest_interval_epoch_witness_audit::SECTION_RULE,
