@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "role": "public_read_only_summary_not_runtime_authority",
+  "review_date": "2026-10-25",
+  "revision": "r1512",
+  "version": "0.10.1839",
+  "accepted_take_sha256": "ea977b4a07e176a72f046b256cb0a4258df678241f32ecd491822ff05c5ed3e8",
+  "accepted_source_snapshot_zip_sha256": "c86e1c8c32be25c761da5c71ca9b7a6e748faa77a07ac28e4ecbf32af09f14cd",
+  "native_acceptance_record_sha256": "cb12fbf1e1f6928f93c9a99a954fa2f20dc75039d4d7bfbfa1091dccb1751e5a",
+  "native": {
+    "tests_passed": 2482,
+    "tests_failed": 0,
+    "tests_ignored": 1,
+    "build_exit": 0,
+    "clippy_exit": 0,
+    "final_exit": 0,
+    "full_corpus": true,
+    "projects_passed": 10,
+    "projects_expected": 10,
+    "renderer_outcome": "passed"
+  },
+  "readback": {
+    "xml_files_reviewed": 20,
+    "xml_unchanged_projects": [
+      1,
+      7,
+      8
+    ],
+    "non_octave_changes": "E4 staff-distance layout metadata at measures 7 and 9 only",
+    "logical_common_span_replacements": 16,
+    "changed_projects": 7,
+    "pages_before": 50,
+    "pages_after": 50,
+    "pixel_changed_pages": 16,
+    "e4_max_ledger_before": 5,
+    "e4_max_ledger_after": 3,
+    "changed_visible_note_objects": 90,
+    "new_objects_over_three_ledger_lines": 0
+  },
+  "runtime_manifest_file_count": 505,
+  "runtime_manifest": "accepted_runtime_sha256.tsv",
+  "limits": [
+    "Private corpus inputs and full output bundle are not published.",
+    "Summary is an editorial readback of one native run, not a signature or a whole-program proof.",
+    "Musical and human-playability questions remain open.",
+    "The public documentation overlay is distinct from the accepted Take."
+  ],
+  "source_import_commit": "dff05fefb66e09916f8097922bceeea5f4930fd3"
+}

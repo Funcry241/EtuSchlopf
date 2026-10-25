@@ -1,18 +1,40 @@
 # EtuSchlopf
 
+**EtuSchlopf erzeugt aus Projektmaterial eine Klavierfassung und prüft die
+zulässigen Verarbeitungsschritte bis zu MusicXML, PDF und Ergebnisbericht.**
+Die Implementierung ist Rust-basiert; der gepflegte Einstieg ist der
+Windows-Launcher `run.cmd`.
+
+Das Projekt hat zwei eng verbundene Gegenstände:
+
+- **Musik:** Ereignisse, Stimmen, Hände, Rhythmus, Pausen, Balken, Register und
+  Layout müssen zu einer lesbaren Klavierdarstellung zusammenfinden.
+- **Entwicklung mit KI:** Vorschläge werden an kausalen Fehlerklassen,
+  Zuständigkeiten, erhaltenen Identitäten und ausführbaren Kontrollen gemessen.
+  Ein plausibler Patch oder ein überzeugender KI-Text reicht nicht als Beleg.
+
+Nach Angabe des Projektinhabers wird der Code vollständig mit KI-Assistenten
+erzeugt. Zielsetzung, Gegenprüfung und Abnahme liegen beim Menschen. Die im Repository hinterlegten Verträge, die Architektur-Essenz
+und der Kaltstartpfad machen die Arbeit über Modell- und Gesprächswechsel hinweg
+nachvollziehbar. Gates sichern viele konkrete Grenzen; sie sind selbst endliche
+Programme und bleiben Gegenstand von Gegenbeispielen und Prüfung.
+
+**Zum Verständnis des Projekts:**
+
+- [Was tatsächlich implementiert ist, einschließlich SchlopfFormel und Mathematik](docs/IMPLEMENTED_FOUNDATIONS.md)
+- [Forschungsbezüge und ihre genaue Rolle](docs/RESEARCH_CONTEXT.md)
+- [Dokumentierte Abnahme von r1512](docs/evidence/r1512/README.md)
+- [Kaltstart ohne Gesprächsgedächtnis](docs/assistant_memory/000_start_here.md)
+
+**Geprüfter Stand am 25.10.2026:** r1512, Paketversion 0.10.1839; 2.482 Tests
+bestanden, ein Test ignoriert, Build/Clippy erfolgreich, privater Evaluationskorpus
+10/10. Das sind Belege dieses konkreten nativen Laufs, keine universelle
+Spielbarkeitsgarantie und kein öffentlich vollständig reproduzierbarer Korpustest.
+Das Notenbild bleibt in Arbeit. Der Git-Stand enthält die angenommene r1512-Quelle
+und eine gesonderte öffentliche Dokumentationsschicht; Git-Commit und Take-Annahme
+sind unterschiedliche Nachweise.
+
 *Zwischen Ereignis und Zeichen liegt eine Entscheidung.*
-
-EtuSchlopf untersucht, unter welchen Bedingungen musikalische Ereignisse eine
-lesbare Gestalt annehmen dürfen. Es empfängt Spuren, bildet Zusammenhänge und
-verlangt von einer Veränderung mehr als ein plausibles Ergebnis: eine geklärte
-Herkunft, eine zuständige Instanz und einen überprüfbaren Übergang.
-
-Die sichtbare Oberfläche ist eine Klavierfassung. Darunter arbeitet ein System
-aus Beobachtung, Zuständigkeit, Identität und begrenzten Schreibrechten. Manche
-seiner Teile dürfen sehen. Andere dürfen vorschlagen. Wenige dürfen schreiben.
-Wer schreibt, hinterlässt einen Beleg.
-
-Das Repository enthält den Maschinenraum. Die Musik muss man selbst mitbringen.
 
 ## Die Eingänge
 

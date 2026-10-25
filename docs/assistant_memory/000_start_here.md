@@ -1,5 +1,15 @@
 # START HERE – EtuSchlopf Architecture Essence Bootstrap
 
+## Öffentlicher Quellstand und aktueller Laufbeleg
+
+Die öffentliche Dokumentationsschicht verweist auf den angenommenen r1512-Lauf:
+[Abnahme und Grenzen des Nachweises](../evidence/r1512/README.md).
+Die im angenommenen Take eingefrorene Datei `050_aktueller_stand.md` enthält noch
+seine damalige Kandidatennotiz. Für die spätere Annahme ist der verlinkte native
+Acceptance-Beleg maßgeblich; der historische Kurzstand wird nicht nachträglich
+umgeschrieben. Öffentliche Erläuterungen sind keine neue Runtime-Authority.
+
+
 Diese Datei zuerst lesen, wenn ein neuer Chat, Thread oder Bearbeiter ohne verlaessliche Projektgeschichte mit EtuSchlopf beginnt.
 
 Zuerst den kompakten Projektstatus in [050_aktueller_stand.md](050_aktueller_stand.md)
