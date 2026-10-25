@@ -1,6 +1,6 @@
 kind=EtuSchlopfTake
 version=0.10.1839
-revision=r1520
-name=OttavaVerticalReflowProof
-parent_revision=r1518
-change_class=GovernedChange
+revision=r1521
+name=ProjectLocalEvidenceAndCompleteReadme
+parent_revision=r1520
+change_class=OutcomeProjection

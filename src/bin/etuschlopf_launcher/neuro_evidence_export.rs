@@ -7,8 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use zip::write::FileOptions;
 
-const NEURO_EVIDENCE_OUTPUT_DIR: &str =
-    r"C:\Users\wmair\Documents\Programmieren\EtuSchlopfTransfer";
+const NEURO_EVIDENCE_OUTPUT_DIR: &str = "target/etuschlopf_neuro_evidence";
 const ARTIFACT_KIND: &str = "etuschlopf_neuro_evidence";
 const SCHEMA_VERSION: u32 = 2;
 const POPULATION_SCOPE: &str = "qualified_key_change_candidates_v1";
@@ -159,10 +158,10 @@ pub(super) fn publish_neuro_evidence_for_successful_normal_run(
         format!("Neuro-Evidence: Source-Identity nicht bestimmbar: {error}")
     })?;
     let stamp = utc_stamp(SystemTime::now())?;
-    let output_dir = PathBuf::from(NEURO_EVIDENCE_OUTPUT_DIR);
+    let output_dir = project_root.join(NEURO_EVIDENCE_OUTPUT_DIR);
     fs::create_dir_all(&output_dir).map_err(|error| {
         format!(
-            "Neuro-Evidence: Transferordner nicht anlegbar {}: {error}",
+            "Neuro-Evidence: Evidence-Verzeichnis nicht anlegbar {}: {error}",
             output_dir.display()
         )
     })?;
@@ -344,7 +343,7 @@ pub(super) fn publish_neuro_evidence_for_successful_corpus_run(
                     .to_string(),
             );
         }
-        publish_prepared_corpus(&prepared, &staged_commit)
+        publish_prepared_corpus(project_root, &prepared, &staged_commit)
     })();
 
     match staged_result {
@@ -692,13 +691,14 @@ fn validate_corpus_commit_bytes(
 }
 
 fn publish_prepared_corpus(
+    project_root: &Path,
     prepared: &[PreparedCorpusArchive],
     staged_commit: &Path,
 ) -> Result<PathBuf, String> {
-    let output_dir = PathBuf::from(NEURO_EVIDENCE_OUTPUT_DIR);
+    let output_dir = project_root.join(NEURO_EVIDENCE_OUTPUT_DIR);
     fs::create_dir_all(&output_dir).map_err(|error| {
         format!(
-            "Neuro-Evidence-Corpus: Transferordner nicht anlegbar {}: {error}",
+            "Neuro-Evidence-Corpus: Evidence-Verzeichnis nicht anlegbar {}: {error}",
             output_dir.display()
         )
     })?;
@@ -2013,6 +2013,78 @@ mod tests {
             corpus_run_id: "obs-0.10.1821-1-2-0",
             created_at_utc: "2026-08-15T19:30:00Z",
         }
+    }
+
+    #[test]
+    fn normal_publication_is_isolated_between_project_roots() {
+        let root = test_zip_path("project_roots").with_extension("");
+        let first = root.join("Project Alpha");
+        let second = root.join("Project Beta");
+        let mut published = Vec::new();
+        for project_root in [&first, &second] {
+            fs::create_dir_all(project_root).expect("project root");
+            fs::write(project_root.join("ZIP_KIND.txt"), "revision=r9000\n")
+                .expect("revision");
+            let report = project_root.join("Synthetic Project.result.txt");
+            fs::write(&report, SAMPLE_REPORT).expect("synthetic report");
+            let path = publish_neuro_evidence_for_successful_normal_run(
+                project_root,
+                &report,
+                "Synthetic Project",
+                "0.10.1839",
+                "synthetic-local-run",
+                0,
+            )
+            .expect("publish")
+            .expect("successful run has evidence");
+            assert_eq!(path.parent(), Some(project_root.join("target/etuschlopf_neuro_evidence").as_path()));
+            assert_eq!(read_retention_evidence_identity(&path).expect("closed evidence").project_id,
+                "Synthetic Project");
+            published.push(path);
+        }
+        fs::remove_dir_all(&first).expect("remove first project");
+        assert!(published[1].is_file(), "the other project's evidence remains independent");
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn corpus_publication_uses_its_project_root_and_preserves_foreign_files() {
+        let root = test_zip_path("local_corpus").with_extension("");
+        let project_root = root.join("Project Alpha");
+        let stage = project_root.join("target/staging");
+        fs::create_dir_all(&stage).expect("staging");
+        let report = stage.join("synthetic.result.txt");
+        fs::write(&report, SAMPLE_REPORT).expect("synthetic report");
+        let stamp = "20260815T193000_000000000Z";
+        let name = format!("etuschlopf_neuro_evidence_{stamp}_01.zip");
+        let archive = prepare_project_archive(
+            &report,
+            "Synthetic Project",
+            sample_provenance(),
+            name.clone(),
+            stage.join(&name),
+        ).expect("prepare closed archive");
+        let commit = corpus_commit_json(
+            std::slice::from_ref(&archive),
+            "0.10.1821-r02",
+            "v0.10.1821:0123456789abcdef",
+            "synthetic-local-run",
+            "2026-08-15T19:30:00Z",
+        );
+        let staged_commit = stage.join(format!("etuschlopf_neuro_corpus_commit_{stamp}.json"));
+        fs::write(&staged_commit, &commit).expect("staged commit");
+        let output = project_root.join("target/etuschlopf_neuro_evidence");
+        fs::create_dir_all(&output).expect("output");
+        let foreign = output.join("user-notes.txt");
+        fs::write(&foreign, "keep").expect("foreign file");
+        let published = publish_prepared_corpus(&project_root, &[archive], &staged_commit)
+            .expect("publish corpus artifacts");
+        assert_eq!(published.parent(), Some(output.as_path()));
+        assert_eq!(fs::read_to_string(&published).expect("commit readback"), commit);
+        assert_eq!(read_retention_evidence_identity(&output.join(name)).expect("closed evidence").project_id,
+            "Synthetic Project");
+        assert_eq!(fs::read_to_string(foreign).expect("foreign file remains"), "keep");
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]

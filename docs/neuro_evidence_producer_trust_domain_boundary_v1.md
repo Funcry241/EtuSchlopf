@@ -2,10 +2,10 @@
 
 EtuSchlopf erzeugt nach einem erfolgreichen normalen Projektlauf ein strikt separates Machine-Evidence-Artefakt fuer NeuroSchlopf r40. Der Producer wird direkt vom normalen Launcherabschluss aufgerufen; das Assistant-Export-Modul ist weder Parent noch Datenquelle des Machine-Evidence-Producers.
 
-Ziel:
+Aktueller Speicherort ab r1521, relativ zum jeweiligen Projekt-Root:
 
 ```text
-C:\Users\wmair\Documents\Programmieren\EtuSchlopfTransfer
+target/etuschlopf_neuro_evidence/
 ```
 
 Dateiname:
@@ -40,7 +40,17 @@ Ein fehlerhafter oder unvollstaendiger Evidence-Export wird nicht publiziert. Er
 
 Human Context und Machine Evidence bleiben verschiedene Artefakte; `assistant_export_*.zip` wird niemals in das Neuro-Evidence-ZIP aufgenommen.
 
-Seit v0.10.1839 r61 gilt zusaetzlich fuer das Verzeichnis selbst: `EtuSchlopfTransfer` ist die Machine-Evidence-Domain. Der Assistant-Export publiziert dort keine Archivkopie und besitzt keinen Transfer-Writer mehr.
+Seit v0.10.1839 r61 bleibt das Evidence-Verzeichnis ausschliesslich der
+Machine-Evidence-Domain vorbehalten. Der Assistant-Export publiziert dort
+keine Archivkopie und besitzt keinen Transfer-Writer. Seit r1521 wird der
+Speicherort aus dem aktuellen Projekt-Root abgeleitet; Einzelprojekt- und
+Korpuspublikation verwenden denselben lokalen Ordner. Es gibt keinen
+privaten absoluten Standardpfad und keinen Rueckfall auf ein externes
+Transferverzeichnis. Die bestehende Retention bleibt auf das neue lokale
+Verzeichnis begrenzt. Alte externe Dateien werden weder migriert noch
+geloescht. Die oben beschriebene Schema-1-Payload ist historisch; der aktuelle
+Producer verwendet Schema 2 und behaelt dessen bestehende Payload- und
+Korpus-Commit-Vertraege unveraendert bei.
 
 Trust-Domain-Topologie:
 

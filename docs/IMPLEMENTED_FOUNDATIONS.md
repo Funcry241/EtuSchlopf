@@ -1,6 +1,6 @@
 # Was EtuSchlopf tatsächlich implementiert
 
-Stand: angenommene r1520-Quelle plus öffentliche Erläuterungen, 25.10.2026.
+Stand: angenommene r1521-Quelle plus öffentliche Erläuterungen, 25.10.2026.
 Diese Beschreibung ist ein Wegweiser zum Code. Sie ersetzt keinen Contract,
 keine fachliche Authority und keinen Laufbeleg.
 
@@ -164,6 +164,22 @@ Einstiege: [Reader-Policy](../src/registernotation/reader_policy.rs),
 [Begründung des vertikalen Nachweises](ottava_vertical_reflow_proof_r1520.md) und
 [öffentliche Abnahmebelege](evidence/r1520/README.md).
 
+## Aktueller Bedien- und Exportstand: r1521
+
+r1521 dokumentiert sämtliche vorhandenen Launcher- und Programmoptionen samt
+Aliasen, Standardwerten und der lokalen Watch-GUI. Der fest eingebaute private
+Transferpfad entfällt: Einzelprojekt- und Korpusexport legen Machine-Evidence
+unter `target/etuschlopf_neuro_evidence/` im jeweiligen Projektordner ab.
+Container, Payload, Commit-Vertrag und Retention bleiben erhalten; alte externe
+Dateien werden weder verschoben noch gelöscht.
+
+Der native Windows-Lauf hat r1521 angenommen: 2.513 Tests bestanden,
+0 fehlgeschlagen, 1 ignoriert; Build und Strict Clippy erfolgreich; privater
+Korpus 10/10. Alle 20 Master-/Render-XML-Dateien sind gegenüber dem angenommenen
+r1520 bytegleich. Für die erneut erzeugten PDFs wird hier keine Pixelgleichheit
+behauptet. Die [Abnahmebelege](evidence/r1521/README.md) und die
+[Änderungsbeschreibung](project_local_evidence_r1521.md) halten den Umfang fest.
+
 ## Forschung und Beweisanspruch
 
 Die [Forschungsbezüge](RESEARCH_CONTEXT.md) unterscheiden eine tatsächlich
@@ -172,4 +188,3 @@ Die SchlopfFormel, Owner-Verträge und Gates sind projektspezifische Konstruktio
 Es wird kein extern begutachteter Neuheits- oder Vollständigkeitsnachweis für sie
 behauptet. Eine persönliche Schätzung der Entwicklungsstunden ist keine gemessene
 Projektkennzahl und kein Nachweis mathematischer oder musikalischer Qualität.
-

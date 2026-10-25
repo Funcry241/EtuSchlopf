@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "role": "public_read_only_summary_not_runtime_authority",
+  "review_date": "2026-10-25",
+  "revision": "r1521",
+  "version": "0.10.1839",
+  "previous_public_revision": "r1520",
+  "xml_comparison_baseline": "r1520",
+  "accepted_take_sha256": "c5f9d0a6dc7cb225835fab947e680264833a3c23ae4b7ceb1abe45d0b00d3c43",
+  "accepted_source_snapshot_zip_sha256": "83a7c603ceb3bfee47a9fe6f80dc602fa9ab1e4ff5c8ed6675867ca3133aaef6",
+  "native_acceptance_record_sha256": "4074ee380e77ba6909d00fd8f7819906b4b5dd6ceb44ca3c3e4537e3b8078218",
+  "native": {
+    "tests_passed": 2513,
+    "tests_failed": 0,
+    "tests_ignored": 1,
+    "test_binaries": 15,
+    "build_exit": 0,
+    "clippy_exit": 0,
+    "final_exit": 0,
+    "full_corpus": true,
+    "projects_passed": 10,
+    "projects_expected": 10,
+    "renderer_outcome": "passed",
+    "run_severity": "dark_green"
+  },
+  "readback": {
+    "take_files_byte_matched_to_native_snapshot": 1835,
+    "xml_files_compared": 20,
+    "master_files_byte_identical": 10,
+    "render_files_byte_identical": 10,
+    "pdf_files_byte_identical": 0,
+    "pdf_pixel_comparison_performed": false,
+    "full_visual_page_review": false
+  },
+  "changes": [
+    "Complete option/alias/default reference and Watch GUI documentation.",
+    "Project-local Machine Evidence output; private absolute transfer path removed.",
+    "Existing publication, payload, retention and trust-domain boundaries preserved."
+  ],
+  "runtime_manifest_file_count": 515,
+  "runtime_manifest": "accepted_runtime_sha256.tsv",
+  "limits": [
+    "Private corpus inputs and complete output bundle are not published.",
+    "PDF binaries differ; no raster comparison or full visual page review is claimed.",
+    "Summary is an editorial readback of one native run, not a whole-program proof.",
+    "Public documentation overlay is distinct from the accepted Take."
+  ]
+}
