@@ -2,7 +2,7 @@
 """Read-only evaluation of real exported artifacts, never a productive selector.
 
 Usage: python compare_beam_take_r1472.py PARENT_EXPORT.zip CANDIDATE_EXPORT.zip
-Optional --pdf-pixels compares rendered page pixels with installed PyMuPDF.
+Optional --pdf-pixels compares rendered page pixels with installed pypdfium2 / PDFium.
 Writes JSON to stdout; does not modify the exports or any project.
 """
 import argparse
@@ -58,18 +58,16 @@ def note_rows(data):
 
 
 def pdf_difference(before, after):
-    import fitz
-    a = fitz.open(stream=before, filetype="pdf")
-    b = fitz.open(stream=after, filetype="pdf")
-    if len(a) != len(b):
-        return {"before_pages": len(a), "after_pages": len(b), "page_count_changed": True}
-    changed = []
-    for i, (pa, pb) in enumerate(zip(a, b)):
-        xa = pa.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False)
-        xb = pb.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False)
-        if (xa.width, xa.height, xa.samples) != (xb.width, xb.height, xb.samples):
-            changed.append(i + 1)
-    return {"pages": len(a), "changed_pages_at_108dpi": changed}
+    from compare_exports import compare_pdf
+    result = compare_pdf(before, after, 108)
+    if result["visual_status"] == "unavailable":
+        raise ValueError("PDF comparison unavailable: " + result["reason"])
+    if result["pages_before"] != result["pages_after"]:
+        return {"before_pages": result["pages_before"], "after_pages": result["pages_after"],
+                "page_count_changed": True, "raster_engine": result["raster_engine"]}
+    return {"pages": result["pages_before"],
+            "changed_pages_at_108dpi": result["different_pages"],
+            "raster_engine": result["raster_engine"]}
 
 
 def compare(parent_path, candidate_path, pixels=False):

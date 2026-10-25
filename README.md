@@ -217,5 +217,7 @@ Wer verstehen möchte, weshalb sie so entstehen darf, folgt den Übergängen.
 
 ## Lizenz
 
-EtuSchlopf steht unter der [MIT-Lizenz](LICENSE). Vorhandene Lizenz- und
-Urheberrechtshinweise eingebundener Fremdkomponenten bleiben maßgeblich.
+Der eigene EtuSchlopf-Code steht unter der [MIT-Lizenz](LICENSE).
+Fremdkomponenten behalten ihre jeweiligen Lizenzen. Die Zuordnung, mitgelieferte
+Lizenztexte und Grenzen der Prüfung stehen in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

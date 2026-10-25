@@ -11,20 +11,35 @@ SPEC = importlib.util.spec_from_file_location("compare_exports", Path(__file__).
 C = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(C)
 try:
-    import fitz
+    import pypdfium2 as pdfium
 except ImportError:
-    fitz = None
+    pdfium = None
 
 
 def pdf(text="Same notes", pages=1, title="metadata"):
-    doc = fitz.open()
+    # Minimal PDF fixture written here, without a second PDF library.
+    objects = [b"<< /Type /Catalog /Pages 2 0 R >>", b""]
+    kids = []
     for _ in range(pages):
-        page = doc.new_page()
-        page.insert_text((72, 72), text)
-    doc.set_metadata({"title": title})
-    result = doc.tobytes()
-    doc.close()
+        page_id = len(objects) + 1
+        kids.append(f"{page_id} 0 R")
+        objects.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> /Contents {page_id + 1} 0 R >>".encode())
+        escaped = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+        stream = f"BT /F1 12 Tf 72 770 Td ({escaped}) Tj ET".encode()
+        objects.append(b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream")
+    objects[1] = f"<< /Type /Pages /Kids [{' '.join(kids)}] /Count {pages} >>".encode()
+    objects.append(f"<< /Title ({title}) >>".encode())
+    result = b"%PDF-1.4\n"
+    offsets = [0]
+    for index, obj in enumerate(objects, 1):
+        offsets.append(len(result))
+        result += f"{index} 0 obj\n".encode() + obj + b"\nendobj\n"
+    xref = len(result)
+    result += f"xref\n0 {len(offsets)}\n0000000000 65535 f \n".encode()
+    result += b"".join(f"{offset:010} 00000 n \n".encode() for offset in offsets[1:])
+    result += f"trailer\n<< /Size {len(offsets)} /Root 1 0 R /Info {len(objects)} 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
     return result
+
 
 
 class ComparisonTests(unittest.TestCase):
@@ -66,7 +81,20 @@ class ComparisonTests(unittest.TestCase):
         a, b = self.export("a.zip"), self.export("b.zip")
         self.assertEqual(C.compare(a, b)["status"], "INCOMPLETE")
 
-    @unittest.skipIf(fitz is None, "PyMuPDF required")
+    @unittest.skipIf(pdfium is None, "pypdfium2 required")
+    def test_invalid_pdf_and_invalid_resolution_are_unavailable(self):
+        self.assertEqual(C.compare_pdf(b"not a PDF", b"not a PDF", 144)["visual_status"], "unavailable")
+        self.assertEqual(C.compare_pdf(pdf(), pdf(), 0)["visual_status"], "unavailable")
+
+    @unittest.skipIf(pdfium is None, "pypdfium2 required")
+    def test_page_dimensions_are_checked_even_when_raster_size_rounds_equal(self):
+        a = pdf()
+        b = a.replace(b"595 842", b"595.01 842")
+        result = C.compare_pdf(a, b, 72)
+        self.assertEqual(result["different_pages"], [1])
+        self.assertIn("PDFium", result["raster_engine"])
+
+    @unittest.skipIf(pdfium is None, "pypdfium2 required")
     def test_changed_metadata_and_new_run_do_not_change_notation(self):
         a = self.export("a.zip", document=pdf(title="old"))
         b = self.export("b.zip", document=pdf(title="new"), reused=True)
@@ -77,7 +105,7 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(r["before_run"]["strict_tests"]["passed"], 7)
         self.assertEqual(r["after_run"]["strict_tests"]["mode"], "reported_reused_bound_receipt")
 
-    @unittest.skipIf(fitz is None, "PyMuPDF required")
+    @unittest.skipIf(pdfium is None, "pypdfium2 required")
     def test_xml_change_is_not_hidden_by_same_pdf(self):
         image = pdf()
         a = self.export("a.zip", document=image)
@@ -86,31 +114,31 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(r["status"], "CHANGED")
         self.assertEqual(r["xml"]["modified"], ["Probe.musicxml"])
 
-    @unittest.skipIf(fitz is None, "PyMuPDF required")
+    @unittest.skipIf(pdfium is None, "pypdfium2 required")
     def test_source_change_is_reported(self):
         image = pdf()
         r = C.compare(self.export("a.zip", document=image), self.export("b.zip", document=image, code=b"changed"))
         self.assertEqual(r["status"], "CHANGED")
         self.assertEqual(r["source"]["managed_delta"]["modified"], ["src/example.rs"])
 
-    @unittest.skipIf(fitz is None, "PyMuPDF required")
+    @unittest.skipIf(pdfium is None, "pypdfium2 required")
     def test_actual_visible_change_is_detected(self):
         r = C.compare(self.export("a.zip", document=pdf()), self.export("b.zip", document=pdf("Different notes")))
         self.assertEqual(r["pdf"]["files"]["Probe.pdf"]["different_pages"], [1])
         self.assertEqual(r["status"], "CHANGED")
 
-    @unittest.skipIf(fitz is None, "PyMuPDF required")
+    @unittest.skipIf(pdfium is None, "pypdfium2 required")
     def test_added_page_is_detected(self):
         r = C.compare(self.export("a.zip", document=pdf()), self.export("b.zip", document=pdf(pages=2)))
         self.assertEqual(r["pdf"]["files"]["Probe.pdf"]["different_pages"], [2])
 
-    @unittest.skipIf(fitz is None, "PyMuPDF required")
+    @unittest.skipIf(pdfium is None, "pypdfium2 required")
     def test_bad_snapshot_binding_is_incomplete(self):
         image = pdf()
         r = C.compare(self.export("a.zip", document=image), self.export("b.zip", document=image, corrupt_binding=True))
         self.assertEqual(r["status"], "INCOMPLETE")
 
-    @unittest.skipIf(fitz is None, "PyMuPDF required")
+    @unittest.skipIf(pdfium is None, "pypdfium2 required")
     def test_local_lock_is_distinguished_from_managed_source(self):
         image = pdf()
         r = C.compare(self.export("a.zip", document=image), self.export("b.zip", document=image, lock=b"other lock"))

@@ -9,13 +9,19 @@ Gesamtlauf startet die Python-Hilfsmittel nicht automatisch.
 
 Python 3.10 oder neuer. Der Vorabcheck braucht die bestehende Rust-1.98-Toolchain
 und den vorgesehenen MuseScore-4.7.4-Aufruf. Der PDF-Exportvergleich benötigt
-zusätzlich PyMuPDF 1.26.6. Bei Bedarf separat installieren:
+zusätzlich pypdfium2 5.14.0 (PDFium). Bei Bedarf separat installieren:
 
 ```powershell
 python -m pip install -r tools\assistant_diagnostics\requirements.txt
 ```
 
-Der Take verändert weder Cargo-Abhängigkeiten noch Root-Cargo.lock und
+Die PDF-Diagnose verwendet PDFium statt PyMuPDF. Der Bericht nennt die Versionen
+von pypdfium2 und PDFium. Pixelgleichheit wird immer mit derselben installierten
+Engine geprüft; frühere PyMuPDF-Raster sind kein Referenzbeleg für PDFium-Raster.
+Die Bibliothek und ihre Binärdateien werden separat installiert. Ihre eigenen
+Lizenzhinweise bleiben maßgeblich; siehe `THIRD_PARTY_NOTICES.md` im Projektroot.
+
+Der Diagnosezusatz verändert weder Cargo-Abhängigkeiten noch Root-Cargo.lock und
 installiert keine Python-Pakete automatisch.
 
 ## Vorabcheck aus der Projektwurzel
