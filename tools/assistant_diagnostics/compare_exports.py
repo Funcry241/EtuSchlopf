@@ -1,6 +1,7 @@
 """Compare EtuSchlopf assistant exports without extracting or modifying them."""
 from __future__ import annotations
 
+from contextlib import closing
 import argparse
 import hashlib
 import io
@@ -115,23 +116,30 @@ def compare_pdf(before: bytes, after: bytes, dpi: int) -> dict:
     result = {"bytes_identical": before == after, "before_sha256": sha(before),
               "after_sha256": sha(after), "dpi": dpi}
     try:
-        import fitz
+        import pypdfium2 as pdfium
     except ImportError:
-        return {**result, "visual_status": "unavailable", "reason": "PyMuPDF is not installed"}
+        return {**result, "visual_status": "unavailable", "reason": "pypdfium2 is not installed"}
     try:
-        with fitz.open(stream=before, filetype="pdf") as a, fitz.open(stream=after, filetype="pdf") as b:
-            if a.is_encrypted or b.is_encrypted or not len(a) or not len(b):
+        if dpi <= 0:
+            raise ValueError("dpi must be positive")
+        with pdfium.PdfDocument(before) as a, pdfium.PdfDocument(after) as b:
+            if (pdfium.raw.FPDF_GetSecurityHandlerRevision(a) >= 0
+                    or pdfium.raw.FPDF_GetSecurityHandlerRevision(b) >= 0
+                    or not len(a) or not len(b)):
                 raise ValueError("encrypted or empty PDF")
             changed = []
             for i in range(min(len(a), len(b))):
-                x = a[i].get_pixmap(matrix=fitz.Matrix(dpi / 72, dpi / 72), alpha=False)
-                y = b[i].get_pixmap(matrix=fitz.Matrix(dpi / 72, dpi / 72), alpha=False)
-                if a[i].rect != b[i].rect or (x.width, x.height, x.samples) != (y.width, y.height, y.samples):
-                    changed.append(i + 1)
+                with closing(a[i]) as pa, closing(b[i]) as pb:
+                    with closing(pa.render(scale=dpi / 72, force_bitmap_format=pdfium.raw.FPDFBitmap_BGR)) as x, \
+                            closing(pb.render(scale=dpi / 72, force_bitmap_format=pdfium.raw.FPDFBitmap_BGR)) as y:
+                        if (pa.get_size() != pb.get_size()
+                                or (x.width, x.height, bytes(x.buffer)) != (y.width, y.height, bytes(y.buffer))):
+                            changed.append(i + 1)
             changed.extend(range(min(len(a), len(b)) + 1, max(len(a), len(b)) + 1))
             return {**result, "visual_status": "different" if changed else "pixel_equal",
                     "pages_before": len(a), "pages_after": len(b), "different_pages": changed,
-                    "raster_engine": "PyMuPDF " + str(fitz.VersionBind)}
+                    "raster_engine": "pypdfium2 " + str(pdfium.PYPDFIUM_INFO)
+                                     + " / PDFium " + str(pdfium.PDFIUM_INFO)}
     except Exception as error:
         return {**result, "visual_status": "unavailable", "reason": str(error)}
 

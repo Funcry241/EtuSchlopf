@@ -1,12 +1,12 @@
 # 050 – Aktueller Stand
 
-Stand 24.10.2026. Advisory only. Massgeblich sind immer die aktuellen hashgebundenen
+Stand 25.10.2026. Advisory only. Massgeblich sind immer die aktuellen hashgebundenen
 Lifecycle-/Acceptance-Belege und die Runtime-Belege des Exports, nicht dieser Text.
 
 ## Jetzt
 
-- Angenommen bis r1503 / 0.10.1839 (Kandidat b3f49ac8...): 10/10 dunkelgruen,
-  2444 Tests bestanden, 0 fehlgeschlagen, 1 ignoriert (15 Testprogramme); Build/Clippy Exit 0.
+- Angenommen bis r1507 / 0.10.1839 (Kandidat 2a2ce714...): 10/10 dunkelgruen,
+  2465 Tests bestanden, 0 fehlgeschlagen, 1 ignoriert (15 Testprogramme); Build/Clippy Exit 0.
   Alle MuseScore-Aufrufe ohne `-f`,
   erste Variante erfolgreich (`VariantsAttempted 1/7; FailedBeforeSuccess 0`).
 - Balkenthema abgeschlossen (seit r1484): Pruefer fuer Primaergruppen ueber Stimmen 0 Takte,
@@ -150,3 +150,13 @@ The existing KODEX requires a frozen parent error-class definition before select
 Parent r1506 accepted: a4bc2f0bc8bf65ca822bddc066936ecf8171e13652cd27b5516f8d420a477fcf. Native 2453 passed, 0 failed, 1 ignored, build/clippy green, 10/10; 20 XMLs byte-identical and 50 pages pixel-identical at 200 dpi to r1505. The scope class definition is frozen at SHA-256 80ba736a0aa531e90d588a0cdf8c0e1dd7884d9f9850992dabc4ef4c9ce3c2e4.
 
 r1507 implements only the second primary-beam guard's part-local lower octave decision scope. Query-relative scoping prevents stale protection after a boundary. Proven interiors before future boundaries remain protected; unresolved prefixes block new insertions without forcing existing-clef removal. An earlier boolean-prefix prototype was rejected after an isolated E4 pressure regression; it is not the delivered code. Scanner, costs, tie/chord rules, writers and gates unchanged. No generic temporal-gap rule. Musical effect is declared through the existing pure-clef course; actual Windows artifacts and native acceptance pending. E6/T22 musical approval is not implied. See the separate repair contract. No further revision is assumed accepted.
+
+
+## r1508 - LicenseNoticeAndPdfiumDiagnostics (RefactorOnly candidate)
+
+Parent r1507 accepted: `2a2ce714d783101956ace0753c6ff2f9b3a9a8603c143081dc23a5288a286a66`.
+The supplied native export reports 2465 passed, 0 failed, 1 ignored, build/clippy green, 10/10 corpus.
+r1508 installs license notices and exact third-party license texts under docs/, and replaces PyMuPDF with pypdfium2 in the separate Python diagnostics.
+The two additional Cargo resolutions are audit snapshots only, not installed component/runtime locks.
+All Rust source files except the required change-manifest text, qualified component bytes, root Cargo.toml/Cargo.lock, gates and music logic remain unchanged.
+Native acceptance and the fresh Windows full-corpus comparison remain pending. See ../license_take_r1508.md.
