@@ -55,3 +55,6 @@ pub(crate) mod import_channel_profile_readback;
 pub(crate) mod panic_origin_observation;
 
 pub(crate) mod register_planner_input;
+pub(crate) mod clef_planner_input;
+
+pub(crate) mod renderer_ottava_context;

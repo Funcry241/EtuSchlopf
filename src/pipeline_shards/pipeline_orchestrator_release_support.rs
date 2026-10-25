@@ -240,6 +240,10 @@ fn run_render_pdf_source_selection_stage(
     // E007 is the final Master owner (PRESERVING) with an empty phrase-intent
     // list; it calls the E011 sink internally and carries its own verified
     // post bytes in its receipt.
+    crate::registernotation::reader_policy::plan_final_document(master_state.document(), &final_horizontal_layout_materialization)?;
+    if let Some(document) = render_state.document() {
+        crate::registernotation::reader_policy::plan_final_document(document, &final_horizontal_layout_materialization)?;
+    }
     let (final_master_layout, final_master_layout_receipt) =
         structural_write_authority::materialize_final_render_notation_with_phrase_projection_authorized(
             &source.musicxml_out,
@@ -261,6 +265,9 @@ fn run_render_pdf_source_selection_stage(
             )?;
         }
     }
+
+    crate::registernotation::reader_policy::observe_master_adoption(master_state);
+    crate::registernotation::reader_policy::observe_render_adoption(render_state);
 
     // E007 may legitimately advance beyond the last #58. The committed PDF
     // proof is rebound to that witnessed sovereign post, never a later file read.
@@ -422,6 +429,11 @@ fn run_render_pdf_source_selection_stage(
     } else {
         None
     };
+
+    if pdf_render_requested && crate::registernotation::reader_policy::final_pdf_observation_required(&selected_final_notation_xml_before_renderer) {
+        let observed = crate::audit_only::renderer_system_break_readback::audit_paths(pdf_source_path, &source.pdf_out)?;
+        crate::registernotation::reader_policy::validate_final_pdf(&selected_final_notation_xml_before_renderer, &observed.ottava_context)?;
+    }
 
     let selected_final_notation_read_after_renderer =
         std::fs::read_to_string(pdf_source_path).with_context(|| {

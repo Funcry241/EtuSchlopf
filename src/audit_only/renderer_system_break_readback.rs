@@ -22,13 +22,13 @@ const LEFT_MARGIN_MAX: f64 = 70.0;
 const HEADER_EXCLUSION_FROM_TOP: f64 = 55.0;
 
 #[derive(Debug, Clone, PartialEq)]
-struct PdfTextEvent {
-    page_index: usize,
-    x: f64,
-    y_from_bottom: f64,
-    page_height: f64,
-    text: String,
-    head_bounds: Option<[f64; 4]>,
+pub(super) struct PdfTextEvent {
+    pub(super) page_index: usize,
+    pub(super) x: f64,
+    pub(super) y_from_bottom: f64,
+    pub(super) page_height: f64,
+    pub(super) text: String,
+    pub(super) head_bounds: Option<[f64; 4]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,6 +43,7 @@ pub(crate) struct RendererSystemBreakReadbackAudit {
     pub(crate) collapsed_page_breaks: Vec<usize>,
     pub(crate) measure_count: usize,
     pub(crate) pdf_pages: usize,
+    pub(crate) ottava_context: crate::registernotation::reader_policy::PdfContext,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -215,6 +216,7 @@ pub(crate) fn audit_paths(
     let planned_page_set = planned_page_starts.iter().copied().collect::<BTreeSet<_>>();
     let rendered_page_set = rendered_page_starts.iter().copied().collect::<BTreeSet<_>>();
 
+    let ottava_context = crate::audit_only::renderer_ottava_context::observe(&planned_xml, &pdf_bytes);
     Ok(RendererSystemBreakReadbackAudit {
         inserted_system_breaks: rendered_system_set
             .difference(&planned_system_set)
@@ -238,6 +240,7 @@ pub(crate) fn audit_paths(
         rendered_page_starts,
         measure_count,
         pdf_pages,
+        ottava_context,
     })
 }
 
@@ -871,7 +874,7 @@ fn planned_breaks_from_musicxml(xml: &str) -> anyhow::Result<(usize, Vec<usize>,
     Ok((measures.len(), system_starts, page_starts))
 }
 
-fn extract_pdf_text_events(bytes: &[u8]) -> anyhow::Result<(Vec<PdfTextEvent>, usize)> {
+pub(super) fn extract_pdf_text_events(bytes: &[u8]) -> anyhow::Result<(Vec<PdfTextEvent>, usize)> {
     let objects = parse_pdf_objects(bytes)?;
     let page_ids = page_ids_in_order(&objects)?;
     let page_count = page_ids.len();
@@ -910,6 +913,9 @@ fn extract_pdf_text_events(bytes: &[u8]) -> anyhow::Result<(Vec<PdfTextEvent>, u
             let cmap = parse_to_unicode_cmap(&cmap_stream);
             if let Some(metrics) = pdf_notehead_metrics(font_obj, &objects, &cmap) {
                 head_metrics.insert(font_name.clone(), metrics);
+            }
+            if let Some(metrics) = pdf_ottava_metrics(font_obj, &objects, &cmap) {
+                head_metrics.entry(font_name.clone()).or_default().extend(metrics);
             }
             font_maps.insert(font_name, cmap);
         }
@@ -1030,29 +1036,29 @@ impl RendererBeamSpan {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct PdfStrokeSegment {
-    page_index: usize,
-    x1: f64,
-    y1_top: f64,
-    x2: f64,
-    y2_top: f64,
-    width: f64,
+pub(super) struct PdfStrokeSegment {
+    pub(super) page_index: usize,
+    pub(super) x1: f64,
+    pub(super) y1_top: f64,
+    pub(super) x2: f64,
+    pub(super) y2_top: f64,
+    pub(super) width: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct PdfFilledPolygon {
+pub(super) struct PdfFilledPolygon {
     page_index: usize,
     points: Vec<(f64, f64)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct RendererStaffCell {
-    page_index: usize,
-    x_left: f64,
-    x_right: f64,
-    staff: u8,
-    measure: usize,
-    line_y_top: Vec<f64>,
+pub(super) struct RendererStaffCell {
+    pub(super) page_index: usize,
+    pub(super) x_left: f64,
+    pub(super) x_right: f64,
+    pub(super) staff: u8,
+    pub(super) measure: usize,
+    pub(super) line_y_top: Vec<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1352,7 +1358,7 @@ fn pdf_readback_child_text(node: roxmltree::Node<'_, '_>, tag: &str) -> Option<S
         .map(ToOwned::to_owned)
 }
 
-fn extract_pdf_vector_geometry(
+pub(super) fn extract_pdf_vector_geometry(
     bytes: &[u8],
 ) -> anyhow::Result<(Vec<PdfStrokeSegment>, Vec<PdfFilledPolygon>)> {
     let objects = parse_pdf_objects(bytes)?;
@@ -1550,7 +1556,7 @@ fn append_pdf_filled_path(
     }
 }
 
-fn renderer_staff_cells(
+pub(super) fn renderer_staff_cells(
     segments: &[PdfStrokeSegment],
     measure_count: usize,
 ) -> anyhow::Result<Vec<RendererStaffCell>> {
@@ -2366,6 +2372,7 @@ mod tests {
     #[test]
     fn planner_demand_binding_projects_inserted_break_headroom() {
         let audit = RendererSystemBreakReadbackAudit {
+            ottava_context: Default::default(),
             planned_system_starts: vec![1, 13, 16],
             rendered_system_starts: vec![1, 13, 15, 16],
             planned_page_starts: vec![1],
@@ -2391,6 +2398,7 @@ mod tests {
     #[test]
     fn final_selected_plan_demand_binding_projects_adopted_plan() {
         let audit = RendererSystemBreakReadbackAudit {
+            ottava_context: Default::default(),
             planned_system_starts: vec![1, 4],
             rendered_system_starts: vec![1, 4],
             planned_page_starts: vec![1],
@@ -2415,6 +2423,7 @@ mod tests {
     #[test]
     fn planner_demand_binding_rejects_measure_demand_recompose_drift() {
         let audit = RendererSystemBreakReadbackAudit {
+            ottava_context: Default::default(),
             planned_system_starts: vec![1, 4],
             rendered_system_starts: vec![1, 4],
             planned_page_starts: vec![1],
@@ -2436,6 +2445,7 @@ mod tests {
     #[test]
     fn planner_demand_binding_rejects_group_drift() {
         let audit = RendererSystemBreakReadbackAudit {
+            ottava_context: Default::default(),
             planned_system_starts: vec![1, 4],
             rendered_system_starts: vec![1, 4],
             planned_page_starts: vec![1],
@@ -2520,6 +2530,7 @@ mod tests {
     #[test]
     fn rhythmic_shape_projection_binds_split_to_planned_system_shape() {
         let audit = RendererSystemBreakReadbackAudit {
+            ottava_context: Default::default(),
             planned_system_starts: vec![1, 4],
             rendered_system_starts: vec![1, 3, 4],
             planned_page_starts: vec![1],
@@ -2639,10 +2650,17 @@ mod tests {
 
 // Read actual embedded TrueType glyph bounds. Only the renderer's Identity-H /
 // Identity CID-to-GID profile is supported. Missing metrics never authorize a bind.
-fn pdf_notehead_metrics(
+fn pdf_notehead_metrics(font: &PdfObject, objects: &BTreeMap<u32, PdfObject>, cmap: &BTreeMap<u16, char>) -> Option<BTreeMap<char,[f64;4]>> {
+    embedded_glyph_metrics(font,objects,cmap,|ch|matches!(ch,'\u{e0a3}'|'\u{e0a4}'))
+}
+fn pdf_ottava_metrics(font: &PdfObject, objects: &BTreeMap<u32, PdfObject>, cmap: &BTreeMap<u16, char>) -> Option<BTreeMap<char,[f64;4]>> {
+    embedded_glyph_metrics(font,objects,cmap,|ch|matches!(ch,'\u{e510}'|'\u{e511}'|'\u{e512}'|'\u{e513}'|'\u{e514}'|'\u{e515}'|'\u{e516}'|'\u{e51c}'|'\u{e51d}'))
+}
+fn embedded_glyph_metrics(
     font: &PdfObject,
     objects: &BTreeMap<u32, PdfObject>,
     cmap: &BTreeMap<u16, char>,
+    relevant: fn(char)->bool,
 ) -> Option<BTreeMap<char, [f64; 4]>> {
     let dict = font.dictionary_text();
     if !dict.contains("/Encoding /Identity-H") || !dict.contains("/BaseFont /Leland") {
@@ -2680,7 +2698,7 @@ fn pdf_notehead_metrics(
     let glyph_count = u16_at(maxp + 4)?;
     let mut result = BTreeMap::new();
     for (&code, &ch) in cmap {
-        if !matches!(ch, '\u{e0a3}' | '\u{e0a4}') || code >= glyph_count { continue; }
+        if !relevant(ch) || code >= glyph_count { continue; }
         let stride = match format { 0 => 2, 1 => 4, _ => return None };
         let offset = usize::from(code) * stride;
         if offset + 2 * stride > loca_length { return None; }

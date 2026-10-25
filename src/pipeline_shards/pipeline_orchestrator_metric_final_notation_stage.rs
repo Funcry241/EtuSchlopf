@@ -1264,6 +1264,8 @@ primary_beam_voice_partition_plan.as_ref())?,
                         "ETUSCHLOPF: RendererFeasibilityRound: Project={:?} | Round={} | Phase=confirmed | Reason=all_four_boundary_differences_empty | ProjectionOnly=true | Authority=none",
                         source.input_label, round,
                     );
+                    crate::registernotation::reader_policy::observe_probe(
+                        &committed_source_xml, shadow_committed_xml, &shadow_directives, &shadow_observation.ottava_context);
                     return Ok(RendererFeasibilityOracleOutcome::Confirmed {
                         plan: candidate_plan,
                         rounds: round,

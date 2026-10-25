@@ -183,3 +183,7 @@ mod tests {
         assert_eq!(PipelineExit::from_process_code(256), PipelineExit::Failure(1));
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/ottava_reader_owner_chain.rs"]
+mod ottava_reader_owner_chain_tests;

@@ -1,6 +1,6 @@
 # Was EtuSchlopf tatsächlich implementiert
 
-Stand: angenommene r1512-Quelle plus öffentliche Erläuterungen, 25.10.2026.
+Stand: angenommene r1520-Quelle plus öffentliche Erläuterungen, 25.10.2026.
 Diese Beschreibung ist ein Wegweiser zum Code. Sie ersetzt keinen Contract,
 keine fachliche Authority und keinen Laufbeleg.
 
@@ -36,7 +36,7 @@ zuständigen Ausführer und Nachweise für den konkreten Übergang. Hier wird di
 Projektbegriff anhand der nachweisbaren operativen Bestandteile erläutert.
 
 Eine einzelne kanonische Gesamtgleichung unter diesem Namen ist im geprüften
-r1512-Quellbaum nicht hinterlegt. Die folgende Notation ist deshalb eine jetzt
+r1520-Quellbaum nicht hinterlegt. Die folgende Notation ist deshalb eine jetzt
 dokumentierte Zusammenfassung vorhandener Implementierung, kein wörtliches Zitat
 einer früheren Formel und kein zusätzlicher Beweis.
 
@@ -124,7 +124,7 @@ Sein Ergebnis liefert daher keinen Beweis für das Spieltempo oder die Spielbark
 durch einen konkreten Menschen. Forschung zu Hand- und Klaviaturgröße motiviert
 die Modelltrennung; sie kalibriert diese Annahmen nicht automatisch.
 
-## Was die jüngste Änderung wirklich gezeigt hat
+## Was die Registeränderung r1512 gezeigt hat
 
 r1512 reproduzierte zunächst sämtliche zehn bisherigen Plan-Hashes aus den echten
 Eingangsaufnahmen. Danach wurden 16 bessere gemeinsame Alternativen in sieben
@@ -143,6 +143,27 @@ Benchmark-Sieg und kein Beweis, dass der gesamte Notensatz fertig ist. Die
 [öffentliche Belegzusammenfassung](evidence/r1512/README.md) trennt Laufbelege,
 redaktionelle Auswertung und die Grenzen öffentlicher Reproduzierbarkeit.
 
+## Aktueller Fortschritt: Oktavfortsetzungen in r1520
+
+r1520 entfernt automatisch erzeugte redundante Oktavtexte nur bei gebundener
+Herkunft, tatsächlich ausgeführtem Receipt und übernommener finaler Fassung.
+Der PDF-Readback prüft die aktuelle Linie und das zugehörige Oktavzeichen in
+ihrem aktuellen System. Vertikale Neuverteilung durch den Renderer darf diese
+Lesbarkeit erhalten; unveränderte absolute Seitenhöhen sind dafür keine geeignete
+Bedingung. Fehlende oder mehrdeutige Beobachtung erlaubt keine Entfernung.
+
+Der native Lauf hat r1520 angenommen: 2.511 Tests bestanden, Build und Clippy
+erfolgreich, zehn Projekte vollständig. Gegenüber r1518 bleiben alle zehn
+Master-MusicXML-Dateien bytegleich. In fünf Render-Dateien fehlen ausschließlich
+neun erzeugte Wort-Wrapper; alle übrigen XML-Bytes sind erhalten. Die PDF-Ausgaben
+behalten zusammen 50 Seiten. Diese Auswertung enthält keine erneute visuelle
+Einzelprüfung aller Seiten und keine allgemeine Spielbarkeitsaussage.
+
+Einstiege: [Reader-Policy](../src/registernotation/reader_policy.rs),
+[PDF-Beobachtung](../src/audit_only/renderer_ottava_context.rs),
+[Begründung des vertikalen Nachweises](ottava_vertical_reflow_proof_r1520.md) und
+[öffentliche Abnahmebelege](evidence/r1520/README.md).
+
 ## Forschung und Beweisanspruch
 
 Die [Forschungsbezüge](RESEARCH_CONTEXT.md) unterscheiden eine tatsächlich
@@ -151,3 +172,4 @@ Die SchlopfFormel, Owner-Verträge und Gates sind projektspezifische Konstruktio
 Es wird kein extern begutachteter Neuheits- oder Vollständigkeitsnachweis für sie
 behauptet. Eine persönliche Schätzung der Entwicklungsstunden ist keine gemessene
 Projektkennzahl und kein Nachweis mathematischer oder musikalischer Qualität.
+

@@ -126,7 +126,14 @@ fn append_repair_loop_invocation_evidence_body(
         "register_planner_input",
         crate::audit_only::register_planner_input::SECTION,
         crate::audit_only::register_planner_input::SECTION_RULE,
-        crate::registernotation::fuege_eingangsbeobachtung_hinzu,
+        |out| {
+            crate::registernotation::fuege_eingangsbeobachtung_hinzu(out);
+            crate::registernotation::fuege_ottava_kontext_hinzu(
+                out,
+                best.layout_xml(),
+                render_musicxml_artifact_for_audit.as_deref(),
+            );
+        },
     )?;
     text.project_owned_section(
         "final_chord_visible_rest_interval_epoch_witness_audit",

@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "role": "public_read_only_summary_not_runtime_authority",
+  "review_date": "2026-10-25",
+  "revision": "r1520",
+  "version": "0.10.1839",
+  "previous_public_revision": "r1512",
+  "xml_comparison_baseline": "r1518",
+  "accepted_take_sha256": "9c9874a4bb48606bb2e3c48b2570067f3af89188b6e90e55b9984ea7de447ef7",
+  "accepted_source_snapshot_zip_sha256": "8dc19dc7b30427a4a5689fd4dedbfaa75cf84a531a75e228893d2087a25ee3db",
+  "native_acceptance_record_sha256": "52b11289c46e3be7cc1272fbb93b83b647fa34206ff34b69e6e9b5dece6e4a34",
+  "native": {
+    "tests_passed": 2511,
+    "tests_failed": 0,
+    "tests_ignored": 1,
+    "build_exit": 0,
+    "clippy_exit": 0,
+    "final_exit": 0,
+    "full_corpus": true,
+    "projects_passed": 10,
+    "projects_expected": 10,
+    "renderer_outcome": "passed"
+  },
+  "readback": {
+    "take_files_byte_matched_to_native_snapshot": 1834,
+    "xml_files_reviewed": 20,
+    "master_files_byte_identical": 10,
+    "render_files_byte_identical": 5,
+    "removed_generated_word_wrappers": 9,
+    "other_xml_byte_changes": 0,
+    "changed_render_projects": [
+      1,
+      3,
+      4,
+      6,
+      9
+    ],
+    "pages_before": 50,
+    "pages_after": 50,
+    "full_visual_page_review": false
+  },
+  "runtime_manifest_file_count": 515,
+  "runtime_manifest": "accepted_runtime_sha256.tsv",
+  "limits": [
+    "Private corpus inputs and full output bundle are not published.",
+    "XML comparison uses accepted r1518, while public source update includes r1513 through r1520.",
+    "Summary is an editorial readback of one native run, not a whole-program proof.",
+    "Page counts and native renderer guards do not constitute a new full visual review.",
+    "Public documentation overlay is distinct from the accepted Take."
+  ]
+}

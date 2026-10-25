@@ -7,6 +7,9 @@
 //! bestehenden zentralen StructuralWriteAuthority-Writer.
 
 mod gemeinsame_spanne;
+mod ottava_kontext;
+pub(crate) mod reader_policy;
+pub(crate) use ottava_kontext::OttavaCarrier;
 
 use crate::model::{EventKind, Score};
 use std::collections::{BTreeMap, BTreeSet};
@@ -286,6 +289,7 @@ struct Sitzung {
     eingang: Option<crate::audit_only::register_planner_input::InputSnapshot>,
     beweis: Option<Result<RegisternotationsBeweis, String>>,
     materialisierung: Option<RegisternotationsMaterialisierungsZeugnis>,
+    ottava_kontext: Option<ottava_kontext::MaterializedContext>,
 }
 
 static SITZUNG: OnceLock<Mutex<Sitzung>> = OnceLock::new();
@@ -301,6 +305,7 @@ pub(crate) fn sperre_fuer_tests() -> std::sync::MutexGuard<'static, ()> {
 }
 
 pub(crate) fn loesche() {
+    reader_policy::reset();
     let mut zustand = sitzung()
         .lock()
         .unwrap_or_else(|vergiftet| vergiftet.into_inner());
@@ -308,6 +313,7 @@ pub(crate) fn loesche() {
 }
 
 pub(crate) fn beobachte_vor_k00(xml: &str) {
+    reader_policy::reset();
     let eingang = crate::audit_only::register_planner_input::InputSnapshot::capture(xml);
     let beweis = crate::musicxml::parse_musicxml(xml)
         .map_err(|fehler| format!("Score-Projektion vor K00 fehlgeschlagen: {fehler:#}"))
@@ -2304,6 +2310,7 @@ fn sichtplan_fingerabdruck(plaene: &[RegisternotationsMaterialisierungsPlan]) ->
 
 pub(crate) fn beobachte_materialisierung(
     zeugnis: RegisternotationsMaterialisierungsZeugnis,
+    carriers: Vec<OttavaCarrier>,
 ) -> Result<(), String> {
     let sicht = sichtmaterialisierungsauftrag()?;
     let mut zustand = sitzung()
@@ -2328,8 +2335,27 @@ pub(crate) fn beobachte_materialisierung(
                 .to_string(),
         );
     }
+    zustand.ottava_kontext = Some(ottava_kontext::MaterializedContext {
+        visible: sicht,
+        carriers,
+    });
     zustand.materialisierung = Some(zeugnis);
     Ok(())
+}
+
+pub(crate) fn fuege_ottava_kontext_hinzu(out: &mut String, master: &str, render: Option<&str>) {
+    let zustand = sitzung()
+        .lock()
+        .unwrap_or_else(|vergiftet| vergiftet.into_inner())
+        .clone();
+    ottava_kontext::append_context(
+        out,
+        zustand.beweis.as_ref().and_then(|beweis| beweis.as_ref().ok()),
+        zustand.ottava_kontext.as_ref(),
+        master,
+        render,
+    );
+    reader_policy::append_report(out);
 }
 
 pub(crate) fn fuege_eingangsbeobachtung_hinzu(out: &mut String) {

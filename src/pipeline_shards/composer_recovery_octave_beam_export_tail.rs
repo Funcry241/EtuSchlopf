@@ -46,6 +46,7 @@ struct RegisternotationsRichtung {
     art: RegisternotationsGrenzart,
     darstellung: crate::registernotation::RegisternotationsDarstellung,
     linie: usize,
+    origin: Option<String>,
 }
 
 fn apply_octave_notation_policy(xml: &mut String) -> OctaveNotationPolish {
@@ -77,7 +78,16 @@ fn apply_octave_notation_policy(xml: &mut String) -> OctaveNotationPolish {
                 "RegisternotationsSichtmaterialisierung: stille Bruecken und Continue-Cues weichen ab"
             );
         }
-        let richtungen = registernotationsrichtungen_aus_sichtauftrag(xml, &auftrag.plaene)?;
+        let mut richtungen = registernotationsrichtungen_aus_sichtauftrag(xml, &auftrag.plaene)?;
+        let births = richtungen.iter().map(|r| crate::registernotation::reader_policy::Birth {
+            part: r.teil.clone(), staff: r.system.clone(), slot: r.takt_ordinal, onset: r.einsatz,
+            kind: match r.art { RegisternotationsGrenzart::Stop => "stop", RegisternotationsGrenzart::Continue => "continue",
+                RegisternotationsGrenzart::Start => match r.darstellung {
+                    crate::registernotation::RegisternotationsDarstellung::Achtvb | crate::registernotation::RegisternotationsDarstellung::Fuenfzehnmb => "up", _ => "down" } }.to_owned(),
+            display: r.darstellung, line: r.linie,
+        }).collect::<Vec<_>>();
+        let origins = crate::registernotation::reader_policy::issue_origins(&auftrag, &births);
+        for (direction, origin) in richtungen.iter_mut().zip(origins) {direction.origin=Some(origin);}
 
         let vorher = xml.clone();
         let mut nach_takt = BTreeMap::<(String, usize), Vec<RegisternotationsRichtung>>::new();
@@ -186,9 +196,21 @@ fn apply_octave_notation_policy(xml: &mut String) -> OctaveNotationPolish {
                 semantischer_plan_fingerabdruck: auftrag.semantischer_plan_fingerabdruck,
                 sicht_fingerabdruck: auftrag.sicht_fingerabdruck,
             },
+            richtungen.iter()
+                .filter(|richtung| richtung.art == RegisternotationsGrenzart::Continue)
+                .map(|richtung| crate::registernotation::OttavaCarrier {
+                    part: richtung.teil.clone(),
+                    staff: richtung.system.clone(),
+                    measure: richtung.takt_ordinal,
+                    onset: richtung.einsatz,
+                    display: richtung.darstellung,
+                    line: richtung.linie,
+                })
+                .collect(),
         )
         .map_err(|fehler| anyhow!("RegisternotationsSichtmaterialisierung: {fehler}"))?;
 
+        crate::registernotation::reader_policy::confirm_materialization(xml)?;
         crate::audit_only::destructive_edit_attribution::observe_selected_state(xml);
         Ok(OctaveNotationPolish { block_receipts })
     })()
@@ -259,6 +281,7 @@ fn registernotationsrichtungen_aus_sichtauftrag(
                 art: RegisternotationsGrenzart::Start,
                 darstellung: plan.darstellung,
                 linie,
+                origin: None,
             });
             for wiederholung in &plan.sichtwiederholungen {
                 richtungen.push(RegisternotationsRichtung {
@@ -269,6 +292,7 @@ fn registernotationsrichtungen_aus_sichtauftrag(
                     art: RegisternotationsGrenzart::Continue,
                     darstellung: plan.darstellung,
                     linie,
+                    origin: None,
                 });
             }
             richtungen.push(RegisternotationsRichtung {
@@ -279,6 +303,7 @@ fn registernotationsrichtungen_aus_sichtauftrag(
                 art: RegisternotationsGrenzart::Stop,
                 darstellung: plan.darstellung,
                 linie,
+                origin: None,
             });
         }
         for links in 0..belegungen.len() {
@@ -646,9 +671,10 @@ fn registernotationsrichtung_xml(
     } else {
         String::new()
     };
+    let origin = richtung.origin.as_ref().map(|id|format!("<!--{id}-->")).unwrap_or_default();
     Ok(format!(
-        "<direction placement=\"{}\">{}<direction-type><octave-shift type=\"{}\" size=\"{}\" number=\"{}\"/></direction-type><staff>{}</staff></direction>",
-        placement, sichtcue, art, groesse, richtung.linie, richtung.system
+        "<direction placement=\"{}\">{}{}<direction-type><octave-shift type=\"{}\" size=\"{}\" number=\"{}\"/></direction-type><staff>{}</staff></direction>",
+        placement, origin, sichtcue, art, groesse, richtung.linie, richtung.system
     ))
 }
 
@@ -822,6 +848,7 @@ fn pruefe_registernotationsmaterialisierung(
                             art,
                             darstellung,
                             linie,
+                            origin: crate::registernotation::reader_policy::carried_origin(kind).map(str::to_owned),
                         });
                         richtungsbereiche.push(kind.range());
                     }
@@ -889,6 +916,7 @@ mod registernotations_besitzumschaltung_tests {
             art,
             darstellung,
             linie: 1,
+            origin: None,
         }
     }
 
@@ -1283,6 +1311,7 @@ mod registernotations_besitzumschaltung_tests {
             art: RegisternotationsGrenzart::Start,
             darstellung: crate::registernotation::RegisternotationsDarstellung::Achtvb,
             linie: 1,
+            origin: None,
         };
         let xml = registernotationsrichtung_xml(&richtung).expect("richtung");
         assert!(xml.contains("placement=\"below\""));
@@ -3334,6 +3363,7 @@ fn validate_octave_shift_direction_semantics(xml: &str) -> anyhow::Result<Octave
     validate_octave_shift_direction_semantics_with_layout(xml, false)
 }
 
+
 fn validate_final_layout_aware_octave_shift_direction_semantics(
     xml: &str,
 ) -> anyhow::Result<OctaveExportStats> {
@@ -3411,7 +3441,10 @@ fn validate_octave_shift_direction_semantics_with_layout(
         }
     }
     let mut scan = 0_usize;
+    let mut direction_ordinal = 0usize;
     while let Some(rel_start) = xml[scan..].find("<direction") {
+        let current_direction_ordinal = direction_ordinal;
+        direction_ordinal += 1;
         let start = scan + rel_start;
         let Some(close_rel) = xml[start..].find("</direction>") else { break; };
         let end = start + close_rel + "</direction>".len();
@@ -3467,6 +3500,10 @@ fn validate_octave_shift_direction_semantics_with_layout(
                         ));
                     }
                     stats.layout_restart_continues += 1;
+                } else if final_layout_aware && words.is_empty()
+                    && crate::registernotation::reader_policy::omission_is_adopted(xml, current_direction_ordinal) {
+                    // The unchanged baseline rule is replaced only for this exact
+                    // adopted E007 post and its transported continuation ordinal.
                 } else {
                     if words.len() != 1
                         || words.first().map(String::as_str) != Some(expected_recue)

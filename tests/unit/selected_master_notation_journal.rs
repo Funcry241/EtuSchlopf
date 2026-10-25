@@ -2,7 +2,7 @@ use super::*;
 fn direction(einsatz: i64, art: RegisternotationsGrenzart,
     darstellung: crate::registernotation::RegisternotationsDarstellung) -> RegisternotationsRichtung {
     RegisternotationsRichtung { teil: "P1".into(), takt_ordinal: 1, system: "1".into(),
-        einsatz, art, darstellung, linie: 1 }
+        einsatz, art, darstellung, linie: 1, origin: None }
 }
     #[test]
     fn actual_octave_emission_carries_duplicate_notes_and_original_receipts_in_order() {

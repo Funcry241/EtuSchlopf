@@ -1634,6 +1634,27 @@ pub(crate) struct PreservingTransformationReceipt {
     recorded_representation: Option<Box<RecordedPreservingCourseTransport>>,
 }
 
+/// Read-only original E007 course, recorded only when its real receipt commits.
+/// Private fields prevent source/readback code from manufacturing an observation.
+#[derive(Clone)]
+pub(crate) struct CommittedFinalLayoutObservation {
+    identity: MintedIdentity,
+    domain: crate::ssc_evidence_proof::SscAdoptionDomain,
+    before: String,
+    after: String,
+}
+impl CommittedFinalLayoutObservation {
+    pub(crate) fn documents(&self) -> (&str, &str) { (&self.before, &self.after) }
+}
+static COMMITTED_FINAL_LAYOUT_OBSERVATIONS: Mutex<Vec<CommittedFinalLayoutObservation>> = Mutex::new(Vec::new());
+pub(crate) fn clear_final_layout_observations() {
+    COMMITTED_FINAL_LAYOUT_OBSERVATIONS.lock().unwrap_or_else(|e|e.into_inner()).clear();
+}
+pub(crate) fn committed_final_layout_observation(post: &str, domain: crate::ssc_evidence_proof::SscAdoptionDomain) -> Option<CommittedFinalLayoutObservation> {
+    COMMITTED_FINAL_LAYOUT_OBSERVATIONS.lock().unwrap_or_else(|e|e.into_inner()).iter().rev()
+        .find(|record| record.after==post && record.domain==domain).cloned()
+}
+
 impl PreservingTransformationReceipt {
     pub(crate) fn with_final_layout_course_transport(mut self,
         transport: anyhow::Result<crate::structural_write_authority::FinalLayoutCourseTransport>) -> Self {
@@ -2072,6 +2093,17 @@ impl TransformationReceipt {
             pre_fingerprint,
             post_fingerprint,
         };
+        // This is the original receipt-consuming commit after the unchanged
+        // SSC verdict. Carry its sealed E007 observation as data, not a domain
+        // callback or a reconstructed origin, and never alter the adoption.
+        if let Self::Preserving(receipt) = &self
+            && let Ok(Some(course)) = receipt.final_layout_course_transport() {
+            let (before, after) = course.documents();
+            let mut observations = COMMITTED_FINAL_LAYOUT_OBSERVATIONS.lock().unwrap_or_else(|e|e.into_inner());
+            if !observations.iter().any(|record|record.identity==identity && record.domain==domain) {
+                observations.push(CommittedFinalLayoutObservation {identity, domain, before:before.to_owned(), after:after.to_owned()});
+            }
+        }
         match self {
             Self::Block(receipt) => crate::ssc_evidence_proof::record_block_commit(&SSC_ORIGIN_ACCESS, receipt, domain),
             Self::Exact(receipt) => crate::ssc_evidence_proof::record_exact_commit(&SSC_ORIGIN_ACCESS, receipt, domain),

@@ -6,6 +6,9 @@ use crate::clef_readability_observation::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "rustig_clef_boundary.rs"]
+mod beam_boundary;
+
 const REDUNDANT_CLEF_COST: i64 = 1;
 const READABILITY_SHORT_EXCURSION_MAX_ATTACKS: usize = 2;
 const READABILITY_SHORT_EXCURSION_REFERENCE_COST: i64 = 24;
@@ -335,6 +338,7 @@ pub(crate) struct RustigClefCoursePreservingMint {
 }
 
 pub(super) fn derive_clef_readability_primary_course_plan(xml: &str) -> RustigClefCoursePlan {
+    crate::audit_only::clef_planner_input::emit(xml, super::authority_primitives::fingerprint(xml));
     let mut removals = Vec::new();
     let mut insertions = Vec::new();
     for (part_index, (part_start, part_end)) in score_part_ranges(xml).into_iter().enumerate() {
@@ -433,8 +437,8 @@ fn beam_anchor_planner_input_trace(
     for row in rows {
         out.push_str(&format!("BeamAnchorPlannerContext: {binding}; {row}\n"));
     }
-    let attacks = collect_lower_staff_attacks(pitches);
-    let candidates = collect_readability_transition_candidates(&attacks);
+    let boundaries = beam_boundary::observe(part);
+    let candidates = collect_readability_course_candidates(part, pitches, &boundaries);
     out.push_str(&format!(
         "BeamAnchorPlannerCandidates: {binding}; PositionScope=part_local_bytes; Candidates={candidates:?}; Authority=none\n",
     ));
@@ -455,6 +459,7 @@ fn normalize_clef_readability_insertions(
     removals: &[(usize, usize)],
     insertions: &mut Vec<(usize, ClefKind)>,
 ) -> bool {
+    let boundaries = beam_boundary::observe(xml);
     insertions.sort_unstable_by_key(|(start, kind)| (*start, *kind));
     insertions.dedup();
     for (index, &(start, _)) in insertions.iter().enumerate() {
@@ -468,7 +473,7 @@ fn normalize_clef_readability_insertions(
                 .get(index + 1)
                 .is_some_and(|(next_start, _)| *next_start == start)
             || lower_tie_open_at_position(xml, start)
-            || lower_primary_beam_insertion_blocked(xml, start)
+            || (lower_primary_beam_insertion_blocked(xml, start) && !boundaries.contains(&start))
         {
             return false;
         }
@@ -669,7 +674,7 @@ pub fn append_clef_readability_shadow_course_audit_section(
     out.push_str("\nCLEF-READABILITY-PRIMARY-COURSE-POSTWRITE-AUDIT\n");
     out.push_str("----------------------------------------------------------------\n");
     out.push_str("Mode: primary_owner_postwrite_audit; WriteAllowed yes_via_existing_structural_write_authority; WriterAuthorityChanged nein.\n");
-    out.push_str("Policy: ledger lines remain graded costs, never a hard maximum. One clef transition carries the same explicit reference cost as one isolated four-ledger event (24 pressure units). A return to the previous clef after at most two lower-staff attacks is additionally classified as a short excursion and receives one further four-ledger reference cost. Transition candidates are writer-free starts of maximal lower-staff register-preference runs derived from F4/G2 ledger pressure, not legacy local >3 surfaces. Candidate boundaries are tie-chain and primary-beam-group closed within the current lower-staff octave-display scope: a preferred-register change on a tied continuation is anchored at the matching tie-chain start, and one inside a level-1 beam group is anchored at that beam group's begin attack only when that structural origin lies in the same octave-shift scope. Every lower-staff octave-shift start/stop is a hard clef-decision-scope boundary; tie/beam anchors never cross it. An unmatched tie continuation or beam continuation is not a writable clef boundary. Existing removable clef surfaces inside an open tie/beam structure of the same octave-display scope may only be omitted/reanchored, never retained in place. This is a readability tradeoff, not a four-ledger prohibition.\n");
+    out.push_str("Policy: ledger lines remain graded costs, never a hard maximum. Original ledger, transition, redundancy and short-excursion weights remain unchanged. The complete original closed-anchor course is preserved as an immutable baseline. An extended course retains its choices and may add only proved untied fresh lower heads inside complete mixed-preference primary beams in one current measure/cursor/octave scope. Original pitch/anchor evidence, all chord members, stable time, other lower voices/groups and incoming/outgoing ties remain protected. One shared boundary observation governs anchors, solver, normalization and postwrite safety; pure materialized clefs before the same head are recognized without trusting a marker. Unknown grants no new boundary. Only strict whole-part total-cost improvement replaces the baseline; equal or worse proposals keep it. This is a readability tradeoff, not a four-ledger prohibition.\n");
     out.push_str("ContourDisruptionProjection: short-excursion count only; no independent contour weight is used in this take.\n");
     append_clef_readability_shadow_source(out, "MasterMusicXML", master_audit);
     if let Some(render_artifact_audit) = render_artifact_audit {
@@ -758,9 +763,47 @@ fn solve_readability_course(
     surfaces: &[SurfaceEvent],
     pitches: &[PitchedEvent],
 ) -> Option<ClefReadabilityCourseSolution> {
-    let first = surfaces.first()?;
+    let original_boundaries = BTreeSet::new();
+    let original_pitches = scan_lower_pitches_with_boundary_policy(part, None, &original_boundaries);
+    let baseline = solve_readability_course_with_boundaries(part, surfaces, &original_pitches, &original_boundaries)?;
+    let boundaries = beam_boundary::observe(part);
+    if boundaries.is_empty() {
+        return Some(baseline);
+    }
+    let expanded = solve_readability_course_with_boundaries(part, surfaces, pitches, &boundaries);
+    match expanded {
+        Some(expanded) if expanded.cost.total() < baseline.cost.total() => Some(expanded),
+        _ => Some(baseline),
+    }
+}
+
+fn collect_readability_course_candidates(
+    part: &str,
+    pitches: &[PitchedEvent],
+    boundaries: &BTreeSet<usize>,
+) -> Vec<ClefReadabilityTransitionCandidate> {
     let attacks = collect_lower_staff_attacks(pitches);
-    let candidates = collect_readability_transition_candidates(&attacks);
+    let mut candidates = collect_readability_transition_candidates(&attacks);
+    if !boundaries.is_empty() {
+        let original = scan_lower_pitches_with_boundary_policy(part, None, &BTreeSet::new());
+        for candidate in collect_readability_transition_candidates(&collect_lower_staff_attacks(&original)) {
+            if !candidates.iter().any(|present| present.start == candidate.start && present.kind == candidate.kind) {
+                candidates.push(candidate);
+            }
+        }
+        candidates.sort_by_key(|candidate| (candidate.start, candidate.kind));
+    }
+    candidates
+}
+
+fn solve_readability_course_with_boundaries(
+    part: &str,
+    surfaces: &[SurfaceEvent],
+    pitches: &[PitchedEvent],
+    boundaries: &BTreeSet<usize>,
+) -> Option<ClefReadabilityCourseSolution> {
+    let first = surfaces.first()?;
+    let candidates = collect_readability_course_candidates(part, pitches, boundaries);
     let mut timeline = Vec::with_capacity(surfaces.len().saturating_sub(1) + candidates.len());
     for (index, event) in surfaces.iter().enumerate().skip(1) {
         timeline.push((event.start, 0u8, ClefReadabilityTimelineEvent::Surface(index)));
@@ -816,7 +859,8 @@ fn solve_readability_course(
                 let tie_open_at_surface =
                     event.visible && lower_tie_open_at_position(part, event.start);
                 let beam_open_at_surface = event.visible
-                    && lower_primary_beam_group_contains_position(part, event.start);
+                    && lower_primary_beam_group_contains_position(part, event.start)
+                    && !boundaries.contains(&event.start);
                 let octave_shift_boundary_surface = event.visible
                     && lower_octave_shift_boundary_precedes_position(part, event.start);
                 let boundary_closed =
@@ -877,7 +921,8 @@ fn solve_readability_course(
                 let tie_open_at_transition =
                     lower_tie_open_at_position(part, transition.start);
                 let beam_open_at_transition =
-                    lower_primary_beam_insertion_blocked(part, transition.start);
+                    lower_primary_beam_insertion_blocked(part, transition.start)
+                        && !boundaries.contains(&transition.start);
                 let octave_shift_boundary_transition =
                     lower_octave_shift_boundary_precedes_position(part, transition.start);
                 let boundary_closed = (tie_open_at_transition || beam_open_at_transition)
@@ -1430,7 +1475,16 @@ fn scan_lower_pitches(
 
 fn scan_lower_pitches_with_beam_audit(
     part: &str,
+    observations: Option<&mut Vec<BeamAnchorObservation>>,
+) -> Vec<PitchedEvent> {
+    let boundaries = beam_boundary::observe(part);
+    scan_lower_pitches_with_boundary_policy(part, observations, &boundaries)
+}
+
+fn scan_lower_pitches_with_boundary_policy(
+    part: &str,
     mut observations: Option<&mut Vec<BeamAnchorObservation>>,
+    boundaries: &BTreeSet<usize>,
 ) -> Vec<PitchedEvent> {
     let shifts = scan_octave_events(part);
     let mut shift_index = 0usize;
@@ -1524,10 +1578,15 @@ fn scan_lower_pitches_with_beam_audit(
         let beam_transition_anchor = self_anchor.and(beam_transition_anchor);
 
         if let Some(pitch) = lower_pitch {
-            let clef_transition_anchor = match (tie_transition_anchor, beam_transition_anchor) {
+            let mut clef_transition_anchor = match (tie_transition_anchor, beam_transition_anchor) {
                 (Some(tie_anchor), Some(beam_anchor)) => Some(tie_anchor.min(beam_anchor)),
                 _ => None,
             };
+            if clef_transition_anchor.is_some()
+                && self_anchor.is_some_and(|head| boundaries.contains(&head))
+            {
+                clef_transition_anchor = self_anchor;
+            }
 
             if let (Some(state), Some(rows)) = (beam_state, observations.as_deref_mut()) {
                 rows.push(BeamAnchorObservation {
@@ -1711,6 +1770,7 @@ fn primary_beam_state(note: &str) -> Option<PrimaryBeamState> {
 fn lower_clef_surface_inside_primary_beam_group(xml: &str) -> bool {
     for (part_start, part_end) in score_part_ranges(xml) {
         let part = &xml[part_start..part_end];
+        let boundaries = beam_boundary::observe(part);
         let Some(surfaces) = scan_lower_clef_surfaces(part) else {
             continue;
         };
@@ -1718,6 +1778,7 @@ fn lower_clef_surface_inside_primary_beam_group(xml: &str) -> bool {
             surface.visible
                 && !lower_octave_shift_boundary_precedes_position(part, surface.start)
                 && lower_primary_beam_group_contains_position(part, surface.start)
+                && !boundaries.contains(&surface.start)
         }) {
             return true;
         }

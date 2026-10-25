@@ -5,8 +5,8 @@ Lifecycle-/Acceptance-Belege und die Runtime-Belege des Exports, nicht dieser Te
 
 ## Jetzt
 
-- Angenommen bis r1511 / 0.10.1839 (6aaf1fd7...): 10/10 dunkelgruen,
-  2465 Tests bestanden, 0 fehlgeschlagen, 1 ignoriert (15 Testprogramme); Build/Clippy Exit 0.
+- Angenommen bis r1514 / 0.10.1839 (d69b4895...): 10/10 dunkelgruen,
+  2485 Tests bestanden, 0 fehlgeschlagen, 1 ignoriert (15 Testprogramme); Build/Clippy Exit 0.
   Alle MuseScore-Aufrufe ohne `-f`,
   erste Variante erfolgreich (`VariantsAttempted 1/7; FailedBeforeSuccess 0`).
 - Balkenthema abgeschlossen (seit r1484): Pruefer fuer Primaergruppen ueber Stimmen 0 Takte,
@@ -215,3 +215,121 @@ Register tests: 73 local real-module cases passed. A separate real-writer/receip
 binary integration probe uses synthetic test genesis. Windows/native corpus acceptance,
 actual downstream output comparison and new PDF readback remain pending.
 See ../register_common_span_closed_comparison_r1512.md.
+
+
+## r1513 - LowerClefBeamInteriorContextDefinition (Stage A candidate)
+
+Parent r1512 accepted: `ea977b4a07e176a72f046b256cb0a4258df678241f32ecd491822ff05c5ed3e8`.
+The 20261025-112259 export supplies the parent source and native lifecycle record.
+A fresh PDF/XML review selected lower clef readability as the next musical topic.
+Source inspection shows whole-course optimization already exists: primary-beam
+and transitive tie anchors coalesce internal preferences before candidate
+formation. Final Render readback shows that pattern in two low tails; it does
+not establish their transient productive input or a newly measured distribution.
+r1513 freezes only the causal missing-boundary-context definition, with a
+necessity review, UNKNOWN, positive neighbors and independent proof obligations.
+No musical source, gate, test, dependency or existing class contract changes.
+Native acceptance is pending. A later repair must reference the accepted
+definition unchanged and reconcile all existing clef owner guards, not bypass
+one of them. No corrected PDF or musical result is claimed by this take.
+See ../lower_clef_beam_interior_context_r1513.md and
+../selector_derivation_contract_lower_clef_beam_interior_context.md.
+
+
+## r1514 - ClefPlannerExactInputReadback (RefactorOnly candidate)
+
+Parent r1513 accepted: `fdb4270fb2d193b719bc188f7ffd8176cdd14d466ef42adcfad89454c1205ee8`.
+Native: 2482 passed, 0 failed, 1 ignored; build/clippy 0; corpus 10/10 dark-green.
+The source snapshot matches all delivered r1513 source bytes.
+r1514 adds one unconditional read-only call at the actual clef-planner entry.
+Complete input bytes are SHA-256/length/FNV-bound and emitted as zlib hex frames
+through existing stderr. Repeated calls are preserved; no classifier, selector,
+cost, musical writer, receipt or adoption changes. r1513 definition unchanged.
+The strict extractor retains all observations and rejects incomplete/corrupt data.
+Actual input is observed; productive phase and writer commit remain unproven
+without separate caller/receipt evidence. Native acceptance is pending.
+See ../clef_planner_exact_input_readback_r1514.md.
+
+
+## r1515 - LowerClefFreshBeamBoundary (MusicMutation candidate)
+
+Parent r1514 accepted: `d69b4895a41aed42c9a5d40b7eb1b9eb67affd9703adfbb56ff28e60edc5c762`.
+Native 2485 passed, 0 failed, 1 ignored; build/clippy passed; ten-piece corpus dark-green.
+All 20 XMLs byte-equal and all 50 pages pixel-equal at 144 dpi to r1513.
+Exact input capture: 90 observations, 55 distinct byte states; unchanged planner
+replay matches all 32 native detailed solution and candidate-list occurrences.
+r1515 adds a shared, conservative fresh-attack boundary proof inside a complete
+lower primary beam. Original whole-part baseline and candidate choices remain
+available; only strict whole-part cost improvement can replace that baseline.
+The same proof is used in scanner, solver, normalization and postwrite safety.
+No note/beam/tie or writer/receipt/adoption ownership mutation is introduced by
+the clef operation. Unknown grants no new boundary; lower-clef costs stay fixed.
+Correction: E-sharp3 has three treble ledger lines, not four as earlier reported.
+The r1513 class bytes remain unchanged. Native r1515 acceptance is pending.
+See ../lower_clef_fresh_beam_boundary_r1515.md.
+
+## r1516 - OttavaRecueContextDefinition (Stage A candidate)
+
+Parent r1515 accepted: `15cb8e29f849c4f1d27f431f9d940ec6faf2e5bd323b87f8b59ac10fdf9e848d`.
+Native 2493 passed, 0 failed, 1 ignored; 15 test programs; build/clippy passed;
+ten-piece corpus dark-green. Delivered source and acceptance hashes verified.
+Five PDF pages change; the other 45 are pixel-identical at 144 dpi. All pitched
+note bytes remain unchanged; three rest display rebindings follow clef changes.
+The two lower-clef examples are improved; committed clef reentry changes are zero.
+The proposed repeated-ottava topic is not a duplicate-writer bug: existing r605
+policy intentionally requires visible reminders at in-system silent-bridge
+continues. The final upper-domain gaps contain lower-domain notes, not scorewide
+silence. A continuous final PDF line alone does not authorize reminder removal.
+r1516 freezes only the omitted visible-line cue-context comparison definition.
+No runtime selector, cue removal, octave-scope change, new writer or guard change.
+All prior contracts and runtime/test source bytes stay unchanged. Native acceptance
+is pending. See ../ottava_recue_context_r1516.md and
+../selector_derivation_contract_ottava_recue_context.md.
+
+## r1517 - Ottava-Kontextbeobachtung (Kandidat)
+
+- Frischer Parent-Beleg: r1516 accepted; 2493 Tests, 10/10 dunkelgruen,
+  Build/Clippy erfolgreich. r1516 friert nur die fehlende Kontextfrage ein.
+- r1517 (RefactorOnly): der bestehende Registereingangs-Bericht zeigt fruehe
+  semantische Plaene, validierten Sichtplan und tatsaechlich materialisierte
+  Continue-Liniennummern sowie getrennte finale XML-Beobachtungen.
+- Keine Zeichenentfernung, neue Leserregel oder Musikwirkung. PDF-Linienkontinuitaet
+  und Leserbedarf bleiben UNKNOWN; finales XML rekonstruiert keine fruehe Identitaet.
+- Details: ../ottava_context_observation_r1517.md. Native Annahme steht aus.
+
+## r1518 - Leserregel und Reparaturumfang (Kandidat)
+
+- Frischer r1517-Beleg: accepted, 2500 Tests bestanden, 0 fehlgeschlagen,
+  1 ignoriert; Build/Clippy erfolgreich, 10/10 dunkelgruen. Gegen r1516 sind
+  20/20 XMLs bytegleich und 50/50 PDF-Seiten bei 144 dpi pixelgleich.
+- Zensus: 12 Fortsetzungen, davon 3 finale Restart-Projektionen ohne zusaetzliches
+  Wort und 9 inner-systemische Erinnerungswoerter. Die neun Stellen wurden im
+  PDF visuell geprueft; das ersetzt keine transportierte Identitaet oder PDF-Proof.
+- r1518 (KodexOnly) friert die begruendete Leser-Praeferenz und den separat
+  anzunehmenden Reparaturumfang ein. Keine Runtime-, Guard- oder Musikaenderung.
+- Details: ../ottava_reader_reminder_scope_r1518.md und
+  ../ottava_reader_reminder_repair_scope_v1.md. Native Annahme steht aus.
+
+## r1519 - Belegte Leserentscheidung (Kandidat)
+
+- Parent r1518 accepted, 2500 Tests / 10/10 dunkelgruen, 20/20 XML bytegleich
+  und 50/50 PDF-Seiten bei 144 dpi pixelgleich zu r1517.
+- r1519 implementiert den angenommenen Reparaturumfang: originale Herkunftsmarker als nichtdruckende XML-Kommentare,
+  aktuelle PDF-Linien-/Orientierungsbeobachtung, quellengebundene Leserentscheidung
+  im vorhandenen E012-Owner und exakter Receipt-/Adoptions-/Export-Nachweis.
+- UNKNOWN behaelt die Baseline; finale PDF-Geometrie muss den Nachweis erhalten.
+  Keine Aenderung eingefrorener E007-/Checkpoint58-/Render-Adoptionsdateien.
+- Details: ../ottava_reader_decision_r1519.md. Native Annahme steht aus.
+
+## r1520 - Vertikale Ottava-Renderbewegung (Kandidat)
+
+- Parent bleibt r1518, hashgebunden angenommen. r1519 (4329c5be...) wurde
+  nativ verworfen und auf r1518 zurueckgerollt: 2509 Tests, Build/Clippy gruen;
+  finale PDF-Nachweise in drei Projekten fehlgeschlagen.
+- Das getrennte native Gegenexperiment belegt vertikale Layoutbewegung bei
+  erhaltenen Linien/Orientierungszeichen. Keine Korpusadressen oder gemessenen
+  Abstaende werden zu produktiven Cutoffs.
+- r1520 behaelt die quellgetragene Identitaet und Original-Receipt-/Adoptionskette.
+  Der finale Beobachter prueft aktuelle Orientierung/Kontinuitaet im aktuellen
+  Lesebereich bei unveraendertem horizontalen Verlauf und Seiten-/Zellenbezug.
+- Native Annahme und vollstaendige XML-/PDF-Korpusbewertung stehen aus.

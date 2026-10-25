@@ -108,6 +108,7 @@ fn plan(parts: &[Vec<usize>]) -> HorizontalLayoutPlan {
 
 fn observation() -> crate::audit_only::renderer_system_break_readback::RendererSystemBreakReadbackAudit {
     crate::audit_only::renderer_system_break_readback::RendererSystemBreakReadbackAudit {
+        ottava_context: Default::default(),
         planned_system_starts: vec![1,2,4,5], rendered_system_starts: vec![1,2,4,5],
         planned_page_starts: vec![1,4], rendered_page_starts: vec![1,2,4],
         inserted_system_breaks: vec![], collapsed_system_breaks: vec![], inserted_page_breaks: vec![2],
@@ -194,6 +195,7 @@ fn alternate_plan_passes_original_promote_and_keeps_its_negative_guards() {
 
 fn subdivided_observation(concurrent_page: bool) -> crate::audit_only::renderer_system_break_readback::RendererSystemBreakReadbackAudit {
     crate::audit_only::renderer_system_break_readback::RendererSystemBreakReadbackAudit {
+        ottava_context: Default::default(),
         planned_system_starts: vec![1,4], rendered_system_starts: vec![1,3,4,6],
         planned_page_starts: vec![1,4], rendered_page_starts: if concurrent_page { vec![1,3,4] } else { vec![1,4] },
         inserted_system_breaks: vec![3,6], collapsed_system_breaks: vec![],

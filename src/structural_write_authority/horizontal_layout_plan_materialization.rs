@@ -228,10 +228,15 @@ fn materialize_like_canonical(
     }
 
     let mut out = source_xml.to_string();
+    let reader_removals = crate::registernotation::reader_policy::final_removals(source_xml, directives);
     let mut changed_slots = 0usize;
     for (slot_index, (start, end)) in ranges.into_iter().enumerate().rev() {
         let current = &source_xml[start..end];
-        let replacement = rewrite_measure(current, &directives[slot_index])?;
+        let mut reader_projection = current.to_owned();
+        for range in reader_removals.iter().rev().filter(|r|r.start>=start && r.end<=end) {
+            reader_projection.replace_range(range.start-start..range.end-start, "");
+        }
+        let replacement = rewrite_measure(&reader_projection, &directives[slot_index])?;
         if replacement != current {
             out.replace_range(start..end, &replacement);
             changed_slots += 1;

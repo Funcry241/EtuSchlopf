@@ -23,14 +23,14 @@ Programme und bleiben Gegenstand von Gegenbeispielen und Prüfung.
 
 - [Was tatsächlich implementiert ist, einschließlich SchlopfFormel und Mathematik](docs/IMPLEMENTED_FOUNDATIONS.md)
 - [Forschungsbezüge und ihre genaue Rolle](docs/RESEARCH_CONTEXT.md)
-- [Dokumentierte Abnahme von r1512](docs/evidence/r1512/README.md)
+- [Dokumentierte Abnahme von r1520](docs/evidence/r1520/README.md)
 - [Kaltstart ohne Gesprächsgedächtnis](docs/assistant_memory/000_start_here.md)
 
-**Geprüfter Stand am 25.10.2026:** r1512, Paketversion 0.10.1839; 2.482 Tests
+**Geprüfter Stand am 25.10.2026:** r1520, Paketversion 0.10.1839; 2.511 Tests
 bestanden, ein Test ignoriert, Build/Clippy erfolgreich, privater Evaluationskorpus
 10/10. Das sind Belege dieses konkreten nativen Laufs, keine universelle
 Spielbarkeitsgarantie und kein öffentlich vollständig reproduzierbarer Korpustest.
-Das Notenbild bleibt in Arbeit. Der Git-Stand enthält die angenommene r1512-Quelle
+Das Notenbild bleibt in Arbeit. Der Git-Stand enthält die angenommene r1520-Quelle
 und eine gesonderte öffentliche Dokumentationsschicht; Git-Commit und Take-Annahme
 sind unterschiedliche Nachweise.
 
@@ -243,3 +243,4 @@ Der eigene EtuSchlopf-Code steht unter der [MIT-Lizenz](docs/licenses/EtuSchlopf
 Fremdkomponenten behalten ihre jeweiligen Lizenzen. Die Zuordnung, mitgelieferte
 Lizenztexte und Grenzen der Prüfung stehen in
 [Fremdlizenzhinweise](docs/THIRD_PARTY_NOTICES.md).
+
