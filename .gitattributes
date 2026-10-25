@@ -1,2 +1,2 @@
 # Preserve upstream license text bytes, including original CRLF and whitespace.
-LICENSES/** -text -whitespace
+docs/licenses/** -text -whitespace

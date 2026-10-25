@@ -8,7 +8,7 @@ This audit tool evaluates Spotify Basic Pitch's ICASSP 2022 ONNX model as fallib
 - Expected bytes: `230444`
 - Upstream license: Apache-2.0
 - Copyright 2022 Spotify AB
-- License text: `../../LICENSES/Basic-Pitch-Apache-2.0.txt`
+- License text: `../../docs/licenses/Basic-Pitch-Apache-2.0.txt`
 - Model output labels used: `StatefulPartitionedCall:1` (note), `StatefulPartitionedCall:2` (onset)
 - Model input label documented upstream: `serving_default_input_2:0`
 

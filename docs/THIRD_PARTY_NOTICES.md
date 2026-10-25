@@ -1,19 +1,19 @@
 # Fremdkomponenten und Lizenzen
 
 Der eigene EtuSchlopf-Code einschließlich der eigenen Hilfsprogramme steht unter
-der [MIT-Lizenz](LICENSE). Diese Lizenz ersetzt keine Rechte oder Bedingungen
+der [MIT-Lizenz](licenses/EtuSchlopf-MIT.txt). Diese Lizenz ersetzt keine Rechte oder Bedingungen
 von Fremdkomponenten. Deren Lizenztexte und Urheberrechtshinweise bleiben gültig.
 
 ## Rust-Pakete
 
-Die [Paketliste](docs/license_inventory.md) ordnet alle 189 unterschiedlichen
-Registry-Paketversionen aus den vier `Cargo.lock`-Dateien ihren Lizenzen zu.
+Die [Paketliste](license_inventory.md) ordnet alle 189 unterschiedlichen
+Registry-Paketversionen aus zwei vorhandenen Lockfiles und zwei zusätzlichen Prüf-Auflösungen ihren Lizenzen zu.
 Sie umfasst auch optionale und plattformspezifische Abhängigkeiten. Der Hauptbaum
 verwendet davon 44; die übrigen kommen durch die separaten Werkzeuge hinzu.
 
 Die Originalarchive wurden gegen die SHA-256-Prüfsummen der Lockfiles geprüft.
-Ihre Lizenz- und NOTICE-Dateien liegen unter [LICENSES/rust](LICENSES/rust).
-Die [maschinelle Bestandsaufnahme](docs/license_inventory.json) enthält die
+Ihre Lizenz- und NOTICE-Dateien liegen unter [licenses/rust](licenses/rust).
+Die [maschinelle Bestandsaufnahme](license_inventory.json) enthält die
 Prüfsummen, Quellarchive, Lizenztexte und die Zuordnung zu den Lockfiles.
 `MIT/Apache-2.0` und `Unlicense/MIT` sind unverändert übernommene ältere
 Paketangaben für alternative Lizenzen. Bei alternativen Lizenzen kann eine
@@ -33,7 +33,7 @@ unveränderter Quellcode einschließlich MPL-Hinweisen ist hier erhältlich:
 
 - [Original-Quellarchiv](https://static.crates.io/crates/webpki-roots/webpki-roots-0.25.4.crate)
 - SHA-256: `5f20c57d8d7db6d3b86154206ae5d8fba62dd39573114de97c2cb0578251f8e1`
-- [MPL-2.0-Lizenztext](LICENSES/rust/texts/6a70a4bf6b010016d59a.txt)
+- [MPL-2.0-Lizenztext](licenses/rust/texts/6a70a4bf6b010016d59a.txt)
 
 Wer eine daraus gebaute Sensor-Binärdatei weitergibt, muss die Empfänger auf die
 Verfügbarkeit dieses MPL-Quellcodes hinweisen. Änderungen an MPL-Dateien müssen
@@ -48,12 +48,12 @@ Die Dateien `musicxml.xsd` und `xlink.xsd` unter
 **MusicXML 3.1** beziehungsweise **MusicXML 4.0**. Copyright © 2004–2017
 beziehungsweise © 2004–2021, Contributors to the MusicXML Specification.
 Veröffentlicht durch die W3C Music Notation Community Group unter dem
-[W3C Community Final Specification Agreement](LICENSES/W3C/w3c-fsa.txt).
+[W3C Community Final Specification Agreement](licenses/W3C/w3c-fsa.txt).
 
 Die jeweiligen `xml.xsd` sind die mit den Upstream-Versionen gelieferten
 W3C-Schemas für den XML-Namensraum. Dazu werden die
-[W3C Software License 2002](LICENSES/W3C/w3c-software.txt) und deren
-[Software and Document License 2015](LICENSES/W3C/w3c-software-2015.txt)
+[W3C Software License 2002](licenses/W3C/w3c-software.txt) und deren
+[Software and Document License 2015](licenses/W3C/w3c-software-2015.txt)
 mitgeführt. W3C hat die 2015-Fassung auch auf zuvor unter der 2002-Fassung
 veröffentlichte Dokumente angewandt. Die Rechte an diesen W3C-Dateien bleiben
 bei ihren jeweiligen Rechteinhabern.
@@ -79,7 +79,7 @@ besitzen zusätzliche Lizenzen.
 
 Diese Bibliotheken werden separat installiert; das Repository liefert keine
 PDFium-Binärdatei oder Python-Wheels aus. Unter
-[LICENSES/pypdfium2-5.14.0](LICENSES/pypdfium2-5.14.0) liegen die pypdfium2-Texte
+[licenses/pypdfium2-5.14.0](licenses/pypdfium2-5.14.0) liegen die pypdfium2-Texte
 und die Hinweise des hier geprüften Linux-x64-Wheels. Diese Linux-Hinweise sind
 keine pauschale Freigabe anderer Plattformbuilds. Wer Wheels oder PDFium später
 mitliefert, muss die vollständigen Lizenzhinweise **genau dieser Binärbuilds**
@@ -101,8 +101,8 @@ Spotify AB, Apache-2.0. Das Modell liegt nicht im Repository. Der bereits
 vorgesehene Bootstrap lädt es separat und prüft seine festgelegte Prüfsumme.
 Die Primärquelle wurde beim Audit gegen diese Prüfsumme geprüft.
 
-- [Herkunft und Modellidentität](tools/wav_pitch_external_sensor_audit/BASIC_PITCH_NOTICE.md)
-- [Apache-2.0-Lizenztext](LICENSES/Basic-Pitch-Apache-2.0.txt)
+- [Herkunft und Modellidentität](../tools/wav_pitch_external_sensor_audit/BASIC_PITCH_NOTICE.md)
+- [Apache-2.0-Lizenztext](licenses/Basic-Pitch-Apache-2.0.txt)
 - [Upstream](https://github.com/spotify/basic-pitch)
 
 Wer das Modell separat ausliefert, muss dessen Apache-Lizenz und anwendbare
@@ -124,8 +124,11 @@ erteilt dafür keine Rechte.
 
 Stand: 25.10.2026, Ausgangscommit
 `5fce4153f10b8fac90b171e003eaf98a89ac1db3` plus die hier dokumentierte Änderung.
-Die beiden neuen Lockfiles fixieren die zuvor separat aufgelösten
-Sensor- und Schemaschlopf-Abhängigkeiten. Root-`Cargo.lock` bleibt unverändert.
+Die zusätzlichen Cargo-Auflösungen liegen ausschließlich als Prüf-Snapshots
+unter `docs/license_lock_snapshots`. Sie ändern keine native Laufzeitauflösung.
+Der Sensor-Build synchronisiert diese Snapshots nicht in seinen Target-Baum;
+ein daraus später abweichender Build ist durch dieses Inventar nicht freigeprüft.
+Root-`Cargo.lock` und die qualifizierte Schemaschlopf-Komponente bleiben unverändert.
 
 Geprüft wurden Paketmetadaten, Archividentitäten, vorhandene Lizenztexte,
 mitgelieferte Fremdschemas und die genannten externen Komponenten. Dies ist
