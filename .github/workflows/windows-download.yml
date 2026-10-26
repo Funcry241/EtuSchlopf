@@ -2,7 +2,7 @@ name: Windows download
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, windows-report-fix]
     paths:
       - '.gitattributes'
       - '.github/distribution/**'
@@ -24,20 +24,30 @@ jobs:
       CARGO_INCREMENTAL: '0'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Verify accepted runtime source
+      - name: Verify pinned candidate runtime source
         run: |
           $ErrorActionPreference = 'Stop'
-          Get-Content docs/evidence/r1526/accepted_runtime_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
+          Get-Content docs/evidence/r1528/candidate_runtime_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
             $parts = $_ -split "`t"
-            if ((Get-FileHash -Algorithm SHA256 $parts[0]).Hash.ToLowerInvariant() -ne $parts[1]) { throw "Runtime differs from accepted r1526: $($parts[0])" }
+            if ((Get-FileHash -Algorithm SHA256 $parts[0]).Hash.ToLowerInvariant() -ne $parts[1]) { throw "Runtime differs from r1528 candidate: $($parts[0])" }
           }
-      - name: Build accepted engine
+      - name: Build candidate engine
         run: |
           rustup toolchain install 1.98.0 --profile minimal
           if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed' }
           $jobs = [Math]::Max(1, [Environment]::ProcessorCount - 1)
           cargo +1.98.0 build --locked --profile strict --bin etuschlopf --jobs $jobs --color never
-          if ($LASTEXITCODE -ne 0) { throw 'Accepted engine build failed' }
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate engine build failed' }
+      - name: Run strict regression suite
+        run: |
+          $jobs = [Math]::Max(1, [Environment]::ProcessorCount - 1)
+          cargo +1.98.0 test --locked --profile strict --all-targets --config 'profile.strict.package.etuschlopf.opt-level=0' --jobs $jobs --color never
+          if ($LASTEXITCODE -ne 0) { throw 'Strict regression tests failed' }
+      - name: Strict Clippy
+        run: |
+          $jobs = [Math]::Max(1, [Environment]::ProcessorCount - 1)
+          cargo +1.98.0 clippy --locked --profile strict --all-targets --jobs $jobs --color never -- -D warnings
+          if ($LASTEXITCODE -ne 0) { throw 'Strict Clippy failed' }
       - name: Bundle runtime data and licences
         run: |
           $ErrorActionPreference = 'Stop'
@@ -69,7 +79,7 @@ jobs:
             & $exe --help
             if ($LASTEXITCODE -ne 0) { throw 'Standalone help probe failed' }
           } finally { $env:PATH = $originalPath }
-      - name: Verify isolated runtime and safe rejection
+      - name: Verify isolated runtime and successful synthetic pipeline
         run: |
           ./.github/distribution/smoke.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
       - name: Hash Windows download

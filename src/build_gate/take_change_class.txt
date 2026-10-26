@@ -1,10 +1,7 @@
 schema_version=1
-change_class=KodexOnly
+change_class=RefactorOnly
 from_version=0.10.1839
 to_version=0.10.1839
-reason=Keep the existing public output transaction enabled for standard-output project options and freeze general run request admission before runtime integration
-change=modified|ZIP_KIND.txt|fnv64:1f2d5c205a2de68c
-change=added|docs/selector_derivation_contract_run_request_input_admission.md|fnv64:1101f136f20e1def
-change=added|docs/standard_output_option_protection_r1526.md|fnv64:0ec0667c4f82d047
-change=modified|src/bin/etuschlopf_launcher.rs|fnv64:13d9182e76c8bdae
-change=modified|src/identity_gate_trust_anchor.rs|fnv64:2e173a7b07de0817
+reason=Project internal rest tie audit verdict names as machine rule checks preserving rejection outcomes and the unchanged unknown authority guard
+change=modified|ZIP_KIND.txt|fnv64:013a1aac41b3fba5
+change=modified|src/report_sanitizer.rs|fnv64:77ebdec3eb234b87

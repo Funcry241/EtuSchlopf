@@ -28,13 +28,15 @@ $log = Get-Content "$root/probe.log" -Raw
 Write-Output $log
 if ($log -notmatch 'MIDI produktiv;') { throw 'Packaged engine did not reach productive MIDI processing' }
 if ($log -match 'konnte EtuSchlopfs gebundene MusicXML') { throw 'Required runtime schema data unavailable' }
-if ($exitCode -ne 0 -and $log -notmatch 'Aktiver menschlicher Sichtpruefungs-/Reviewvertrag') { throw "Unexpected pipeline failure: $exitCode" }
-if ($exitCode -ne 0) { Write-Warning 'Synthetic piece was rejected by the existing report gate. This is not a successful musical acceptance.' }
+if ($exitCode -ne 0) { throw "Packaged synthetic pipeline must succeed: $exitCode" }
+if ($log -match 'Aktiver menschlicher Sichtpruefungs-/Reviewvertrag') { throw 'Report verdict projection regression' }
 $folders = @(Get-ChildItem "$root/EtuSchlopf-Ergebnisse" -Directory)
 if ($folders.Count -ne 1) { throw 'Expected exactly one isolated result workspace' }
 if (-not (Test-Path (Join-Path $folders[0].FullName 'Example Ü.mid'))) { throw 'Internal MIDI copy missing' }
 if (-not (Test-Path (Join-Path $folders[0].FullName 'Example Ü.wav'))) { throw 'Internal WAV copy missing' }
-Write-Output 'Packaged engine reached processing without developer PATH; original source hashes preserved.'
-# The negative fixture's production exit is asserted above. A passing harness
-# returns success without changing or suppressing the engine's failure result.
+foreach ($extension in @('musicxml','render.musicxml','result.txt')) {
+  $file = Join-Path $folders[0].FullName "Example Ü.$extension"
+  if (-not (Test-Path $file) -or (Get-Item $file).Length -eq 0) { throw "Missing successful result: $extension" }
+}
+Write-Output 'Packaged synthetic pipeline completed with exit 0 without developer PATH; original source hashes preserved.'
 $global:LASTEXITCODE = 0

@@ -23,27 +23,12 @@ fn run_project_run_preparation_stage(
         cli.musicxml_out.as_deref(),
         cli.pdf_out.as_deref(),
     )?;
-    purge_previous_report_outputs(&source)?;
-    let _writer_trace_session = crate::audit_only::writer_trace::start(
-        cli.writer_trace.as_deref(),
-        &source.input_label,
-        Some(&source.render_musicxml_out),
-    )
-    .map_err(|reason| anyhow!("Writer-Trace konnte nicht initialisiert werden: {reason}"))?;
+    let parallel = resolve_parallel_plan(&cli.jobs, cli.candidate_budget_jobs)?;
+    let decoded_midi = validate_project_input_files(&source, cli.reference_wav.as_deref())?;
     let reference = inspect_reference_files(
         &source.expected_midi,
-        cli.reference_wav
-            .as_deref()
-            .or(Some(source.expected_wav.as_path())),
+        cli.reference_wav.as_deref().or(Some(source.expected_wav.as_path())),
     );
-    if reference.wav.is_none() || !source.expected_midi.is_file() {
-        return Err(anyhow!(
-            "Projektmodus erwartet produktiv diese Quellen: {} und {}. MusicXML ist kein Input und wird nicht gesucht.",
-            source.expected_wav.display(),
-            source.expected_midi.display(),
-        ));
-    }
-    let decoded_midi = crate::midi::read_standard_midi(&source.expected_midi)?;
     let midi_projection = crate::source_event::project_source_events(&decoded_midi.notes);
     let source_event_causal_projection = crate::source_event::project_source_event_causality(
         &decoded_midi.source_event_causal_ledger,
@@ -69,7 +54,13 @@ fn run_project_run_preparation_stage(
     let options = CheckOptions {
         strict: !cli.lenient_partial_voices,
     };
-    let parallel = resolve_parallel_plan(&cli.jobs, cli.candidate_budget_jobs)?;
+    let _writer_trace_session = crate::audit_only::writer_trace::start(
+        cli.writer_trace.as_deref(),
+        &source.input_label,
+        Some(&source.render_musicxml_out),
+    )
+    .map_err(|reason| anyhow!("Writer-Trace konnte nicht initialisiert werden: {reason}"))?;
+    purge_previous_report_outputs(&source)?;
     let midi_path = source.expected_midi.clone();
     console_progress(format!(
         "ARBEITET - Projekt '{}' wird aus MIDI/WAV analysiert",
@@ -327,4 +318,18 @@ fn run_master_notation_and_salience_stage(
     );
 
     Ok(MasterNotationAndSalienceStageOutcome { best })
+}
+
+fn validate_project_input_files(source: &source::SourcePlan, explicit_wav: Option<&Path>) -> anyhow::Result<crate::midi::DecodedMidiSource> {
+    let wav = explicit_wav.unwrap_or(&source.expected_wav);
+    crate::source::validate_file_targets(
+        &[source.expected_midi.clone(), wav.to_path_buf()],
+        &source.output_paths(),
+    )?;
+    let decoded_midi = crate::midi::read_standard_midi(&source.expected_midi)
+        .with_context(|| format!("MIDI ungueltig: {}. Bitte eine gueltige Standard-MIDI-Datei verwenden.", source.expected_midi.display()))?;
+    if decode_wav_mono_samples(wav).is_none() {
+        return Err(anyhow!("WAV kann nicht als Audiodatei gelesen werden: {}. Bitte eine unterstuetzte, nicht leere WAV-Datei bereitstellen.", wav.display()));
+    }
+    Ok(decoded_midi)
 }

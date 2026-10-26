@@ -1,6 +1,6 @@
 kind=EtuSchlopfTake
 version=0.10.1839
-revision=r1526
-name=StandardOutputOptionProtection
-parent_revision=r1525
-change_class=KodexOnly
+revision=r1528
+name=RestTieReportVerdictProjection
+parent_revision=r1527
+change_class=RefactorOnly

@@ -225,6 +225,12 @@ pub(crate) fn sanitize_behind_bars_active_authority_language_v1284(mut input: St
         ("human_visual_review_required", "behind_bars_visual_rule_proof_required"),
         ("HumanReview", "BehindBarsRuleCheck"),
         ("human_review", "behind_bars_rule_check"),
+        // Internal rest/tie audit verdicts describe machine outcomes, not human approval.
+        // Preserve each outcome suffix; unknown review labels still reach the guard.
+        ("behind_bars_review_no_adopted_transaction", "behind_bars_rule_check_no_adopted_transaction"),
+        ("behind_bars_review_no_safe_rest_cleanup_candidate_tie_audit_only", "behind_bars_rule_check_no_safe_rest_cleanup_candidate_tie_audit_only"),
+        ("behind_bars_review_local_transaction_rejected_by_final_invariant_guard", "behind_bars_rule_check_local_transaction_rejected_by_final_invariant_guard"),
+        ("behind_bars_review_all_local_transactions_rejected", "behind_bars_rule_check_all_local_transactions_rejected"),
     ];
     for &(legacy, truthful) in REPLACEMENTS {
         if input.contains(legacy) {
@@ -321,4 +327,42 @@ pub(crate) fn sanitize_report_hygiene_polish(input: String) -> String {
     );
     text = replace_numbered_label_after_prefix(&text, "candidate", "candidate<rank>");
     text
+}
+
+#[cfg(test)]
+mod rest_tie_verdict_projection_tests {
+    use super::*;
+
+    #[test]
+    fn all_internal_rest_tie_verdicts_preserve_their_outcome_and_pass_language_guard() {
+        for suffix in [
+            "no_adopted_transaction",
+            "no_safe_rest_cleanup_candidate_tie_audit_only",
+            "local_transaction_rejected_by_final_invariant_guard",
+            "all_local_transactions_rejected",
+        ] {
+            let input = format!("Verdict: behind_bars_review_{suffix}; attempted=2; rejected=2; written=false\n");
+            let output = sanitize_behind_bars_active_authority_language_v1284(input);
+            assert_eq!(output, format!("Verdict: behind_bars_rule_check_{suffix}; attempted=2; rejected=2; written=false\n"));
+            assert!(active_legacy_authority_markers_v1284(&output).is_empty());
+            assert_eq!(sanitize_behind_bars_active_authority_language_v1284(output.clone()), output);
+        }
+    }
+
+    #[test]
+    fn unknown_review_authority_is_still_rejected() {
+        let text = sanitize_behind_bars_active_authority_language_v1284(
+            "behind_bars_review_unknown_outcome HumanAuthority".to_string(),
+        );
+        let markers = active_legacy_authority_markers_v1284(&text);
+        assert!(markers.contains(&"HumanAuthority"));
+        assert!(markers.contains(&"_review"));
+        assert!(markers.contains(&"review_"));
+    }
+
+    #[test]
+    fn adopted_verdict_and_musical_facts_are_unchanged() {
+        let text = "canonical_measure_rest_adopted_independently_single_writer; written=true; pitch=60; duration=96\n";
+        assert_eq!(sanitize_behind_bars_active_authority_language_v1284(text.to_string()), text);
+    }
 }
