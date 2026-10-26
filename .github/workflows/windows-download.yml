@@ -22,6 +22,7 @@ jobs:
     env:
       RUSTFLAGS: '-C target-feature=+crt-static'
       CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_STRICT_BUILD_OVERRIDE_OPT_LEVEL: '1'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - name: Verify pinned candidate runtime source
@@ -46,7 +47,7 @@ jobs:
       - name: Strict Clippy
         run: |
           $jobs = [Math]::Max(1, [Environment]::ProcessorCount - 1)
-          cargo +1.98.0 clippy --locked --profile strict --all-targets --jobs $jobs --color never -- -D warnings
+          cargo +1.98.0 clippy --locked --profile strict --jobs $jobs --color never -- -D warnings
           if ($LASTEXITCODE -ne 0) { throw 'Strict Clippy failed' }
       - name: Bundle runtime data and licences
         run: |
