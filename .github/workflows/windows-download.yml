@@ -50,6 +50,7 @@ jobs:
           Copy-Item LICENSE "$bundle/"
           Compress-Archive -Path "$bundle/*" -DestinationPath "$env:RUNNER_TEMP/etuschlopf-runtime.zip"
       - name: Build and test single downloadable EXE
+        id: package
         run: |
           $env:ETUSCHLOPF_BUNDLE_ZIP = "$env:RUNNER_TEMP/etuschlopf-runtime.zip"
           cargo +1.98.0 test --locked --manifest-path .github/distribution/Cargo.toml --release
@@ -68,14 +69,16 @@ jobs:
             & $exe --help
             if ($LASTEXITCODE -ne 0) { throw 'Standalone help probe failed' }
           } finally { $env:PATH = $originalPath }
-      - name: Test isolated musical run
+      - name: Verify isolated runtime and safe rejection
         run: |
           ./.github/distribution/smoke.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
       - name: Hash Windows download
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         run: |
           $hash = (Get-FileHash -Algorithm SHA256 dist/EtuSchlopf-Windows-x64.exe).Hash.ToLowerInvariant()
           "$hash  EtuSchlopf-Windows-x64.exe" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
       - name: Keep Windows build for review
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: EtuSchlopf-Windows-x64

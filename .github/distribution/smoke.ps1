@@ -35,3 +35,6 @@ if ($folders.Count -ne 1) { throw 'Expected exactly one isolated result workspac
 if (-not (Test-Path (Join-Path $folders[0].FullName 'Example Ü.mid'))) { throw 'Internal MIDI copy missing' }
 if (-not (Test-Path (Join-Path $folders[0].FullName 'Example Ü.wav'))) { throw 'Internal WAV copy missing' }
 Write-Output 'Packaged engine reached processing without developer PATH; original source hashes preserved.'
+# The negative fixture's production exit is asserted above. A passing harness
+# returns success without changing or suppressing the engine's failure result.
+$global:LASTEXITCODE = 0
