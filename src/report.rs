@@ -1380,7 +1380,7 @@ mod locator_sanitizer_metric_preservation_tests {
         let mutation = source.find(mutation_call).unwrap();
         let locator = source.find(locator_call).unwrap();
         let suffix = source.find(suffix_call).unwrap();
-        let finalize = source.find("let finalized_report = text.finalize()?;").unwrap();
+        let finalize = source.find("let finalized_report = text.finalize_for_pdf_request(!cli.no_pdf)?;").unwrap();
         assert!(
             writer_trace < mutation_authority
                 && mutation_authority < mutation

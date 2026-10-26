@@ -33,7 +33,7 @@ jobs:
           }
       - name: Build candidate engine
         run: |
-          rustup toolchain install 1.98.0 --profile minimal
+          rustup toolchain install 1.98.0 --profile minimal --component clippy
           if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed' }
           $jobs = [Math]::Max(1, [Environment]::ProcessorCount - 1)
           cargo +1.98.0 build --locked --profile strict --bin etuschlopf --jobs $jobs --color never
