@@ -1,2 +1,5 @@
+# Accepted source and trust-anchor hashes bind exact bytes on every platform.
+# Disable checkout line-ending conversion; the native source is not normalized.
+* -text
 # Preserve upstream license text bytes, including original CRLF and whitespace.
 docs/licenses/** -text -whitespace
