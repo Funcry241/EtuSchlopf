@@ -1,0 +1,83 @@
+name: Windows download
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/distribution/**'
+      - '.github/workflows/windows-download.yml'
+permissions:
+  contents: read
+concurrency:
+  group: windows-download
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      RUSTFLAGS: '-C target-feature=+crt-static'
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Verify accepted runtime source
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-Content docs/evidence/r1526/accepted_runtime_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
+            $parts = $_ -split "`t"
+            if ((Get-FileHash -Algorithm SHA256 $parts[0]).Hash.ToLowerInvariant() -ne $parts[1]) { throw "Runtime differs from accepted r1526: $($parts[0])" }
+          }
+      - name: Build accepted engine
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed' }
+          $jobs = [Math]::Max(1, [Environment]::ProcessorCount - 1)
+          cargo +1.98.0 build --locked --profile strict --bin etuschlopf --jobs $jobs --color never
+          if ($LASTEXITCODE -ne 0) { throw 'Accepted engine build failed' }
+      - name: Bundle runtime data and licences
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bundle = Join-Path $env:RUNNER_TEMP 'etuschlopf-runtime'
+          New-Item -ItemType Directory -Force "$bundle/docs/normative_sources", "$bundle/docs/licenses", 'dist' | Out-Null
+          Copy-Item target/strict/etuschlopf.exe "$bundle/etuschlopf_engine.exe"
+          Copy-Item -Recurse docs/normative_sources/musicxml "$bundle/docs/normative_sources/"
+          Copy-Item -Recurse docs/licenses/* "$bundle/docs/licenses/"
+          Copy-Item docs/THIRD_PARTY_NOTICES.md "$bundle/docs/"
+          Copy-Item LICENSE "$bundle/"
+          Compress-Archive -Path "$bundle/*" -DestinationPath "$env:RUNNER_TEMP/etuschlopf-runtime.zip"
+      - name: Build and test single downloadable EXE
+        run: |
+          $env:ETUSCHLOPF_BUNDLE_ZIP = "$env:RUNNER_TEMP/etuschlopf-runtime.zip"
+          cargo +1.98.0 test --locked --manifest-path .github/distribution/Cargo.toml --release
+          if ($LASTEXITCODE -ne 0) { throw 'Distribution tests failed' }
+          cargo +1.98.0 build --locked --manifest-path .github/distribution/Cargo.toml --release
+          if ($LASTEXITCODE -ne 0) { throw 'Distribution build failed' }
+          Copy-Item .github/distribution/target/release/etuschlopf_windows_download.exe dist/EtuSchlopf-Windows-x64.exe
+      - name: Test packaged EXE without developer PATH
+        run: |
+          $exe = (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
+          $originalPath = $env:PATH
+          try {
+            $env:PATH = "$env:windir\System32;$env:windir"
+            & $exe --version
+            if ($LASTEXITCODE -ne 0) { throw 'Standalone version probe failed' }
+            & $exe --help
+            if ($LASTEXITCODE -ne 0) { throw 'Standalone help probe failed' }
+          } finally { $env:PATH = $originalPath }
+      - name: Test isolated musical run
+        run: |
+          ./.github/distribution/smoke.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
+      - name: Hash Windows download
+        run: |
+          $hash = (Get-FileHash -Algorithm SHA256 dist/EtuSchlopf-Windows-x64.exe).Hash.ToLowerInvariant()
+          "$hash  EtuSchlopf-Windows-x64.exe" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+      - name: Keep Windows build for review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: EtuSchlopf-Windows-x64
+          path: dist/*
+          retention-days: 30
+          if-no-files-found: error
