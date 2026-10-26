@@ -13,6 +13,7 @@ const REQUIRED_FINAL_REPORT_SECTIONS: [&str; 2] = [
 
 const REQUIRED_SILENT_VOICE_RENDERER_OUTCOME: &str =
     "RendererOutcome: observed_from_existing_writer_audit.\n";
+const NOT_REQUESTED_SILENT_VOICE_RENDERER_OUTCOME: &str = "RendererOutcome: not_requested.\n";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct ReportRewriteScope {
@@ -516,8 +517,13 @@ impl CompactedReport {
         self.document.render()
     }
 
+    #[cfg(test)]
     pub fn finalize(self) -> Result<FinalizedReport> {
-        validate_required_contract(&self.document)?;
+        self.finalize_for_pdf_request(true)
+    }
+
+    pub fn finalize_for_pdf_request(self, pdf_requested: bool) -> Result<FinalizedReport> {
+        validate_required_contract(&self.document, pdf_requested)?;
         let mut text = self.document.render();
         let access = SscObservationReadAccess { _private: () };
         crate::ssc_shadow_report::append_ssc_shadow_observation(&access, &mut text);
@@ -537,7 +543,7 @@ impl FinalizedReport {
     }
 }
 
-fn validate_required_contract(document: &ReportDocument) -> Result<()> {
+fn validate_required_contract(document: &ReportDocument, pdf_requested: bool) -> Result<()> {
     for section in REQUIRED_FINAL_REPORT_SECTIONS {
         let occurrences = document.section_count(section);
         if occurrences != 1 {
@@ -550,13 +556,13 @@ fn validate_required_contract(document: &ReportDocument) -> Result<()> {
     }
 
     let report = document.render();
-    let renderer_outcome_occurrences = report
-        .match_indices(REQUIRED_SILENT_VOICE_RENDERER_OUTCOME)
-        .count();
-    if renderer_outcome_occurrences != 1 {
+    let observed = report.match_indices(REQUIRED_SILENT_VOICE_RENDERER_OUTCOME).count();
+    let not_requested = report.match_indices(NOT_REQUESTED_SILENT_VOICE_RENDERER_OUTCOME).count();
+    let expected = if pdf_requested { (1, 0) } else { (0, 1) };
+    if (observed, not_requested) != expected {
         bail!(
-            "FinalReportContract: Silent-Voice-RendererOutcome kommt {}-mal statt exakt einmal vor",
-            renderer_outcome_occurrences
+            "FinalReportContract: Silent-Voice-RendererOutcome widerspricht PDF-Aufruf; requested={}; observed={}; not_requested={}",
+            pdf_requested, observed, not_requested
         );
     }
 
@@ -760,4 +766,38 @@ mod tests {
             .expect_err("duplicate section must fail");
         assert!(error.to_string().contains("kommt 2-mal"));
     }
+
+    #[test]
+    fn no_pdf_finalization_requires_explicit_not_requested_outcome() {
+        let report = valid_report().replace(
+            REQUIRED_SILENT_VOICE_RENDERER_OUTCOME,
+            super::NOT_REQUESTED_SILENT_VOICE_RENDERER_OUTCOME,
+        );
+        assert!(DraftReport::new(report.clone()).compact(ToOwned::to_owned)
+            .finalize_for_pdf_request(false).is_ok());
+        assert!(DraftReport::new(report).compact(ToOwned::to_owned)
+            .finalize_for_pdf_request(true).is_err());
+        assert!(DraftReport::new(valid_report()).compact(ToOwned::to_owned)
+            .finalize_for_pdf_request(false).is_err());
+    }
+
+    #[test]
+    fn renderer_outcome_absence_duplicates_and_conflicting_modes_are_rejected() {
+        let base = valid_report().replace(REQUIRED_SILENT_VOICE_RENDERER_OUTCOME, "");
+        for marker in ["", REQUIRED_SILENT_VOICE_RENDERER_OUTCOME,
+            super::NOT_REQUESTED_SILENT_VOICE_RENDERER_OUTCOME] {
+            let report = format!("{base}{marker}{marker}");
+            for requested in [false, true] {
+                assert!(DraftReport::new(report.clone()).compact(ToOwned::to_owned)
+                    .finalize_for_pdf_request(requested).is_err());
+            }
+        }
+        let conflicting = format!("{}{outcome}", valid_report(),
+            outcome = super::NOT_REQUESTED_SILENT_VOICE_RENDERER_OUTCOME);
+        for requested in [false, true] {
+            assert!(DraftReport::new(conflicting.clone()).compact(ToOwned::to_owned)
+                .finalize_for_pdf_request(requested).is_err());
+        }
+    }
+
 }

@@ -38,7 +38,7 @@ jobs:
           $jobs = [Math]::Max(1, [Environment]::ProcessorCount - 1)
           cargo +1.98.0 build --locked --profile strict --bin etuschlopf --jobs $jobs --color never
           if ($LASTEXITCODE -ne 0) { throw 'Candidate engine build failed' }
-      - name: Run strict regression suite
+      - name: Run strict regression suite including explicit no-PDF outcome
         run: |
           $jobs = [Math]::Max(1, [Environment]::ProcessorCount - 1)
           cargo +1.98.0 test --locked --profile strict --all-targets --config 'profile.strict.package.etuschlopf.opt-level=0' --jobs $jobs --color never

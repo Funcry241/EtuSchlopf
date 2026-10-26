@@ -199,6 +199,7 @@ fn append_silent_voice_coverage_write_outcome_projection(
         out.push_str("RendererOutcome: observed_from_existing_writer_audit.\n");
     } else {
         out.push_str("Source: existing_writer_audit_pipeline_line; ProjectionOnly ja; RendererOutcome not_observed; RenderXmlWrite nein; NotationMutation nein; MusicMutation nein; MasterApply nein.\n");
+        out.push_str("RendererOutcome: not_requested.\n");
     }
 }
 

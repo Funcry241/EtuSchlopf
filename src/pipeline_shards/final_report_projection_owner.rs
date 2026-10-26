@@ -1822,7 +1822,7 @@ fn append_repair_loop_invocation_evidence_body(
     text.rewrite_document(report::clarify_legacy_music_mutation_report);
     text.rewrite_document(report::sanitize_measure_locator_authority_report);
     text.rewrite_document(report::sanitize_final_locator_suffixes);
-    let finalized_report = text.finalize()?;
+    let finalized_report = text.finalize_for_pdf_request(!cli.no_pdf)?;
     let measurement_snapshot_path =
         crate::audit_only::canonical_measurement_snapshot::write_project_snapshot(
             source,
