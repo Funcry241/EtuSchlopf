@@ -8,8 +8,9 @@ Das Ergebnis ist ein Ausgangspunkt für deine weitere musikalische Arbeit.
 
 ## Für Windows herunterladen
 
-Der direkte EXE-Download wird gerade gebaut und geprüft. Sobald die Datei
-verfügbar ist, steht der Download direkt an dieser Stelle.
+**[Windows-EXE direkt herunterladen (Testversion r1526, 7,7 MB)](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1526-windows-preview/EtuSchlopf-Windows-x64.exe)**
+
+[Hinweise zur Testversion und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1526-windows-preview).
 
 Die Windows-EXE enthält das Programm und seine benötigten Notationsdaten.
 Du musst dafür weder Rust noch Cargo, Python oder andere Entwicklungswerkzeuge
@@ -59,7 +60,7 @@ an einer bestehenden Berichtprüfung abgelehnt. Lesbarkeit und Spielbarkeit
 musst du daher am eigenen Ergebnis prüfen; eine fertige druckreife Fassung
 für jede MIDI wird nicht versprochen.
 
-Die derzeit angenommene Programmfassung ist **r1526**. Einzelheiten zu den
+Die herunterladbare Windows-Testversion enthält **r1526**. Einzelheiten zu den
 [Prüfbelegen](docs/evidence/r1526/README.md), die
 [vollständige technische Optionsreferenz](docs/DEVELOPMENT.md#vollständige-aufrufreferenz)
 und Hinweise für die [Arbeit am Quellcode](docs/DEVELOPMENT.md) liegen auf eigenen Seiten.
