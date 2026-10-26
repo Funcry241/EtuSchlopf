@@ -3011,19 +3011,44 @@ fn is_public_artifact_transaction_eligible(args: &ArgsState) -> bool {
 }
 
 fn program_args_select_exact_project(program_args: &[OsString], project_name: &str) -> bool {
-    match program_args {
-        [only] => {
-            let value = only.to_string_lossy();
-            value == project_name
-                || strip_option_value_ignore_ascii_case(&value, "--project=")
-                    .is_some_and(|project| project == project_name)
+    let mut selected = false;
+    let mut index = 0;
+    while index < program_args.len() {
+        let value = program_args[index].to_string_lossy();
+        if value == project_name {
+            if selected { return false; }
+            selected = true;
+        } else if value.eq_ignore_ascii_case("--project") {
+            index += 1;
+            if selected || program_args.get(index).is_none_or(|arg| arg.to_string_lossy() != project_name) {
+                return false;
+            }
+            selected = true;
+        } else if let Some(project) = strip_option_value_ignore_ascii_case(&value, "--project=") {
+            if selected || project != project_name { return false; }
+            selected = true;
+        } else if ["--jobs", "--layout-pages", "--top", "--reference-wav"]
+            .iter().any(|flag| value.as_ref() == *flag)
+        {
+            index += 1;
+            if program_args.get(index).is_none_or(|arg| arg.to_string_lossy().starts_with("--")) {
+                return false;
+            }
+        } else if ["--jobs=", "--layout-pages=", "--top=", "--reference-wav="]
+            .iter().any(|prefix| value.starts_with(*prefix))
+            || matches!(value.as_ref(), "--writer-trace" | "--use-corpus-cache" | "--lenient-partial-voices")
+            || value.starts_with("--writer-trace=")
+        {
+            // These existing options preserve the same four public output paths.
+            // Their values and musical meaning remain owned by the child parser.
+        } else {
+            // Output overrides, partial-output modes and unknown options need a
+            // different artifact contract; the current four-file owner is exact.
+            return false;
         }
-        [flag, value] => {
-            flag.to_string_lossy().eq_ignore_ascii_case("--project")
-                && value.to_string_lossy() == project_name
-        }
-        _ => false,
+        index += 1;
     }
+    selected
 }
 
 #[cfg(test)]
@@ -5555,6 +5580,64 @@ mod fresh_run_gate_tests {
         ]);
 
         assert!(super::is_public_artifact_transaction_eligible(&args));
+    }
+
+    #[test]
+    fn standard_output_options_retain_transaction_protection() {
+        use std::ffi::OsString;
+        for extra in [
+            vec!["--jobs", "1"], vec!["--jobs=max"],
+            vec!["--layout-pages", "4", "--top=6"],
+            vec!["--writer-trace"], vec!["--writer-trace=5,7"],
+            vec!["--reference-wav", "other audio.wav"],
+            vec!["--use-corpus-cache", "--lenient-partial-voices"],
+        ] {
+            let mut raw = vec![OsString::from("Synthetic Project Beta")];
+            raw.extend(extra.iter().map(|arg| OsString::from(*arg)));
+            let args = super::parse_args(raw);
+            assert!(super::is_public_artifact_transaction_eligible(&args), "{extra:?}");
+        }
+    }
+
+    #[test]
+    fn nonstandard_output_sets_stay_outside_the_four_file_contract() {
+        use std::ffi::OsString;
+        for extra in [
+            vec!["--out", "custom.result.txt"], vec!["--musicxml-out=custom.musicxml"],
+            vec!["--pdf-out", "custom.pdf"], vec!["--no-pdf"], vec!["--no-polish"],
+            vec!["--unknown"],
+        ] {
+            let mut raw = vec![OsString::from("Synthetic Project Beta")];
+            raw.extend(extra.iter().map(|arg| OsString::from(*arg)));
+            let args = super::parse_args(raw);
+            assert!(!super::is_public_artifact_transaction_eligible(&args), "{extra:?}");
+        }
+        let args = super::parse_args(vec![OsString::from("--all")]);
+        assert!(!super::is_public_artifact_transaction_eligible(&args));
+    }
+
+    #[test]
+    fn option_run_child_failure_restores_the_same_previous_output_set() {
+        use std::fs;
+        use std::ffi::OsString;
+        let root = std::env::temp_dir().join(format!(
+            "etuschlopf-option-output-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let label = "Synthetic Option Run";
+        let args = super::parse_args(vec![OsString::from(label), OsString::from("--jobs"), OsString::from("1")]);
+        assert!(super::is_public_artifact_transaction_eligible(&args));
+        let suffixes = [".musicxml", ".render.musicxml", ".pdf", ".result.txt"];
+        for suffix in suffixes { fs::write(root.join(format!("{label}{suffix}")), format!("previous {suffix}")).unwrap(); }
+        let transaction = super::public_artifact_recovery::begin_public_artifact_transaction(&root, label, "0.10.1839").unwrap();
+        for suffix in suffixes { fs::remove_file(root.join(format!("{label}{suffix}"))).unwrap(); }
+        fs::write(root.join(format!("{label}.result.txt")), "failed child report").unwrap();
+        let mut launcher = super::Launcher::new("0.10.1839".to_string());
+        super::complete_project_public_transaction(&mut launcher, Some(&transaction), 1).unwrap();
+        for suffix in suffixes { assert_eq!(fs::read(root.join(format!("{label}{suffix}"))).unwrap(), format!("previous {suffix}").as_bytes()); }
+        assert!(!root.join(super::public_artifact_recovery::PUBLIC_ARTIFACT_MARKER_RELATIVE_PATH).exists());
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # Was EtuSchlopf tatsächlich implementiert
 
-Stand: angenommene r1521-Quelle plus öffentliche Erläuterungen, 25.10.2026.
+Stand: angenommene r1526-Quelle plus öffentliche Erläuterungen, 26.10.2026.
 Diese Beschreibung ist ein Wegweiser zum Code. Sie ersetzt keinen Contract,
 keine fachliche Authority und keinen Laufbeleg.
 
@@ -143,7 +143,7 @@ Benchmark-Sieg und kein Beweis, dass der gesamte Notensatz fertig ist. Die
 [öffentliche Belegzusammenfassung](evidence/r1512/README.md) trennt Laufbelege,
 redaktionelle Auswertung und die Grenzen öffentlicher Reproduzierbarkeit.
 
-## Aktueller Fortschritt: Oktavfortsetzungen in r1520
+## Oktavfortsetzungen in r1520
 
 r1520 entfernt automatisch erzeugte redundante Oktavtexte nur bei gebundener
 Herkunft, tatsächlich ausgeführtem Receipt und übernommener finaler Fassung.
@@ -164,7 +164,7 @@ Einstiege: [Reader-Policy](../src/registernotation/reader_policy.rs),
 [Begründung des vertikalen Nachweises](ottava_vertical_reflow_proof_r1520.md) und
 [öffentliche Abnahmebelege](evidence/r1520/README.md).
 
-## Aktueller Bedien- und Exportstand: r1521
+## Bedien- und Exportstand r1521
 
 r1521 dokumentiert sämtliche vorhandenen Launcher- und Programmoptionen samt
 Aliasen, Standardwerten und der lokalen Watch-GUI. Der fest eingebaute private
@@ -179,6 +179,37 @@ Korpus 10/10. Alle 20 Master-/Render-XML-Dateien sind gegenüber dem angenommene
 r1520 bytegleich. Für die erneut erzeugten PDFs wird hier keine Pixelgleichheit
 behauptet. Die [Abnahmebelege](evidence/r1521/README.md) und die
 [Änderungsbeschreibung](project_local_evidence_r1521.md) halten den Umfang fest.
+
+## Zeitkontext und Ergebnisschutz r1522–r1526
+
+Die untere Schlüsselplanung bewertet Notenköpfe, wirksame Schlüssel, Zeitspannen
+und Angriffe nun in musikalischer Zeit. XML-Bytepositionen bleiben gebundene
+Editierstellen. Eine später serialisierte Stimme kann einen früher wirksamen
+Schlüssel oder eine gleichzeitig gehaltene Überbindung enthalten. Die gemeinsame
+Zeitbeobachtung berücksichtigt diese Beziehungen; r1524 ordnet getrennte,
+nicht überlappende Ursprungsbeobachtungen nach bewiesener musikalischer Zeit.
+Kostengewichte, bestehende Schreibpfade und Schutzgrenzen bleiben erhalten.
+Ungeklärte Zeit- oder Herkunftsevidenz erlaubt keinen zusätzlichen Plan.
+Eine gemeinsame Schlüssel-/Oktavoptimierung wird damit nicht behauptet.
+
+r1525 schützt vorhandene Ergebnisse vor der Root-Bereinigung. r1526 erhält die
+bestehende Vierdateien-Transaktion für reguläre Einzelaufrufe mit unterstützten
+Optionen. Batch, direkte Programmaufrufe und abweichende Ausgaben bleiben außerhalb
+dieses Sicherungsumfangs. Die Stage-A-Eingabedefinition bereitet einen späteren
+Runtime-Schnitt vor; sie implementiert ihn noch nicht.
+
+Der native r1526-Lauf ist angenommen: 2.538 Tests bestanden, 0 fehlgeschlagen,
+1 ignoriert; Build und Strict Clippy erfolgreich; privater Korpus 10/10.
+Gegen r1525 sind alle 20 XML-Dateien bytegleich und 50 PDF-Seiten bei 96 dpi
+pixelgleich. Diese Gleichheit betrifft r1526 gegen r1525, nicht sämtliche
+musikalischen Änderungen seit dem vorherigen öffentlichen r1521-Stand.
+[Abnahme und Grenzen](evidence/r1526/README.md).
+
+Einstiege: [Zeitbeobachtung](../src/clef_readability_observation/temporal.rs),
+[Schlüssel-Owner](../src/structural_write_authority/rustig_clef_planning.rs),
+[Ursprungsordnung](staff_origin_musical_order_closure_r1524.md),
+[Root-Schutz](root_result_preservation_r1525.md) und
+[Optionsschutz](standard_output_option_protection_r1526.md).
 
 ## Forschung und Beweisanspruch
 

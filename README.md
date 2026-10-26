@@ -24,16 +24,23 @@ Programme und bleiben Gegenstand von Gegenbeispielen und Prüfung.
 
 - [Was tatsächlich implementiert ist, einschließlich SchlopfFormel und Mathematik](docs/IMPLEMENTED_FOUNDATIONS.md)
 - [Forschungsbezüge und ihre genaue Rolle](docs/RESEARCH_CONTEXT.md)
-- [Dokumentierte Abnahme von r1521](docs/evidence/r1521/README.md)
+- [Dokumentierte Abnahme von r1526](docs/evidence/r1526/README.md)
 - [Kaltstart ohne Gesprächsgedächtnis](docs/assistant_memory/000_start_here.md)
 
-**Geprüfter Stand am 25.10.2026:** r1521, Paketversion 0.10.1839; 2.513 Tests
-bestanden, ein Test ignoriert, Build/Clippy erfolgreich, privater Evaluationskorpus
-10/10. Das sind Belege dieses konkreten nativen Laufs, keine universelle
-Spielbarkeitsgarantie und kein öffentlich vollständig reproduzierbarer Korpustest.
-Das Notenbild bleibt in Arbeit. Der Git-Stand enthält die angenommene r1521-Quelle
-und eine gesonderte öffentliche Dokumentationsschicht; Git-Commit und Take-Annahme
-sind unterschiedliche Nachweise.
+**Geprüfter Stand am 26.10.2026:** r1526, Paketversion 0.10.1839; 2.538 Tests
+bestanden, kein Fehler, ein Test ignoriert, Build/Clippy erfolgreich, privater
+Evaluationskorpus 10/10. Gegen den angenommenen r1525-Stand sind 20 XML-Dateien
+bytegleich und alle 50 PDF-Seiten im Rastervergleich bei 96 dpi pixelgleich.
+Diese Belege gelten für den konkreten nativen Lauf. Spielbarkeit und Eignung
+für fremde Stücke brauchen eine unabhängige musikalische Bewertung.
+Der Git-Stand enthält die angenommene r1526-Quelle und eine gesonderte öffentliche
+Dokumentationsschicht; Git-Commit und Take-Annahme sind unterschiedliche Nachweise.
+
+**Entwicklerstand:** Ein vorgebautes Windows-Anwenderpaket ist noch offen.
+Der reguläre Einstieg benötigt weiterhin ein gleichnamiges `.mid`-/`.wav`-Paar.
+MIDI ohne WAV, direkte Dateinamen und `.midi` sind noch kein verlässlich
+unterstützter Einstieg. Die Sicherung vorhandener Ergebnisse deckt noch nicht
+alle Aufrufarten ab; Details stehen unter [Ergebnisschutz und Grenzen](#ergebnisschutz-und-grenzen).
 
 *Zwischen Ereignis und Zeichen liegt eine Entscheidung.*
 
@@ -41,6 +48,7 @@ sind unterschiedliche Nachweise.
 
 - [Eingaben und Ausgaben](#die-eingänge)
 - [Installation und erster Lauf](#eine-maschine-in-gang-setzen)
+- [Fehlerhilfe und Ergebnisschutz](#fehlerhilfe)
 - [Watch-GUI](#die-gui-etuschlopf-watch)
 - [Alle Optionen, Aliase und Beispiele](#vollständige-aufrufreferenz)
 - [Architektur und Verarbeitung](#vom-ereignis-zur-gestalt)
@@ -118,6 +126,44 @@ Der Launcher ist Teil des Arbeitsablaufs. Er koordiniert unter anderem Build,
 Prüfungen, Lauf und Belegausgabe. Strict ist der Standard. Wiederverwendung
 bereits geprüfter Ergebnisse ist an die dafür vorgesehenen Belege gebunden.
 Ein vorhandener Build-Cache ersetzt diese Bindung nicht.
+
+## Fehlerhilfe
+
+Gib den Projektnamen ohne `.mid` oder `.wav` an; bei Leerzeichen in
+Anführungszeichen. Öffne für die sichtbare Notation in MuseScore die Datei
+`Mein Projekt.render.musicxml`. Die PDF liegt normalerweise neben den Eingaben.
+Prüfe Abschlussmeldung und aktuellen Ergebnisbericht: Eine vorhandene Datei
+allein beweist keinen erfolgreichen neuen Lauf.
+
+| Beobachtung | Nächster Schritt |
+| --- | --- |
+| Eingabe fehlt | Projektnamen und das gleichnamige `.mid`-/`.wav`-Paar prüfen. |
+| MIDI/WAV wird abgelehnt | Im ursprünglichen Musik-/Audioprogramm prüfen und neu exportieren; die konkrete Fehlermeldung aufbewahren. |
+| Kein PDF / Renderer fehlt | MuseScore-Installation und Renderer-Meldung prüfen. Eine alte PDF belegt keinen neuen Export. |
+| Datei ist gesperrt | PDF/XML in anderen Programmen schließen und Schreibrechte prüfen. |
+| Rust/Cargo fehlt | Die festgelegte Toolchain installieren; dieser Stand ist ein Source-Projekt. |
+| Unklarer Fehler | Revision, exakten Aufruf, Meldung und aktuellen Bericht sichern. Eigene Musik nur bewusst weitergeben. |
+
+### Ergebnisschutz und Grenzen
+
+r1525 erhält vorhandene Ergebnisse bei der Root-Bereinigung unabhängig von
+Projektauswahl und vollständigem Eingangspaar. r1526 erhält die bestehende
+Vierdateien-Sicherung auch bei regulären Einzelaufrufen mit `--jobs`,
+`--layout-pages`, `--top`, `--reference-wav`, `--writer-trace`,
+`--use-corpus-cache` und `--lenient-partial-voices`.
+
+Batch, direkte Programmausführung, abweichende Ausgabeziele, `--no-pdf`,
+`--no-polish` und weitere ausgeschlossene Aufrufbedingungen sind durch diese
+Vierdateien-Hülle nicht abgesichert. Vorhandene gute Ergebnisse vor solchen
+Versuchen separat sichern; Fehler-, Abbruch- und Kollisionsproben gehören in
+eine getrennte Testkopie. Die angenommene Stage-A-Definition für frühe
+Eingabeprüfungen ist noch keine Runtime-Implementierung.
+
+Für einen abgeschlossenen öffentlichen Anwendertest fehlen unter anderem der
+vollständige Eingabe-/Ausgabe- und Recovery-Schutz, die fachliche MIDI-only-Lösung,
+das vorgebaute Windows-Paket sowie die Abnahme auf sauberem Windows mit mindestens
+drei fremden Stücken und unabhängiger musikalischer Bewertung. Die öffentliche
+Verfügbarkeit des Quellcodes ist kein Nachweis dieser noch offenen Prüfungen.
 
 ## Die GUI: EtuSchlopf Watch
 

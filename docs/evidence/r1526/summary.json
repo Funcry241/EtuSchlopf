@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "role": "public_read_only_summary_not_runtime_authority",
+  "review_date": "2026-10-26",
+  "revision": "r1526",
+  "version": "0.10.1839",
+  "previous_public_revision": "r1521",
+  "accepted_parent_revision": "r1525",
+  "xml_comparison_baseline": "r1525",
+  "accepted_take_sha256": "adbf1d92e54a6ae0dbfc778d1f9a571fdf7fefa56bca432287a22568920f1070",
+  "accepted_source_snapshot_zip_sha256": "3a58f9218125642d3eda74878509548b9037ba7660ed92ec4554564b66cec3de",
+  "native_acceptance_record_sha256": "1249e6d60480800b3a30c5412f867788edc786f530ae29c9920f86577632bb45",
+  "native": {
+    "tests_passed": 2538,
+    "tests_failed": 0,
+    "tests_ignored": 1,
+    "test_binaries": 15,
+    "build_exit": 0,
+    "clippy_exit": 0,
+    "final_exit": 0,
+    "full_corpus": true,
+    "projects_passed": 10,
+    "projects_expected": 10,
+    "renderer_outcome": "passed",
+    "run_severity": "dark_green"
+  },
+  "readback": {
+    "take_files_byte_matched_to_native_snapshot": 1845,
+    "source_snapshot_files": 1846,
+    "xml_files_compared": 20,
+    "master_files_byte_identical": 10,
+    "render_files_byte_identical": 10,
+    "pdf_files_byte_identical": 0,
+    "pdf_pixel_comparison_performed": true,
+    "pdf_comparison_renderer": "Poppler pdftoppm",
+    "pdf_comparison_dpi": 96,
+    "pdf_pages_compared": 50,
+    "pdf_pages_pixel_identical": 50,
+    "full_visual_page_review": false
+  },
+  "runtime_manifest_file_count": 517,
+  "runtime_manifest": "accepted_runtime_sha256.tsv",
+  "limits": [
+    "Private corpus inputs and complete musical outputs are not published.",
+    "XML/PDF comparison baseline is r1525; it does not claim unchanged notation since public r1521.",
+    "No clean-Windows end-user package acceptance or independent evaluation of three foreign pieces is claimed.",
+    "Public documentation overlay is distinct from the accepted Take."
+  ]
+}

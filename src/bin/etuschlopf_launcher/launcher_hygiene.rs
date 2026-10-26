@@ -477,7 +477,7 @@ fn is_root_hygiene_protected(
     path: &Path,
     name: &str,
     protected_outputs: &HashSet<String>,
-    policy: RootCleanupPolicy,
+    _policy: RootCleanupPolicy,
 ) -> bool {
     if path.is_dir() {
         return matches!(
@@ -486,13 +486,15 @@ fn is_root_hygiene_protected(
         );
     }
     let lower = name.to_ascii_lowercase();
-    if lower.ends_with(".wav") || lower.ends_with(".mid") {
+    if lower.ends_with(".wav") || lower.ends_with(".mid") || lower.ends_with(".midi") {
         return true;
     }
     if is_core_root_file(name) {
         return true;
     }
-    if policy == RootCleanupPolicy::PreserveGeneratedOutputs && is_standard_output_name(name) {
+    // Root hygiene owns temporary residue, never the lifetime of user results.
+    // A project may be absent from today's input selection and still own valid output.
+    if is_standard_output_name(name) || lower.ends_with(".pdf") {
         return true;
     }
     protected_outputs.contains(name)
@@ -758,6 +760,71 @@ fn remove_obsolete_powershell_files(project_root: &Path) {
         if path.exists() {
             let _ = fs::remove_file(path);
         }
+    }
+}
+
+#[cfg(test)]
+mod result_preservation_tests {
+    use super::*;
+
+    #[test]
+    fn cleanup_preserves_outputs_of_unselected_and_incomplete_projects() {
+        let root = std::env::temp_dir().join(format!(
+            "etuschlopf-result-preservation-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let kept = [
+            "Other Ü.musicxml", "Other Ü.render.musicxml", "Other Ü.pdf",
+            "Other Ü.result.txt", "Other Ü.strict-clippy.txt",
+            "Incomplete.musicxml", "Incomplete.pdf", "Incomplete.result.txt",
+            "Incomplete.mid", "Long extension.midi", "Upper.MIDI", "Audio.wav",
+            "notation reference.pdf",
+        ];
+        for (index, name) in kept.iter().enumerate() {
+            fs::write(root.join(name), format!("preserved bytes {index}")).unwrap();
+        }
+        let selected = ["Missing", "--all", "--visual-preflight"];
+        for input in selected {
+            let args = parse_args(vec![OsString::from(input)]);
+            let startup = cleanup_startup_project_root_residue(&root, &args);
+            assert_eq!(startup.stale_output_files_deleted, 0);
+            let finalization = cleanup_project_root_residue(&root, Some(input), false);
+            assert_eq!(finalization.stale_output_files_deleted, 0);
+            for (index, name) in kept.iter().enumerate() {
+                assert_eq!(
+                    fs::read(root.join(name)).unwrap(),
+                    format!("preserved bytes {index}").as_bytes(),
+                    "cleanup for {input} changed {name}"
+                );
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn output_preservation_keeps_temporary_residue_cleanup_active() {
+        let root = std::env::temp_dir().join(format!(
+            "etuschlopf-residue-preservation-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("result.pdf"), "keep pdf").unwrap();
+        fs::write(root.join("etuschlopf_tmp_probe.tmp"), "temporary").unwrap();
+        let report = cleanup_project_root_residue(&root, Some("Missing"), false);
+        assert_eq!(fs::read(root.join("result.pdf")).unwrap(), b"keep pdf");
+        assert!(!root.join("etuschlopf_tmp_probe.tmp").exists());
+        assert_eq!(report.temp_files_deleted, 1);
+        assert_eq!(report.stale_output_files_deleted, 0);
+        fs::remove_dir_all(root).unwrap();
     }
 }
 

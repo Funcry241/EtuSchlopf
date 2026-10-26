@@ -308,7 +308,7 @@ const _: () = assert!(DESTRUCTIVE_TRANSFORMATION_SURFACE_BASELINE_V1_FNV1A64 == 
 const _: () = assert!(THIRTY_SURFACE_BATCH_SCAN_FNV1A64 == 0xf7cb74bb1ed893ec);
 const _: () = assert!(KODEX_GATE_CORE_OWNERSHIP_FNV1A64 == 0xa928770e3293682a);
 const _: () = assert!(TAKE_BOOTSTRAP_FNV1A64 == 0x74d6f5ad70f0a202);
-const _: () = assert!(LAUNCHER_FNV1A64 == 0x1632011bf999ef50);
+const _: () = assert!(LAUNCHER_FNV1A64 == 0x13d9182e76c8bdae);
 const _: () = assert!(LAUNCHER_ASSISTANT_EXPORT_FNV1A64 == 0xac5fde8855716ca5);
 const _: () = assert!(LAUNCHER_INVENTORY_EXPORT_FNV1A64 == 0xf7312a4d392b65a0);
 const _: () = assert!(LAUNCHER_NEURO_EVIDENCE_EXPORT_FNV1A64 == 0x5d6a8d60f1463924);

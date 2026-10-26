@@ -1,6 +1,6 @@
 kind=EtuSchlopfTake
 version=0.10.1839
-revision=r1521
-name=ProjectLocalEvidenceAndCompleteReadme
-parent_revision=r1520
-change_class=OutcomeProjection
+revision=r1526
+name=StandardOutputOptionProtection
+parent_revision=r1525
+change_class=KodexOnly

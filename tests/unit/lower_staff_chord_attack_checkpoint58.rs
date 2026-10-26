@@ -190,7 +190,7 @@ fn chord_attack_projection_unknown_entries_neither_merge_count_nor_restore_conti
                 assert_eq!(notes[1].clef_transition_anchor, None);
                 assert_eq!(notes[2].clef_transition_anchor, None);
                 assert_eq!(
-                    passage_attack_count(&notes, notes[1].start, notes[2].start),
+                    passage_attack_count(std::slice::from_ref(&notes[1]), notes[1].at, notes[2].at),
                     0
                 );
                 assert_eq!(collect_lower_staff_attacks(&notes).len(), 3);
@@ -361,7 +361,7 @@ fn beam_scope_future_boundary_does_not_release_an_old_scope_interior() {
     }
     // Even without a later note, the known boundary cannot release its prefix.
     let src = format!("<part><measure>{}<attributes/>{}</measure></part>",
-        scope_beam("v", 2, "begin"), lower_scope_event("stop", 2));
+        scope_beam("v", 2, "begin"), lower_scope_event("stop", 2).replace("</direction-type>", "</direction-type><offset>96</offset>"));
     let at = src.find("<attributes/>").unwrap();
     assert_eq!(lower_primary_beam_position(&src, at), PrimaryBeamPosition::UnresolvedPrefix);
     assert!(!lower_primary_beam_group_contains_position(&src, at));
@@ -397,7 +397,16 @@ fn beam_scope_cross_staff_backup_and_barline_do_not_become_reset_rules() {
     for gap in ["", "<backup><duration>96</duration></backup>", "</measure><measure number=\"renamed\">"] {
         let src = format!("<part><measure>{}{gap}{}</measure></part>",
             scope_beam("v", 1, "begin"), scope_beam("v", 2, "end"));
-        assert!(lower_primary_beam_group_contains_position(&src, src.rfind("<note>").unwrap()));
+        let at = src.rfind("<note>").unwrap();
+        if gap.contains("<backup") {
+            // The temporal relation is unresolved. The frozen parent physical
+            // interior remains a protection, never a new boundary permission.
+            assert_eq!(TemporalPart::observe(&src).unwrap().beam_inside(at), None);
+            assert_eq!(lower_primary_beam_position(&src, at), PrimaryBeamPosition::Interior);
+            assert!(lower_primary_beam_insertion_blocked(&src, at));
+        } else {
+            assert!(lower_primary_beam_group_contains_position(&src, at));
+        }
     }
 }
 

@@ -216,3 +216,6 @@ mod tests {
         );
     }
 }
+
+#[path = "clef_readability_observation/temporal.rs"]
+pub(crate) mod temporal;
