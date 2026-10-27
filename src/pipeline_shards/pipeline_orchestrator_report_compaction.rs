@@ -324,6 +324,7 @@ fn real_main() -> anyhow::Result<i32> {
     if cli.renderer_available {
         return Ok(if render::renderer_available() { 0 } else { 3 });
     }
+    crate::source::register_technical_workspace(cli.internal_work_dir.as_deref())?;
     let _ =
         crate::audit_only::writer_trace::cleanup_clef_ab_probe_artifacts(&std::env::current_dir()?);
     if cli.all {

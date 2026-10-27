@@ -6,6 +6,7 @@ on:
     paths:
       - '.gitattributes'
       - '.github/distribution/**'
+      - '.github/temporal-preview/**'
       - '.github/workflows/windows-download.yml'
       - 'src/**'
       - 'tests/**'
@@ -63,6 +64,23 @@ jobs:
           Copy-Item docs/THIRD_PARTY_NOTICES.md "$bundle/docs/"
           Copy-Item LICENSE "$bundle/"
           Compress-Archive -Path "$bundle/*" -DestinationPath "$env:RUNNER_TEMP/etuschlopf-runtime.zip"
+      - name: Isolated B source-time prototype; not a music-run qualification
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $proof = Join-Path $env:RUNNER_TEMP 'etuschlopf-real-package-temporal-prototype'
+          New-Item -ItemType Directory -Force $proof | Out-Null
+          $anyhow = @(Get-ChildItem target/strict/deps -Filter 'libanyhow-*.rlib')[0].FullName
+          if (-not $anyhow) { throw 'Built anyhow dependency missing' }
+          $tests = Join-Path $proof 'source-time-tests.exe'
+          rustc +1.98.0 --edition=2024 -C target-feature=+crt-static -D warnings --test .github/temporal-preview/main.rs --extern "anyhow=$anyhow" -L dependency=target/strict/deps -o $tests
+          if ($LASTEXITCODE -ne 0) { throw 'Isolated temporal tests did not compile' }
+          & $tests *> (Join-Path $proof 'tests.log')
+          if ($LASTEXITCODE -ne 0) { throw 'Isolated temporal tests failed' }
+          $probe = Join-Path $proof 'exact-midi-probe.exe'
+          rustc +1.98.0 --edition=2024 -C target-feature=+crt-static -D warnings .github/temporal-preview/main.rs --extern "anyhow=$anyhow" -L dependency=target/strict/deps -o $probe
+          if ($LASTEXITCODE -ne 0) { throw 'Isolated exact importer did not compile' }
+          & $probe .github/distribution/fixtures/menuet.mid *> (Join-Path $proof 'original-menuet-import.log')
+          if ($LASTEXITCODE -ne 0) { throw 'Unchanged foreign MIDI import failed' }
       - name: Build and test single downloadable EXE
         id: package
         run: |

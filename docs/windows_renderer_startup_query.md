@@ -1,18 +1,18 @@
 # Packaged EXE: renderer startup projection
 
-Otter's explicit startup text is exactly:
+The missing-renderer startup text is:
 
 ```text
-Depp!
-MuseScore fehlt. Ohne MuseScore gibt es keine PDF, nur die Notendateien.
-Kostenlos: https://musescore.org/de/download
+MuseScore ist nicht installiert. Die Notendateien werden trotzdem erstellt.
+Für eine PDF installiere MuseScore kostenlos: https://musescore.org/de/download
 
 ```
 
 The distribution EXE queries the embedded engine using the internal hidden
 `--renderer-available` option before the input prompt or output workspace.
 Exit 0 means the existing render.rs discovery/validation finds an existing
-renderer executable, exit 3 means absent. Other query failures abort visibly.
+renderer executable, exit 3 means absent. Other query failures warn and continue
+the ordinary requested run.
 The query reads the same candidate population: explicit configured renderer,
 Registry/App-Paths, standard Windows paths and PATH; bare fallback names alone
 are not treated as installation evidence. It writes no notation or PDF and
@@ -24,6 +24,15 @@ the ordinary engine with --no-pdf, so the truthful not-requested report mode is
 used and notation processing continues. An explicit --no-pdf remains honored
 when MuseScore exists. The closing message mentions opening the PDF only if the
 actual per-run PDF is a regular file. Previous runs are not searched for a PDF.
+Without MuseScore, the closing message first gives the installation link and
+only then tells the user to open the Render file after installing it.
+
+The bootstrap supplies a fresh private `--internal-work-dir` inside its
+per-process runtime. Existing intermediate renderer evidence is stored there;
+the musician's result directory contains the persistent products, input copies
+and reports. Product paths and report artifact locators are not relocated or
+rewritten. Native invocations without this internal option retain their usual
+project-local target directory.
 
 Package validation must use real engine/package bytes on two Windows setups:
 without MuseScore (message present, notes/report, no PDF, no PDF invitation)

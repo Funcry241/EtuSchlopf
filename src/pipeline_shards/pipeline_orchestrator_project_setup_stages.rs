@@ -327,7 +327,7 @@ fn validate_project_input_files(source: &source::SourcePlan, explicit_wav: Optio
         &source.output_paths(),
     )?;
     let decoded_midi = crate::midi::read_standard_midi(&source.expected_midi)
-        .with_context(|| format!("MIDI ungueltig: {}. Bitte eine gueltige Standard-MIDI-Datei verwenden.", source.expected_midi.display()))?;
+        .with_context(|| format!("MIDI-Datei konnte nicht verarbeitet werden: {}", source.expected_midi.display()))?;
     if decode_wav_mono_samples(wav).is_none() {
         return Err(anyhow!("WAV kann nicht als Audiodatei gelesen werden: {}. Bitte eine unterstuetzte, nicht leere WAV-Datei bereitstellen.", wav.display()));
     }

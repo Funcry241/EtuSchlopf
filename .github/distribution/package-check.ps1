@@ -41,7 +41,7 @@ function Assert-Preserved($Before) {
 $outputRoot = Join-Path $root 'EtuSchlopf-Ergebnisse'
 $originalMidi = [IO.File]::ReadAllBytes($midi)
 $sourceHashes = @{ $midi = (Get-FileHash $midi -Algorithm SHA256).Hash; $wav = (Get-FileHash $wav -Algorithm SHA256).Hash }
-$hint = "Depp!`nMuseScore fehlt. Ohne MuseScore gibt es keine PDF, nur die Notendateien.`nKostenlos: https://musescore.org/de/download`n`n"
+$hint = "MuseScore ist nicht installiert. Die Notendateien werden trotzdem erstellt.`nFür eine PDF installiere MuseScore kostenlos: https://musescore.org/de/download`n`n"
 function Successful-Run([bool]$NoPdf,[string]$Label) {
   $before = Hash-Tree $outputRoot
   $oldDirs = @(Get-ChildItem $outputRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object FullName)
@@ -55,6 +55,7 @@ function Successful-Run([bool]$NoPdf,[string]$Label) {
   $newDirs = @(Get-ChildItem $outputRoot -Directory | Where-Object { $_.FullName -notin $oldDirs })
   if ($newDirs.Count -ne 1) { throw 'Each run must create exactly one fresh result directory' }
   $run = $newDirs[0].FullName
+  if (Test-Path (Join-Path $run 'target')) { throw 'Technical intermediate files leaked into the musician result folder' }
   foreach ($extension in @('musicxml','render.musicxml','result.txt')) {
     $path = Join-Path $run "$stem.$extension"
     if (-not (Test-Path $path -PathType Leaf) -or (Get-Item $path).Length -eq 0) { throw "Missing actual output: $path" }
@@ -62,7 +63,8 @@ function Successful-Run([bool]$NoPdf,[string]$Label) {
   $log = (Get-Content (Join-Path $root "$Label.log") -Raw).Replace("`r`n","`n")
   if ($Renderer -eq 'Missing') {
     if (-not $log.Contains($hint)) { throw 'Exact missing-MuseScore startup text absent: this environment does not prove the missing case' }
-  } elseif ($log.Contains('Depp!')) { throw 'Present-renderer case reported missing MuseScore' }
+    if (-not $log.Contains('Öffne danach die Datei')) { throw 'Missing renderer: installation must precede the opening instruction' }
+  } elseif ($log.Contains('MuseScore ist nicht installiert.')) { throw 'Present-renderer case reported missing MuseScore' }
   $pdf = Join-Path $run "$stem.pdf"
   if ($Renderer -eq 'Present' -and -not $NoPdf) {
     if (-not (Test-Path $pdf -PathType Leaf) -or (Get-Item $pdf).Length -eq 0) { throw 'Actual MuseScore PDF missing' }

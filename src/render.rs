@@ -785,8 +785,7 @@ fn write_pdf_output_freshness_runtime_artifact_v994(input: PdfOutputFreshnessRun
         input.after_render,
     );
     let renderer_winning_exit_zero = renderer_exit_zero_label(input.winning_exit_code);
-    let out_dir = project_root
-        .join("target")
+    let out_dir = crate::source::technical_work_dir(project_root)
         .join("etuschlopf_pdf_output_freshness_runtime");
     fs::create_dir_all(&out_dir)?;
     let attempts_compact = compact_attempts(input.attempts);

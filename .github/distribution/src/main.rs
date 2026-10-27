@@ -86,7 +86,7 @@ fn run(args: &[String]) -> Result<i32> {
         }
     };
     if renderer_missing {
-        println!("Depp!\nMuseScore fehlt. Ohne MuseScore gibt es keine PDF, nur die Notendateien.\nKostenlos: https://musescore.org/de/download\n");
+        println!("MuseScore ist nicht installiert. Die Notendateien werden trotzdem erstellt.\nFür eine PDF installiere MuseScore kostenlos: https://musescore.org/de/download\n");
     }
     let input = if args.is_empty() {
         println!("EtuSchlopf - aus MIDI und WAV zu einer Klavierfassung");
@@ -104,12 +104,17 @@ fn run(args: &[String]) -> Result<i32> {
     println!("Deine Originaldateien und bisherige Ergebnisordner bleiben erhalten.");
     let mut child = Command::new(rt.0.join("etuschlopf_engine.exe"));
     child.current_dir(&rt.0).arg(&project);
+    let internal_work = rt.0.join("work");
+    fs::create_dir(&internal_work)?;
+    child.arg("--internal-work-dir").arg(&internal_work);
     if renderer_missing || args.get(1).is_some_and(|s| s == "--no-pdf") { child.arg("--no-pdf"); }
     let status = child.status()?.code().unwrap_or(1);
     println!("\nErgebnisordner: {}", output.display());
     if status == 0 {
         if output.join(format!("{stem}.pdf")).is_file() {
             println!("Fertig. Öffne die PDF oder die Datei mit der Endung .render.musicxml in MuseScore.");
+        } else if renderer_missing {
+            println!("Fertig. Deine Notendateien liegen im Ergebnisordner.\nZum Ansehen installiere MuseScore kostenlos: https://musescore.org/de/download\nÖffne danach die Datei mit der Endung .render.musicxml in MuseScore.");
         } else {
             println!("Fertig. Öffne die Datei mit der Endung .render.musicxml in MuseScore.");
         }

@@ -106,7 +106,7 @@ pub(crate) fn normalize_tick_exact(value: i64, source_ppq: i64) -> anyhow::Resul
     let denominator = i128::from(source_ppq);
     if denominator <= 0 || numerator % denominator != 0 {
         return Err(anyhow!(
-            "MIDI-Tick {value} bei PPQ {source_ppq} ist nicht verlustfrei auf {CANONICAL_DIVISIONS} Divisions abbildbar"
+            "EtuSchlopf unterstuetzt diese Zeitaufloesung noch nicht: MIDI-Tick {value} bei PPQ {source_ppq} ist nicht verlustfrei auf {CANONICAL_DIVISIONS} Divisions abbildbar"
         ));
     }
     i64::try_from(numerator / denominator)

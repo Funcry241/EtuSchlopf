@@ -768,8 +768,7 @@ fn run_metric_beam_and_final_notation_stage(
             .chars()
             .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
             .collect::<String>();
-        let shadow_dir = project_root
-            .join("target")
+        let shadow_dir = crate::source::technical_work_dir(&project_root)
             .join("etuschlopf_renderer_feasibility_shadow")
             .join(if shadow_project_slot.is_empty() {
                 "project__primary_beam_voice_partition_scope".to_string()
@@ -1141,8 +1140,7 @@ primary_beam_voice_partition_plan.as_ref())?,
                 .chars()
                 .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
                 .collect::<String>();
-            let shadow_dir = project_root
-                .join("target")
+            let shadow_dir = crate::source::technical_work_dir(&project_root)
                 .join("etuschlopf_renderer_feasibility_shadow")
                 .join(if shadow_project_slot.is_empty() {
                     "project".to_string()

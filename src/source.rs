@@ -7,6 +7,24 @@ use anyhow::{anyhow, Context};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+static TECHNICAL_WORKSPACE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+pub(crate) fn register_technical_workspace(path: Option<&Path>) -> anyhow::Result<()> {
+    if let Some(path) = path {
+        let root = fs::canonicalize(path).context("Interner Arbeitsordner ist nicht erreichbar")?;
+        if !root.is_dir() {
+            return Err(anyhow!("Interner Arbeitsordner ist kein Ordner"));
+        }
+        TECHNICAL_WORKSPACE.set(root)
+            .map_err(|_| anyhow!("Interner Arbeitsordner wurde bereits festgelegt"))?;
+    }
+    Ok(())
+}
+
+pub(crate) fn technical_work_dir(project_root: &Path) -> PathBuf {
+    TECHNICAL_WORKSPACE.get().cloned().unwrap_or_else(|| project_root.join("target"))
+}
+
 const OUTPUT_SUFFIX_MUSICXML: &str = ".musicxml";
 const OUTPUT_SUFFIX_PDF: &str = ".pdf";
 const OUTPUT_SUFFIX_REPORT: &str = ".result.txt";
