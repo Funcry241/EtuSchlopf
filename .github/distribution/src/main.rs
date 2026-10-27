@@ -104,7 +104,7 @@ fn run(args: &[String]) -> Result<i32> {
     println!("Deine Originaldateien und bisherige Ergebnisordner bleiben erhalten.");
     let mut child = Command::new(rt.0.join("etuschlopf_engine.exe"));
     child.current_dir(&rt.0).arg(&project);
-    let internal_work = rt.0.join("work");
+    let internal_work = rt.0.join("target");
     fs::create_dir(&internal_work)?;
     child.arg("--internal-work-dir").arg(&internal_work);
     if renderer_missing || args.get(1).is_some_and(|s| s == "--no-pdf") { child.arg("--no-pdf"); }
