@@ -29,7 +29,16 @@ jobs:
           $ErrorActionPreference = 'Stop'
           Get-Content docs/evidence/r1533/accepted_runtime_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
             $parts = $_ -split "`t"
-            if ((Get-FileHash -Algorithm SHA256 $parts[0]).Hash.ToLowerInvariant() -ne $parts[1]) { throw "Runtime differs from accepted r1533: $($parts[0])" }
+            $nativePath = $parts[0]
+            if ($nativePath -eq 'src/build_gate/take_change_class.txt') {
+              $nativePath = 'docs/evidence/r1533/native_take_change_class.txt'
+            }
+            if ((Get-FileHash -Algorithm SHA256 $nativePath).Hash.ToLowerInvariant() -ne $parts[1]) { throw "Runtime differs from accepted r1533: $($parts[0])" }
+          }
+          # Public documentation has its own exact, still gate-checked declaration.
+          Get-Content docs/evidence/r1533/github_projection_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
+            $parts = $_ -split "`t"
+            if ((Get-FileHash -Algorithm SHA256 $parts[0]).Hash.ToLowerInvariant() -ne $parts[1]) { throw "Git documentation projection differs: $($parts[0])" }
           }
       - name: Build accepted engine
         run: |

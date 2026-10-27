@@ -46,5 +46,17 @@
     "The downloadable EXE remains r1526; no new binary release is published.",
     "No clean-Windows user-package acceptance or independent musical evaluation is claimed.",
     "Public documentation and GitHub templates are a separate projection of the accepted Take."
-  ]
+  ],
+  "git_projection": {
+    "native_manifest": "native_take_change_class.txt",
+    "published_hashes": "github_projection_sha256.tsv",
+    "rebound_documentation_paths": [
+      "README.md",
+      "docs/CONTRIBUTING.md",
+      "docs/README.md"
+    ],
+    "native_manifest_sha256": "bab630be744cd50a43f19103cad80d1b2db81395e3c211c43127be8b7155b80f",
+    "runtime_rust_tests_tools_byte_identical": true,
+    "native_take_identity_unchanged": true
+  }
 }
