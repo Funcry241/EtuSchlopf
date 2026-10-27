@@ -44,8 +44,13 @@ Mein Stück.wav
 ```
 
 1. Lade die Windows-EXE herunter. Für die PDF-Ausgabe brauchst du außerdem **[MuseScore](https://musescore.org/de/download)**.
-2. Ziehe deine `.mid`- oder `.midi`-Datei auf die EXE. Alternativ startest du die EXE und gibst den Pfad zur MIDI-Datei ein.
-3. Öffne nach erfolgreichem Lauf die PDF im angezeigten Ergebnisordner.
+2. Lege MIDI und WAV in denselben Ordner. Die Namen vor der Dateiendung müssen übereinstimmen: `Mein Stück.mid` und `Mein Stück.wav`.
+3. Ziehe deine `.mid`- oder `.midi`-Datei auf die EXE. Alternativ startest du die EXE und gibst den Pfad zur MIDI-Datei ein.
+4. Öffne nach erfolgreichem Lauf die PDF im angezeigten Ergebnisordner. Zum Weiterbearbeiten öffnest du die Datei mit `.render.musicxml` in MuseScore.
+
+Du brauchst für diesen Weg keinen Repository-Download und keine Rust-Installation.
+Wähle für den ersten Versuch ein kurzes Stück, dessen Noten du kennst. So kannst
+du das Ergebnis leichter beurteilen.
 
 Neben deiner MIDI entsteht der Ordner **`EtuSchlopf-Ergebnisse`**. Jeder Lauf
 bekommt darin einen neuen Unterordner. Das Programm arbeitet mit Kopien deiner
@@ -68,6 +73,15 @@ richtige Wahl. Weitere technische Dateien können im Ergebnisordner liegen.
 - **Keine PDF:** Prüfe, ob MuseScore installiert ist. Mit `EtuSchlopf-Windows-x64.exe "Mein Stück.mid" --no-pdf` kannst du nur die Notendateien anfordern.
 - **Datei wird abgelehnt:** Bewahre die konkrete Meldung auf. Nicht jede MIDI-Struktur wird unterstützt; manchmal hilft ein erneuter Export aus deinem Musikprogramm.
 - **Lauf fehlgeschlagen:** Frühere Ergebnisordner bleiben bestehen. Eine Datei aus einem fehlgeschlagenen Lauf ist noch kein freigegebenes Ergebnis.
+
+## Eine falsche Note oder einen Fehler melden
+
+**[Fehlerbericht öffnen](https://github.com/Funcry241/EtuSchlopf/issues/new?template=01_fehler.md)**
+
+Beschreibe, was du versucht hast und was passiert ist. Bei einem Notationsfehler
+hilft zum Beispiel: „In Takt … fehlt …; ich erwarte …“ Ein Bildausschnitt ist
+willkommen. Du musst dafür keinen Quellcode verstehen und keinen vollständigen
+Laufbericht zusammentragen. Unbekannte technische Angaben kannst du offenlassen.
 
 ## Aktueller Stand
 

@@ -5,7 +5,9 @@ Aufgabe mit einem der folgenden Einstiege:
 
 | Aufgabe | Einstieg |
 | --- | --- |
-| Zweck, Eingaben, Ausgaben und erster Lauf | [Projekt-README](../README.md) |
+| Windows-EXE herunterladen und erstes Stück verarbeiten | [Erster Start](../README.md#dein-erstes-stück) und [Download](../README.md) |
+| Noten ansehen, bevor du etwas installierst | [Notenbeispiel](../README.md#ein-blick-auf-die-noten) |
+| Eine falsche Note oder ein Startproblem melden | [Kurzer Fehlerbericht](https://github.com/Funcry241/EtuSchlopf/issues/new?template=01_fehler.md) |
 | Alle Aufrufe und Optionen | [Aufrufreferenz](DEVELOPMENT.md#vollständige-aufrufreferenz) |
 | Fehler melden oder etwas beitragen | [Beitragsleitfaden](CONTRIBUTING.md) |
 | Sicherheitslücke melden | [Sicherheitsrichtlinie](SECURITY.md) |

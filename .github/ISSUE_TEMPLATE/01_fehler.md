@@ -1,38 +1,42 @@
 ---
 name: Fehler melden
-about: Einen Programmfehler, ein Notationsproblem oder eine Bedienhürde nachvollziehbar melden.
+about: Eine falsche Note, ein Startproblem oder eine Bedienhürde beschreiben.
 title: ""
 labels: []
 assignees: []
 ---
 
-Bitte zuerst bestehende Issues prüfen. Sicherheitslücken nicht hier offenlegen;
-siehe https://github.com/Funcry241/EtuSchlopf/blob/main/docs/SECURITY.md.
+Beschreibe das Problem in deinen Worten. Unbekannte technische Angaben kannst
+du offenlassen. Bitte zuerst kurz nach einem ähnlichen bestehenden Issue schauen.
+Sicherheitslücken bitte nicht hier veröffentlichen:
+https://github.com/Funcry241/EtuSchlopf/blob/main/docs/SECURITY.md.
 
-## Stand und Umgebung
+## Was wolltest du tun, und was ist passiert?
 
-- Version und Revision, gegebenenfalls Git-Commit:
-- Betriebssystem:
-- Browser und Hilfstechnologie, falls für eine Bedienhürde relevant:
-- Genauer Aufruf:
+Zum Beispiel: MIDI auf die EXE gezogen; danach erscheint diese Meldung …
+Oder: Die PDF wurde erzeugt, aber in Takt … fehlt …
 
-## Problem und Reproduktion
+## Was hast du erwartet?
 
-Was wolltest du tun? Welche Schritte führen zum Problem?
+Bei Noten: Welche Note, Dauer, Hand oder Darstellung wäre richtig?
+Ein kleiner Bildausschnitt mit der betroffenen Stelle hilft.
 
-## Erwartetes und tatsächliches Ergebnis
+## Wie hast du gestartet?
 
-Bei Notation bitte die musikalische Erwartung erklären; ein kleiner Ausschnitt
-mit Lokalisation kann helfen. Bei Bedienhürden die betroffene Aufgabe nennen.
+- [ ] MIDI auf die Windows-EXE gezogen
+- [ ] EXE geöffnet und Dateipfad eingegeben
+- [ ] run.cmd oder anderer Aufruf (bitte nennen, wenn bekannt)
 
-## Kleines Beispiel und Laufbelege
+Version oder Name der heruntergeladenen Datei, falls bekannt:
+Windows-Version oder anderes Betriebssystem, falls bekannt:
 
-Füge möglichst ein selbst erstelltes Minimalbeispiel und relevante Logzeilen bei.
-Bitte nur Material hochladen, das du teilen darfst. Private Pfade und persönliche
-Daten vorher entfernen. Ein vollständiger Assistant-Export ist nicht erforderlich.
+## Ergänzungen, wenn vorhanden
 
-## Häufigkeit und letzter funktionierender Stand
+Hier ist Platz für den genauen Meldungstext, einen Bildausschnitt, relevante
+Berichtszeilen oder ein kleines eigenes Beispiel. Ein vollständiger
+Assistant-Export ist nicht nötig. Teile nur Material, das du veröffentlichen
+darfst; private Pfade und persönliche Daten bitte vorher entfernen.
 
-Falls bekannt: immer/manchmal; letzter funktionierender Stand.
+Tritt es immer oder nur manchmal auf? Falls du es nicht weißt, lass die Frage offen.
 
-Das Projekt wird privat gepflegt; es gibt keine garantierte Bearbeitungsfrist.
+Das Projekt wird privat gepflegt; eine Bearbeitungsfrist ist nicht zugesagt.

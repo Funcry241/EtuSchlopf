@@ -17,11 +17,18 @@ Antwortzeiten, Fehlerbehebungen oder Unterstützung älterer Versionen.
 
 ## Einen hilfreichen Fehlerbericht schreiben
 
-Nenne Version und Revision, Betriebssystem, genauen Aufruf, Schritte zur
-Reproduktion, erwartetes und tatsächliches Ergebnis. Bei Notationsproblemen
-helfen ein kleiner Ausschnitt und eine Erklärung der musikalischen Erwartung.
-Ein grüner Lauf und ein gut lesbares Notenbild sind unterschiedliche Aussagen.
-Ein konkreter Takt darf im Fehlerbericht lokalisiert werden.
+Nutze den [kurzen Fehlerbericht](https://github.com/Funcry241/EtuSchlopf/issues/new?template=01_fehler.md).
+Beschreibe zuerst, was du tun wolltest, was tatsächlich passiert und was du
+erwartet hast. Bei Notationsproblemen helfen Takt, Stimme oder Hand, die betroffene
+Note und ein kleiner Bildausschnitt. Ein grüner Lauf und ein gut lesbares Notenbild
+sind unterschiedliche Aussagen.
+
+Wenn du die Windows-EXE verwendest, genügt als Startbeschreibung zum Beispiel
+„MIDI auf die EXE gezogen“ oder „EXE gestartet und Dateipfad eingegeben“.
+Ein Kommandozeilenaufruf ist dafür nicht erforderlich. Version und
+Betriebssystem sind hilfreich, soweit bekannt; unbekannte Angaben können
+offenbleiben. Du musst keine Entwicklungswerkzeuge installieren, um einen
+Fehler zu melden.
 
 Verwende möglichst ein kleines selbst erstelltes Beispiel. Teile nur Musik und
 Dateien, die du veröffentlichen darfst. Prüfe Logs, Screenshots und Exporte vor
@@ -29,7 +36,12 @@ Dateien, die du veröffentlichen darfst. Prüfe Logs, Screenshots und Exporte vo
 vollständiger Assistant-Export kann Quellcode, Berichte und weitere lokale
 Informationen enthalten; er ist keine Voraussetzung für einen öffentlichen Bericht.
 
-## Einrichten und ausführen
+## Windows-EXE ausprobieren
+
+Für die fertige Testversion folge dem [ersten Start](../README.md#dein-erstes-stück).
+Die folgenden Abschnitte betreffen die Arbeit am Quellcode.
+
+## Quellcode einrichten und ausführen
 
 Die [technische Referenz](DEVELOPMENT.md) beschreibt Eingaben, Ausgaben und die aktuelle
 Aufrufreferenz. Die maßgebliche Rust-Toolchain samt Komponenten steht in
