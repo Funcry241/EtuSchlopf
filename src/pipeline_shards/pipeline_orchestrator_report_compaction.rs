@@ -321,10 +321,14 @@ fn real_main() -> anyhow::Result<i32> {
     master_state_identity::reset_master_lineage_measurement();
     master_state_identity::reset_render_lineage_measurement();
     let cli = Cli::normalized_from_env();
+    if cli.renderer_available {
+        return Ok(if render::renderer_available() { 0 } else { 3 });
+    }
+    crate::source::register_technical_workspace(cli.internal_work_dir.as_deref())?;
     let _ =
         crate::audit_only::writer_trace::cleanup_clef_ab_probe_artifacts(&std::env::current_dir()?);
     if cli.all {
-        return run_all_batch_orchestrator(&cli.corpus_out, &cli.jobs);
+        return run_all_batch_orchestrator(&cli.corpus_out, &cli.jobs, cli.writer_trace.as_deref());
     }
     if cli.corpus_emergence {
         return write_corpus_emergence_report(&cli.corpus_out);

@@ -1848,7 +1848,6 @@ fn build_musicxml(
     // in den MusicXML-Metadaten, aber nicht mehr als Staff-Text über dem Notenanfang.
     // So konkurrieren sie nicht mit Tempo und Spielanweisung.
     xml.push_str("  <identification>\n");
-    xml.push_str("    <creator type=\"composer\">Wolfgang Mair</creator>\n");
     xml.push_str("    <creator type=\"editor\">EtuSchlopf External Review</creator>\n");
     xml.push_str(&format!("    <encoding><software>etuschlopf v{}</software></encoding>\n", env!("CARGO_PKG_VERSION")));
     xml.push_str("  </identification>\n");

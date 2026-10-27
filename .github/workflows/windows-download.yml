@@ -27,9 +27,9 @@ jobs:
       - name: Verify accepted runtime source
         run: |
           $ErrorActionPreference = 'Stop'
-          Get-Content docs/evidence/r1526/accepted_runtime_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
+          Get-Content docs/evidence/r1533/accepted_runtime_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
             $parts = $_ -split "`t"
-            if ((Get-FileHash -Algorithm SHA256 $parts[0]).Hash.ToLowerInvariant() -ne $parts[1]) { throw "Runtime differs from accepted r1526: $($parts[0])" }
+            if ((Get-FileHash -Algorithm SHA256 $parts[0]).Hash.ToLowerInvariant() -ne $parts[1]) { throw "Runtime differs from accepted r1533: $($parts[0])" }
           }
       - name: Build accepted engine
         run: |

@@ -575,7 +575,7 @@ const _: () = assert!(CURSOR_TEMPORAL_RETIREMENT_FNV1A64 == 0x72a366646188d86c);
 
 
 const CHECKPOINT58_PREPARE_BYTES: &[u8] = include_bytes!("build_gate/render_checkpoint_prepare_kodex.rs");
-const _: () = assert!(fnv1a64(CHECKPOINT58_PREPARE_BYTES) == 0xa97fb4b6c55c6c3f);
+const _: () = assert!(fnv1a64(CHECKPOINT58_PREPARE_BYTES) == 0x817ab9d4154f2319);
 const CHECKPOINT58_HISTORICAL_ADOPTION: &[u8] = include_bytes!("build_gate/ssc_test_fixture_r1449_render_adopted_state.txt");
 const _: () = assert!(fnv1a64(CHECKPOINT58_HISTORICAL_ADOPTION) == 0x51997746bec0b556);
 

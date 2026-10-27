@@ -239,7 +239,7 @@ struct RunningBatchProject {
     project_log: crate::audit_only::batch_project_log::BatchProjectLog,
 }
 
-fn run_all_batch_orchestrator(corpus_out: &Path, jobs: &str) -> anyhow::Result<i32> {
+fn run_all_batch_orchestrator(corpus_out: &Path, jobs: &str, writer_trace: Option<&str>) -> anyhow::Result<i32> {
     let mut runtime_observation = observation::SourceStateOwner::corpus(0);
     let runtime_observation_transport =
         observation_transport::SnapshotDatagramPublisher::local(&runtime_observation);
@@ -255,6 +255,9 @@ fn run_all_batch_orchestrator(corpus_out: &Path, jobs: &str) -> anyhow::Result<i
             }
         };
     }
+    {
+        let _trace_validation = observed_corpus_try!(crate::audit_only::writer_trace::start(writer_trace, "batch", None).map_err(anyhow::Error::msg));
+    }
     let pairs = observed_corpus_try!(scan_wav_midi_pairs(Path::new(".")));
     if pairs.is_empty() {
         runtime_observation.mark_failed();
@@ -266,6 +269,16 @@ fn run_all_batch_orchestrator(corpus_out: &Path, jobs: &str) -> anyhow::Result<i
     let batch_started = Instant::now();
     let project_count = pairs.len();
     let parallel = observed_corpus_try!(resolve_parallel_plan(jobs, None));
+    // Validate every selected input before any batch output or manifest is reset.
+    let mut input_paths = Vec::new();
+    let mut output_paths = vec![corpus_out.to_path_buf(), PathBuf::from(CORPUS_RUN_MANIFEST_FILE)];
+    for pair in &pairs {
+        let source = observed_corpus_try!(crate::source::resolve_source_plan(Some(Path::new(&pair.project)), None, None, None));
+        observed_corpus_try!(validate_project_input_files(&source, None));
+        input_paths.extend([pair.midi_path.clone(), pair.wav_path.clone()]);
+        output_paths.extend(source.output_paths());
+    }
+    observed_corpus_try!(crate::source::validate_file_targets(&input_paths, &output_paths));
     let execution_plan = CorpusExecutionPlan::bounded(project_count, &parallel);
     runtime_observation.enter_corpus_stage(
         observation::CorpusStage::PreparingProjects,
@@ -703,18 +716,24 @@ fn expected_batch_outputs(project: &str) -> BatchExpectedOutputs {
 }
 
 fn scan_wav_midi_pairs(dir: &Path) -> anyhow::Result<Vec<BatchProjectPair>> {
-    let mut pairs = Vec::new();
+    let mut stems = std::collections::BTreeMap::new();
     for entry in std::fs::read_dir(dir).with_context(|| format!("Konnte Ordner nicht lesen: {}", dir.display()))? {
-        let entry = entry.context("Konnte Ordnereintrag nicht lesen")?;
-        let path = entry.path();
-        if !path.is_file() || path.extension().and_then(|v| v.to_str()).is_none_or(|v| !v.eq_ignore_ascii_case("wav")) {
-            continue;
+        let path = entry?.path();
+        if !path.extension().and_then(|ext| ext.to_str())
+            .is_some_and(|ext| matches!(ext.to_ascii_lowercase().as_str(), "mid" | "midi" | "wav"))
+        { continue; }
+        if let Some(stem) = path.file_stem().and_then(|value| value.to_str()) {
+            let key = if cfg!(windows) { stem.to_ascii_lowercase() } else { stem.to_string() };
+            stems.entry(key).or_insert_with(|| stem.to_string());
         }
-        let Some(stem) = path.file_stem().and_then(|v| v.to_str()).map(str::to_string) else { continue; };
-        let midi = dir.join(format!("{stem}.mid"));
-        if midi.exists() {
-            pairs.push(BatchProjectPair { project: stem, wav_path: path, midi_path: midi });
+    }
+    let mut pairs = Vec::new();
+    for stem in stems.into_values() {
+        let source = crate::source::resolve_source_plan(Some(&dir.join(&stem)), None, None, None)?;
+        if !source.expected_midi.is_file() || !source.expected_wav.is_file() {
+            return Err(anyhow!("Unvollstaendiges Projekt '{stem}': benoetigt {} und {}. Vorhandene Ergebnisse bleiben erhalten.", source.expected_midi.display(), source.expected_wav.display()));
         }
+        pairs.push(BatchProjectPair { project: stem, wav_path: source.expected_wav, midi_path: source.expected_midi });
     }
     pairs.sort_by(|a, b| natural_project_key(&a.project).cmp(&natural_project_key(&b.project)).then_with(|| a.project.cmp(&b.project)));
     Ok(pairs)
@@ -1395,3 +1414,51 @@ fn write_corpus_emergence_report_for_run(
 
 
 
+
+#[cfg(test)]
+mod batch_input_admission_tests {
+    use super::scan_wav_midi_pairs;
+    use std::path::PathBuf;
+
+    struct Fixture(PathBuf);
+    impl Fixture {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!("batch-admission-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+            std::fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) { std::fs::remove_dir_all(&self.0).unwrap(); }
+    }
+
+    #[test]
+    fn discovery_reports_incomplete_or_non_file_inputs_without_changing_results() {
+        for directory_input in [false, true] {
+            let fixture = Fixture::new();
+            std::fs::write(fixture.0.join("Complete.mid"), b"midi").unwrap();
+            std::fs::write(fixture.0.join("Complete.wav"), b"wav").unwrap();
+            let incomplete = fixture.0.join("Incomplete.midi");
+            if directory_input { std::fs::create_dir(incomplete).unwrap(); }
+            else { std::fs::write(incomplete, b"midi").unwrap(); }
+            let output = fixture.0.join("Complete.pdf");
+            std::fs::write(&output, b"previous good result").unwrap();
+            assert!(scan_wav_midi_pairs(&fixture.0).is_err());
+            assert_eq!(std::fs::read(output).unwrap(), b"previous good result");
+        }
+    }
+
+    #[test]
+    fn discovery_keeps_independent_pairs_with_long_and_uppercase_extensions() {
+        let fixture = Fixture::new();
+        for name in ["Alpha.midi", "Alpha.WAV", "Other.mid", "Other.wav"] {
+            std::fs::write(fixture.0.join(name), b"synthetic source").unwrap();
+        }
+        let pairs = scan_wav_midi_pairs(&fixture.0).unwrap();
+        assert_eq!(pairs.len(), 2);
+        assert_eq!(pairs[0].project, "Alpha");
+        assert_eq!(pairs[0].midi_path, fixture.0.join("Alpha.midi"));
+        assert_eq!(pairs[0].wav_path, fixture.0.join("Alpha.WAV"));
+        assert_eq!(pairs[1].project, "Other");
+    }
+}

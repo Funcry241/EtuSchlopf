@@ -5,6 +5,14 @@
 // through declared section contracts in the byte-preserving ledger; no generic append
 // surface and no mutable String escape remain after compaction.
 {
+// Required-product closure in the enclosing release owner precedes this
+// projection. Validate both persisted products before any successful report or
+// console verdict is built; the renderer-source gate is not this final gate.
+if let Some(summary) = persisted_schema_validation::validate_registered_final_artifacts()
+    .map_err(anyhow::Error::msg)?
+{
+    println!("ETUSCHLOPF: [XSD-GATE   ] {summary}");
+}
 fn append_repair_loop_invocation_evidence_body(
     text: &mut String,
     rest_articulation: &RestArticulationRepairLoopInvocationEvidence,
@@ -1617,7 +1625,8 @@ fn append_repair_loop_invocation_evidence_body(
         |out| {
             append_silent_voice_coverage_write_outcome_projection(
                 out,
-                silent_voice_coverage_projection_message.as_deref(),
+                silent_voice_coverage_projection_message.message.as_deref(),
+                silent_voice_coverage_projection_message.expectation,
             );
         },
     )?;
@@ -1822,7 +1831,7 @@ fn append_repair_loop_invocation_evidence_body(
     text.rewrite_document(report::clarify_legacy_music_mutation_report);
     text.rewrite_document(report::sanitize_measure_locator_authority_report);
     text.rewrite_document(report::sanitize_final_locator_suffixes);
-    let finalized_report = text.finalize()?;
+    let finalized_report = text.finalize_for_renderer_outcome(silent_voice_coverage_projection_message.expectation)?;
     let measurement_snapshot_path =
         crate::audit_only::canonical_measurement_snapshot::write_project_snapshot(
             source,

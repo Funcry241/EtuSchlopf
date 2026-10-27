@@ -63,6 +63,10 @@ impl PersistedSchemaValidationReport {
     }
 }
 
+#[cfg(test)]
+#[path = "../tests/unit/persisted_product_order.rs"]
+mod product_order_tests;
+
 static REGISTERED_ARTIFACTS: OnceLock<RegisteredArtifacts> = OnceLock::new();
 static BOUND_VALIDATOR: OnceLock<Result<BoundInstanceValidator, String>> = OnceLock::new();
 static FINAL_GATE_RESULT: OnceLock<Result<PersistedSchemaValidationReport, String>> = OnceLock::new();
@@ -110,6 +114,41 @@ pub(super) fn is_registered_final_renderer_boundary(
 
 pub(super) fn final_gate_evaluated() -> bool {
     FINAL_GATE_RESULT.get().is_some()
+}
+
+/// Before rendering, validate the actual, already persisted PDF source. The
+/// mandatory unselected product may be realized only at the later sovereign
+/// closure; it is checked independently by the complete final-product gate.
+pub(super) fn validate_registered_renderer_source(
+    input_musicxml: &Path,
+    output_pdf: &Path,
+) -> Result<Option<String>, String> {
+    let Some(registered) = REGISTERED_ARTIFACTS.get() else {
+        return Ok(None);
+    };
+    validate_renderer_source(registered, input_musicxml, output_pdf).map(Some)
+}
+
+fn validate_renderer_source(
+    registered: &RegisteredArtifacts,
+    input_musicxml: &Path,
+    output_pdf: &Path,
+) -> Result<String, String> {
+    let label = if input_musicxml == registered.master {
+        "master"
+    } else if input_musicxml == registered.render {
+        "render"
+    } else {
+        return Err("PersistedRendererSourceGate: unregistered input".to_owned());
+    };
+    if output_pdf != registered.pdf {
+        return Err("PersistedRendererSourceGate: unregistered PDF output".to_owned());
+    }
+    let artifact = validate_persisted(bound_validator()?, label, input_musicxml)?;
+    Ok(format!(
+        "PersistedRendererSourceGate: GREEN; DeclaredVersion={}; SchemaSchlopf {SCHEMASCHLOPF_REVISION} XSD40: GREEN; source={label}; bytes={}; CompleteProductGate=pending_final_product_closure",
+        artifact.declared_version, artifact.bytes,
+    ))
 }
 
 pub(super) fn validate_registered_final_artifacts() -> Result<Option<String>, String> {
@@ -256,6 +295,7 @@ mod tests {
     <measure number="1"/>
   </part>
 </score-partwise>"#;
+
 
     #[test]
     fn bound_validator_accepts_valid_musicxml40_bytes() {

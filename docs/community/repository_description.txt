@@ -1,0 +1,1 @@
+Experimentelles Rust-Projekt für Klavierfassungen aus WAV und MIDI: MusicXML, PDF und nachvollziehbare Laufbelege. Privat gepflegt.

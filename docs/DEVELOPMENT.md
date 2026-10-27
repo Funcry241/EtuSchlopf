@@ -1,14 +1,10 @@
 # Technische Referenz und Quellenarbeit
 
-Diese Seite bewahrt den ausführlichen Entwicklerstand und die vollständige Optionsreferenz. Für den Windows-Download gilt die Anleitung auf der [Startseite](../README.md).
-
-# EtuSchlopf
-
-**EtuSchlopf erzeugt aus Projektmaterial eine Klavierfassung und prüft die
-zulässigen Verarbeitungsschritte bis zu MusicXML, PDF und Ergebnisbericht.**
-Die Implementierung ist Rust-basiert; der gepflegte Einstieg ist der
-Windows-Launcher `run.cmd`. Die lokale Watch-GUI zeigt Laufzustände,
-Projektfortschritt, Zeiten und Links zu den PDFs.
+Diese Seite enthält den technischen Einstieg des angenommenen r1533-Stands samt
+vollständiger Optionsreferenz. Für die separate Windows-Testversion r1526 gilt die
+[Download-Anleitung](../README.md). Git-Dokumentation und Take-Identität sind
+unterschiedliche Ebenen; die Runtime-Dateien entsprechen dem angenommenen Take.
+Die [aktuellen Prüfbelege](evidence/r1533/README.md) dokumentieren die native Abnahme.
 
 Das Projekt hat zwei eng verbundene Gegenstände:
 
@@ -28,36 +24,43 @@ Programme und bleiben Gegenstand von Gegenbeispielen und Prüfung.
 
 - [Was tatsächlich implementiert ist, einschließlich SchlopfFormel und Mathematik](../docs/IMPLEMENTED_FOUNDATIONS.md)
 - [Forschungsbezüge und ihre genaue Rolle](../docs/RESEARCH_CONTEXT.md)
-- [Dokumentierte Abnahme von r1526](../docs/evidence/r1526/README.md)
+- [Dokumentierte Abnahme von r1533](evidence/r1533/README.md)
 - [Kaltstart ohne Gesprächsgedächtnis](../docs/assistant_memory/000_start_here.md)
 
-**Geprüfter Stand am 26.10.2026:** r1526, Paketversion 0.10.1839; 2.538 Tests
-bestanden, kein Fehler, ein Test ignoriert, Build/Clippy erfolgreich, privater
-Evaluationskorpus 10/10. Gegen den angenommenen r1525-Stand sind 20 XML-Dateien
-bytegleich und alle 50 PDF-Seiten im Rastervergleich bei 96 dpi pixelgleich.
-Diese Belege gelten für den konkreten nativen Lauf. Spielbarkeit und Eignung
-für fremde Stücke brauchen eine unabhängige musikalische Bewertung.
-Der Git-Stand enthält die angenommene r1526-Quelle und eine gesonderte öffentliche
-Dokumentationsschicht; Git-Commit und Take-Annahme sind unterschiedliche Nachweise.
 
-**Entwicklerstand:** Ein vorgebautes Windows-Anwenderpaket ist noch offen.
-Der reguläre Einstieg benötigt weiterhin ein gleichnamiges `.mid`-/`.wav`-Paar.
-MIDI ohne WAV, direkte Dateinamen und `.midi` sind noch kein verlässlich
-unterstützter Einstieg. Die Sicherung vorhandener Ergebnisse deckt noch nicht
-alle Aufrufarten ab; Details stehen unter [Ergebnisschutz und Grenzen](#ergebnisschutz-und-grenzen).
+# EtuSchlopf
+
+EtuSchlopf ist ein **experimentelles, privat gepflegtes Rust-Projekt**, das
+zusammengehörige WAV- und MIDI-Dateien zu einer Klavierfassung verarbeitet.
+Die Ergebnisse sind MusicXML, eine gesonderte Renderfassung, ein PDF über einen
+externen MuseScore-Renderer und ein Laufbericht. Der gepflegte Einstieg ist der
+Windows-Launcher `run.cmd`; eigene geeignete Eingaben sind erforderlich.
+
+Fehlerberichte sind jederzeit willkommen. Größere Änderungen bitte vorab über
+GitHub besprechen. Es gibt keine garantierten Antwortzeiten, Fehlerbehebungen
+oder Unterstützung älterer Versionen.
+
+[Dokumentationswegweiser](../docs/README.md) ·
+[Beiträge](../docs/CONTRIBUTING.md) ·
+[Sicherheit](../docs/SECURITY.md) ·
+[Umgang miteinander](../docs/CODE_OF_CONDUCT.md) ·
+[Barrierefreiheit](../docs/ACCESSIBILITY.md)
 
 *Zwischen Ereignis und Zeichen liegt eine Entscheidung.*
 
-## Inhalt
+EtuSchlopf untersucht, unter welchen Bedingungen musikalische Ereignisse eine
+lesbare Gestalt annehmen dürfen. Es empfängt Spuren, bildet Zusammenhänge und
+verlangt von einer Veränderung mehr als ein plausibles Ergebnis: eine geklärte
+Herkunft, eine zuständige Instanz und einen überprüfbaren Übergang.
 
-- [Eingaben und Ausgaben](#die-eingänge)
-- [Installation und erster Lauf](#eine-maschine-in-gang-setzen)
-- [Fehlerhilfe und Ergebnisschutz](#fehlerhilfe)
-- [Watch-GUI](#die-gui-etuschlopf-watch)
-- [Alle Optionen, Aliase und Beispiele](#vollständige-aufrufreferenz)
-- [Architektur und Verarbeitung](#vom-ereignis-zur-gestalt)
-- [Revisionen und Takes](#revisionen-takes-und-rückkehr)
-- [Lizenz](#lizenz)
+Die musikalische Ausgabe ist eine Klavierfassung. Eine lokale Watch-GUI zeigt
+den laufenden Prozess, Projektfortschritt, Laufzeiten und Links zu den PDFs.
+Darunter arbeitet ein System
+aus Beobachtung, Zuständigkeit, Identität und begrenzten Schreibrechten. Manche
+seiner Teile dürfen sehen. Andere dürfen vorschlagen. Wenige dürfen schreiben.
+Wer schreibt, hinterlässt einen Beleg.
+
+Das Repository enthält den Maschinenraum. Die Musik muss man selbst mitbringen.
 
 ## Die Eingänge
 
@@ -130,44 +133,6 @@ Der Launcher ist Teil des Arbeitsablaufs. Er koordiniert unter anderem Build,
 Prüfungen, Lauf und Belegausgabe. Strict ist der Standard. Wiederverwendung
 bereits geprüfter Ergebnisse ist an die dafür vorgesehenen Belege gebunden.
 Ein vorhandener Build-Cache ersetzt diese Bindung nicht.
-
-## Fehlerhilfe
-
-Gib den Projektnamen ohne `.mid` oder `.wav` an; bei Leerzeichen in
-Anführungszeichen. Öffne für die sichtbare Notation in MuseScore die Datei
-`Mein Projekt.render.musicxml`. Die PDF liegt normalerweise neben den Eingaben.
-Prüfe Abschlussmeldung und aktuellen Ergebnisbericht: Eine vorhandene Datei
-allein beweist keinen erfolgreichen neuen Lauf.
-
-| Beobachtung | Nächster Schritt |
-| --- | --- |
-| Eingabe fehlt | Projektnamen und das gleichnamige `.mid`-/`.wav`-Paar prüfen. |
-| MIDI/WAV wird abgelehnt | Im ursprünglichen Musik-/Audioprogramm prüfen und neu exportieren; die konkrete Fehlermeldung aufbewahren. |
-| Kein PDF / Renderer fehlt | MuseScore-Installation und Renderer-Meldung prüfen. Eine alte PDF belegt keinen neuen Export. |
-| Datei ist gesperrt | PDF/XML in anderen Programmen schließen und Schreibrechte prüfen. |
-| Rust/Cargo fehlt | Die festgelegte Toolchain installieren; dieser Stand ist ein Source-Projekt. |
-| Unklarer Fehler | Revision, exakten Aufruf, Meldung und aktuellen Bericht sichern. Eigene Musik nur bewusst weitergeben. |
-
-### Ergebnisschutz und Grenzen
-
-r1525 erhält vorhandene Ergebnisse bei der Root-Bereinigung unabhängig von
-Projektauswahl und vollständigem Eingangspaar. r1526 erhält die bestehende
-Vierdateien-Sicherung auch bei regulären Einzelaufrufen mit `--jobs`,
-`--layout-pages`, `--top`, `--reference-wav`, `--writer-trace`,
-`--use-corpus-cache` und `--lenient-partial-voices`.
-
-Batch, direkte Programmausführung, abweichende Ausgabeziele, `--no-pdf`,
-`--no-polish` und weitere ausgeschlossene Aufrufbedingungen sind durch diese
-Vierdateien-Hülle nicht abgesichert. Vorhandene gute Ergebnisse vor solchen
-Versuchen separat sichern; Fehler-, Abbruch- und Kollisionsproben gehören in
-eine getrennte Testkopie. Die angenommene Stage-A-Definition für frühe
-Eingabeprüfungen ist noch keine Runtime-Implementierung.
-
-Für einen abgeschlossenen öffentlichen Anwendertest fehlen unter anderem der
-vollständige Eingabe-/Ausgabe- und Recovery-Schutz, die fachliche MIDI-only-Lösung,
-das vorgebaute Windows-Paket sowie die Abnahme auf sauberem Windows mit mindestens
-drei fremden Stücken und unabhängiger musikalischer Bewertung. Die öffentliche
-Verfügbarkeit des Quellcodes ist kein Nachweis dieser noch offenen Prüfungen.
 
 ## Die GUI: EtuSchlopf Watch
 
@@ -260,6 +225,7 @@ lautet `etuschlopf [OPTIONS] [INPUT]`.
 | `--pdf-out <PFAD>` | Pfad der PDF-Ausgabe bei verfügbarem Renderer. Standard: `<Projekt>.pdf`. |
 | `--reference-wav <PFAD>` | Explizite WAV-Referenz. Ohne Angabe erfolgt die eindeutige Suche im Eingabeordner. |
 | `--no-pdf` | Überspringt die PDF-Erzeugung. Standard: PDF-Erzeugung anfordern. |
+| `--renderer-available` | Interne, nur lesende Startabfrage der Download-EXE über die vorhandene MuseScore-Suche. Exit 0: ausführbare Renderer-Datei gefunden; Exit 3: nicht gefunden. Kein Projektlauf und keine PDF-Erzeugung; im normalen Programm-Hilfetext ausgeblendet. |
 | `--layout-pages <ANZAHL>` | Feste Zielseitenzahl. Ohne Angabe bestimmt das Programm sie anhand der Dichte. |
 | `--no-polish` | Überspringt die Notensatz-Politur; Prüfmodus ohne MusicXML-Ausgabe. Standard: Politur aktiv. |
 | `--lenient-partial-voices` | Unterfüllte Nebenstimmen erzeugen Warnungen statt Blockern. Standard: strenge Behandlung. Dies ist eine fachliche Prüfoption, kein Abschalten der Strict-Build-Gates. |

@@ -191,6 +191,7 @@ fn semantic_lower_clef_pdf_render_input_force_reason(
 fn append_silent_voice_coverage_write_outcome_projection(
     out: &mut String,
     projection_message: Option<&str>,
+    expected: crate::final_report::RendererOutcomeExpectation,
 ) {
     if let Some(line) = projection_message {
         out.push_str("Source: existing_writer_audit_pipeline_line; ProjectionOnly ja; WriterGraphChanged nein; SelectionChanged nein; MusicXmlChangedByProjection nein; PdfChangedByProjection nein.\n");
@@ -199,6 +200,11 @@ fn append_silent_voice_coverage_write_outcome_projection(
         out.push_str("RendererOutcome: observed_from_existing_writer_audit.\n");
     } else {
         out.push_str("Source: existing_writer_audit_pipeline_line; ProjectionOnly ja; RendererOutcome not_observed; RenderXmlWrite nein; NotationMutation nein; MusicMutation nein; MasterApply nein.\n");
+        out.push_str(match expected {
+            crate::final_report::RendererOutcomeExpectation::NotRequested => "RendererOutcome: not_requested.\n",
+            crate::final_report::RendererOutcomeExpectation::BlockedBeforeRenderer => "RendererOutcome: blocked_before_renderer.\n",
+            crate::final_report::RendererOutcomeExpectation::Observed => "RendererOutcome: missing_writer_audit.\n",
+        });
     }
 }
 

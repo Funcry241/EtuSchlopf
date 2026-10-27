@@ -461,14 +461,17 @@ pub fn render_pdf_if_possible(
             input_musicxml,
             output_pdf,
         ) {
-            match super::persisted_schema_validation::validate_registered_final_artifacts() {
+            match super::persisted_schema_validation::validate_registered_renderer_source(
+                input_musicxml,
+                output_pdf,
+            ) {
                 Ok(Some(summary)) => Some(summary),
                 Ok(None) => None,
                 Err(error) => {
                     eprintln!("ETUSCHLOPF: [XSD-GATE   ] FEHLER: {error}");
                     return RenderResult {
                         message: format!(
-                            "SchemaSchlopf r020 PersistedByteXsdGate: BLOCKIERT; MuseScore nicht gestartet; {error}"
+                            "SchemaSchlopf r021 PersistedRendererSourceGate: BLOCKIERT; MuseScore nicht gestartet; {error}"
                         ),
                         status: RenderStatus::RendererFailed,
             probe_identity: None,
@@ -782,8 +785,7 @@ fn write_pdf_output_freshness_runtime_artifact_v994(input: PdfOutputFreshnessRun
         input.after_render,
     );
     let renderer_winning_exit_zero = renderer_exit_zero_label(input.winning_exit_code);
-    let out_dir = project_root
-        .join("target")
+    let out_dir = crate::source::technical_work_dir(project_root)
         .join("etuschlopf_pdf_output_freshness_runtime");
     fs::create_dir_all(&out_dir)?;
     let attempts_compact = compact_attempts(input.attempts);
@@ -1843,6 +1845,19 @@ fn one_line(value: &str) -> String {
         compact
     }
 }
+// Read-only startup projection for the packaged EXE. Reuse the renderer's
+// own candidates and validation; do not maintain another discovery policy.
+pub(super) fn renderer_available() -> bool {
+    discover_renderer_candidates().into_iter().any(|candidate| {
+        let Some(executable) = validate_renderer_executable(
+            &strip_optional_quotes(&candidate.executable), candidate.source,
+        ) else { return false; };
+        if looks_like_path(&executable) { return Path::new(&executable).is_file(); }
+        env::var_os("PATH").is_some_and(|paths|
+            env::split_paths(&paths).any(|dir| dir.join(&executable).is_file()))
+    })
+}
+
 fn discover_renderer_candidates() -> Vec<RendererCandidate> {
     let mut candidates = Vec::new();
     if let Ok(explicit) = env::var("ETUSCHLOPF_PDF_RENDERER")

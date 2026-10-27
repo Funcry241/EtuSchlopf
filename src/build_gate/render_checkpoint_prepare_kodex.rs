@@ -62,6 +62,48 @@ fn bridge_transport_pair(observed: &[(&str, &str)]) -> Result<bool, String> {
     }
     Ok(true)
 }
+
+// Closed prerequisite for the required unchanged XML product. The separate
+// RefactorOnly successor must match this complete reviewed implementation;
+// no generic pin renewal or new Render origin is admitted.
+const REQUIRED_PRODUCT_IMAGES: &[(&str, &str)] = &[
+    ("src/structural_write_authority/master_adoption/render_adopted_state.rs", "5c5906371898fbe88a380546345e3f1967ba37c9beaca2defc8485f5220a9b09"),
+    ("src/structural_write_authority/master_adoption/required_render_product.rs", "d0b85f406fc49e18329f398945c8b12a544ee750cc7970d8068a9a12202c8f31"),
+    ("src/pipeline_shards/pipeline_orchestrator_release_report_exit_stage.rs", "f2f0744120ea8ef19cc2db4a12ce565c3802350e9dbc19d2beddca6d0788be87"),
+    ("docs/selector_derivation_contract_required_render_product_implementation.md", "91d0feef6749a5b02be0f363428b2daaa7e440f185152276db4fbd790c5ed147"),
+];
+fn required_product_tuple_matches(observed: &[(&str,Option<&str>)]) -> bool {
+    observed.len()==REQUIRED_PRODUCT_IMAGES.len() && REQUIRED_PRODUCT_IMAGES.iter().all(|(path,digest)|
+        observed.iter().filter(|(p,_)|p==path).count()==1
+        && observed.iter().any(|(p,d)|p==path && *d==Some(*digest)))
+}
+fn required_product_state(root: &Path) -> Result<bool, String> {
+    let observed = REQUIRED_PRODUCT_IMAGES.iter().map(|(path,_)|
+        writer_image(root,path).map(|digest|(*path,digest))).collect::<Result<Vec<_>,_>>()?;
+    let signalled = observed.iter().zip(REQUIRED_PRODUCT_IMAGES).any(|((path,actual),(_,expected))|
+        actual.as_deref()==Some(*expected) || (*path==REQUIRED_PRODUCT_IMAGES[1].0 && actual.is_some()));
+    if !signalled { return Ok(false); }
+    let refs=observed.iter().map(|(p,d)|(*p,d.as_deref())).collect::<Vec<_>>();
+    if !required_product_tuple_matches(&refs) {
+        return Err("RequiredRenderProduct requires its complete exact source-bound implementation; partial or drifted images are forbidden".into());
+    }
+    Ok(true)
+}
+fn required_product_bound_image(root: &Path, path: &str, digest: &str) -> Result<bool,String> {
+    Ok(REQUIRED_PRODUCT_IMAGES.iter().any(|(p,d)|*p==path && *d==digest) && required_product_state(root)?)
+}
+fn required_product_transition(parent: &Path, child: &Path, class: &str) -> Result<(),String> {
+    let before=required_product_state(parent)?;
+    let after=required_product_state(child)?;
+    if before && !after { return Err("RequiredRenderProduct admitted implementation cannot disappear".into()); }
+    if !before && after && (class!="RefactorOnly"
+        || !writer_identity(parent,"r1529","r1528","SscK2GovernanceRevisionKodex","KodexOnly")?
+        || !writer_identity(child,"r1530","r1529","RequiredRenderProductRealization","RefactorOnly")?) {
+        return Err("RequiredRenderProduct requires the exact admitted prerequisite parent and separate RefactorOnly successor".into());
+    }
+    Ok(())
+}
+
 pub(crate) fn validate_tree(root: &Path) -> Result<(), String> {
     if !installed(root) { return Ok(()); }
     let writer_retired = writer_retirement_state(root)?;
@@ -74,7 +116,7 @@ pub(crate) fn validate_tree(root: &Path) -> Result<(), String> {
         let bridge_bound = bridge_complete && BRIDGE_TRANSPORT_SUCCESSORS.iter()
             .any(|(bound_path,bound_digest)|path==bound_path && digest==*bound_digest);
         let writer_bound = writer_retired && WRITER_RETIREMENT_IMAGES.iter().any(|(p,_,after)|p==path && after.is_some_and(|sha|sha==digest));
-        if digest != *expected && !phrase_transport_successor(path, &digest) && !bridge_bound && !writer_bound {
+        if digest != *expected && !phrase_transport_successor(path, &digest) && !bridge_bound && !writer_bound && !required_product_bound_image(root, path, &digest)? {
             return Err(format!("Checkpoint58 exact prepared successor changed: {path}"));
         }
     }
@@ -84,6 +126,7 @@ pub(crate) fn applies(parent: &Path, child: &Path) -> bool {
     installed(parent) || installed(child)
 }
 pub(crate) fn validate_transition(parent: &Path, child: &Path, class: &str) -> Result<(), String> {
+    required_product_transition(parent,child,class)?;
     writer_retirement_transition(parent,child,class)?;
     let before=installed(parent);let after=installed(child);
     if before && !after { return Err("Checkpoint58 prepared event cannot disappear".into()); }
@@ -212,7 +255,13 @@ fn writer_installed_images_match(root: &Path) -> Result<bool, String> {
         if *path == "ZIP_KIND.txt" || path.starts_with("docs/") { continue; }
         let actual = writer_image(root,path)?;
         let bound = after.is_none() || writer_retirement_exact_after_installation(path);
-        if bound && actual.as_deref() != *after { return Ok(false); }
+        if bound && actual.as_deref() != *after {
+            let product_bound = match actual.as_deref() {
+                Some(digest) => required_product_bound_image(root,path,digest)?,
+                None => false,
+            };
+            if !product_bound { return Ok(false); }
+        }
     }
     Ok(true)
 }
@@ -368,6 +417,12 @@ mod bridge_transport_tests {
                 }
             }
         }
+        if required_product_state(parent).unwrap() {
+            for (path,_) in REQUIRED_PRODUCT_IMAGES {
+                let file=root.join(path);std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+                std::fs::write(file,read(parent,path).unwrap()).unwrap();
+            }
+        }
         assert!(validate_tree(&root).is_ok());
         for (path,_) in SUCCESSORS {
             let file = root.join(path); let original = std::fs::read(&file).unwrap();
@@ -455,8 +510,12 @@ mod writer_retirement_installed_tests {
         let parent = Path::new(env!("CARGO_MANIFEST_DIR"));
         let root = std::env::temp_dir().join(format!("writer-retirement-installed-{tag}-{}",std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
+        // Copy the complete current contract into the synthetic installed tree;
+        // the product successor adds bound owner files outside the old tables.
+        let product_paths = if required_product_state(parent).unwrap() { REQUIRED_PRODUCT_IMAGES } else { &[] };
         let paths = WRITER_RETIREMENT_IMAGES.iter().filter(|(_,_,after)|after.is_some()).map(|(p,_,_)|*p)
-            .chain(SUCCESSORS.iter().map(|(p,_)|*p));
+            .chain(SUCCESSORS.iter().map(|(p,_)|*p))
+            .chain(product_paths.iter().map(|(p,_)|*p));
         for path in paths {
             let file=root.join(path);std::fs::create_dir_all(file.parent().unwrap()).unwrap();
             std::fs::write(file,read(parent,path).unwrap()).unwrap();
@@ -518,5 +577,29 @@ mod writer_retirement_installed_tests {
             assert!(writer_retirement_state(&root).is_err() || validate_tree(&root).is_err(), "{path}");
             std::fs::remove_dir_all(root).unwrap();
         }
+    }
+}
+
+#[cfg(test)]
+mod required_product_contract_tests {
+    use super::*;
+    #[test]
+    fn required_product_accepts_only_complete_exact_tuple_in_any_order() {
+        let mut tuple=REQUIRED_PRODUCT_IMAGES.iter().map(|(p,d)|(*p,Some(*d))).collect::<Vec<_>>();
+        assert!(required_product_tuple_matches(&tuple));tuple.reverse();
+        assert!(required_product_tuple_matches(&tuple));
+    }
+    #[test]
+    fn required_product_rejects_partial_mixed_foreign_duplicate_or_extra_images() {
+        let tuple=REQUIRED_PRODUCT_IMAGES.iter().map(|(p,d)|(*p,Some(*d))).collect::<Vec<_>>();
+        for i in 0..tuple.len() {
+            let mut partial=tuple.clone();partial.remove(i);assert!(!required_product_tuple_matches(&partial));
+            let mut drift=tuple.clone();drift[i].1=Some("drift");assert!(!required_product_tuple_matches(&drift));
+            drift[i].1=None;assert!(!required_product_tuple_matches(&drift));
+            let mut wrong_path=tuple.clone();wrong_path[i].0="foreign.rs";assert!(!required_product_tuple_matches(&wrong_path));
+            let mut duplicate=tuple.clone();duplicate[i]=tuple[(i+1)%tuple.len()];assert!(!required_product_tuple_matches(&duplicate));
+        }
+        let mut extra=tuple.clone();extra.push(tuple[0]);assert!(!required_product_tuple_matches(&extra));
+        assert!(!required_product_tuple_matches(&[]));
     }
 }
