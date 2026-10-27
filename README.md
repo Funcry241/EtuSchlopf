@@ -1,29 +1,38 @@
 # EtuSchlopf
 
-**Aus MIDI und WAV zu einer Klavierfassung – als PDF und zum Bearbeiten in MuseScore.**
+**Klaviernoten aus zusammengehörigen MIDI- und WAV-Dateien – als PDF und zum Bearbeiten in MuseScore.**
 
 EtuSchlopf ordnet musikalische Ereignisse zu einer zweihändigen Klavierdarstellung
 und bearbeitet unter anderem Stimmen, Rhythmus, Pausen, Balken und Register.
 Das Ergebnis ist ein Ausgangspunkt für deine weitere musikalische Arbeit.
 
-EtuSchlopf ist ein **experimentelles, privat gepflegtes Projekt**.
-Fehlerberichte sind jederzeit willkommen; größere Änderungen bitte vorab über
-GitHub besprechen. Es gibt keine garantierten Antwortzeiten, Fehlerbehebungen
-oder Unterstützung älterer Versionen.
+**[Windows-EXE herunterladen · Testversion r1526 · 7,7 MB](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1526-windows-preview/EtuSchlopf-Windows-x64.exe)**
 
-[Dokumentation](docs/README.md) · [Beiträge](docs/CONTRIBUTING.md) ·
-[Sicherheit](docs/SECURITY.md) · [Umgang miteinander](docs/CODE_OF_CONDUCT.md) ·
-[Barrierefreiheit](docs/ACCESSIBILITY.md)
+Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI und WAV als Eingabe
 
-## Für Windows herunterladen
+[Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1526-windows-preview) ·
+[Erstes Stück](#dein-erstes-stück) · [Grenzen der Testversion](#aktueller-stand) ·
+[Technische Dokumentation](docs/DEVELOPMENT.md)
 
-**[Windows-EXE direkt herunterladen (Testversion r1526, 7,7 MB)](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1526-windows-preview/EtuSchlopf-Windows-x64.exe)**
+## Ein Blick auf die Noten
 
-[Hinweise zur Testversion und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1526-windows-preview).
+[![EtuSchlopf-Notenbeispiel: erstes Klaviersystem der Etüde Nr. 1, Entwicklungsstand r1537](docs/images/etude-1-r1537-ausschnitt.png)](docs/examples/etude-1-r1537.pdf)
 
-Die Windows-EXE enthält das Programm und seine benötigten Notationsdaten.
-Du musst dafür weder Rust noch Cargo, Python oder andere Entwicklungswerkzeuge
-installieren. Für die PDF-Ausgabe brauchst du **[MuseScore](https://musescore.org/de/download)**.
+*Etüde Nr. 1 aus dem eigenen Evaluationskorpus: unveränderter PDF-Ausschnitt,
+Entwicklungsstand r1537. Bild anklicken für die vollständige PDF.
+Die herunterladbare EXE enthält den älteren Stand r1526; das Beispiel zeigt r1537.*
+
+## Für wen ist EtuSchlopf gedacht?
+
+Für Menschen, die zu einem Stück eine MIDI-Datei und eine passende WAV-Datei
+besitzen und daraus eine Klavierfassung zum Lesen und Weiterbearbeiten gewinnen
+möchten. MIDI liefert die Notenereignisse und ihre Zeitstruktur; WAV steht als
+Klangaufnahme für die Audio-Beobachtung zur Verfügung. Beide Dateien werden
+im derzeitigen Ablauf benötigt.
+
+Das Projekt ist experimentell und privat gepflegt. Prüfe am eigenen Stück,
+ob dir die Fassung bei der weiteren Arbeit hilft; musikalische Nachbearbeitung
+kann erforderlich sein.
 
 ## Dein erstes Stück
 
@@ -34,7 +43,7 @@ Mein Stück.mid
 Mein Stück.wav
 ```
 
-1. Lade die Windows-EXE herunter.
+1. Lade die Windows-EXE herunter. Für die PDF-Ausgabe brauchst du außerdem **[MuseScore](https://musescore.org/de/download)**.
 2. Ziehe deine `.mid`- oder `.midi`-Datei auf die EXE. Alternativ startest du die EXE und gibst den Pfad zur MIDI-Datei ein.
 3. Öffne nach erfolgreichem Lauf die PDF im angezeigten Ergebnisordner.
 
@@ -87,7 +96,6 @@ Für die Arbeit am Quellcode gelten die [technische Referenz](docs/DEVELOPMENT.m
 und die [Beitragsregeln](docs/CONTRIBUTING.md). Der [Dokumentationswegweiser](docs/README.md)
 führt zu Architektur, Diagnose und Community-Dateien.
 
-## Lizenz
-
+Fehlerberichte sind willkommen. Bitte nenne die verwendete Version, die konkrete\nMeldung und – bei einem Notationsfehler – die betroffene Stelle.\n[Beiträge](docs/CONTRIBUTING.md) · [Sicherheit](docs/SECURITY.md) ·\n[Umgang miteinander](docs/CODE_OF_CONDUCT.md) · [Barrierefreiheit](docs/ACCESSIBILITY.md)\n\n## Lizenz\n
 EtuSchlopf steht unter der [MIT-Lizenz](LICENSE).
 [Fremdkomponenten und Lizenzen](docs/THIRD_PARTY_NOTICES.md).
