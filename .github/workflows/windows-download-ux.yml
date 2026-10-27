@@ -1,0 +1,63 @@
+name: Windows download usability
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/windows-download-ux]
+    paths:
+      - '.github/distribution/**'
+      - '.github/workflows/windows-download-ux.yml'
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      RUSTFLAGS: '-C target-feature=+crt-static'
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Reuse the exact published music engine
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Invoke-WebRequest -Uri 'https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1526-windows-preview/EtuSchlopf-Windows-x64.exe' -OutFile "$env:RUNNER_TEMP/published-r1526.exe"
+          python .github/distribution/extract_release_runtime.py "$env:RUNNER_TEMP/published-r1526.exe" "$env:RUNNER_TEMP/published-runtime.zip" | Tee-Object dist/runtime-provenance.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Published engine extraction failed' }
+      - name: Test and build the revised starter
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal
+          if ($LASTEXITCODE -ne 0) { throw 'Toolchain installation failed' }
+          $env:ETUSCHLOPF_BUNDLE_ZIP = "$env:RUNNER_TEMP/published-runtime.zip"
+          cargo +1.98.0 test --locked --manifest-path .github/distribution/Cargo.toml --release
+          if ($LASTEXITCODE -ne 0) { throw 'Starter tests failed' }
+          cargo +1.98.0 build --locked --manifest-path .github/distribution/Cargo.toml --release
+          if ($LASTEXITCODE -ne 0) { throw 'Starter build failed' }
+          Copy-Item .github/distribution/target/release/etuschlopf_windows_download.exe dist/EtuSchlopf-Windows-x64.exe
+      - name: Check version and help without developer tools
+        run: |
+          $exe = (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
+          $originalPath = $env:PATH
+          try {
+            $env:PATH = "$env:windir\System32;$env:windir"
+            & $exe --version
+            if ($LASTEXITCODE -ne 0) { throw 'Version check failed' }
+            & $exe --help
+            if ($LASTEXITCODE -ne 0) { throw 'Help check failed' }
+          } finally { $env:PATH = $originalPath }
+      - name: Check real packaged processing, log capture and safe rejection
+        run: |
+          ./.github/distribution/smoke.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
+      - name: Record the download checksum
+        run: |
+          $hash = (Get-FileHash -Algorithm SHA256 dist/EtuSchlopf-Windows-x64.exe).Hash.ToLowerInvariant()
+          "$hash  EtuSchlopf-Windows-x64.exe" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: EtuSchlopf-Windows-UX-r1526
+          path: dist/*
+          retention-days: 30
+          if-no-files-found: error

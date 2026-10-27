@@ -24,14 +24,20 @@ try {
 } finally { $env:PATH = $originalPath }
 if ((Get-FileHash $midi -Algorithm SHA256).Hash -ne $beforeMidi) { throw 'Original MIDI changed' }
 if ((Get-FileHash $wav -Algorithm SHA256).Hash -ne $beforeWav) { throw 'Original WAV changed' }
-$log = Get-Content "$root/probe.log" -Raw
-Write-Output $log
+$console = Get-Content "$root/probe.log" -Raw
+Write-Output $console
+if ($console.Contains([string][char]27)) { throw 'Engine ANSI escapes leaked into the user console' }
+if ($console -match 'MIDI produktiv;') { throw 'Raw engine diagnostics leaked into the user console' }
+$folders = @(Get-ChildItem "$root/EtuSchlopf-Ergebnisse" -Directory)
+if ($folders.Count -ne 1) { throw 'Expected exactly one isolated result workspace' }
+$diagnosticPath = Join-Path $folders[0].FullName 'Laufprotokoll.txt'
+if (-not (Test-Path $diagnosticPath)) { throw 'Persistent engine log missing' }
+$log = Get-Content $diagnosticPath -Raw
+if ($console -notmatch 'Laufprotokoll.txt') { throw 'User-facing log location missing' }
 if ($log -notmatch 'MIDI produktiv;') { throw 'Packaged engine did not reach productive MIDI processing' }
 if ($log -match 'konnte EtuSchlopfs gebundene MusicXML') { throw 'Required runtime schema data unavailable' }
 if ($exitCode -ne 0 -and $log -notmatch 'Aktiver menschlicher Sichtpruefungs-/Reviewvertrag') { throw "Unexpected pipeline failure: $exitCode" }
 if ($exitCode -ne 0) { Write-Warning 'Synthetic piece was rejected by the existing report gate. This is not a successful musical acceptance.' }
-$folders = @(Get-ChildItem "$root/EtuSchlopf-Ergebnisse" -Directory)
-if ($folders.Count -ne 1) { throw 'Expected exactly one isolated result workspace' }
 if (-not (Test-Path (Join-Path $folders[0].FullName 'Example Ü.mid'))) { throw 'Internal MIDI copy missing' }
 if (-not (Test-Path (Join-Path $folders[0].FullName 'Example Ü.wav'))) { throw 'Internal WAV copy missing' }
 Write-Output 'Packaged engine reached processing without developer PATH; original source hashes preserved.'

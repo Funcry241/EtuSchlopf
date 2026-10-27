@@ -1,7 +1,7 @@
 //! Distribution bootstrap: private runtime extraction and fresh per-run input copies.
 //! Musical decoding and writing remain exclusively in the embedded accepted engine.
 #![forbid(unsafe_code)]
-use std::{env, fs, io::{self, Write}, path::{Path, PathBuf}, process::{Command, ExitCode}, time::{SystemTime, UNIX_EPOCH}};
+use std::{env, fs, io::{self, IsTerminal, Write}, path::{Path, PathBuf}, process::{Command, ExitCode, Stdio}, thread, time::{Duration, Instant, SystemTime, UNIX_EPOCH}};
 
 const BUNDLE: &[u8] = include_bytes!(env!("ETUSCHLOPF_BUNDLE_ZIP"));
 
@@ -62,6 +62,38 @@ fn midi_pair(input: &Path) -> Result<(PathBuf, PathBuf, String)> {
     Ok((full, wavs.remove(0), stem))
 }
 
+fn execute_engine(command: &mut Command, log_path: &Path) -> Result<i32> {
+    // File-backed output cannot fill a pipe while the parent waits. Keep the
+    // engine's complete diagnostics, including its original colour bytes, off
+    // the user console and preserve its actual exit status.
+    let log = fs::OpenOptions::new().write(true).create_new(true).open(log_path)?;
+    command.stdout(Stdio::from(log.try_clone()?)).stderr(Stdio::from(log));
+    let mut child = command.spawn()?;
+    let started = Instant::now();
+    loop {
+        if let Some(status) = child.try_wait()? {
+            println!("\rVerarbeitung beendet nach {} Sekunden.                  ", started.elapsed().as_secs());
+            return Ok(status.code().unwrap_or(1));
+        }
+        print!("\rDein Stück wird verarbeitet ... {} Sekunden", started.elapsed().as_secs());
+        let _ = io::stdout().flush();
+        thread::sleep(Duration::from_millis(250));
+    }
+}
+
+fn open_result_folder(output: &Path) {
+    #[cfg(windows)]
+    if io::stdin().is_terminal() {
+        // Starting Explorer is a convenience; a shell failure must not change
+        // the musical engine's result or hide the printed folder path.
+        if let Err(error) = Command::new("explorer.exe").arg(output).spawn() {
+            eprintln!("Der Ergebnisordner konnte nicht automatisch geöffnet werden: {error}");
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = output;
+}
+
 fn run(args: &[String]) -> Result<i32> {
     if args.len() == 1 && matches!(args[0].as_str(), "--help" | "-h") {
         println!("EtuSchlopf fuer Windows\n\nZiehe deine .mid- oder .midi-Datei auf diese EXE.\nEine gleichnamige WAV-Datei muss daneben liegen.\nOhne Argument fragt das Programm nach dem Dateipfad.\n\nEtuSchlopf.exe \"Mein Stueck.mid\" [--no-pdf]\n--no-pdf erzeugt die Notendateien ohne PDF.\n--version zeigt die Programmversion.\nJeder Lauf legt einen neuen Ordner unter EtuSchlopf-Ergebnisse an.");
@@ -88,22 +120,39 @@ fn run(args: &[String]) -> Result<i32> {
     fs::copy(&wav, output.join(format!("{stem}.wav")))?;
     println!("Ergebnisse dieses Laufs: {}", output.display());
     println!("Deine Originaldateien und bisherige Ergebnisordner bleiben erhalten.");
+    println!("Ich bereite das Programm vor. Der Ergebnisordner öffnet sich nach dem Lauf.");
     let rt = runtime()?;
     let mut child = Command::new(rt.0.join("etuschlopf_engine.exe"));
     child.current_dir(&rt.0).arg(&project);
     if args.get(1).is_some_and(|s| s == "--no-pdf") { child.arg("--no-pdf"); }
-    let status = child.status()?.code().unwrap_or(1);
+    let log_path = output.join("Laufprotokoll.txt");
+    let result = execute_engine(&mut child, &log_path);
     println!("\nErgebnisordner: {}", output.display());
-    if status == 0 { println!("Fertig. Oeffne die PDF oder die Datei mit der Endung .render.musicxml in MuseScore."); }
-    else { eprintln!("Der Lauf ist fehlgeschlagen. Die Meldung oben beschreibt die Ursache; fruehere Ergebnisse bleiben erhalten."); }
+    println!("Technische Einzelheiten stehen in Laufprotokoll.txt.");
+    open_result_folder(&output);
+    let status = result?;
+    if status == 0 {
+        if args.get(1).is_some_and(|s| s == "--no-pdf") {
+            println!("Fertig. Öffne {stem}.render.musicxml in MuseScore. Eine PDF war nicht angefordert.");
+        } else {
+            println!("Fertig. Öffne {stem}.pdf im Ergebnisordner.");
+            println!("Zum Bearbeiten in MuseScore nimm {stem}.render.musicxml.");
+        }
+    } else {
+        eprintln!("Der Lauf ist fehlgeschlagen. Im Ergebnisordner findest du Laufprotokoll.txt mit der genauen Meldung.");
+        eprintln!("Deine Originaldateien und frühere Ergebnisse bleiben erhalten.");
+    }
     Ok(status)
 }
 
 fn main() -> ExitCode {
     let args = env::args().skip(1).collect::<Vec<_>>();
-    let interactive = args.is_empty();
+    // Drag-and-drop also supplies an argument. It still needs a persistent
+    // result message, whereas help/version and noninteractive jobs must exit.
+    let query = args.len() == 1 && matches!(args[0].as_str(), "--help" | "-h" | "--version");
+    let interactive = !query && io::stdin().is_terminal();
     let code = match run(&args) { Ok(code) => code, Err(e) => { eprintln!("EtuSchlopf: {e}");1 } };
-    if interactive { println!("Zum Schliessen Eingabetaste druecken."); let mut s=String::new();let _=io::stdin().read_line(&mut s); }
+    if interactive { println!("Zum Schließen dieses Fensters drücke die Eingabetaste."); let mut s=String::new();let _=io::stdin().read_line(&mut s); }
     if code == 0 { ExitCode::SUCCESS } else { ExitCode::FAILURE }
 }
 
@@ -128,5 +177,27 @@ mod tests {
     fn missing_wav_is_reported_without_creating_output_workspaces() {
         let root = Runtime(fresh_directory(&env::temp_dir(), "distribution-test").unwrap());let midi=root.0.join("Example.mid");fs::write(&midi,b"source").unwrap();
         assert!(midi_pair(&midi).is_err());assert!(!root.0.join("EtuSchlopf-Ergebnisse").exists());assert_eq!(fs::read(midi).unwrap(),b"source");
+    }
+
+    #[test]
+    fn engine_failure_keeps_both_diagnostic_streams_and_exit_code() {
+        let root = Runtime(fresh_directory(&env::temp_dir(), "distribution-log-test").unwrap());
+        let path = root.0.join("Laufprotokoll.txt");
+        #[cfg(windows)]
+        let mut command = {
+            let mut c = Command::new("cmd.exe");
+            c.args(["/D", "/C", "echo engine-stdout & echo engine-stderr 1>&2 & exit /b 7"]);
+            c
+        };
+        #[cfg(not(windows))]
+        let mut command = {
+            let mut c = Command::new("sh");
+            c.args(["-c", "printf '\\033[92mengine-stdout\\033[0m\\n'; printf 'engine-stderr\\n' >&2; exit 7"]);
+            c
+        };
+        assert_eq!(execute_engine(&mut command, &path).unwrap(), 7);
+        let diagnostic = fs::read_to_string(path).unwrap();
+        assert!(diagnostic.contains("engine-stdout"));
+        assert!(diagnostic.contains("engine-stderr"));
     }
 }
