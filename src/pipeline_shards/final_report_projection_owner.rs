@@ -5,6 +5,14 @@
 // through declared section contracts in the byte-preserving ledger; no generic append
 // surface and no mutable String escape remain after compaction.
 {
+// Required-product closure in the enclosing release owner precedes this
+// projection. Validate both persisted products before any successful report or
+// console verdict is built; the renderer-source gate is not this final gate.
+if let Some(summary) = persisted_schema_validation::validate_registered_final_artifacts()
+    .map_err(anyhow::Error::msg)?
+{
+    println!("ETUSCHLOPF: [XSD-GATE   ] {summary}");
+}
 fn append_repair_loop_invocation_evidence_body(
     text: &mut String,
     rest_articulation: &RestArticulationRepairLoopInvocationEvidence,

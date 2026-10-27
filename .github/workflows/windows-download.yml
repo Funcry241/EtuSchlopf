@@ -7,6 +7,9 @@ on:
       - '.gitattributes'
       - '.github/distribution/**'
       - '.github/workflows/windows-download.yml'
+      - 'src/**'
+      - 'tests/**'
+      - 'docs/evidence/r1530/**'
 permissions:
   contents: read
 concurrency:
@@ -80,25 +83,34 @@ jobs:
             & $exe --help
             if ($LASTEXITCODE -ne 0) { throw 'Standalone help probe failed' }
           } finally { $env:PATH = $originalPath }
-      - name: Real audible package tests without MuseScore
+      - name: Synthetic audible package without MuseScore
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         run: |
           $exe = (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
-          foreach ($case in @('synthetic','menuet')) {
-            ./.github/distribution/package-check.ps1 -Exe $exe -Renderer Missing -Case $case
-            if ($LASTEXITCODE -ne 0) { throw "Missing-renderer package test failed: $case" }
-          }
+          ./.github/distribution/package-check.ps1 -Exe $exe -Renderer Missing -Case synthetic
+          if ($LASTEXITCODE -ne 0) { throw 'Synthetic missing-renderer package test failed' }
+      - name: Original foreign MIDI without MuseScore
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        run: |
+          $exe = (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
+          ./.github/distribution/package-check.ps1 -Exe $exe -Renderer Missing -Case menuet
+          if ($LASTEXITCODE -ne 0) { throw 'Original foreign MIDI missing-renderer package test failed' }
       - name: Install pinned official MuseScore for PDF tests
         id: renderer_install
         if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         run: ./.github/distribution/install-ci-musescore.ps1
-      - name: Real audible package tests with MuseScore
+      - name: Synthetic audible package with real MuseScore
         if: ${{ !cancelled() && steps.package.outcome == 'success' && steps.renderer_install.outcome == 'success' }}
         run: |
           $exe = (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
-          foreach ($case in @('synthetic','menuet')) {
-            ./.github/distribution/package-check.ps1 -Exe $exe -Renderer Present -Case $case
-            if ($LASTEXITCODE -ne 0) { throw "Real MuseScore PDF package test failed: $case" }
-          }
+          ./.github/distribution/package-check.ps1 -Exe $exe -Renderer Present -Case synthetic
+          if ($LASTEXITCODE -ne 0) { throw 'Synthetic real MuseScore PDF package test failed' }
+      - name: Original foreign MIDI with real MuseScore
+        if: ${{ !cancelled() && steps.package.outcome == 'success' && steps.renderer_install.outcome == 'success' }}
+        run: |
+          $exe = (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
+          ./.github/distribution/package-check.ps1 -Exe $exe -Renderer Present -Case menuet
+          if ($LASTEXITCODE -ne 0) { throw 'Original foreign MIDI real MuseScore PDF package test failed' }
       - name: Hash Windows download
         if: ${{ success() }}
         run: |

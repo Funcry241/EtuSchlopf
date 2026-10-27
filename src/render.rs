@@ -461,14 +461,17 @@ pub fn render_pdf_if_possible(
             input_musicxml,
             output_pdf,
         ) {
-            match super::persisted_schema_validation::validate_registered_final_artifacts() {
+            match super::persisted_schema_validation::validate_registered_renderer_source(
+                input_musicxml,
+                output_pdf,
+            ) {
                 Ok(Some(summary)) => Some(summary),
                 Ok(None) => None,
                 Err(error) => {
                     eprintln!("ETUSCHLOPF: [XSD-GATE   ] FEHLER: {error}");
                     return RenderResult {
                         message: format!(
-                            "SchemaSchlopf r020 PersistedByteXsdGate: BLOCKIERT; MuseScore nicht gestartet; {error}"
+                            "SchemaSchlopf r021 PersistedRendererSourceGate: BLOCKIERT; MuseScore nicht gestartet; {error}"
                         ),
                         status: RenderStatus::RendererFailed,
             probe_identity: None,
