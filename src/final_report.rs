@@ -14,6 +14,15 @@ const REQUIRED_FINAL_REPORT_SECTIONS: [&str; 2] = [
 const REQUIRED_SILENT_VOICE_RENDERER_OUTCOME: &str =
     "RendererOutcome: observed_from_existing_writer_audit.\n";
 const NOT_REQUESTED_SILENT_VOICE_RENDERER_OUTCOME: &str = "RendererOutcome: not_requested.\n";
+const BLOCKED_SILENT_VOICE_RENDERER_OUTCOME: &str = "RendererOutcome: blocked_before_renderer.\n";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RendererOutcomeExpectation {
+    Observed,
+    NotRequested,
+    BlockedBeforeRenderer,
+}
+
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct ReportRewriteScope {
@@ -522,8 +531,17 @@ impl CompactedReport {
         self.finalize_for_pdf_request(true)
     }
 
+    #[cfg(test)]
     pub fn finalize_for_pdf_request(self, pdf_requested: bool) -> Result<FinalizedReport> {
-        validate_required_contract(&self.document, pdf_requested)?;
+        self.finalize_for_renderer_outcome(if pdf_requested {
+            RendererOutcomeExpectation::Observed
+        } else {
+            RendererOutcomeExpectation::NotRequested
+        })
+    }
+
+    pub fn finalize_for_renderer_outcome(self, expected: RendererOutcomeExpectation) -> Result<FinalizedReport> {
+        validate_required_contract(&self.document, expected)?;
         let mut text = self.document.render();
         let access = SscObservationReadAccess { _private: () };
         crate::ssc_shadow_report::append_ssc_shadow_observation(&access, &mut text);
@@ -543,7 +561,7 @@ impl FinalizedReport {
     }
 }
 
-fn validate_required_contract(document: &ReportDocument, pdf_requested: bool) -> Result<()> {
+fn validate_required_contract(document: &ReportDocument, expected: RendererOutcomeExpectation) -> Result<()> {
     for section in REQUIRED_FINAL_REPORT_SECTIONS {
         let occurrences = document.section_count(section);
         if occurrences != 1 {
@@ -558,11 +576,16 @@ fn validate_required_contract(document: &ReportDocument, pdf_requested: bool) ->
     let report = document.render();
     let observed = report.match_indices(REQUIRED_SILENT_VOICE_RENDERER_OUTCOME).count();
     let not_requested = report.match_indices(NOT_REQUESTED_SILENT_VOICE_RENDERER_OUTCOME).count();
-    let expected = if pdf_requested { (1, 0) } else { (0, 1) };
-    if (observed, not_requested) != expected {
+    let blocked = report.match_indices(BLOCKED_SILENT_VOICE_RENDERER_OUTCOME).count();
+    let expected_counts = match expected {
+        RendererOutcomeExpectation::Observed => (1, 0, 0),
+        RendererOutcomeExpectation::NotRequested => (0, 1, 0),
+        RendererOutcomeExpectation::BlockedBeforeRenderer => (0, 0, 1),
+    };
+    if (observed, not_requested, blocked) != expected_counts {
         bail!(
-            "FinalReportContract: Silent-Voice-RendererOutcome widerspricht PDF-Aufruf; requested={}; observed={}; not_requested={}",
-            pdf_requested, observed, not_requested
+            "FinalReportContract: Silent-Voice-RendererOutcome widerspricht gebundener Ausfuehrungsentscheidung; expected={:?}; observed={}; not_requested={}; blocked={}",
+            expected, observed, not_requested, blocked
         );
     }
 
@@ -797,6 +820,43 @@ mod tests {
         for requested in [false, true] {
             assert!(DraftReport::new(conflicting.clone()).compact(ToOwned::to_owned)
                 .finalize_for_pdf_request(requested).is_err());
+        }
+    }
+
+    #[test]
+    fn blocked_pdf_report_uses_bound_blocker_outcome_and_remains_readable() {
+        let blocked = valid_report().replace(REQUIRED_SILENT_VOICE_RENDERER_OUTCOME,
+            super::BLOCKED_SILENT_VOICE_RENDERER_OUTCOME) + "\nErgebnis: BLOCKIERT\nBlocker: 1\n";
+        let finalized = DraftReport::new(blocked.clone()).compact(ToOwned::to_owned)
+            .finalize_for_renderer_outcome(super::RendererOutcomeExpectation::BlockedBeforeRenderer)
+            .expect("requested PDF withheld by blockers still has a valid report");
+        assert!(finalized.as_str().contains("Blocker: 1"));
+        for other in [super::RendererOutcomeExpectation::Observed, super::RendererOutcomeExpectation::NotRequested] {
+            assert!(DraftReport::new(blocked.clone()).compact(ToOwned::to_owned)
+                .finalize_for_renderer_outcome(other).is_err());
+        }
+    }
+
+    #[test]
+    fn all_renderer_outcomes_require_one_exact_independent_mode_marker() {
+        let base=valid_report().replace(REQUIRED_SILENT_VOICE_RENDERER_OUTCOME, "");
+        let modes=[super::RendererOutcomeExpectation::Observed,
+            super::RendererOutcomeExpectation::NotRequested,
+            super::RendererOutcomeExpectation::BlockedBeforeRenderer];
+        let markers=[REQUIRED_SILENT_VOICE_RENDERER_OUTCOME,
+            super::NOT_REQUESTED_SILENT_VOICE_RENDERER_OUTCOME,
+            super::BLOCKED_SILENT_VOICE_RENDERER_OUTCOME];
+        for (i,expected) in modes.iter().enumerate() {
+            for (j,marker) in markers.iter().enumerate() {
+                let report=format!("{base}{marker}");
+                assert_eq!(DraftReport::new(report).compact(ToOwned::to_owned)
+                    .finalize_for_renderer_outcome(*expected).is_ok(),i==j);
+                let duplicate=format!("{base}{marker}{marker}");
+                assert!(DraftReport::new(duplicate).compact(ToOwned::to_owned)
+                    .finalize_for_renderer_outcome(*expected).is_err());
+            }
+            assert!(DraftReport::new(base.clone()).compact(ToOwned::to_owned)
+                .finalize_for_renderer_outcome(*expected).is_err());
         }
     }
 

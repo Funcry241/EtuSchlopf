@@ -1417,6 +1417,13 @@ primary_beam_voice_partition_plan.as_ref())?,
             render_xml_selected_for_pdf,
             pdf_source_label,
             pdf_render_requested,
+            renderer_outcome_expectation: if no_pdf {
+                crate::final_report::RendererOutcomeExpectation::NotRequested
+            } else if pdf_render_requested {
+                crate::final_report::RendererOutcomeExpectation::Observed
+            } else {
+                crate::final_report::RendererOutcomeExpectation::BlockedBeforeRenderer
+            },
             committed_source_xml,
             committed_initial_horizontal_layout_plan,
             renderer_feasibility_basis,

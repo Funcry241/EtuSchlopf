@@ -51,6 +51,10 @@ pub struct Cli {
     #[arg(long)]
     pub no_pdf: bool,
 
+    /// Internal distribution startup query; exits before project preparation.
+    #[arg(long, hide = true)]
+    pub renderer_available: bool,
+
     /// Optionale feste Ziel-Seitenzahl. Ohne Angabe entscheidet EtuSchlopf automatisch nach Dichte.
     #[arg(long)]
     pub layout_pages: Option<usize>,

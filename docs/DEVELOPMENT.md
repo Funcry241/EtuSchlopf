@@ -476,3 +476,11 @@ Der eigene EtuSchlopf-Code steht unter der [MIT-Lizenz](../docs/licenses/EtuSchl
 Fremdkomponenten behalten ihre jeweiligen Lizenzen. Die Zuordnung, mitgelieferte
 Lizenztexte und Grenzen der Prüfung stehen in
 [Fremdlizenzhinweise](../docs/THIRD_PARTY_NOTICES.md).
+
+
+## Interne Renderer-Startabfrage der EXE
+
+`--renderer-available` fragt nur die bestehende Suche in render.rs ab und schreibt keine Projektdateien. Exit 0: ausfuehrbare Renderer-Datei gefunden; Exit 3: kein Renderer gefunden. Der Download-Bootstrap verwendet bei fehlendem MuseScore --no-pdf. Andere Abfragefehler werden als Warnung ausgegeben und der normale Lauf setzt fort. Der Bericht unterscheidet einen ausgefuehrten Renderer, ausdrueckliches --no-pdf und PDF-Unterdrueckung wegen Blockern.
+
+Die Paketpruefung verwendet hoerbare WAVs sowie ein unveraendertes gemeinfreies Fremd-MIDI. Eine nicht unterstuetzte MIDI-Zeitaufloesung bleibt eine sichtbare Ablehnung, kein erfolgreicher Musiktest. Herkunft und SHA256 stehen in .github/distribution/fixtures/manifest.json.
+

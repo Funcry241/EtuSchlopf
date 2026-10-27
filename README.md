@@ -1,3 +1,5 @@
+> Dieser Vorschauzweig enthaelt den noch nicht nativ angenommenen r1530-Kandidaten. Die Windows-Paketpruefungen mit und ohne MuseScore sind verpflichtend; ein fehlgeschlagener Fremdstuecktest bleibt ein Fehler. Keine neue EXE ist dadurch zur Veroeffentlichung freigegeben.
+
 # EtuSchlopf
 
 **Aus MIDI und WAV zu einer Klavierfassung – als PDF und zum Bearbeiten in MuseScore.**
@@ -69,3 +71,4 @@ und Hinweise für die [Arbeit am Quellcode](docs/DEVELOPMENT.md) liegen auf eige
 
 EtuSchlopf steht unter der [MIT-Lizenz](LICENSE).
 [Fremdkomponenten und Lizenzen](docs/THIRD_PARTY_NOTICES.md).
+

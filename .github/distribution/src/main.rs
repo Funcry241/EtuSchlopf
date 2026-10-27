@@ -74,6 +74,20 @@ fn run(args: &[String]) -> Result<i32> {
     if args.len() > 2 || (args.len() == 2 && args[1] != "--no-pdf") {
         return Err("Aufruf: EtuSchlopf.exe \"Mein Stueck.mid\" [--no-pdf]".into());
     }
+    let rt = runtime()?;
+    let renderer_probe = Command::new(rt.0.join("etuschlopf_engine.exe"))
+        .current_dir(&rt.0).arg("--renderer-available").output();
+    let renderer_missing = match renderer_probe {
+        Ok(probe) if probe.status.code() == Some(0) => false,
+        Ok(probe) if probe.status.code() == Some(3) => true,
+        _ => {
+            eprintln!("Warnung: MuseScore-Abfrage fehlgeschlagen. Der normale Lauf wird fortgesetzt.");
+            false
+        }
+    };
+    if renderer_missing {
+        println!("Depp!\nMuseScore fehlt. Ohne MuseScore gibt es keine PDF, nur die Notendateien.\nKostenlos: https://musescore.org/de/download\n");
+    }
     let input = if args.is_empty() {
         println!("EtuSchlopf - aus MIDI und WAV zu einer Klavierfassung");
         println!("Du kannst deine MIDI-Datei auch direkt auf diese EXE ziehen.");
@@ -88,13 +102,18 @@ fn run(args: &[String]) -> Result<i32> {
     fs::copy(&wav, output.join(format!("{stem}.wav")))?;
     println!("Ergebnisse dieses Laufs: {}", output.display());
     println!("Deine Originaldateien und bisherige Ergebnisordner bleiben erhalten.");
-    let rt = runtime()?;
     let mut child = Command::new(rt.0.join("etuschlopf_engine.exe"));
     child.current_dir(&rt.0).arg(&project);
-    if args.get(1).is_some_and(|s| s == "--no-pdf") { child.arg("--no-pdf"); }
+    if renderer_missing || args.get(1).is_some_and(|s| s == "--no-pdf") { child.arg("--no-pdf"); }
     let status = child.status()?.code().unwrap_or(1);
     println!("\nErgebnisordner: {}", output.display());
-    if status == 0 { println!("Fertig. Oeffne die PDF oder die Datei mit der Endung .render.musicxml in MuseScore."); }
+    if status == 0 {
+        if output.join(format!("{stem}.pdf")).is_file() {
+            println!("Fertig. Öffne die PDF oder die Datei mit der Endung .render.musicxml in MuseScore.");
+        } else {
+            println!("Fertig. Öffne die Datei mit der Endung .render.musicxml in MuseScore.");
+        }
+    }
     else { eprintln!("Der Lauf ist fehlgeschlagen. Die Meldung oben beschreibt die Ursache; fruehere Ergebnisse bleiben erhalten."); }
     Ok(status)
 }

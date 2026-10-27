@@ -321,6 +321,9 @@ fn real_main() -> anyhow::Result<i32> {
     master_state_identity::reset_master_lineage_measurement();
     master_state_identity::reset_render_lineage_measurement();
     let cli = Cli::normalized_from_env();
+    if cli.renderer_available {
+        return Ok(if render::renderer_available() { 0 } else { 3 });
+    }
     let _ =
         crate::audit_only::writer_trace::cleanup_clef_ab_probe_artifacts(&std::env::current_dir()?);
     if cli.all {

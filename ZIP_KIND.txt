@@ -1,6 +1,6 @@
 kind=EtuSchlopfTake
 version=0.10.1839
-revision=r1528
-name=RestTieReportVerdictProjection
-parent_revision=r1527
+revision=r1530
+name=RequiredRenderProductRealization
+parent_revision=r1529
 change_class=RefactorOnly

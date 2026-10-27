@@ -782,6 +782,10 @@ impl RenderSovereignState {
     pub(crate) fn close_render_sovereignty(&self) -> RenderClosureVerdict {
         let artifact = read_artifact(&self.artifact_path);
         let witnessed = artifact.as_deref() == self.document();
+        self.finish_render_closure(witnessed)
+    }
+
+    fn finish_render_closure(&self, witnessed: bool) -> RenderClosureVerdict {
         let verdict = record_final_render_lineage(
             self.adopted
                 .as_ref()
@@ -802,6 +806,8 @@ impl RenderSovereignState {
         verdict
     }
 }
+
+include!("required_render_product.rs");
 
 #[cfg(test)]
 #[path = "render_adopted_state_tests.rs"]

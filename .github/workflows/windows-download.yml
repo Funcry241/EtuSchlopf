@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build:
     runs-on: windows-2022
-    timeout-minutes: 45
+    timeout-minutes: 90
     defaults:
       run:
         shell: pwsh
@@ -28,9 +28,9 @@ jobs:
       - name: Verify pinned candidate runtime source
         run: |
           $ErrorActionPreference = 'Stop'
-          Get-Content docs/evidence/r1528/candidate_runtime_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
+          Get-Content docs/evidence/r1530/candidate_runtime_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
             $parts = $_ -split "`t"
-            if ((Get-FileHash -Algorithm SHA256 $parts[0]).Hash.ToLowerInvariant() -ne $parts[1]) { throw "Runtime differs from r1528 candidate: $($parts[0])" }
+            if ((Get-FileHash -Algorithm SHA256 $parts[0]).Hash.ToLowerInvariant() -ne $parts[1]) { throw "Runtime differs from r1530 preview: $($parts[0])" }
           }
       - name: Build candidate engine
         run: |
@@ -80,19 +80,44 @@ jobs:
             & $exe --help
             if ($LASTEXITCODE -ne 0) { throw 'Standalone help probe failed' }
           } finally { $env:PATH = $originalPath }
-      - name: Verify isolated runtime and successful synthetic pipeline
+      - name: Real audible package tests without MuseScore
         run: |
-          ./.github/distribution/smoke.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
-      - name: Hash Windows download
+          $exe = (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
+          foreach ($case in @('synthetic','menuet')) {
+            ./.github/distribution/package-check.ps1 -Exe $exe -Renderer Missing -Case $case
+            if ($LASTEXITCODE -ne 0) { throw "Missing-renderer package test failed: $case" }
+          }
+      - name: Install pinned official MuseScore for PDF tests
+        id: renderer_install
         if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        run: ./.github/distribution/install-ci-musescore.ps1
+      - name: Real audible package tests with MuseScore
+        if: ${{ !cancelled() && steps.package.outcome == 'success' && steps.renderer_install.outcome == 'success' }}
+        run: |
+          $exe = (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
+          foreach ($case in @('synthetic','menuet')) {
+            ./.github/distribution/package-check.ps1 -Exe $exe -Renderer Present -Case $case
+            if ($LASTEXITCODE -ne 0) { throw "Real MuseScore PDF package test failed: $case" }
+          }
+      - name: Hash Windows download
+        if: ${{ success() }}
         run: |
           $hash = (Get-FileHash -Algorithm SHA256 dist/EtuSchlopf-Windows-x64.exe).Hash.ToLowerInvariant()
           "$hash  EtuSchlopf-Windows-x64.exe" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+      - name: Keep package diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: package-diagnostics
+          path: ${{ runner.temp }}/etuschlopf-real-package-*/**
+          retention-days: 14
+          if-no-files-found: warn
       - name: Keep Windows build for review
-        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        if: ${{ success() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: EtuSchlopf-Windows-x64
           path: dist/*
           retention-days: 30
           if-no-files-found: error
+

@@ -1843,6 +1843,19 @@ fn one_line(value: &str) -> String {
         compact
     }
 }
+// Read-only startup projection for the packaged EXE. Reuse the renderer's
+// own candidates and validation; do not maintain another discovery policy.
+pub(super) fn renderer_available() -> bool {
+    discover_renderer_candidates().into_iter().any(|candidate| {
+        let Some(executable) = validate_renderer_executable(
+            &strip_optional_quotes(&candidate.executable), candidate.source,
+        ) else { return false; };
+        if looks_like_path(&executable) { return Path::new(&executable).is_file(); }
+        env::var_os("PATH").is_some_and(|paths|
+            env::split_paths(&paths).any(|dir| dir.join(&executable).is_file()))
+    })
+}
+
 fn discover_renderer_candidates() -> Vec<RendererCandidate> {
     let mut candidates = Vec::new();
     if let Ok(explicit) = env::var("ETUSCHLOPF_PDF_RENDERER")

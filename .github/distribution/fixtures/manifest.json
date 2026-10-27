@@ -1,0 +1,34 @@
+[
+  {
+    "name": "synthetic",
+    "midi_source": "project-authored synthetic MIDI",
+    "midi_sha256": "5064334b182793fee7d268f2d4ea7f0169faef6aad867c90a1fc023f2b5f6a64",
+    "wav_sha256": "65f8b21a28817c962c6bfd8218ffb530d1d58bd47f7bfd8fd0a66f6ef0eddaf3",
+    "wav_gzip_sha256": "45f43cb131fdaccbacf0157282aaa752e9ac5f98900c265c7967ecf4631168ce",
+    "notes": 64,
+    "duration_seconds": 16.25,
+    "sample_rate": 8000,
+    "bits": 16,
+    "rms": 0.4002696693117855,
+    "nonzero_samples": 127960,
+    "wav_origin": "own audible harmonic synthesis of the exact MIDI, not an independent acoustic recording",
+    "composition_and_midi_license": "CC0-1.0",
+    "wav_license": "CC0-1.0"
+  },
+  {
+    "name": "menuet",
+    "midi_source": "https://www.mutopiaproject.org/ftp/BachJS/BWVAnh114/anna-magdalena-04/anna-magdalena-04.mid",
+    "midi_sha256": "fd87a6673e18104047842a1c858d2c9d8eb9ad845d7a8fa46e3664b17642cb75",
+    "wav_sha256": "e65ef224641026b89992d8bf787d72e908c5774854d71c57280c5a11ecfec884",
+    "wav_gzip_sha256": "458f869accc4faeb226bf8ea8d6595ea8d4480456443b4bc81646c8b0ec55353",
+    "notes": 204,
+    "duration_seconds": 41.392816,
+    "sample_rate": 8000,
+    "bits": 16,
+    "rms": 0.20075814803208902,
+    "nonzero_samples": 328973,
+    "wav_origin": "own audible harmonic synthesis of the exact MIDI, not an independent acoustic recording",
+    "composition_and_midi_license": "Public Domain",
+    "wav_license": "CC0-1.0"
+  }
+]

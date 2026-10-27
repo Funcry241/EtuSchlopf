@@ -121,6 +121,7 @@ struct CommittedPdfSourceAndRendererOracleOutcome {
     render_xml_selected_for_pdf: bool,
     pdf_source_label: &'static str,
     pdf_render_requested: bool,
+    renderer_outcome_expectation: crate::final_report::RendererOutcomeExpectation,
     committed_source_xml: String,
     committed_initial_horizontal_layout_plan: HorizontalLayoutPlan,
     renderer_feasibility_basis: GlobalHorizontalPageSystemPlanAudit,
@@ -144,12 +145,17 @@ struct RenderPdfSourceSelectionStageInputs<'a> {
         CommittedPdfSourceAndRendererOracleOutcome,
 }
 
+struct RendererCoverageProjection {
+    expectation: crate::final_report::RendererOutcomeExpectation,
+    message: Option<String>,
+}
+
 struct RenderPdfSourceSelectionStageOutcome {
     render_xml_selected_for_pdf: bool,
     committed_voice_plan: Option<structural_write_authority::FrozenSerializedVoicePlan>,
     final_serialized_musicxml_temporal_artifact_observation: RawCursorInvariantHardGateAudit,
     pdf_actual_pages: Option<usize>,
-    silent_voice_coverage_projection_message: Option<String>,
+    silent_voice_coverage_projection_message: RendererCoverageProjection,
     render_write_pdf_source_adoption_truth_gate_audit:
         RenderWritePdfSourceAdoptionTruthGateAudit,
     render_write_pdf_source_adoption_truth_gate_blocks_release: bool,
@@ -172,6 +178,7 @@ fn run_render_pdf_source_selection_stage(
         render_xml_selected_for_pdf,
         pdf_source_label,
         pdf_render_requested,
+        renderer_outcome_expectation,
         committed_source_xml,
         committed_initial_horizontal_layout_plan,
         renderer_feasibility_basis,
@@ -491,7 +498,10 @@ fn run_render_pdf_source_selection_stage(
         committed_voice_plan,
         final_serialized_musicxml_temporal_artifact_observation,
         pdf_actual_pages,
-        silent_voice_coverage_projection_message,
+        silent_voice_coverage_projection_message: RendererCoverageProjection {
+            expectation: renderer_outcome_expectation,
+            message: silent_voice_coverage_projection_message,
+        },
         render_write_pdf_source_adoption_truth_gate_audit,
         render_write_pdf_source_adoption_truth_gate_blocks_release,
         authorized_writer_entry_boundary_audit,
