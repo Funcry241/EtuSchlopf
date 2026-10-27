@@ -1,0 +1,87 @@
+name: Publish tested Windows starter
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/windows-download-ux]
+    paths:
+      - '.github/workflows/publish-windows-starter.yml'
+concurrency:
+  group: publish-r1526-starterfix1
+  cancel-in-progress: false
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: v0.10.1839-r1526-starterfix1
+    steps:
+      - name: Verify the successful source build
+        run: |
+          gh api "repos/$GH_REPO/actions/runs/40603860330" > source-run.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          run = json.loads(Path('source-run.json').read_text())
+          assert run['status'] == 'completed' and run['conclusion'] == 'success'
+          assert run['head_sha'] == '11d600eae88f9a262085bb74b1cdcef5ea08b18d'
+          assert run['repository']['full_name'] == 'Funcry241/EtuSchlopf'
+          print('Verified successful Windows build and exact source commit.')
+          PY
+      - name: Retrieve the existing tested EXE without rebuilding
+        run: |
+          gh run download 40603860330 --repo "$GH_REPO" --name EtuSchlopf-Windows-UX-r1526 --dir dist
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          root = Path('dist')
+          assert sorted(p.name for p in root.iterdir()) == ['EtuSchlopf-Windows-x64.exe', 'SHA256SUMS.txt', 'runtime-provenance.txt']
+          expected = '223083bce0e0f135ed3c861b33dba9bf6b8dc1a350e3f4f0f60bdb4b2a807473'
+          assert hashlib.sha256((root/'EtuSchlopf-Windows-x64.exe').read_bytes()).hexdigest() == expected
+          assert (root/'SHA256SUMS.txt').read_text().split()[0] == expected
+          assert 'ed105de8ce027f2bbbe927ceaf3acd89f0523fdddfef053cc11da91232b9face' in (root/'runtime-provenance.txt').read_text()
+          print('Verified exact tested download bytes and unchanged engine provenance.')
+          PY
+      - name: Publish a separate preview release
+        run: |
+          cat > release-notes.md <<'EOF'
+          Windows-Testversion mit verbessertem Starter und unveränderter Musik-Engine r1526.
+
+          ## Was sich verbessert hat
+
+          - Eine ruhige Fortschrittsanzeige ersetzt die vielen internen Diagnosezeilen.
+          - Die vollständigen technischen Ausgaben stehen in `Laufprotokoll.txt` im Ergebnisordner.
+          - Bei einem normalen interaktiven Start wird der Ergebnisordner nach dem Lauf automatisch geöffnet.
+          - Auch beim Ziehen einer MIDI auf die EXE bleibt die Abschlussmeldung bis zur Eingabetaste sichtbar.
+          - Erfolg, Fehler und ein Lauf ohne angeforderte PDF werden getrennt benannt.
+
+          ## Ausprobieren
+
+          Lade unten **EtuSchlopf-Windows-x64.exe** herunter und ziehe deine MIDI-Datei darauf.
+          Eine gleichnamige WAV-Datei muss im selben Ordner wie die MIDI liegen.
+          Für die PDF-Ausgabe wird MuseScore benötigt. Rust und Cargo sind nicht erforderlich.
+          Jeder Lauf verwendet Kopien der Eingaben in einem neuen Ergebnisordner.
+
+          ## Prüfstand und bekannte Grenzen
+
+          Der Windows-Build, vier Starter-Tests, Hilfe und Versionsabfrage ohne Entwicklerwerkzeuge sowie der Pakettest für Protokollausgabe und erwartete Ablehnung sind bestanden.
+          Das automatische Öffnen des Ergebnisordners und das stehenbleibende Fenster sind noch nicht durch einen interaktiven Anwender-Probelauf bestätigt.
+
+          Die Musik-Engine und ihre bisherigen Grenzen bleiben unverändert. Der bekannte synthetische Musikfall wird weiterhin von einer Berichtskontrolle abgelehnt; der Pakettest prüft diese Ablehnung und ist kein erfolgreicher musikalischer Abnahmetest.
+          Der beim Etüden-Probelauf beobachtete fehlende WAV-Zugriff in der Audio-Diagnose ist in dieser Starter-Version noch nicht korrigiert.
+
+          Die EXE ist nicht signiert. Dies ist eine Vorschau, keine abgeschlossene Anwenderfreigabe.
+
+          [Erfolgreicher Windows-Build und Prüfprotokoll](https://github.com/Funcry241/EtuSchlopf/actions/runs/40603860330)
+
+          SHA-256 der EXE: `223083bce0e0f135ed3c861b33dba9bf6b8dc1a350e3f4f0f60bdb4b2a807473`
+          EOF
+          gh release create "$RELEASE_TAG" \
+            dist/EtuSchlopf-Windows-x64.exe dist/SHA256SUMS.txt dist/runtime-provenance.txt \
+            --repo "$GH_REPO" --target 11d600eae88f9a262085bb74b1cdcef5ea08b18d \
+            --title 'EtuSchlopf für Windows – verbesserter Starter (r1526)' \
+            --prerelease --latest=false --notes-file release-notes.md
