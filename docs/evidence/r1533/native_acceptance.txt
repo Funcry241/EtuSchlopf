@@ -1,0 +1,7 @@
+schema=2
+from_version=0.10.1839
+to_version=0.10.1839
+take_revision=1533
+accepted_zip_sha256=e77bf97874098a65647397745707e2dc64443358740fca9c2e697eda314a6c4b
+prior_rejections=541
+accepted_epoch_millis=1793120491551

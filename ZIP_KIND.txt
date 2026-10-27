@@ -1,6 +1,6 @@
 kind=EtuSchlopfTake
 version=0.10.1839
-revision=r1526
-name=StandardOutputOptionProtection
-parent_revision=r1525
-change_class=KodexOnly
+revision=r1533
+name=CommunityDocumentationAndTemplates
+parent_revision=r1532
+change_class=RefactorOnly

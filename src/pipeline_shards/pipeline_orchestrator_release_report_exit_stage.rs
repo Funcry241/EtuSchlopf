@@ -145,7 +145,9 @@ fn run_release_report_and_exit_stage(
             bytes: bytes.len() as u64,
             sha256: sha256::hex(&bytes),
         });
-    let render_closure = render_state.close_render_sovereignty();
+    let render_closure = render_state.close_required_render_product(
+        &best.master_state, source, render_xml_selected_for_pdf,
+    )?;
     debug_assert!(render_closure.closed);
     let report_options = ReportOptions {
         top: cli.top,

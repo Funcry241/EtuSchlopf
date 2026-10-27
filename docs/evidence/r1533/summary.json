@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "role": "public_read_only_summary_not_runtime_authority",
+  "review_date": "2026-10-27",
+  "revision": "r1533",
+  "version": "0.10.1839",
+  "previous_public_revision": "r1526",
+  "accepted_parent_revision": "r1532",
+  "xml_comparison_baseline": "r1532",
+  "accepted_take_sha256": "e77bf97874098a65647397745707e2dc64443358740fca9c2e697eda314a6c4b",
+  "accepted_source_snapshot_zip_sha256": "41e30e57e0be5c6ce31e7cd97adfe9d4dc66adc89f32bf2b3d7ae63cf0d63250",
+  "native_acceptance_record_sha256": "834c7f83b8a5d38ace13ac0c0c8892bc4e9284d169cb1b3d6440a580f67c77b8",
+  "native": {
+    "tests_passed": 2564,
+    "tests_failed": 0,
+    "tests_ignored": 1,
+    "test_binaries": 15,
+    "build_exit": 0,
+    "clippy_exit": 0,
+    "final_exit": 0,
+    "full_corpus": true,
+    "projects_passed": 10,
+    "projects_expected": 10,
+    "renderer_outcome": "passed",
+    "run_severity": "dark_green"
+  },
+  "readback": {
+    "take_files_byte_matched_to_native_snapshot": 1868,
+    "source_snapshot_files": 1869,
+    "xml_files_compared": 20,
+    "master_files_byte_identical": 10,
+    "render_files_byte_identical": 10,
+    "pdf_files_byte_identical": 0,
+    "pdf_pixel_comparison_performed": true,
+    "pdf_comparison_renderer": "PDFium / pypdfium2",
+    "pdf_comparison_dpi": 144,
+    "pdf_pages_compared": 50,
+    "pdf_pages_pixel_identical": 50,
+    "full_visual_page_review": false
+  },
+  "runtime_manifest_file_count": 519,
+  "runtime_manifest": "accepted_runtime_sha256.tsv",
+  "limits": [
+    "Private corpus inputs and complete musical outputs are not published.",
+    "XML/PDF comparison baseline is r1532; no unchanged-notation claim since public r1526.",
+    "The downloadable EXE remains r1526; no new binary release is published.",
+    "No clean-Windows user-package acceptance or independent musical evaluation is claimed.",
+    "Public documentation and GitHub templates are a separate projection of the accepted Take."
+  ]
+}
