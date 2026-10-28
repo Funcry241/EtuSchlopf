@@ -85,6 +85,8 @@ jobs:
           cargo +1.98.0 build --locked --manifest-path .github/distribution/Cargo.toml --release
           if ($LASTEXITCODE -ne 0) { throw 'Starter build failed' }
           Copy-Item .github/distribution/target/release/etuschlopf_windows_download.exe dist/EtuSchlopf-Windows-x64.exe
+          $hash = (Get-FileHash dist/EtuSchlopf-Windows-x64.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  EtuSchlopf-Windows-x64.exe" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
       - name: Install the pinned MuseScore renderer
         run: |
           $ErrorActionPreference = 'Stop'
@@ -96,8 +98,14 @@ jobs:
           if (-not $row) { throw 'Official renderer checksum missing' }
           $expected = ($row -split '\s+')[0].ToLowerInvariant()
           if ((Get-FileHash "$env:RUNNER_TEMP/$name" -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'MuseScore download checksum mismatch' }
-          $install = Start-Process msiexec.exe -ArgumentList "/i `"$env:RUNNER_TEMP/$name`" /qn /norestart /L*v `"$env:RUNNER_TEMP/musescore-install.log`"" -Wait -PassThru
-          if ($install.ExitCode -notin @(0,3010)) { throw "MuseScore installer exit $($install.ExitCode)" }
+          $installerPath = (Resolve-Path (Join-Path $env:RUNNER_TEMP $name)).Path
+          $installerLog = Join-Path $env:RUNNER_TEMP 'musescore-install.log'
+          $installerExe = Join-Path $env:windir 'System32\msiexec.exe'
+          $install = Start-Process $installerExe -ArgumentList "/i `"$installerPath`" /qn /norestart /L*v `"$installerLog`"" -Wait -PassThru
+          if ($install.ExitCode -notin @(0,3010)) {
+            if (Test-Path $installerLog) { Get-Content $installerLog | Select-Object -Last 80 }
+            throw "MuseScore installer exit $($install.ExitCode)"
+          }
           $renderer = Get-ChildItem "$env:ProgramFiles/MuseScore*" -Recurse -Filter MuseScore4.exe | Select-Object -First 1
           if (-not $renderer) { throw 'Installed renderer executable not found' }
           "ETUSCHLOPF_PDF_RENDERER=$($renderer.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
@@ -114,15 +122,23 @@ jobs:
           $hash = (Get-FileHash dist/EtuSchlopf-Windows-x64.exe -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  EtuSchlopf-Windows-x64.exe" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
         with:
           name: EtuSchlopf-Windows-r1537
           path: dist/*
           retention-days: 30
-          if-no-files-found: error
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: EtuSchlopf-r1537-example-evidence
           path: ${{ runner.temp }}/r1537-example-evidence/**
+          retention-days: 30
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: EtuSchlopf-r1537-installer-diagnostics
+          path: ${{ runner.temp }}/musescore-install.log
           retention-days: 30
           if-no-files-found: ignore
