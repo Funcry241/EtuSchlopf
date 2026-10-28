@@ -6,11 +6,11 @@ EtuSchlopf ordnet musikalische Ereignisse zu einer zweihändigen Klavierdarstell
 und bearbeitet unter anderem Stimmen, Rhythmus, Pausen, Balken und Register.
 Das Ergebnis ist ein Ausgangspunkt für deine weitere musikalische Arbeit.
 
-**[Windows-EXE herunterladen · Testversion r1526 · 7,7 MB](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1526-windows-preview/EtuSchlopf-Windows-x64.exe)**
+**[Windows-EXE herunterladen · Testversion r1537](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1537-windows-preview/EtuSchlopf-Windows-x64.exe)**
 
 Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI und WAV als Eingabe
 
-[Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1526-windows-preview) ·
+[Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1537-windows-preview) ·
 [Erstes Stück](#dein-erstes-stück) · [Grenzen der Testversion](#aktueller-stand) ·
 [Technische Dokumentation](docs/DEVELOPMENT.md)
 
@@ -20,7 +20,7 @@ Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI u
 
 *Etüde Nr. 1 aus dem eigenen Evaluationskorpus: unveränderter PDF-Ausschnitt,
 Entwicklungsstand r1537. Bild anklicken für die vollständige PDF.
-Die herunterladbare EXE enthält den älteren Stand r1526; das Beispiel zeigt r1537.*
+Die aktuelle Download-EXE enthält ebenfalls die Engine r1537.*
 
 ## Für wen ist EtuSchlopf gedacht?
 
@@ -35,6 +35,8 @@ ob dir die Fassung bei der weiteren Arbeit hilft; musikalische Nachbearbeitung
 kann erforderlich sein.
 
 ## Dein erstes Stück
+
+**[Kleines Startbeispiel herunterladen](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1537-windows-preview/EtuSchlopf-Beispiel-r1537.zip)** – synthetisches MIDI/WAV-Paar mit der zugehörigen PDF aus dem Windows-Test.
 
 Du brauchst eine MIDI-Datei und eine gleichnamige WAV-Datei, zum Beispiel:
 
@@ -85,31 +87,35 @@ Laufbericht zusammentragen. Unbekannte technische Angaben kannst du offenlassen.
 
 ## Aktueller Stand
 
-EtuSchlopf ist eine **Vorschau in Entwicklung**. Es gibt noch keinen abgeschlossenen
-Anwendertest auf einem sauberen Windows-Rechner mit MuseScore und unabhängiger
-Bewertung fremder Stücke. Bei der herunterladbaren Testversion r1526 wurde auch ein einfaches synthetisches
-Stück an einer bestehenden Berichtprüfung abgelehnt. Lesbarkeit und Spielbarkeit
-musst du daher am eigenen Ergebnis prüfen; eine fertige druckreife Fassung
-für jede MIDI wird nicht versprochen.
+Die Windows-Testversion enthält **Engine r1537 / 0.10.1839** und den verbesserten
+Starter. Unterstützt sind 2/4, 3/4 und 4/4 sowie Taktwechsel an Taktgrenzen.
+Andere Taktarten, Triolen und Wechsel mitten im Takt bleiben nicht unterstützt.
 
-Die herunterladbare Windows-Testversion enthält **r1526**. Einzelheiten zu den
-[Prüfbelegen](docs/evidence/r1526/README.md), die
-[vollständige technische Optionsreferenz](docs/DEVELOPMENT.md#vollständige-aufrufreferenz)
-und Hinweise für die [Arbeit am Quellcode](docs/DEVELOPMENT.md) liegen auf eigenen Seiten.
+Der Windows-Build, Strict-Clippy, native Tests und ein vollständiger synthetischer
+MIDI/WAV-Lauf mit MuseScore sind bestanden. Die [Versionshinweise mit Prüfbelegen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1537-windows-preview)
+beschreiben den Umfang. Das ersetzt keine unabhängige Bewertung fremder Stücke
+und keinen interaktiven Anwender-Probelauf. Lesbarkeit und Spielbarkeit prüfst
+du am eigenen Ergebnis.
 
 ## Quellstand und Beiträge
 
-Der veröffentlichte Quellstand ist **r1533 / 0.10.1839**, nativ angenommen:
-2.564 Tests bestanden, Build und Clippy erfolgreich, privater Zehnerkorpus
-vollständig erfolgreich. Gegen r1532 sind 20 XML-Dateien bytegleich und alle
-50 PDF-Seiten bei 144 dpi pixelgleich. Die [Prüfbelege](docs/evidence/r1533/README.md)
-beschreiben Umfang und Grenzen. Der Download oben bleibt die separate Testversion
-**r1526**; mit diesem Quellupdate wird keine neue EXE veröffentlicht.
+Die Download-Engine wurde aus dem angenommenen nativen Stand **r1537** gebaut.
+Der [exakte r1537-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1537-windows-preview/EtuSchlopf-r1537-source.zip)
+und das Dateiprüfsummen-Manifest stehen beim Release bereit. Für den exakten
+Engine-Build ist dieser Snapshot maßgeblich; der zugehörige Prüfzweig enthält
+den Starter und die Skripte zur vollständigen Rekonstruktion und Verifikation.
 
 Für die Arbeit am Quellcode gelten die [technische Referenz](docs/DEVELOPMENT.md)
 und die [Beitragsregeln](docs/CONTRIBUTING.md). Der [Dokumentationswegweiser](docs/README.md)
 führt zu Architektur, Diagnose und Community-Dateien.
 
-Fehlerberichte sind willkommen. Bitte nenne die verwendete Version, die konkrete\nMeldung und – bei einem Notationsfehler – die betroffene Stelle.\n[Beiträge](docs/CONTRIBUTING.md) · [Sicherheit](docs/SECURITY.md) ·\n[Umgang miteinander](docs/CODE_OF_CONDUCT.md) · [Barrierefreiheit](docs/ACCESSIBILITY.md)\n\n## Lizenz\n
+Fehlerberichte sind willkommen. Bitte nenne die verwendete Version, die konkrete
+Meldung und – bei einem Notationsfehler – die betroffene Stelle.
+[Beiträge](docs/CONTRIBUTING.md) · [Sicherheit](docs/SECURITY.md) ·
+[Umgang miteinander](docs/CODE_OF_CONDUCT.md) · [Barrierefreiheit](docs/ACCESSIBILITY.md)
+
+## Lizenz
+
 EtuSchlopf steht unter der [MIT-Lizenz](LICENSE).
 [Fremdkomponenten und Lizenzen](docs/THIRD_PARTY_NOTICES.md).
+
