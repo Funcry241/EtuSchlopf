@@ -1,0 +1,49 @@
+name: MuseScore installer preflight
+on:
+  push:
+    branches: [release/r1537-windows-preview]
+    paths: ['.github/workflows/musescore-preflight.yml']
+permissions:
+  contents: read
+jobs:
+  install:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Install the pinned MuseScore renderer
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $name = 'MuseScore-Studio-4.7.4.260706075-x86_64.msi'
+          $base = 'https://github.com/musescore/MuseScore/releases/download/v4.7.4'
+          Invoke-WebRequest "$base/$name" -OutFile "$env:RUNNER_TEMP/$name"
+          Invoke-WebRequest "$base/checksums.sha256.txt" -OutFile "$env:RUNNER_TEMP/musescore-checksums.txt"
+          $row = Get-Content "$env:RUNNER_TEMP/musescore-checksums.txt" | Where-Object { $_ -like "*$name" } | Select-Object -First 1
+          if (-not $row) { throw 'Official renderer checksum missing' }
+          $expected = ($row -split '\s+')[0].ToLowerInvariant()
+          if ((Get-FileHash "$env:RUNNER_TEMP/$name" -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'MuseScore download checksum mismatch' }
+          $installerPath = (Resolve-Path (Join-Path $env:RUNNER_TEMP $name)).Path
+          $installerLog = Join-Path $env:RUNNER_TEMP 'musescore-install.log'
+          $installerExe = Join-Path $env:windir 'System32\msiexec.exe'
+          $install = Start-Process $installerExe -ArgumentList "/i `"$installerPath`" /qn /norestart /L*v `"$installerLog`"" -Wait -PassThru
+          if ($install.ExitCode -notin @(0,3010)) {
+            if (Test-Path $installerLog) { Get-Content $installerLog | Select-Object -Last 80 }
+            throw "MuseScore installer exit $($install.ExitCode)"
+          }
+          $renderer = Get-ChildItem "$env:ProgramFiles/MuseScore*" -Recurse -Filter MuseScore4.exe | Select-Object -First 1
+          if (-not $renderer) { throw 'Installed renderer executable not found' }
+          "ETUSCHLOPF_PDF_RENDERER=$($renderer.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          'QT_QPA_PLATFORM=offscreen' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Check the installed renderer
+        run: |
+          & $env:ETUSCHLOPF_PDF_RENDERER --version
+          if ($LASTEXITCODE -ne 0) { throw 'Installed renderer version check failed' }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: MuseScore-installer-preflight-log
+          path: ${{ runner.temp }}/musescore-install.log
+          retention-days: 7
+          if-no-files-found: ignore
