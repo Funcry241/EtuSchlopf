@@ -6,8 +6,12 @@ on:
     paths:
       - '.github/distribution/**'
       - '.github/workflows/windows-r1537.yml'
+concurrency:
+  group: windows-r1537-preview
+  cancel-in-progress: true
 permissions:
   contents: read
+  actions: write
 jobs:
   package:
     runs-on: windows-2022
@@ -18,7 +22,18 @@ jobs:
     env:
       RUSTFLAGS: '-C target-feature=+crt-static'
       CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_STRICT_BUILD_OVERRIDE_OPT_LEVEL: '1'
     steps:
+      - name: Stop the superseded packaging attempt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json' }
+          $url = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/runs/40675266479"
+          $previous = Invoke-RestMethod -Uri $url -Headers $headers
+          if ($previous.status -in @('queued','in_progress','waiting')) {
+            Invoke-RestMethod -Method Post -Uri "$url/cancel" -Headers $headers | Out-Null
+          }
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - name: Reconstruct the exact accepted r1537 source tree
         run: |
@@ -30,19 +45,22 @@ jobs:
         run: |
           rustup toolchain install 1.98.0 --profile minimal --component clippy
           if ($LASTEXITCODE -ne 0) { throw 'Toolchain installation failed' }
-      - name: Check and test the accepted engine
+      - name: Check the engine with the native strict Clippy contract
         working-directory: engine-source
         run: |
-          # Match the accepted native launcher's blocking Clippy contract and
-          # zero-warning check. Test targets use its separately specified test
-          # command; the additional all-target style-lint findings are retained
-          # in run 40674298813, not hidden by modifying accepted source files.
-          cargo +1.98.0 clippy --locked --profile strict --jobs 2 --color never -- -D clippy::correctness -D clippy::suspicious -D clippy::perf 2>&1 | Tee-Object native-clippy.log
+          New-Item -ItemType Directory -Force target/etuschlopf_logs | Out-Null
+          cargo +1.98.0 clippy --locked --profile strict --jobs 2 --color never -- -D clippy::correctness -D clippy::suspicious -D clippy::perf 2>&1 | Tee-Object target/etuschlopf_logs/native.strict-clippy.txt
           if ($LASTEXITCODE -ne 0) { throw 'Engine strict clippy failed' }
-          if (-not (Test-Path native-clippy.log)) { throw 'Strict Clippy log unavailable' }
-          if (Select-String -Path native-clippy.log -Pattern '^\s*warning(?:\[|:)') { throw 'Strict Clippy emitted warnings' }
-          cargo +1.98.0 --config profile.strict.package.etuschlopf.opt-level=0 test --locked --profile strict --all-targets --no-fail-fast --jobs 2
+          if (-not (Test-Path target/etuschlopf_logs/native.strict-clippy.txt)) { throw 'Strict Clippy log unavailable' }
+          if (Select-String -Path target/etuschlopf_logs/native.strict-clippy.txt -Pattern '^\s*warning(?:\[|:)') { throw 'Strict Clippy emitted warnings' }
+      - name: Run every native test target with the native test profile
+        working-directory: engine-source
+        run: |
+          cargo +1.98.0 --config profile.strict.package.etuschlopf.opt-level=0 test --locked --profile strict --all-targets --no-fail-fast --jobs 2 --target-dir target/bc
           if ($LASTEXITCODE -ne 0) { throw 'Engine tests failed' }
+      - name: Build the optimized r1537 engine
+        working-directory: engine-source
+        run: |
           cargo +1.98.0 build --locked --profile strict --bin etuschlopf --jobs 2
           if ($LASTEXITCODE -ne 0) { throw 'Engine build failed' }
       - name: Bundle r1537 with its exact runtime data
