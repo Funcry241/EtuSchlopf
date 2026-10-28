@@ -1,0 +1,104 @@
+name: Windows r1537 preview
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/r1537-windows-preview]
+    paths:
+      - '.github/distribution/**'
+      - '.github/workflows/windows-r1537.yml'
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      RUSTFLAGS: '-C target-feature=+crt-static'
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Reconstruct the exact accepted r1537 source tree
+        run: |
+          python .github/distribution/reconstruct_source_snapshot.py . .github/distribution/r1537/source-manifest.json .github/distribution/r1537/source-overlay.zip engine-source
+          if ($LASTEXITCODE -ne 0) { throw 'Native source snapshot verification failed' }
+          python .github/distribution/prepare_synthetic_example.py example-inputs
+          if ($LASTEXITCODE -ne 0) { throw 'Synthetic fixture generation failed' }
+      - name: Install the native toolchain
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component clippy
+          if ($LASTEXITCODE -ne 0) { throw 'Toolchain installation failed' }
+      - name: Check and test the accepted engine
+        working-directory: engine-source
+        run: |
+          cargo +1.98.0 clippy --locked --profile strict --all-targets --jobs 2 -- -D warnings
+          if ($LASTEXITCODE -ne 0) { throw 'Engine strict clippy failed' }
+          cargo +1.98.0 test --locked --profile strict --jobs 2
+          if ($LASTEXITCODE -ne 0) { throw 'Engine tests failed' }
+          cargo +1.98.0 build --locked --profile strict --bin etuschlopf --jobs 2
+          if ($LASTEXITCODE -ne 0) { throw 'Engine build failed' }
+      - name: Bundle r1537 with its exact runtime data
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bundle = Join-Path $env:RUNNER_TEMP 'r1537-runtime'
+          New-Item -ItemType Directory -Force "$bundle/docs/normative_sources", "$bundle/docs/licenses", dist | Out-Null
+          Copy-Item engine-source/target/strict/etuschlopf.exe "$bundle/etuschlopf_engine.exe"
+          Copy-Item -Recurse engine-source/docs/normative_sources/musicxml "$bundle/docs/normative_sources/"
+          Copy-Item -Recurse engine-source/docs/licenses/* "$bundle/docs/licenses/"
+          Copy-Item engine-source/docs/THIRD_PARTY_NOTICES.md "$bundle/docs/"
+          Copy-Item LICENSE "$bundle/"
+          Compress-Archive -Path "$bundle/*" -DestinationPath "$env:RUNNER_TEMP/r1537-runtime.zip"
+          $hash = (Get-FileHash "$bundle/etuschlopf_engine.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "Engine revision r1537; source snapshot SHA256 40f1a5f76117b57cd342426c71c834b6225cd18d2dd0b31e6d134577a734fd12; engine EXE SHA256 $hash" | Set-Content dist/runtime-provenance.txt
+      - name: Build and test the improved Windows starter
+        run: |
+          $env:ETUSCHLOPF_BUNDLE_ZIP = "$env:RUNNER_TEMP/r1537-runtime.zip"
+          $env:ETUSCHLOPF_DOWNLOAD_ENGINE_REVISION = 'r1537'
+          cargo +1.98.0 test --locked --manifest-path .github/distribution/Cargo.toml --release
+          if ($LASTEXITCODE -ne 0) { throw 'Starter tests failed' }
+          cargo +1.98.0 build --locked --manifest-path .github/distribution/Cargo.toml --release
+          if ($LASTEXITCODE -ne 0) { throw 'Starter build failed' }
+          Copy-Item .github/distribution/target/release/etuschlopf_windows_download.exe dist/EtuSchlopf-Windows-x64.exe
+      - name: Install the pinned MuseScore renderer
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $name = 'MuseScore-Studio-4.7.4.260706075-x86_64.msi'
+          $base = 'https://github.com/musescore/MuseScore/releases/download/v4.7.4'
+          Invoke-WebRequest "$base/$name" -OutFile "$env:RUNNER_TEMP/$name"
+          Invoke-WebRequest "$base/checksums.sha256.txt" -OutFile "$env:RUNNER_TEMP/musescore-checksums.txt"
+          $row = Get-Content "$env:RUNNER_TEMP/musescore-checksums.txt" | Where-Object { $_ -like "*$name" } | Select-Object -First 1
+          if (-not $row) { throw 'Official renderer checksum missing' }
+          $expected = ($row -split '\s+')[0].ToLowerInvariant()
+          if ((Get-FileHash "$env:RUNNER_TEMP/$name" -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'MuseScore download checksum mismatch' }
+          $install = Start-Process msiexec.exe -ArgumentList "/i `"$env:RUNNER_TEMP/$name`" /qn /norestart /L*v `"$env:RUNNER_TEMP/musescore-install.log`"" -Wait -PassThru
+          if ($install.ExitCode -notin @(0,3010)) { throw "MuseScore installer exit $($install.ExitCode)" }
+          $renderer = Get-ChildItem "$env:ProgramFiles/MuseScore*" -Recurse -Filter MuseScore4.exe | Select-Object -First 1
+          if (-not $renderer) { throw 'Installed renderer executable not found' }
+          "ETUSCHLOPF_PDF_RENDERER=$($renderer.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          'QT_QPA_PLATFORM=offscreen' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Process a synthetic example with the downloadable EXE
+        run: |
+          ./.github/distribution/verify_r1537_example.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path -Inputs (Resolve-Path example-inputs).Path -Evidence (Join-Path $env:RUNNER_TEMP 'r1537-example-evidence')
+      - name: Verify the final PDF and record the package checksum
+        run: |
+          python -m pip install --quiet pypdf==6.1.1
+          if ($LASTEXITCODE -ne 0) { throw 'PDF verifier setup failed' }
+          python -c "from pypdf import PdfReader; import pathlib; p=pathlib.Path(r'$env:RUNNER_TEMP/r1537-example-evidence/Beispiel.pdf'); r=PdfReader(p); assert len(r.pages)>0; print('Final PDF readable; pages:',len(r.pages))"
+          if ($LASTEXITCODE -ne 0) { throw 'PDF parse failed' }
+          $hash = (Get-FileHash dist/EtuSchlopf-Windows-x64.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  EtuSchlopf-Windows-x64.exe" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: EtuSchlopf-Windows-r1537
+          path: dist/*
+          retention-days: 30
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: EtuSchlopf-r1537-example-evidence
+          path: ${{ runner.temp }}/r1537-example-evidence/**
+          retention-days: 30
+          if-no-files-found: ignore

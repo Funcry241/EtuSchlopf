@@ -4,6 +4,10 @@
 use std::{env, fs, io::{self, IsTerminal, Write}, path::{Path, PathBuf}, process::{Command, ExitCode, Stdio}, thread, time::{Duration, Instant, SystemTime, UNIX_EPOCH}};
 
 const BUNDLE: &[u8] = include_bytes!(env!("ETUSCHLOPF_BUNDLE_ZIP"));
+const ENGINE_REVISION: &str = match option_env!("ETUSCHLOPF_DOWNLOAD_ENGINE_REVISION") {
+    Some(revision) => revision,
+    None => "r1526",
+};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -100,6 +104,7 @@ fn run(args: &[String]) -> Result<i32> {
         return Ok(0);
     }
     if args.len() == 1 && args[0] == "--version" {
+        println!("EtuSchlopf Windows-Download | Engine {ENGINE_REVISION}");
         let rt = runtime()?;
         return Ok(Command::new(rt.0.join("etuschlopf_engine.exe")).current_dir(&rt.0).arg(&args[0]).status()?.code().unwrap_or(1));
     }
@@ -112,6 +117,7 @@ fn run(args: &[String]) -> Result<i32> {
         print!("Pfad zur MIDI-Datei: "); io::stdout().flush()?;
         let mut s = String::new();io::stdin().read_line(&mut s)?;s.trim().trim_matches('"').to_string()
     } else { args[0].clone() };
+    println!("EtuSchlopf für Windows | Engine {ENGINE_REVISION}");
     let (midi, wav, stem) = midi_pair(Path::new(&input))?;
     let output_root = midi.parent().ok_or("Eingabeordner fehlt")?.join("EtuSchlopf-Ergebnisse");
     let output = fresh_directory(&output_root, "Lauf")?;
@@ -122,6 +128,11 @@ fn run(args: &[String]) -> Result<i32> {
     println!("Deine Originaldateien und bisherige Ergebnisordner bleiben erhalten.");
     println!("Ich bereite das Programm vor. Der Ergebnisordner öffnet sich nach dem Lauf.");
     let rt = runtime()?;
+    // The engine's title-bound WAV observations resolve inputs in its current
+    // directory, which also owns the bundled normative schema data. Supply
+    // real input copies there while keeping the result destination unchanged.
+    fs::copy(output.join(format!("{stem}.mid")), rt.0.join(format!("{stem}.mid")))?;
+    fs::copy(output.join(format!("{stem}.wav")), rt.0.join(format!("{stem}.wav")))?;
     let mut child = Command::new(rt.0.join("etuschlopf_engine.exe"));
     child.current_dir(&rt.0).arg(&project);
     if args.get(1).is_some_and(|s| s == "--no-pdf") { child.arg("--no-pdf"); }
