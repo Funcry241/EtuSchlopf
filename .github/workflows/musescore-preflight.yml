@@ -67,10 +67,46 @@ jobs:
           Write-Output "Renderer exit: $($process.ExitCode)"
           if ($process.ExitCode -ne 0) { throw 'Installed renderer version check failed' }
           if ((Get-Content $stdout -Raw) -notmatch '4\.7\.4') { throw 'Expected renderer version was not observed' }
+      - name: Probe actual PDF conversion with bounded process lifetimes
+        run: |
+          $input = Join-Path $env:RUNNER_TEMP 'renderer-probe.musicxml'
+          $xml = '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="4.0"><part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list><part id="P1"><measure number="1"><attributes><divisions>1</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes><note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><type>whole</type></note></measure></part></score-partwise>'
+          [IO.File]::WriteAllText($input,$xml,[Text.UTF8Encoding]::new($false))
+          $success = $false
+          for ($attempt=0; $attempt -lt 2; $attempt++) {
+            $pdf = Join-Path $env:RUNNER_TEMP "renderer-probe-$attempt.pdf"
+            $out = Join-Path $env:RUNNER_TEMP "renderer-probe-$attempt.stdout.txt"
+            $err = Join-Path $env:RUNNER_TEMP "renderer-probe-$attempt.stderr.txt"
+            $info = [Diagnostics.ProcessStartInfo]::new()
+            $info.FileName = $env:ETUSCHLOPF_PDF_RENDERER
+            $info.UseShellExecute = $false
+            $info.RedirectStandardOutput = $true
+            $info.RedirectStandardError = $true
+            if ($attempt -eq 1) { $info.ArgumentList.Add('-s'); $info.ArgumentList.Add('-w') }
+            $info.ArgumentList.Add('-o'); $info.ArgumentList.Add($pdf); $info.ArgumentList.Add($input)
+            $process = [Diagnostics.Process]::new(); $process.StartInfo = $info
+            $process.Start() | Out-Null
+            $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+            $stderrTask = $process.StandardError.ReadToEndAsync()
+            $finished = $process.WaitForExit(30000)
+            if (-not $finished) {
+              $process.Refresh()
+              Write-Output "Renderer probe $attempt timed out; CPU $($process.TotalProcessorTime.TotalSeconds) s; window $($process.MainWindowTitle)"
+              $process.Kill($true); $process.WaitForExit()
+            }
+            $stdout = $stdoutTask.GetAwaiter().GetResult(); $stderr = $stderrTask.GetAwaiter().GetResult()
+            [IO.File]::WriteAllText($out,$stdout); [IO.File]::WriteAllText($err,$stderr)
+            Write-Output "Renderer probe $attempt exited $($process.ExitCode); finished within limit: $finished"
+            Write-Output $stdout; Write-Output $stderr
+            if ($finished -and $process.ExitCode -eq 0 -and (Test-Path $pdf) -and (Get-Item $pdf).Length -gt 100) { $success=$true; break }
+          }
+          if (-not $success) { throw 'Neither ordinary nor audio/web-disabled PDF conversion completed' }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: MuseScore-installer-preflight-log
-          path: ${{ runner.temp }}/musescore-install.log
+          path: |
+            ${{ runner.temp }}/musescore-install.log
+            ${{ runner.temp }}/renderer-probe*
           retention-days: 7
           if-no-files-found: ignore
