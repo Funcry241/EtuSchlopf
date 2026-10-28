@@ -1,0 +1,123 @@
+name: Publish tested Windows r1537
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/r1537-windows-preview]
+    paths:
+      - '.github/workflows/publish-windows-r1537.yml'
+concurrency:
+  group: publish-r1537-windows-preview
+  cancel-in-progress: false
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: v0.10.1839-r1537-windows-preview
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 385f977b2b57bac8d4e1ef38e9655d00b00cb198
+          persist-credentials: false
+      - name: Verify the successful r1537 package run
+        run: |
+          gh api "repos/$GH_REPO/actions/runs/40683764615" > source-run.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          run = json.loads(Path('source-run.json').read_text())
+          assert run['status'] == 'completed' and run['conclusion'] == 'success'
+          assert run['head_sha'] == '385f977b2b57bac8d4e1ef38e9655d00b00cb198'
+          assert run['repository']['full_name'] == 'Funcry241/EtuSchlopf'
+          PY
+      - name: Retrieve the tested package and example verdict
+        run: |
+          gh run download 40683764615 --repo "$GH_REPO" --name EtuSchlopf-Windows-r1537 --dir dist
+          gh run download 40683764615 --repo "$GH_REPO" --name EtuSchlopf-r1537-example-evidence --dir evidence
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          root = Path('dist')
+          expected = (root/'SHA256SUMS.txt').read_text().split()[0]
+          assert expected == '854e969b070e4a60b009dc9029ad86a2d33aeab56333ebb92dafe68cd03a9648'
+          assert hashlib.sha256((root/'EtuSchlopf-Windows-x64.exe').read_bytes()).hexdigest() == expected
+          assert 'r1537' in (root/'runtime-provenance.txt').read_text()
+          verdict = Path('evidence/example-verdict.txt').read_text()
+          assert 'packaged synthetic example exit 0' in verdict
+          (root/'test-verdict.txt').write_text(verdict)
+          print('Verified exact tested EXE and passing synthetic example verdict.')
+          PY
+      - name: Include the exact native source tree and a ready-to-try synthetic example
+        run: |
+          python3 .github/distribution/reconstruct_source_snapshot.py . .github/distribution/r1537/source-manifest.json .github/distribution/r1537/source-overlay.zip native-source
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile, json, shutil
+          root = Path('dist')
+          manifest = json.loads(Path('.github/distribution/r1537/source-manifest.json').read_text())
+          with zipfile.ZipFile(root/'EtuSchlopf-r1537-source.zip','w',zipfile.ZIP_DEFLATED) as z:
+              for row in manifest['files']:
+                  z.write(Path('native-source')/row['path'], row['path'])
+              if 'LICENSE' not in {row['path'] for row in manifest['files']}:
+                  z.write('LICENSE','LICENSE')
+          shutil.copyfile('.github/distribution/r1537/source-manifest.json',root/'source-manifest.json')
+          start = '''EtuSchlopf r1537 ausprobieren
+          =============================
+          Dieses kleine synthetische Beispiel enthält acht Takte im 4/4-Takt.
+          Entpacke das ZIP vollständig. Ziehe Beispiel.mid auf die EXE r1537;
+          Beispiel.wav bleibt daneben liegen. Für eine PDF muss MuseScore installiert sein.
+          Nach dem Lauf öffnet sich der Ergebnisordner. Die dortige neue PDF ist dein Ergebnis.
+          Die beigefügte PDF unter Erwartetes_Ergebnis stammt aus dem erfolgreichen Windows-Pakettest.
+          Das Beispiel zeigt den Ablauf, nicht allgemeine musikalische Fehlerfreiheit.
+          '''
+          with zipfile.ZipFile(root/'EtuSchlopf-Beispiel-r1537.zip','w',zipfile.ZIP_DEFLATED) as z:
+              for suffix in ['mid','wav']:
+                  z.write(Path('evidence')/('Beispiel.'+suffix),'Beispiel.'+suffix)
+              z.write('evidence/Beispiel.pdf','Erwartetes_Ergebnis/Beispiel.pdf')
+              z.writestr('START_HIER.txt',start)
+          PY
+      - name: Publish the r1537 Windows preview
+        run: |
+          cat > release-notes.md <<'EOF'
+          **Aktuelle Windows-Testversion mit der angenommenen Engine r1537 und verbessertem Starter.**
+
+          ## Herunterladen und starten
+
+          Lade **EtuSchlopf-Windows-x64.exe** herunter. Rust und Cargo sind nicht erforderlich.
+          Für die PDF-Ausgabe brauchst du MuseScore.
+          Ziehe eine MIDI-Datei auf die EXE; eine gleichnamige WAV muss daneben liegen.
+          **EtuSchlopf-Beispiel-r1537.zip** enthält ein kurzes synthetisches MIDI/WAV-Paar und die zugehörige PDF aus dem bestandenen Windows-Test.
+
+          ## Stand r1537
+
+          Die Engine enthält die angenommene Source-/Notationszeit-Projektion für 2/4, 3/4 und 4/4 einschließlich Wechseln an Taktgrenzen. Nicht unterstützte Zeitwerte werden frühzeitig abgelehnt.
+          Andere Taktarten, Triolen und Taktwechsel mitten im Takt sind weiterhin nicht unterstützt.
+
+          Der Starter zeigt einen ruhigen Fortschritt, schreibt technische Ausgaben nach Laufprotokoll.txt und öffnet beim interaktiven Start den Ergebnisordner.
+          Die Abschlussmeldung bleibt auch nach dem Ziehen einer MIDI bis zur Eingabetaste sichtbar.
+          Die Eingabekopien stehen nun ebenfalls im temporären Engine-Arbeitsordner bereit; der synthetische Pakettest bestätigt eine lesbare, qualifizierte WAV.
+
+          ## Tatsächlich geprüft
+
+          - Alle 1.878 nativen Quelldateien stimmen mit dem angenommenen r1537-Snapshot überein.
+          - Strict-Clippy, native Tests, Engine-Build und die vier Starter-Tests sind unter Windows bestanden.
+          - Der synthetische vollständige MIDI/WAV-Lauf erzeugt eine lesbare PDF, beide MusicXML-Dateien und einen Bericht mit Ergebnis OK.
+          - Die Eingaben bleiben unverändert; die Benutzerkonsole enthält keine Farb-Steuerzeichen der Engine.
+
+          Das ist kein unabhängiger Test fremder Stücke. Das sichtbare Öffnen des Ergebnisordners und das stehenbleibende Fenster brauchen weiterhin einen interaktiven Anwender-Probelauf.
+          Die EXE ist nicht signiert. Dies ist eine Vorschau, keine abgeschlossene Anwenderfreigabe.
+
+          **EtuSchlopf-r1537-source.zip** enthält den exakten nativen Quellbaum, aus dem die Engine gebaut wurde; source-manifest.json hält die Dateiprüfsummen fest. Dieser Quell-Snapshot ist kein installierbarer Take. Der verbesserte Starter und seine Build-Skripte stehen im zugehörigen Git-Stand.
+
+          [Bestandener vollständiger Windows-Pakettest](https://github.com/Funcry241/EtuSchlopf/actions/runs/40683764615)
+
+          [Native Prüfungen und Build: erfolgreiche Einzelschritte vor dem abgebrochenen ersten Renderingtest](https://github.com/Funcry241/EtuSchlopf/actions/runs/40678490525)
+          EOF
+          gh release create "$RELEASE_TAG" dist/EtuSchlopf-Windows-x64.exe dist/SHA256SUMS.txt dist/runtime-provenance.txt dist/test-verdict.txt dist/source-manifest.json dist/EtuSchlopf-r1537-source.zip dist/EtuSchlopf-Beispiel-r1537.zip \
+            --repo "$GH_REPO" --target 385f977b2b57bac8d4e1ef38e9655d00b00cb198 \
+            --title 'EtuSchlopf für Windows – Testversion r1537' --prerelease --latest=false --notes-file release-notes.md
