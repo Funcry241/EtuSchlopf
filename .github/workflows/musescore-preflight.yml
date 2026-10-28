@@ -18,6 +18,7 @@ jobs:
         shell: pwsh
     env:
       QT_COMMAND_LINE_PARSER_NO_GUI_MESSAGE_BOXES: '1'
+      QT_QPA_PLATFORM: windows
     steps:
       - name: Stop the superseded renderer probe
         env:
@@ -49,12 +50,11 @@ jobs:
           $renderer = Get-ChildItem "$env:ProgramFiles/MuseScore*" -Recurse -Filter MuseScore4.exe | Select-Object -First 1
           if (-not $renderer) { throw 'Installed renderer executable not found' }
           "ETUSCHLOPF_PDF_RENDERER=$($renderer.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          'QT_QPA_PLATFORM=offscreen' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Check the installed renderer
         run: |
           $stdout = Join-Path $env:RUNNER_TEMP 'renderer-version.stdout.txt'
           $stderr = Join-Path $env:RUNNER_TEMP 'renderer-version.stderr.txt'
-          $process = Start-Process -FilePath $env:ETUSCHLOPF_PDF_RENDERER -ArgumentList '--version' -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          $process = Start-Process -FilePath $env:ETUSCHLOPF_PDF_RENDERER -ArgumentList '--long-version' -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
           if (-not $process.WaitForExit(30000)) {
             taskkill.exe /PID $process.Id /T /F | Out-Null
             Get-Content $stdout
@@ -66,6 +66,7 @@ jobs:
           Get-Content $stderr
           Write-Output "Renderer exit: $($process.ExitCode)"
           if ($process.ExitCode -ne 0) { throw 'Installed renderer version check failed' }
+          if ((Get-Content $stdout -Raw) -notmatch '4\.7\.4') { throw 'Expected renderer version was not observed' }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
