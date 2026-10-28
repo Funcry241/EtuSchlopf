@@ -3,8 +3,12 @@ on:
   push:
     branches: [release/r1537-windows-preview]
     paths: ['.github/workflows/musescore-preflight.yml']
+concurrency:
+  group: musescore-preflight
+  cancel-in-progress: true
 permissions:
   contents: read
+  actions: write
 jobs:
   install:
     runs-on: windows-2022
@@ -13,6 +17,14 @@ jobs:
       run:
         shell: pwsh
     steps:
+      - name: Stop the superseded renderer probe
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json' }
+          $url = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/runs/40679871648"
+          $previous = Invoke-RestMethod -Uri $url -Headers $headers
+          if ($previous.status -in @('queued','in_progress','waiting')) { Invoke-RestMethod -Method Post -Uri "$url/cancel" -Headers $headers | Out-Null }
       - name: Install the pinned MuseScore renderer
         run: |
           $ErrorActionPreference = 'Stop'
@@ -40,7 +52,14 @@ jobs:
         run: |
           $stdout = Join-Path $env:RUNNER_TEMP 'renderer-version.stdout.txt'
           $stderr = Join-Path $env:RUNNER_TEMP 'renderer-version.stderr.txt'
-          $process = Start-Process -FilePath $env:ETUSCHLOPF_PDF_RENDERER -ArgumentList '--version' -PassThru -Wait -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          $process = Start-Process -FilePath $env:ETUSCHLOPF_PDF_RENDERER -ArgumentList '--version' -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          if (-not $process.WaitForExit(30000)) {
+            taskkill.exe /PID $process.Id /T /F | Out-Null
+            Get-Content $stdout
+            Get-Content $stderr
+            throw 'Renderer parent process did not exit within 30 seconds'
+          }
+          $process.WaitForExit()
           Get-Content $stdout
           Get-Content $stderr
           Write-Output "Renderer exit: $($process.ExitCode)"
