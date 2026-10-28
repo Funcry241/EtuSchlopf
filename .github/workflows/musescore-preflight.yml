@@ -16,6 +16,8 @@ jobs:
     defaults:
       run:
         shell: pwsh
+    env:
+      QT_COMMAND_LINE_PARSER_NO_GUI_MESSAGE_BOXES: '1'
     steps:
       - name: Stop the superseded renderer probe
         env:
