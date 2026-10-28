@@ -38,8 +38,13 @@ jobs:
           'QT_QPA_PLATFORM=offscreen' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Check the installed renderer
         run: |
-          & $env:ETUSCHLOPF_PDF_RENDERER --version
-          if ($LASTEXITCODE -ne 0) { throw 'Installed renderer version check failed' }
+          $stdout = Join-Path $env:RUNNER_TEMP 'renderer-version.stdout.txt'
+          $stderr = Join-Path $env:RUNNER_TEMP 'renderer-version.stderr.txt'
+          $process = Start-Process -FilePath $env:ETUSCHLOPF_PDF_RENDERER -ArgumentList '--version' -PassThru -Wait -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          Get-Content $stdout
+          Get-Content $stderr
+          Write-Output "Renderer exit: $($process.ExitCode)"
+          if ($process.ExitCode -ne 0) { throw 'Installed renderer version check failed' }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
