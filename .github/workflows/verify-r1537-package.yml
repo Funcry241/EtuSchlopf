@@ -20,6 +20,12 @@ jobs:
       QT_QPA_PLATFORM: windows
       QT_COMMAND_LINE_PARSER_NO_GUI_MESSAGE_BOXES: '1'
     steps:
+      - name: Stop the superseded interactive automation attempt
+        run: |
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json' }
+          $url = "https://api.github.com/repos/$env:GH_REPO/actions/runs/40682215794"
+          $previous = Invoke-RestMethod -Uri $url -Headers $headers
+          if ($previous.status -in @('queued','in_progress','waiting')) { Invoke-RestMethod -Method Post -Uri "$url/cancel" -Headers $headers | Out-Null }
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: 7f2a6ce8a4f698e8d8a9552f737e7d6671ac5e15
@@ -74,6 +80,12 @@ jobs:
           "ETUSCHLOPF_PDF_RENDERER=$($renderer.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Run the exact existing EXE through MIDI, WAV, XML and PDF
         run: |
+          # Batch automation must provide EOF, not an interactive console. The
+          # starter intentionally waits for Enter when launched interactively.
+          $stdin = Join-Path $env:RUNNER_TEMP 'noninteractive-input.txt'
+          [IO.File]::WriteAllText($stdin,'',[Text.UTF8Encoding]::new($false))
+          $PSDefaultParameterValues['Start-Process:NoNewWindow'] = $true
+          $PSDefaultParameterValues['Start-Process:RedirectStandardInput'] = $stdin
           ./.github/distribution/verify_r1537_example.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path -Inputs (Resolve-Path example-inputs).Path -Evidence (Join-Path $env:RUNNER_TEMP 'r1537-example-evidence')
       - name: Parse the actual PDF and recheck the EXE bytes
         run: |
