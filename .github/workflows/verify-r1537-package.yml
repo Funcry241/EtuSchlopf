@@ -1,0 +1,99 @@
+name: Verify existing r1537 Windows package
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/r1537-windows-preview]
+    paths: ['.github/workflows/verify-r1537-package.yml']
+permissions:
+  contents: read
+  actions: write
+jobs:
+  verify:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      QT_QPA_PLATFORM: windows
+      QT_COMMAND_LINE_PARSER_NO_GUI_MESSAGE_BOXES: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 7f2a6ce8a4f698e8d8a9552f737e7d6671ac5e15
+          persist-credentials: false
+      - name: Verify completed native checks and retain the existing EXE
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json' }
+          $url = "https://api.github.com/repos/$env:GH_REPO/actions/runs/40678490525"
+          $sourceRun = Invoke-RestMethod -Uri $url -Headers $headers
+          if ($sourceRun.head_sha -ne '7f2a6ce8a4f698e8d8a9552f737e7d6671ac5e15') { throw 'Source package commit mismatch' }
+          $jobs = Invoke-RestMethod -Uri "$url/jobs" -Headers $headers
+          $steps = $jobs.jobs[0].steps
+          foreach ($name in @('Reconstruct the exact accepted r1537 source tree','Check the engine with the native strict Clippy contract','Run every native test target with the native test profile','Build the optimized r1537 engine','Build and test the improved Windows starter')) {
+            $step = $steps | Where-Object { $_.name -eq $name }
+            if (-not $step -or $step.conclusion -ne 'success') { throw "Required source validation did not pass: $name" }
+          }
+          if ($sourceRun.status -in @('queued','in_progress','waiting')) { Invoke-RestMethod -Method Post -Uri "$url/cancel" -Headers $headers | Out-Null }
+          for ($attempt = 0; $attempt -lt 40; $attempt++) {
+            $sourceRun = Invoke-RestMethod -Uri $url -Headers $headers
+            if ($sourceRun.status -eq 'completed') { break }
+            Start-Sleep -Seconds 5
+          }
+          if ($sourceRun.status -ne 'completed') { throw 'Previous run has not finished retaining its artifacts' }
+          gh run download 40678490525 --repo $env:GH_REPO --name EtuSchlopf-Windows-r1537 --dir dist
+          if ($LASTEXITCODE -ne 0) { throw 'Built package download failed' }
+          $expected = ((Get-Content dist/SHA256SUMS.txt -Raw) -split '\s+')[0]
+          if ((Get-FileHash dist/EtuSchlopf-Windows-x64.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Stored EXE checksum mismatch' }
+          if ((Get-Content dist/runtime-provenance.txt -Raw) -notmatch '40f1a5f76117b57cd342426c71c834b6225cd18d2dd0b31e6d134577a734fd12') { throw 'Native source snapshot identity mismatch' }
+          $sourceRun | ConvertTo-Json -Depth 20 | Set-Content dist/native-build-run.json
+          $jobs | ConvertTo-Json -Depth 20 | Set-Content dist/native-validation-jobs.json
+      - name: Create the independent synthetic test input
+        run: |
+          python .github/distribution/prepare_synthetic_example.py example-inputs
+          if ($LASTEXITCODE -ne 0) { throw 'Synthetic fixture generation failed' }
+      - name: Install the pinned renderer with native Windows paths
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $name = 'MuseScore-Studio-4.7.4.260706075-x86_64.msi'
+          $base = 'https://github.com/musescore/MuseScore/releases/download/v4.7.4'
+          $installerPath = Join-Path $env:RUNNER_TEMP $name
+          $installerLog = Join-Path $env:RUNNER_TEMP 'musescore-install.log'
+          Invoke-WebRequest "$base/$name" -OutFile $installerPath
+          Invoke-WebRequest "$base/checksums.sha256.txt" -OutFile (Join-Path $env:RUNNER_TEMP 'musescore-checksums.txt')
+          $row = Get-Content (Join-Path $env:RUNNER_TEMP 'musescore-checksums.txt') | Where-Object { $_ -like "*$name" } | Select-Object -First 1
+          if (-not $row -or (Get-FileHash $installerPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne ($row -split '\s+')[0].ToLowerInvariant()) { throw 'Official MuseScore checksum mismatch' }
+          $installerPath = (Resolve-Path $installerPath).Path
+          $install = Start-Process (Join-Path $env:windir 'System32\msiexec.exe') -ArgumentList "/i `"$installerPath`" /qn /norestart /L*v `"$installerLog`"" -Wait -PassThru
+          if ($install.ExitCode -notin @(0,3010)) { throw "MuseScore installer exit $($install.ExitCode)" }
+          $renderer = Get-ChildItem "$env:ProgramFiles/MuseScore*" -Recurse -Filter MuseScore4.exe | Select-Object -First 1
+          if (-not $renderer) { throw 'Installed MuseScore executable missing' }
+          "ETUSCHLOPF_PDF_RENDERER=$($renderer.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Run the exact existing EXE through MIDI, WAV, XML and PDF
+        run: |
+          ./.github/distribution/verify_r1537_example.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path -Inputs (Resolve-Path example-inputs).Path -Evidence (Join-Path $env:RUNNER_TEMP 'r1537-example-evidence')
+      - name: Parse the actual PDF and recheck the EXE bytes
+        run: |
+          python -m pip install --quiet pypdf==6.1.1
+          if ($LASTEXITCODE -ne 0) { throw 'PDF verifier setup failed' }
+          python -c "from pypdf import PdfReader; import pathlib; p=pathlib.Path(r'$env:RUNNER_TEMP/r1537-example-evidence/Beispiel.pdf'); r=PdfReader(p); assert len(r.pages)>0; print('Final PDF readable; pages:',len(r.pages))"
+          if ($LASTEXITCODE -ne 0) { throw 'Actual PDF did not parse' }
+          $expected = ((Get-Content dist/SHA256SUMS.txt -Raw) -split '\s+')[0]
+          if ((Get-FileHash dist/EtuSchlopf-Windows-x64.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Tested EXE changed' }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: EtuSchlopf-Windows-r1537
+          path: dist/*
+          retention-days: 30
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: EtuSchlopf-r1537-example-evidence
+          path: ${{ runner.temp }}/r1537-example-evidence/**
+          retention-days: 30
+          if-no-files-found: ignore
