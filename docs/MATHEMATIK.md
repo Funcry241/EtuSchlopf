@@ -2,7 +2,7 @@
 
 EtuSchlopf macht aus MIDI- und WAV-Aufnahmen von Klavieretüden Notensatz (MusicXML und PDF). Viele Teilaufgaben dabei sind Entscheidungen: In welchem System steht ein Ton? Welcher Schlüssel gilt? Wird ein Akkordton gezeigt oder verborgen? Diese Seite zeigt, wo wir dafür Mathematik einsetzen, woher sie stammt und wie belastbar sie heute ist.
 
-**Stand:** r1560 auf der nativ angenommenen Basis r1559 (Oktober 2026). Historische Korpuszahlen sind jeweils bezeichnet. Die 20 Master-/Render-XML-Dateien von r1559 sind bytegleich zu r1556; die 39 PDF-Seiten sind bei 144 dpi pixelgleich.
+**Stand:** r1562, nativ angenommen (Oktober 2026). Korpuszahlen nennen jeweils die Revision, auf der sie gemessen wurden.
 
 ## Ehrlichkeitsregel
 
@@ -37,7 +37,9 @@ Der **Status** sagt, was die Mathematik heute tut:
 
 **Leitgedanke:** Eine Veränderung am Notentext ist nur zulässig, wenn drei Dinge gebunden sind: ihre **Herkunft** (welcher Zustand vorher galt), ein **zuständiger Ausführer** (genau ein Owner) und ein **Nachweis** für genau diesen Übergang. Eine einzelne kanonische Gesamtgleichung unter diesem Namen gibt es im Code nicht. Die SchlopfFormel ist die Zusammenfassung mehrerer ausführbarer Bedingungen. Ihr derzeit schärfster Teilkern ist die Übernahmeregel für ein Änderungsbeleg $e$:
 
-$$\mathrm{Permit}(e) = [p(e)=1] \;\land\; [u(e)+d(e)+i(e)=0] \;\land\; \neg\mathrm{Replay}(e)$$
+```math
+\mathrm{Permit}(e) = [p(e)=1] \;\land\; [u(e)+d(e)+i(e)=0] \;\land\; \neg\mathrm{Replay}(e)
+```
 
 Dabei ist $p$ die Zahl der erlaubenden Einstufungen dieses einen Belegs (keine Wahrscheinlichkeit), und $u, d, i$ zählen fehlende, doppelte und ungültige Nachweise. Ein Beleg, der schon übernommen wurde, wird als Wiederholung abgewiesen. Dazu kommen:
 - lückenlose Belegkette: jeder Übergang ist von genau einem Beleg gedeckt;
@@ -56,7 +58,9 @@ Dabei ist $p$ die Zahl der erlaubenden Einstufungen dieses einen Belegs (keine W
 - **Lesbarkeit ist Voraussetzung**, kein Zielwert.
 - Unter den zulässigen Kandidaten wird **lexikografisch** gewählt:
 
-$$\min_{\text{zulässig}}\ \big(\text{Seitenzahl},\ \text{übermäßige Dehnung},\ \text{Ausgewogenheit}\big)$$
+```math
+\min_{\text{zulässig}}\ \big(\text{Seitenzahl},\ \text{übermäßige Dehnung},\ \text{Ausgewogenheit}\big)
+```
 
 - Die Reihenfolge der Systeme bleibt erhalten.
 - Beobachtete Lücken aus echten Stücken sind keine Mindestmaße.
@@ -66,7 +70,9 @@ $$\min_{\text{zulässig}}\ \big(\text{Seitenzahl},\ \text{übermäßige Dehnung}
 
 ### Symbolische Spielformel: was eine Stelle von den Händen verlangt
 
-$$\exists\ \text{Belegung}: \ \text{Struktur} \land \text{statische Anforderungen} \land \text{Übergänge} \land \text{Wiederanschlag gleicher Taste}$$
+```math
+\exists\ \text{Belegung}: \ \text{Struktur} \land \text{statische Anforderungen} \land \text{Übergänge} \land \text{Wiederanschlag gleicher Taste}
+```
 
 Die Variablen sind die physischen Verpflichtungen einer Stelle (welche Töne gleichzeitig, welche nacheinander). Der Wertebereich sind zehn Hand-/Finger-Plätze. Aus einer Belegung werden statische, Übergangs- und Wiederanschlagsanforderungen abgeleitet. Diese **Anforderungen** werden von den **Fähigkeiten** eines Pianistenmodells getrennt gehalten. Ein nicht modellierter Fähigkeitswert wird nie als „kann“ gelesen.
 
@@ -84,7 +90,7 @@ Die Variablen sind die physischen Verpflichtungen einer Stelle (welche Töne gle
 | 6 | Welcher Lösungskandidat ist der beste? | lexikografische Ordnung | bekannt | entscheidet |
 | 7 | Wie schwer ist ein Ton mit $l$ Hilfslinien zu lesen? | Druckfunktion $p(l)$, genutzt von zwei Schlüsselplanern | eigene Modellierung | entscheidet |
 | 8 | Welcher Schlüsselverlauf im unteren System? | dynamische Programmierung über Zustände (Lesbarkeitskurs); gemeinsame Optimierung mit Oktavierung nur als Prototyp | bekannt; Kosten: eigene Modellierung | entscheidet (Schlüssel); Prototyp (Schlüssel + Oktavierung) |
-| 9 | Legt die Pipeline getrennte Anschläge zusammen? | Injektivität modulo Quellgleichheit | bekannt; Formulierung: eigene Modellierung | misst (R6-Bericht); Platzierungsregel geplant |
+| 9 | Legt die Pipeline getrennte Anschläge zusammen? | Injektivität modulo Quellgleichheit | bekannt; Formulierung: eigene Modellierung | misst (R6-Bericht); entscheidet seit r1562 in der Gestenplatzierung; für die übrigen Platzierer geplant |
 | 10 | Was hat sich zwischen zwei Versionen geändert? | Differenz je Größe auf einer Identitätsabbildung | eigene Modellierung | Prüfwerkzeug |
 | 11 | Wie viele Töne muss man mindestens weglassen? | monotone Zweiteilung, Untergrenze | eigene Modellierung | Prüfwerkzeug |
 | 12 | Ist ein Zustand unverändert? Wer hat ihn erzeugt? | Hashfunktionen (FNV-1a 64, SHA-256) | bekannt | entscheidet (Prüfschranken) |
@@ -104,9 +110,11 @@ Die Variablen sind die physischen Verpflichtungen einer Stelle (welche Töne gle
 
 Jeder Ton der Quelle wird genau einmal verbucht:
 
-$$\text{Quelle} = \text{aktiv} + \text{inaktiv}, \qquad \text{aktiv} = \text{sichtbar} + \text{verborgen}$$
+```math
+\text{Quelle} = \text{aktiv} + \text{inaktiv}, \qquad \text{aktiv} = \text{sichtbar} + \text{verborgen}
+```
 
-Im Korpus (r1556): $10\,149 = 9\,986 + 163$ und $9\,986 = 7\,297 + 2\,689$. Damit sind knapp 27 % der aktiven Anschläge im Master verborgen, meist Akkordtöne, die zugunsten der Spielbarkeit nicht gezeigt werden.
+Im Korpus (r1556): 10.149 = 9.986 + 163 und 9.986 = 7.297 + 2.689. Damit sind knapp 27 % der aktiven Anschläge im Master verborgen, meist Akkordtöne, die zugunsten der Spielbarkeit nicht gezeigt werden.
 
 Die Identität gilt in jeder Etüde exakt. Bricht sie, ist ein Ton verloren gegangen oder doppelt verbucht.
 *Herkunft:* bekannt (Erhaltungssätze, doppelte Buchführung). *Status:* misst (`src/audit_only/material_conservation.rs`).
@@ -135,7 +143,9 @@ Stand r1556, Master, alle Noten: $\omega = 1$ in 732 und $\omega = 2$ in 8 Syste
 
 ### 4. Abdeckung der Spielbarkeitsmessung
 
-$$\text{gemessene Ereignisse} = \text{aktive Anschläge}$$
+```math
+\text{gemessene Ereignisse} = \text{aktive Anschläge}
+```
 
 Weicht das ab, meldet der Bericht den Grund. Beispiel: In Etüde 7 sah die Messung wegen eines Haltebogenfehlers 0 statt 1.042 Ereignisse. Seit r1556 sind es 1.042.
 *Herkunft:* bekannt. *Status:* misst (`src/audit_only/material_reference_coverage.rs`).
@@ -144,7 +154,9 @@ Weicht das ab, meldet der Bericht den Grund. Beispiel: In Etüde 7 sah die Messu
 
 Ein verborgener Akkordton $t$ wird, wenn das musikalisch günstig ist, an einen nahen sichtbaren Ankerplatz $s$ gelegt. Gewählt wird der Platz mit der kleinsten gewichteten Quadratsumme:
 
-$$E(t,s) = 3\,\Delta t^2 + 24\,\Delta p^2 + 42^2\,[\text{System} \ne] + 12^2\,[\text{Stimme} \ne] + 2\,(\Delta t - 24k)^2 + 12\,000\,[\text{Platz in dieser Verteilung schon vergeben}]$$
+```math
+E(t,s) = 3\,\Delta t^2 + 24\,\Delta p^2 + 42^2\,[\text{System} \ne] + 12^2\,[\text{Stimme} \ne] + 2\,(\Delta t - 24k)^2 + 12\,000\,[\text{Platz in dieser Verteilung schon vergeben}]
+```
 
 Dabei ist $\Delta t$ der Zeitabstand in Ticks (96 je Viertel), $\Delta p$ der Tonhöhenabstand in Halbtönen und $k$ die laufende Nummer in der Gruppe (eine Art gleichmäßiges Auffächern).
 
@@ -157,7 +169,9 @@ Seit r1556 gilt zusätzlich eine harte Bedingung: Ein Platz, an dem im selben Sy
 
 Die Suche erzeugt viele Lösungskandidaten. Verglichen werden sie über einen Schlüssel, der der Reihe nach geordnet ist:
 
-$$(\text{Blocker},\ \text{kritische Befunde},\ \text{max. Härte},\ \text{Warnungen},\ \text{Hinweise},\ -\text{Erhalt},\ \dots)$$
+```math
+(\text{Blocker},\ \text{kritische Befunde},\ \text{max. Härte},\ \text{Warnungen},\ \text{Hinweise},\ -\text{Erhalt},\ \dots)
+```
 
 Ein späteres Kriterium zählt nur bei Gleichstand aller früheren. So kann zum Beispiel kein Gewinn bei den Hinweisen einen Blocker aufwiegen.
 *Herkunft:* bekannt (lexikografische Ordnung, Prioritätenoptimierung). *Status:* entscheidet (`CandidateDecisionKey`).
@@ -166,7 +180,9 @@ Ein späteres Kriterium zählt nur bei Gleichstand aller früheren. So kann zum 
 
 Für einen Ton mit $l$ Hilfslinien:
 
-$$p(l) = l^2 + 8\,\max(l-3,\ 0)$$
+```math
+p(l) = l^2 + 8\,\max(l-3,\ 0)
+```
 
 Der quadratische Term bestraft viele Hilfslinien stärker. Der Zusatzterm macht mehr als drei Hilfslinien deutlich teurer. Dieselbe Funktion steht an **zwei** Stellen im Code:
 
@@ -180,23 +196,27 @@ Der quadratische Term bestraft viele Hilfslinien stärker. Der Zusatzterm macht 
 
 **Im Produkt (Lesbarkeitskurs, Schlüssel im unteren System):** Der Zustand ist (aktiver Schlüssel, Ursprung eines kurzen Ausflugs, Anschläge im Ausflug). Entlang der Zeitachse wird eine Front optimaler Teilwege fortgeschrieben (`solve_readability_course_with_boundaries`). Kosten eines Verlaufs:
 
-$$C = \sum_{\text{Töne}} p(l) + 24\cdot\#\text{Wechsel} + 1\cdot\#\text{redundante Schlüssel} + 24\cdot\#\text{kurze Ausflüge}$$
+```math
+C = \sum_{\text{Töne}} p(l) + 24\cdot\#\text{Wechsel} + 1\cdot\#\text{redundante Schlüssel} + 24\cdot\#\text{kurze Ausflüge}
+```
 
 Ein kurzer Ausflug umfasst höchstens 2 Anschläge.
 *Herkunft:* bekannt (Bellman; Viterbi-artige Vorwärtsrechnung). Zustandsraum und Gewichte sind eigene Modellierung. *Status:* entscheidet.
 
-**Als Prototyp (gemeinsam mit Oktavierung):** Zustand Schlüssel $\in \{G, F\}$ × Oktavierung $\in \{0, +8, -8\}$, mit lexikografischem Kostenvektor je Takt (Kollisionen, Hilfslinien-Histogramm von schwer nach leicht, Wechselzahl). *Status:* Prüfwerkzeug und Entwurf für die gemeinsame Registerentscheidung (C3). Ein erster Versuch scheiterte, weil die Schreibweise erst danach entschieden wurde und weitere Schlüsselschreiber folgten.
+**Als Prototyp (gemeinsam mit Oktavierung):** Zustand Schlüssel ∈ {G, F} × Oktavierung ∈ {0, +8, −8}, mit lexikografischem Kostenvektor je Takt (Kollisionen, Hilfslinien-Histogramm von schwer nach leicht, Wechselzahl). *Status:* Prüfwerkzeug und Entwurf für die gemeinsame Registerentscheidung (C3). Ein erster Versuch scheiterte, weil die Schreibweise erst danach entschieden wurde und weitere Schlüsselschreiber folgten.
 
 ### 9. Keine neue Koinzidenz
 
 Für zwei Anschläge $a, b$ mit Rohposition $r$ aus der Quelle und Platzierung $\pi$ in der Notation:
 
-$$\pi(a) = \pi(b) \ \Rightarrow\ r(a) = r(b) \qquad \text{mit } \pi, r \in (\text{Einsatz}, \text{MIDI-Taste})$$
+```math
+\pi(a) = \pi(b) \ \Rightarrow\ r(a) = r(b) \qquad \text{mit } \pi, r \in (\text{Einsatz}, \text{MIDI-Taste})
+```
 
 Die Zuordnung soll also injektiv sein, **außer** wenn die Gleichheit schon in der Quelle steht (Quell-Unisono). System und Stimme spielen keine Rolle, damit ein Systemwechsel einen Fall nicht verdeckt.
 
-Stand: 16 Verletzungen in r1555, 3 in r1556, keine neuen. Quell-Unisoni (r1555: 6, r1556: 4) werden getrennt geführt.
-*Herkunft:* bekannt (Injektivität, Äquivalenzrelationen); die Formulierung als Abnahmeregel ist eigene Modellierung. *Status:* misst als R6-Bericht ab r1560 (`src/audit_only/material_coincidence.rs`); als gemeinsame Regel für alle Platzierer geplant. Der Bericht vergleicht gebundene Quellanschläge mit platzierten Anschlägen auf der typisierten Notationszeitachse. Vorschlagsnoten werden separat als ausgeschlossen gezählt; Fortsetzungen sind keine eigenen Anschläge. Erhaltene Quell-Unisoni werden getrennt gezählt. Herkunftsbeleg-Mitgliedschaften allein beweisen keinen einzelnen Verursacher. Fehlende oder mehrdeutige Eingaben ergeben unbekannt, niemals null Verletzungen.
+Stand: 16 Verletzungen in r1555, 3 in r1556, 0 neu erzeugte in r1562 (nativ angenommen). Quell-Unisoni (r1555: 6, r1556: 4) werden getrennt geführt.
+*Herkunft:* bekannt (Injektivität, Äquivalenzrelationen); die Formulierung als Abnahmeregel ist eigene Modellierung. *Status:* misst als R6-Bericht ab r1560 (`src/audit_only/material_coincidence.rs`). Seit r1562 verweigert die Gestenplatzierung neu entstehende Koinzidenzen getrennter Quellanschläge (`src/pipeline_shards/gesture_placement_occupancy.rs`); als gemeinsame Regel für alle Platzierer geplant. Der Bericht vergleicht gebundene Quellanschläge mit platzierten Anschlägen auf der typisierten Notationszeitachse. Vorschlagsnoten werden separat als ausgeschlossen gezählt; Fortsetzungen sind keine eigenen Anschläge. Erhaltene Quell-Unisoni werden getrennt gezählt. Herkunftsbeleg-Mitgliedschaften allein beweisen keinen einzelnen Verursacher. Fehlende oder mehrdeutige Eingaben ergeben unbekannt, niemals null Verletzungen.
 
 ### 10. Änderungsmatrix zwischen Versionen
 
@@ -218,16 +238,20 @@ Unveränderlichkeit wird über Prüfsummen festgestellt: FNV-1a 64 Bit für schn
 
 Ein aufbewahrter Datensatz $D$ darf auf eine Projektion $\pi(D)$ reduziert werden, wenn jeder später noch erreichbare Leser $L$ nur über $\pi$ zugreift:
 
-$$L(D) = L(\pi(D)) \quad \text{für alle erreichbaren Zustände}$$
+```math
+L(D) = L(\pi(D)) \quad \text{für alle erreichbaren Zustände}
+```
 
 Hinreichend ist eine nach dem Einfügen unveränderliche Eigenschaft, die jeden vollen Zugriff ausschließt. Beispiel: Kandidaten mit Blockern oder Warnungen kann die spätere Auswahl nie übernehmen. Im historischen Pool von Etüde 6 erfüllen 1.833 von 1.834 Einträgen dieses Ausschlusskriterium. Das ist eine Obergrenze für reduzierbare Einträge: r1559 hält den aktuellen und alle vorherigen Gewinner vorsorglich vollständig, ebenso alle kompatiblen Kandidaten. Reihenfolge, Gleichstand und Prüfzeilen bleiben erhalten.
-*Herkunft:* bekannt (Beobachtungsäquivalenz, Lebendigkeitsanalyse). *Status:* umgesetzt seit r1559 (`src/pipeline_shards/solver_candidate_retention.rs`). Nativ bestätigt: 20 XML bytegleich, 39 PDF-Seiten pixelgleich bei 144 dpi, Kandidaten- und Auswahlzeilen unverändert. Eine quantitative Speicherersparnis wurde nicht isoliert gemessen; Otter akzeptiert die beobachtete Speichernutzung.
+*Herkunft:* bekannt (Beobachtungsäquivalenz, Lebendigkeitsanalyse). *Status:* umgesetzt seit r1559 (`src/pipeline_shards/solver_candidate_retention.rs`). Nativ bestätigt: 20 XML bytegleich, 39 PDF-Seiten pixelgleich bei 144 dpi, Kandidaten- und Auswahlzeilen unverändert. Eine quantitative Speicherersparnis wurde nicht isoliert gemessen; die beobachtete Speichernutzung wurde als ausreichend bewertet.
 
 ### 14. Speichermodell (Hypothese)
 
 Spitzenbedarf je Etüde in GB, angepasst an zehn gemessene Läufe:
 
-$$M \approx 0{,}0054\, F S + 0{,}0061\, G S$$
+```math
+M \approx 0{,}0054\, F S + 0{,}0061\, G S
+```
 
 $F$ ist die Zahl der aufbewahrten Kandidaten, $G$ die Zahl der neu erzeugten Master-Zustände, $S$ die Dokumentgröße in MB. $R^2 = 0{,}999$, aber nur 10 Punkte für 3 Parameter. Der $F$-Term hängt fast allein an einer Etüde, und $G S$ ist stark mit der Laufzeit korreliert. Das Modell ist eine Vorhersage, kein Ursachenbeweis.
 *Herkunft:* bekannt (kleinste Quadrate); das Modell ist eigene Auswertung. *Status:* Hypothese.
@@ -257,7 +281,7 @@ Die Spalte „Status“ sagt, was eine Stelle **darf**. Ob sie im Korpus auch **
 | Harmonik-Portfolio, Pareto (19) | **darf** Tonhöhen tauschen | **im Korpus nie übernommen**: Der Beleg deklariert Tonhöhe, System und Stimme als mögliche Wirkung, und alle drei Zähler sind in allen 10 Etüden 0 |
 | SchlopfFormel (15), Hashing (12) | **schützt**: lässt Änderungen zu oder weist sie ab; wählt selbst keine Noten | wirkt bei jeder Übernahme |
 | Bilanz (1), R1–R5 (2), ω (3), Abdeckung (4), Spielformel (17), WAV-Sensor (21) | **nur Bericht** | einziger Leser im Produkt ist der Berichtsschreiber (`final_report_projection_owner.rs` bzw. `report.rs`). Die Spielformel hat außerhalb des Audit-Bereichs keinen Leser |
-| Koinzidenz (9) | **nur Bericht**: keine Platzierung und keine Freigabebefugnis | R6-Bericht ab r1560; native Gegenprobe noch ausstehend |
+| Koinzidenz (9) | **Bericht**, seit r1562 zusätzlich **Ausschluss** in der Gestenplatzierung | r1562 nativ: 0 neu erzeugte Paare in allen 10 Etüden |
 | Änderungsmatrix (10), Untergrenze (11), Speichermodell (14) | **keine**: externe Prüfwerkzeuge | – |
 | Beobachtungsäquivalenz (13) | **Speicheraufbewahrung**: musikalische Ergebnisse unverändert | r1559 nativ angenommen |
 | Schlöpfchen-Formel (16) | **keine**: geplant | – |
