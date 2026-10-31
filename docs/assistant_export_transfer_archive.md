@@ -22,7 +22,7 @@ Transferverzeichnis.
 Standard:
 
 ```text
-C:\Users\wmair\Documents\Programmieren\EtuSchlopfTransfer
+%USERPROFILE%\Documents\Programmieren\EtuSchlopfTransfer
 ```
 
 Konfigurierbar ueber:

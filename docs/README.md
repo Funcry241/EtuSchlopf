@@ -13,6 +13,7 @@ Aufgabe mit einem der folgenden Einstiege:
 | Sicherheitslücke melden | [Sicherheitsrichtlinie](SECURITY.md) |
 | Umgang miteinander und Moderation | [Verhaltenskodex](CODE_OF_CONDUCT.md) |
 | Bedienhürden und bekannte Grenzen | [Barrierefreiheit](ACCESSIBILITY.md) |
+| Welche Mathematik wo genutzt wird und was das Notenbild ändert | [Mathematik hinter EtuSchlopf](MATHEMATIK.md) |
 | Architektur und zuständige Verträge finden | [Architektureinstieg](assistant_memory/000_start_here.md) |
 | Separate PDF-/Export-Diagnosen verwenden | [Diagnosewerkzeuge](../tools/assistant_diagnostics/README.md) |
 | Lizenzen und Fremdkomponenten | [Fremdlizenzhinweise](THIRD_PARTY_NOTICES.md) |

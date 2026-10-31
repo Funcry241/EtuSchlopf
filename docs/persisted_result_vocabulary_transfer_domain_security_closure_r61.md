@@ -32,7 +32,7 @@ ausdruecklich Shadow-, Retirement- oder Legacy-Diagnostik bezeichnen.
 
 Die fruehere chronologische Assistant-Export-Archivkopie nach
 
-`C:\Users\wmair\Documents\Programmieren\EtuSchlopfTransfer`
+`%USERPROFILE%\Documents\Programmieren\EtuSchlopfTransfer`
 
 wird vollstaendig pensioniert.
 

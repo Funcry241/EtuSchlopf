@@ -12,7 +12,9 @@ Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI u
 
 [Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1537-windows-preview) ·
 [Erstes Stück](#dein-erstes-stück) · [Grenzen der Testversion](#aktueller-stand) ·
-[Technische Dokumentation](docs/DEVELOPMENT.md)
+[Technische Dokumentation](docs/DEVELOPMENT.md) · [Mathematik dahinter](docs/MATHEMATIK.md)
+
+> **In English:** EtuSchlopf turns a matching MIDI and WAV pair into piano sheet music: a PDF and a MusicXML file for further editing in MuseScore. The Windows x64 preview needs no installation besides [MuseScore](https://musescore.org/download) for the PDF. The documentation is in German; bug reports and questions in English are welcome.
 
 ## Ein Blick auf die Noten
 
@@ -107,7 +109,9 @@ den Starter und die Skripte zur vollständigen Rekonstruktion und Verifikation.
 
 Für die Arbeit am Quellcode gelten die [technische Referenz](docs/DEVELOPMENT.md)
 und die [Beitragsregeln](docs/CONTRIBUTING.md). Der [Dokumentationswegweiser](docs/README.md)
-führt zu Architektur, Diagnose und Community-Dateien.
+führt zu Architektur, Diagnose und Community-Dateien. Welche Mathematik EtuSchlopf
+wo einsetzt und was davon das Notenbild verändert, beschreibt die
+[Mathematik-Seite](docs/MATHEMATIK.md).
 
 Fehlerberichte sind willkommen. Bitte nenne die verwendete Version, die konkrete
 Meldung und – bei einem Notationsfehler – die betroffene Stelle.
