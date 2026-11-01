@@ -25,7 +25,7 @@ Der **Status** sagt, was die Mathematik heute tut:
 
 ## Leitidee: Notation als geordnete Entscheidungsfolge
 
-1. **Ein Entscheider je Größe.** Schreibweise, Register (Schlüssel und Oktavierung), System, Stimme, Balken und Layout haben je genau eine Stelle, die entscheidet. Alle anderen Stellen lesen nur.
+1. **Ein Entscheider je Größe als Ziel.** Für Schreibweise, Register (Schlüssel und Oktavierung), System, Stimme, Balken und Layout soll die jeweilige Entscheidung einer klar abgegrenzten zuständigen Instanz gehören. Beobachter lesen nur. Das ist eine Leitidee; ihre vollständige Durchsetzung im gesamten Produkt wird damit nicht behauptet.
 2. **Topologische Reihenfolge.** Entschieden wird in der Reihenfolge der Abhängigkeiten, also Schreibweise → Register → Layout. Wie viele Hilfslinien ein Ton braucht, hängt von seiner Schreibweise ab: Es3 und Dis3 sind derselbe Ton, liegen aber auf verschiedenen Linien.
 3. **Invarianten am Ende.** Was eine Stufe nicht ändern darf, wird als Invariante formuliert und nach der Stufe geprüft.
 
@@ -97,7 +97,7 @@ Die Variablen sind die physischen Verpflichtungen einer Stelle (welche Töne gle
 | 13 | Wann darf man aufbewahrte Daten verwerfen? | Beobachtungsäquivalenz (Projektion) | bekannt | umgesetzt seit r1559 |
 | 14 | Woher kommt der Speicherbedarf? | lineare Regression | bekannt; Modell: eigene Auswertung | Hypothese |
 | 15 | Wann ist eine Änderung zulässig? | **SchlopfFormel** | eigene Konstruktion | entscheidet |
-| 16 | Wie werden Seiten gefüllt? | **Schlöpfchen-Formel** (lexikografische Seitenpackung) | eigene Konstruktion | geplant (Fehlerklasse eingefroren) |
+| 16 | Wie werden Seiten gefüllt? | **Schlöpfchen-Formel** (lexikografische Seitenpackung) | eigene Konstruktion | Gesamtformel geplant; begrenzte Layout-Teilverfahren umgesetzt |
 | 17 | Was verlangt eine Stelle von den Händen? | **symbolische Spielformel** (Existenzaussage über Belegungen) | eigene Konstruktion | misst |
 | 18 | Wie werden Zeiten exakt verrechnet? | ggT/kgV, kanonische Zeitachsen, metrische Zerlegung stiller Intervalle | bekannt | entscheidet |
 | 19 | Welche harmonische Lesart? | Kostenvektoren, Pareto-Vergleich, begrenzte Suche auf lokalen Kandidatengraphen | bekannt; Kosten: eigene Modellierung | entscheidet (durch Owner begrenzt) |
@@ -276,7 +276,7 @@ $F$ ist die Zahl der aufbewahrten Kandidaten, $G$ die Zahl der neu erzeugten Mas
 
 ## Was wirkt auf das Notenbild?
 
-Die Spalte „Status“ sagt, was eine Stelle **darf**. Ob sie im Korpus auch **tatsächlich** etwas am Notenbild ändert, steht in dieser Tabelle. Belege aus den zehn Etüden (r1556):
+Die Spalte „Status“ sagt, was eine Stelle **darf**. Die folgende Tabelle sammelt historische Belege aus dem Zehnerkorpus, überwiegend aus r1556; spätere Einträge nennen ihren eigenen Stand. Sie ist keine vollständige aktuelle Wirkungsmessung unter r1577. Die historischen Einzelwirkungen wurden anhand dieser Belegarten zugeordnet:
 - Herkunftsbelege `MaterialMutationReceipt` je Owner;
 - Kennzeichnungen, die die Schreiber in die MusicXML setzen;
 - Berichtszeilen.
@@ -296,14 +296,14 @@ Die Spalte „Status“ sagt, was eine Stelle **darf**. Ob sie im Korpus auch **
 | Koinzidenz (9) | **Bericht**, seit r1562 zusätzlich **Ausschluss** in der Gestenplatzierung | r1562 nativ: 0 neu erzeugte Paare in allen 10 Etüden |
 | Änderungsmatrix (10), Untergrenze (11), Speichermodell (14) | **keine**: externe Prüfwerkzeuge | – |
 | Beobachtungsäquivalenz (13) | **Speicheraufbewahrung**: musikalische Ergebnisse unverändert | r1559 nativ angenommen |
-| Schlöpfchen-Formel (16) | **keine**: geplant | – |
+| Schlöpfchen-Formel (16) | Gesamtformel nicht umgesetzt; begrenzte Teilverfahren dürfen das Layout ändern | keine isolierte aktuelle Wirkungsmessung dieser Teilverfahren auf dieser Seite |
 
 **Folgerung für die historische r1556-Messung:** Sichtbar wirkten fünf Mathematik-Bausteine:
 - zwei Verteiler (Gauss und Geste);
 - zwei Schlüsselplaner, die dieselbe Druckfunktion nutzen;
 - die gemeinsame Spanne.
 
-Dazu kam mittelbar die Kandidatenwahl. Seit r1576 kommt die belegte gemeinsame C3-Registerentscheidung in E7/E8 hinzu. Die Tabelle ist keine erneute Messung aller historischen Einzelwirkungen unter r1577. Alle Schwellen, Gewichte und Prioritäten sind eigene Setzungen (siehe nächster Abschnitt).
+Dazu kam mittelbar die Kandidatenwahl. Seit r1562 verhindert die Gestenplatzierung zusätzlich neue Koinzidenzen; seit r1576 ist die gemeinsame C3-Registerentscheidung in E7/E8 belegt. Die Tabelle ist keine erneute Messung aller historischen Einzelwirkungen unter r1577. Alle Schwellen, Gewichte und Prioritäten sind eigene Setzungen (siehe nächster Abschnitt).
 
 ## Was ist nicht bekannte Mathematik?
 
