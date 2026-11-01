@@ -26,6 +26,15 @@ impl OriginalFunctionalRespellingChains {
         Self { received, epoch: OriginalChainEpoch::Received }
     }
 
+    /// Same received course, before encoding; no respelling stage is advanced.
+    pub(crate) fn joint_source_occurrences(&self, xml: &str)
+        -> anyhow::Result<Vec<(Range<usize>, usize)>> {
+        ensure!(self.epoch == OriginalChainEpoch::Received,
+            "Joint source input has crossed its original course epoch");
+        self.received.as_ref().map_err(|error| anyhow::anyhow!("{error}"))?
+            .original_joint_source_occurrences(xml)
+    }
+
     pub(crate) fn after_original_final_chord(
         &self,
         _: &crate::structural_write_authority::FinalChordEncodingExactMint,

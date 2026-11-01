@@ -1,17 +1,24 @@
 //! Productive fail-closed Standard MIDI File decoder.
 //!
 //! Supports SMF formats 0 and 1 with PPQ time division, Running Status, Note-On/Note-Off,
-//! tempo and time-signature metadata. Notes are normalized losslessly to EtuSchlopf's canonical
-//! 96 divisions. The decoder owns source decoding only; it grants no hand/staff, solver or writer policy.
+//! tempo and chronological time-signature metadata. Notes use an exact integer
+//! time domain, retaining 96 divisions whenever possible. This isolated decoder
+//! grants no hand/staff, solver or writer policy.
+
+#[path = "source_time.rs"]
+pub(crate) mod source_time;
+#[path = "notation_time.rs"]
+pub(crate) mod notation_time;
 
 use crate::source_event::{
-    normalize_tick_exact, project_source_event_causality, CanonicalSourceEvent,
+    normalize_tick_exact_in_domain, project_source_event_causality, CanonicalSourceEvent,
     SourceEventCausalEntry, SourceEventCausalLedger, SourceEventLocator,
 };
 use anyhow::{anyhow, Context};
 use std::collections::{BTreeMap, VecDeque};
 use std::fs;
 use std::path::Path;
+use crate::midi::source_time::{MeterChange, MetricTimeline, SourceTimeDomain};
 
 const MIDI_HEADER: &[u8; 4] = b"MThd";
 const MIDI_TRACK: &[u8; 4] = b"MTrk";
@@ -37,6 +44,7 @@ struct ActiveNote {
 
 #[derive(Debug)]
 struct ParsedMidi {
+    meter_changes: Vec<MeterChange>,
     format: u16,
     tracks: u16,
     ppq: i64,
@@ -47,6 +55,8 @@ struct ParsedMidi {
 
 #[derive(Debug, Clone)]
 pub(crate) struct DecodedMidiSource {
+    pub(crate) time_domain: SourceTimeDomain,
+    pub(crate) metric_timeline: MetricTimeline,
     pub(crate) format: u16,
     pub(crate) tracks: u16,
     pub(crate) source_ppq: i64,
@@ -59,13 +69,27 @@ pub(crate) struct DecodedMidiSource {
 pub(crate) fn read_standard_midi(path: &Path) -> anyhow::Result<DecodedMidiSource> {
     let data = fs::read(path)
         .with_context(|| format!("MIDI-Datei nicht lesbar: {}", path.display()))?;
-    let parsed = parse_midi(&data)?;
-    let (notes, source_event_causal_ledger) = pair_and_normalize_note_events(&parsed)?;
+    decode_standard_midi_bytes(&data)
+}
+
+fn decode_standard_midi_bytes(data: &[u8]) -> anyhow::Result<DecodedMidiSource> {
+    let parsed = parse_midi(data)?;
+    let time_domain = SourceTimeDomain::from_raw_boundaries(parsed.ppq,
+        parsed.note_events.iter().map(|event| event.tick), &parsed.meter_changes)?;
+    let (notes, source_event_causal_ledger) = pair_and_normalize_note_events(&parsed, time_domain)?;
     if notes.is_empty() {
         return Err(anyhow!("MIDI enthält keine lesbaren Notenereignisse"));
     }
     project_source_event_causality(&source_event_causal_ledger, &notes, parsed.ppq)?;
+    let extent = notes.iter().try_fold(0_i64, |extent, note| {
+        let end = note.pos.checked_add(note.len)
+            .ok_or_else(|| anyhow!("Zeitliches Quellnotenende ueberlaeuft"))?;
+        Ok::<_, anyhow::Error>(extent.max(end))
+    })?;
+    let metric_timeline = MetricTimeline::from_midi(time_domain, &parsed.meter_changes, extent)?;
     Ok(DecodedMidiSource {
+        time_domain,
+        metric_timeline,
         format: parsed.format,
         tracks: parsed.tracks,
         source_ppq: parsed.ppq,
@@ -117,6 +141,7 @@ fn parse_midi(data: &[u8]) -> anyhow::Result<ParsedMidi> {
     let mut note_events = Vec::new();
     let mut tempo_microseconds_per_quarter = Vec::new();
     let mut time_signatures = Vec::new();
+    let mut meter_changes = Vec::new();
     for track_index in 0..usize::from(tracks) {
         if data.get(pos..pos + 4) != Some(&MIDI_TRACK[..]) {
             return Err(anyhow!("MIDI-Track {track_index}: MTrk-Kennung fehlt"));
@@ -136,6 +161,7 @@ fn parse_midi(data: &[u8]) -> anyhow::Result<ParsedMidi> {
             &mut note_events,
             &mut tempo_microseconds_per_quarter,
             &mut time_signatures,
+            &mut meter_changes,
         )?;
         pos = end;
     }
@@ -151,6 +177,7 @@ fn parse_midi(data: &[u8]) -> anyhow::Result<ParsedMidi> {
     time_signatures.dedup();
 
     Ok(ParsedMidi {
+        meter_changes,
         format,
         tracks,
         ppq,
@@ -166,6 +193,7 @@ fn parse_track(
     note_events: &mut Vec<RawNoteEvent>,
     tempos: &mut Vec<u32>,
     time_signatures: &mut Vec<(u8, u16)>,
+    meter_changes: &mut Vec<MeterChange>,
 ) -> anyhow::Result<()> {
     let mut pos = 0usize;
     let mut tick = 0u64;
@@ -281,6 +309,7 @@ fn parse_track(
                                 anyhow!("MIDI-Track {track_index}: Taktart-Nenner überläuft")
                             })?;
                         time_signatures.push((payload[0], denominator));
+                        meter_changes.push(MeterChange { tick, beats: payload[0], beat_type: denominator });
                     }
                     _ => {}
                 }
@@ -306,6 +335,7 @@ fn parse_track(
 
 fn pair_and_normalize_note_events(
     parsed: &ParsedMidi,
+    domain: SourceTimeDomain,
 ) -> anyhow::Result<(Vec<CanonicalSourceEvent>, SourceEventCausalLedger)> {
     let mut ordered = parsed.note_events.clone();
     ordered.sort_by_key(|event| (event.tick, event.track_index, event.event_index));
@@ -364,8 +394,8 @@ fn pair_and_normalize_note_events(
                     .map_err(|_| anyhow!("MIDI-Notendauer überläuft i64"))?;
                 let canonical = CanonicalSourceEvent {
                     source_ordinal: started.source_ordinal,
-                    pos: normalize_tick_exact(start, parsed.ppq)?,
-                    len: normalize_tick_exact(length, parsed.ppq)?,
+                    pos: normalize_tick_exact_in_domain(start, parsed.ppq, domain.divisions)?,
+                    len: normalize_tick_exact_in_domain(length, parsed.ppq, domain.divisions)?,
                     midi: i32::from(event.key),
                 };
                 completed.push(canonical);
@@ -386,6 +416,7 @@ fn pair_and_normalize_note_events(
     Ok((
         completed,
         SourceEventCausalLedger {
+            canonical_divisions: domain.divisions,
             raw_note_event_count: parsed.note_events.len(),
             entries: causal_entries,
         },
@@ -498,7 +529,7 @@ mod tests {
 
         let parsed = parse_midi(&midi_with_track(&track)).expect("valid MIDI");
         let (events, causal_ledger) =
-            pair_and_normalize_note_events(&parsed).expect("paired notes");
+            pair_and_normalize_note_events(&parsed, SourceTimeDomain { source_ppq: parsed.ppq, divisions: 96 }).expect("paired notes");
         let projection = project_source_events(&events);
         let causal_projection =
             project_source_event_causality(&causal_ledger, &events, parsed.ppq)
@@ -521,13 +552,14 @@ mod tests {
     fn decoder_rejects_unclosed_note() {
         let track = [0x00, 0x90, 60, 100, 0x00, 0xff, 0x2f, 0x00];
         let parsed = parse_midi(&midi_with_track(&track)).expect("structurally valid MIDI");
-        let error = pair_and_normalize_note_events(&parsed).expect_err("note must remain open");
+        let error = pair_and_normalize_note_events(&parsed, SourceTimeDomain { source_ppq: parsed.ppq, divisions: 96 }).expect_err("note must remain open");
         assert!(error.to_string().contains("nicht geschlossene"));
     }
 
     #[test]
     fn decoder_rejects_lossy_ppq_normalization() {
         let parsed = ParsedMidi {
+            meter_changes: Vec::new(),
             format: 0,
             tracks: 1,
             ppq: 100,
@@ -552,7 +584,7 @@ mod tests {
             tempo_microseconds_per_quarter: Vec::new(),
             time_signatures: Vec::new(),
         };
-        let error = pair_and_normalize_note_events(&parsed)
+        let error = pair_and_normalize_note_events(&parsed, SourceTimeDomain { source_ppq: parsed.ppq, divisions: 96 })
             .expect_err("lossy canonical tick projection must fail closed");
         assert!(error.to_string().contains("nicht verlustfrei"));
     }
@@ -564,5 +596,30 @@ mod tests {
         data.push(0);
         let error = parse_midi(&data).expect_err("trailing byte must fail closed");
         assert!(error.to_string().contains("Restbytes"));
+    }
+
+    #[test]
+    fn exact_decoder_carries_fractional_source_times_and_chronological_meter_changes() {
+        let track = [
+            0, 0xff, 0x58, 4, 3, 2, 24, 8,
+            0, 0x90, 60, 90,
+            1, 0x80, 60, 0,
+            19, 0xff, 0x58, 4, 5, 2, 24, 8,
+            0, 0x90, 64, 90,
+            7, 0x80, 64, 0,
+            0, 0xff, 0x2f, 0,
+        ];
+        let mut bytes = midi_with_track(&track);
+        bytes[12..14].copy_from_slice(&5u16.to_be_bytes());
+        let decoded = decode_standard_midi_bytes(&bytes).unwrap();
+        assert_eq!(decoded.notes.len(), 2);
+        assert_eq!(decoded.time_domain.divisions, 480);
+        assert_eq!((decoded.notes[0].pos, decoded.notes[0].len), (0, 96));
+        assert_eq!((decoded.notes[1].pos, decoded.notes[1].len), (1920, 672));
+        assert_eq!(decoded.source_event_causal_ledger.canonical_divisions, 480);
+        assert_eq!(decoded.metric_timeline.len(), 3);
+        assert_eq!(decoded.metric_timeline.measure(0).unwrap().beats, 3);
+        assert!(decoded.metric_timeline.measure(1).unwrap().truncated_by_change);
+        assert_eq!(decoded.metric_timeline.measure(2).unwrap().beats, 5);
     }
 }

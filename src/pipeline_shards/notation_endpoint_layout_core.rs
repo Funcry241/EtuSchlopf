@@ -278,7 +278,10 @@ fn lower_staff_clef_local_scope_start(measure: &str, clef_local_start: usize) ->
 
 fn advance_lower_staff_bass_clef_before_preceding_low_or_rest_events(
     xml: &mut String,
+    original_steps: &mut Vec<crate::arrangement::representation_transport::RepresentationStep>,
 ) -> anyhow::Result<usize> {
+    let original = xml.clone();
+    let mut original_edits = Vec::new();
     let mut ops = Vec::<structural_write_authority::LowerStaffClefMoveRequest>::new();
     let mut current_staff2_sign = 'F';
     let mut scan = 0usize;
@@ -318,6 +321,8 @@ fn advance_lower_staff_bass_clef_before_preceding_low_or_rest_events(
                     let has_low_or_rest_before = !midis_before.is_empty()
                         || count_visible_staff2_rests_before(local_scope, local_scope.len()) > 0;
                     if has_low_or_rest_before && !high_before {
+                        original_edits.push((measure_start + first_event..measure_start + first_event, block.to_string()));
+                        original_edits.push((clef.abs_start..clef.abs_end, String::new()));
                         ops.push(structural_write_authority::LowerStaffClefMoveRequest::new(
                             clef.abs_start,
                             clef.abs_end,
@@ -335,9 +340,14 @@ fn advance_lower_staff_bass_clef_before_preceding_low_or_rest_events(
 
     // A rejected batch leaves `xml` byte-identical and is transported to the
     // #57 trial as an owner failure; it never becomes a silent zero-move success.
-    structural_write_authority::apply_lower_staff_clef_moves_authorized(xml, ops).map_err(|error| {
+    let changed = structural_write_authority::apply_lower_staff_clef_moves_authorized(xml, ops).map_err(|error| {
         error.context("source-bound lower-staff clef move authorization rejected the local batch")
-    })
+    })?;
+    if changed > 0 {
+        original_edits.sort_by_key(|(range, _)| (range.start, range.end));
+        original_steps.push(crate::arrangement::representation_transport::RepresentationStep::recorded(&original, xml, original_edits));
+    }
+    Ok(changed)
 }
 
 fn prune_rest_only_staff2_clef_noops(

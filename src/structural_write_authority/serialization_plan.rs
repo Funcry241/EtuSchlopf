@@ -1569,6 +1569,7 @@ struct FinalChordCanonicalMeasureInfo {
 // ids establish provenance; they never determine overlap or presentation roles.
 #[derive(Debug, Clone)]
 struct FinalChordWrittenOccurrence {
+    is_grace: bool,
     source_event_id: usize,
     fragment_id: usize,
     attack_id: usize,
@@ -2409,7 +2410,7 @@ impl<'a> FinalChordCanonicalPlanningContext<'a> {
             }
             if !matches!(row.staff, 1 | 2)
                 || row.measure == 0
-                || row.duration <= 0
+                || row.duration < 0
                 || row.onset < 0
             {
                 return Err(io::Error::new(
@@ -3344,7 +3345,14 @@ fn plan_measure_final_chord_encoding(
         if !child.has_tag_name("note") {
             continue;
         }
-        let duration = final_chord_direct_child_i64(child, "duration").unwrap_or(0).max(0);
+        let raw_duration = final_chord_direct_child_i64(child, "duration");
+        let is_grace = final_chord_direct_has_child(child, "grace");
+        if canonical_context.is_some() && ((is_grace && raw_duration.is_some())
+            || (!is_grace && raw_duration.is_none_or(|duration| duration <= 0))) {
+            return Err(io::Error::new(io::ErrorKind::InvalidData,
+                "Canonical event must have either positive measured duration or source-bound grace without duration"));
+        }
+        let duration = raw_duration.unwrap_or(0).max(0);
         let chord_member = final_chord_direct_has_child(child, "chord");
         let onset = if chord_member {
             last_anchor_onset.unwrap_or(cursor)
@@ -4175,11 +4183,18 @@ fn final_chord_bind_written_projection(
         ).ok_or_else(invalid)?;
         let staff = note.staff.parse::<u8>().map_err(|_| invalid())?;
         let end = note.onset.checked_add(note.duration).ok_or_else(invalid)?;
-        if note.duration <= 0 || !matches!(staff, 1 | 2) {
+        let source_fragment = source_xml.get(row.source_note_start..row.source_note_end).ok_or_else(invalid)?;
+        let projected_fragment = projection.xml.get(row.projected_note_start..row.projected_note_end).ok_or_else(invalid)?;
+        let is_grace = locator.duration == 0 && source_fragment.contains("<grace")
+            && !source_fragment.contains("<duration>") && projected_fragment.contains("<grace")
+            && !projected_fragment.contains("<duration>");
+        if (note.duration <= 0 && !is_grace) || !matches!(staff, 1 | 2)
+            || (is_grace && (note.duration != 0 || note.chord_member)) {
             return Err(invalid());
         }
         represented_fragments.insert(locator.fragment_id);
         occurrences.push(FinalChordWrittenOccurrence {
+            is_grace,
             source_event_id: locator.source_event_id,
             fragment_id: locator.fragment_id,
             attack_id: locator.attack_id,
@@ -4587,7 +4602,11 @@ pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
     let mut attack_by_source = std::collections::BTreeMap::<usize, &FrozenVoiceAttackEvidenceRow>::new();
     let mut attack_ids = std::collections::BTreeSet::<usize>::new();
     for attack in attacks {
-        if attack.absolute_end <= attack.absolute_start
+        let bound_grace = attack.absolute_end == attack.absolute_start
+            && canonical.source_locators.iter().any(|locator|
+                locator.source_event_id == attack.source_event_id && locator.duration == 0);
+        if attack.absolute_end < attack.absolute_start
+            || (attack.absolute_end == attack.absolute_start && !bound_grace)
             || !matches!(attack.staff, 1 | 2)
             || attack.technical_lane == 0
             || attack_by_source.insert(attack.source_event_id, attack).is_some()
@@ -4819,7 +4838,7 @@ pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
             "FrozenSerializedVoicePlan written occurrence evidence is empty"));
     }
     for row in written.occurrences.iter() {
-        if row.end <= row.onset
+        if row.end < row.onset || (row.end == row.onset && !row.is_grace)
             || source_by_fragment.get(&row.fragment_id) != Some(&row.source_event_id)
             || attack_by_source.get(&row.source_event_id).map(|attack| attack.attack_id)
                 != Some(row.attack_id)
@@ -10256,6 +10275,7 @@ mod tests {
                 chord_anchor_end: written_spans[index].1,
                 has_pitched_chord_anchor: true,
                 projected_note_start: index,
+                is_grace: false,
             }
         }).collect::<Vec<_>>();
         let attacks = ids.iter().enumerate().map(|(index, &source)| {

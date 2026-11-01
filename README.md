@@ -101,6 +101,11 @@ du am eigenen Ergebnis.
 
 ## Quellstand und Beiträge
 
+Der Entwicklungsquellstand im Repository enthält inzwischen den nativ angenommenen
+Stand **r1577**. Die [Prüfbelege zu r1577](docs/evidence/r1577/README.md) dokumentieren
+Korpus, unveränderte Notation und die Grenzen der Laufzeitmessung. Die veröffentlichte
+Windows-Download-EXE bleibt weiterhin r1537.
+
 Die Download-Engine wurde aus dem angenommenen nativen Stand **r1537** gebaut.
 Der [exakte r1537-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1537-windows-preview/EtuSchlopf-r1537-source.zip)
 und das Dateiprüfsummen-Manifest stehen beim Release bereit. Für den exakten

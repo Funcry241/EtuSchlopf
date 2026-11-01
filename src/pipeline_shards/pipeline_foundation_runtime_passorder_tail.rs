@@ -97,7 +97,10 @@ sounding_signature_after: u64, sounding_signature_stable: bool, parse_before_ok:
 actions: Vec<LowerStaffSecondaryReanchoredLaneRestVisibilitySuppressionAction>, examples: Vec<String>, } #[derive(Debug, Clone, Default)] struct LowerStaffSecondaryReanchoredLaneRestVisibilitySuppressionAction {
 scope: usize, old_rest_count: usize, risk: String, } #[derive(Debug, Clone, Default)] struct RenderXmlRestConsolidationCandidate {
 scope: usize, staff: String, voice: String, spans: Vec<RenderXmlRestFragmentSpan>, total_duration: i32, first_onset: i32, score: i64, } #[derive(Debug, Clone, Default)] struct RenderXmlHiddenRestVirtualStats {
-changed_events: usize, } #[derive(Debug, Clone, Default)] struct RenderXmlPruneStats { removed_safe_hidden_inner_chord_tones: usize, removed_hidden_pitched_events: usize, removed_source_note_ranges: Vec<(usize, usize)>, } #[derive(Debug, Clone, Default)]
+changed_events: usize,
+original_note_emissions: Vec<(std::ops::Range<usize>, std::ops::Range<usize>)>,
+original_note_capture: Option<std::sync::Arc<JointRestForwardNoteCapture>>,
+} #[derive(Debug, Clone, Default)] struct RenderXmlPruneStats { removed_safe_hidden_inner_chord_tones: usize, removed_hidden_pitched_events: usize, removed_source_note_ranges: Vec<(usize, usize)>, } #[derive(Debug, Clone, Default)]
 struct RenderXmlHiddenScopeAudit { scope: usize, staff: String, voice: String, hidden_pitched: usize, hidden_rests: usize, score: i64, } #[derive(Debug, Clone)] struct RenderXmlNoteEvent { scope: usize, staff: String, voice: String,
 onset: i32, duration: i32, is_hidden: bool, is_rest: bool, is_chord: bool, midi: Option<i32>, anchor: RenderXmlAnchorKind, has_visible_dependency: bool, }
 #[derive(Debug, Clone, Default)] struct StaccatoProxyCandidateRow { scope: usize, staff: String, voice: String, midi: i32, note_onset: i32, note_duration: i32, rest_duration: i32, total_duration: i32, beat_unit: i32, }

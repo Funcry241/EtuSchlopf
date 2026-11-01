@@ -14,6 +14,8 @@ pub(crate) mod governed;
 pub(crate) mod cursor_temporal;
 #[path = "render_checkpoint_prepare_kodex.rs"]
 pub(crate) mod checkpoint_prepare;
+#[path = "c3_original_render_note_admission.rs"]
+mod original_render_notes;
 pub(crate) const PATH: &str = "src/build_gate/ssc_k2_retirement_governance_contract_v1.txt";
 const CONTRACT: &str = include_str!("ssc_k2_retirement_governance_contract_v1.txt");
 // V2 stays a frozen historical document; the installed proof surface is V3.
@@ -85,6 +87,16 @@ const DOCUMENTS: &[(&str, &str)] = &[
 ];
 // E1 uses these parent-compiled bytes, not a candidate-updated TA checksum.
 const CODE: &[(&str, &[u8])] = &[
+    ("src/build_gate/c3_original_render_note_admission.rs", include_bytes!("c3_original_render_note_admission.rs")),
+    ("src/build_gate/ssc_c3_render_block_struct_r1568.txt", include_bytes!("ssc_c3_render_block_struct_r1568.txt")),
+    ("src/build_gate/ssc_c3_render_block_impl_r1568.txt", include_bytes!("ssc_c3_render_block_impl_r1568.txt")),
+    ("src/build_gate/ssc_c3_render_clef_journal_r1568.txt", include_bytes!("ssc_c3_render_clef_journal_r1568.txt")),
+    ("src/build_gate/ssc_c3_render_cleanup_journal_r1568.txt", include_bytes!("ssc_c3_render_cleanup_journal_r1568.txt")),
+    ("src/build_gate/ssc_c3_render_cleanup_test_r1568.txt", include_bytes!("ssc_c3_render_cleanup_test_r1568.txt")),
+
+    ("src/build_gate/c3_initial_stage_admission.rs", include_bytes!("c3_initial_stage_admission.rs")),
+    ("src/build_gate/ssc_c3_initial_stage_parent_r1562.txt", include_bytes!("ssc_c3_initial_stage_parent_r1562.txt")),
+    ("src/build_gate/ssc_c3_initial_stage_successor_r1564.txt", include_bytes!("ssc_c3_initial_stage_successor_r1564.txt")),
     ("src/build_gate/ssc_proof_bundle_preserving_direction_contract_parent_r1485.txt",include_bytes!("ssc_proof_bundle_preserving_direction_contract_parent_r1485.txt")),
     ("src/build_gate/ssc_cursor_temporal_origins_parent_r1444.txt", include_bytes!("ssc_cursor_temporal_origins_parent_r1444.txt")),
     ("src/build_gate/ssc_cursor_temporal_initial_parent_r1444.txt", include_bytes!("ssc_cursor_temporal_initial_parent_r1444.txt")),
@@ -912,7 +924,7 @@ fn validate_render57_positive(root: &Path) -> Result<(), String> {
     for (path, kind, name, expected) in R57_POSITIVE_ITEMS {
         let source = read(root, path)?;
         let actual = crate::rust_source_scan_primitives::fnv1a64(item(&source, kind, name)?.as_bytes());
-        if actual != *expected {
+        if actual != *expected && !original_render_notes::accepts_item(path, kind, name, item(&source, kind, name)?.as_bytes()) {
             return Err(fail(format!(
                 "#57 accepted construction item changed: {path}::{name} ({actual:#018x})"
             )));
@@ -929,7 +941,7 @@ fn validate_render57_positive(root: &Path) -> Result<(), String> {
             || actual == R57_MATERIAL_STAGE_AFTER || cursor_temporal::stage_successor(&bytes));
         let exact_checked_test_successor = *path == "tests/support/render_authority/row57_local_clef_scope_through_trial.rs" && cursor_temporal::row57_test_successor(&bytes);
         let exact_prepared_adoption = *path == "src/structural_write_authority/master_adoption/render_adopted_state.rs" && (checkpoint_prepare::render_successor(&bytes) || (actual != *expected && checkpoint_prepare::writer_retirement_state(root)?));
-        if actual != *expected && !exact_noop_successor && !exact_checked_test_successor && !exact_prepared_adoption {
+        if actual != *expected && !exact_noop_successor && !exact_checked_test_successor && !exact_prepared_adoption && !original_render_notes::accepts_file(path, &bytes) {
             return Err(fail(format!("#57 accepted construction/adoption/test binding changed: {path}")));
         }
     }

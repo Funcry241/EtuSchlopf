@@ -384,9 +384,11 @@ fn apply_editorial_voice_integrate_variant(xml: &str, target: &EditorialVoiceDec
 
 
 
-fn editorial_voice_full_measure_rest_note(target: &EditorialVoiceDecisionTarget) -> String {
+fn editorial_voice_full_measure_rest_note(target: &EditorialVoiceDecisionTarget, duration: i64) -> String {
     format!(
-        "      <note>\n        <rest/>\n        <duration>384</duration>\n        <voice>{}</voice>\n        <type>whole</type>\n        <staff>{}</staff>\n      </note>\n",
+        "      <note>\n        {}\n        <duration>{}</duration>\n        <voice>{}</voice>\n        <type>whole</type>\n        <staff>{}</staff>\n      </note>\n",
+        if duration == 384 { "<rest/>" } else { "<rest measure=\"yes\"/>" },
+        duration,
         target.voice,
         target.staff
     )
@@ -410,12 +412,16 @@ fn apply_editorial_voice_complete_rewrite_variant(xml: &str, target: &EditorialV
 
     ranges.sort_by_key(|a| a.0);
     let insert_pos = ranges[0].0;
+    let Some(duration) = target.measure.parse::<usize>().ok()
+        .and_then(|index| render_scope_metric_expected_duration_map(xml).get(&index).copied()) else {
+        return PatchedXml::with_exact(xml.to_string(), None);
+    };
     let (rewritten, rewrite_receipt) =
         crate::structural_write_authority::apply_editorial_voice_complete_rewrite_authorized(
             xml,
             ranges,
             insert_pos,
-            editorial_voice_full_measure_rest_note(target),
+            editorial_voice_full_measure_rest_note(target, i64::from(duration)),
         );
     PatchedXml::with_exact(
         rewritten.expect("source-bound complete editorial voice rewrite authorization"),
@@ -829,6 +835,42 @@ fn normalize_editorial_voice_accepted_candidate(
     candidate
 }
 
+type EditorialVoiceBoundSourceSupport =
+    Vec<(MaterialSourceEventId, SoundingAttackId, usize, i64, i64, i32, bool)>;
+
+fn editorial_voice_bound_source_support(
+    spine: &CandidateMaterialLineageSpine,
+) -> Option<EditorialVoiceBoundSourceSupport> {
+    if !spine.authority_bound {
+        return None;
+    }
+    let mut support = spine.fragments.iter().filter(|fragment| fragment.pitch.is_some())
+        .map(|fragment| Some((fragment.source_event_id?, fragment.attack_id?,
+            fragment.measure, fragment.onset, fragment.duration,
+            fragment.pitch?, fragment.is_grace)))
+        .collect::<Option<Vec<_>>>()?;
+    support.sort_unstable();
+    Some(support)
+}
+
+fn editorial_voice_preserves_bound_source_support(
+    current: &SolverCandidate,
+    proposed: &SolverCandidate,
+) -> bool {
+    let Some(before) = editorial_voice_bound_source_support(&current.material_lineage) else {
+        return false;
+    };
+    // Reconcile only a disposable trial. The inherited source identities and
+    // existing representation-only contract supply the proof, never note counts.
+    let mut trial = proposed.clone();
+    if reconcile_candidate_material_lineage(&mut trial, "EditorialVoiceSourceSupportTrial",
+        CandidateMaterialDeclaredEffects::representation_only()).is_err()
+    {
+        return false;
+    }
+    editorial_voice_bound_source_support(&trial.material_lineage).is_some_and(|after| after == before)
+}
+
 fn run_editorial_voice_decision_pass(best: &mut SolverCandidate, options: &CheckOptions) -> anyhow::Result<EditorialVoiceDecisionStats> {
     let mut stats = EditorialVoiceDecisionStats {
         ..EditorialVoiceDecisionStats::default()
@@ -924,7 +966,10 @@ fn run_editorial_voice_decision_pass(best: &mut SolverCandidate, options: &Check
                     && scope_trace.in_scope_blockers == 0
                     && scope_trace.out_of_scope_blockers == 0
                     && scope_trace.scope_mismatch == 0;
-                let role_better = after_score_for_gate < before_score_for_gate
+                let source_support_preserved = !is_full_rewrite
+                    || editorial_voice_preserves_bound_source_support(best, &candidate);
+                let role_better = source_support_preserved
+                    && after_score_for_gate < before_score_for_gate
                     && after_audit_for_gate.hidden_should_sound <= before_audit.hidden_should_sound
                     && candidate_visible + 3 >= current_visible;
                 if is_full_rewrite {
@@ -969,6 +1014,9 @@ fn run_editorial_voice_decision_pass(best: &mut SolverCandidate, options: &Check
                     }
                 }
                 let mut reject_reasons = editorial_voice_decision_reject_reasons(&candidate, best, &before_audit);
+                if !source_support_preserved {
+                    reject_reasons.push("SubstanzGuard: gebundene Quellereignisse oder deren klingende Fragmente sind im Editorial-Restvorschlag nicht vollstaendig erhalten".to_string());
+                }
                 if is_full_rewrite
                     && let Some(normalization) = final_clean_normalization.as_ref()
                     && normalization.normalized_clean
@@ -1263,3 +1311,7 @@ mod editorial_voice_integration_tests {
         assert!(editorial_voice_integration_is_collision_free(&notes, target, "2"));
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/editorial_voice_source_support.rs"]
+mod editorial_voice_source_support_tests;

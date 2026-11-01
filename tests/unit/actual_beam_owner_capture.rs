@@ -462,6 +462,7 @@ fn original_chord_attachment_records_its_actual_head_without_own_beam_inference(
     let row = &rows[0];
     assert!(row.unknown.is_none());
     let head = &capture.occurrences(&after).unwrap()[row.head.unwrap()];
+    assert_eq!(row.original_head.as_ref(), Some(&head.0));
     assert!(after[head.0.clone()].contains("<step>C</step>"));
     let member = &after[row.member.clone()];
     assert!(member.contains("<chord"));
@@ -479,6 +480,8 @@ fn an_original_cursor_boundary_cannot_borrow_the_previous_head() {
     let (after, _, capture) = execute(&before);
     let row = &capture.chord_attachments(&after).unwrap()[0];
     assert!(row.head.is_none());
+    assert!(row.original_head.is_none());
+    assert!(row.original_head_absent);
     assert!(
         row.unknown
             .as_ref()
@@ -496,6 +499,9 @@ fn an_original_unowned_pitched_head_stays_unknown() {
     let (after, _, capture) = execute(&before);
     let row = &capture.chord_attachments(&after).unwrap()[0];
     assert!(row.head.is_none());
+    let physical_head = row.original_head.as_ref().expect("original non-beamed chord head");
+    assert!(after[physical_head.clone()].contains("<step>G</step>"));
+    assert!(!after[physical_head.clone()].contains("<beam"));
     assert!(
         row.unknown
             .as_ref()
@@ -508,6 +514,7 @@ fn an_original_unowned_pitched_head_stays_unknown() {
 fn original_attachment_ranges_follow_the_original_insertion_receipt() {
     let (after, _, capture) = execute(&input_with_original_chord());
     let before_member = capture.chord_attachments(&after).unwrap()[0].member.clone();
+    let before_head = capture.chord_attachments(&after).unwrap()[0].original_head.clone().unwrap();
     let offset = after.find("<note>").unwrap();
     let insertion = "<!-- original operation -->";
     let post = format!("{}{insertion}{}", &after[..offset], &after[offset..]);
@@ -518,6 +525,9 @@ fn original_attachment_ranges_follow_the_original_insertion_receipt() {
     let row = &carried.chord_attachments(&post).unwrap()[0];
     assert_eq!(row.member.start, before_member.start + insertion.len());
     assert_eq!(&post[row.member.clone()], &after[before_member]);
+    let head = row.original_head.as_ref().unwrap();
+    assert_eq!(head.start, before_head.start + insertion.len());
+    assert_eq!(&post[head.clone()], &after[before_head]);
     assert!(carried.chord_attachments(&after).is_err());
 }
 
@@ -559,12 +569,57 @@ fn independently_duplicated_chords_keep_separate_original_heads() {
     let rows = capture.chord_attachments(&after).unwrap();
     assert_eq!(rows.len(), 2);
     assert_ne!(rows[0].head, rows[1].head);
+    assert_ne!(rows[0].original_head, rows[1].original_head);
     let original = capture.occurrences(&after).unwrap();
     for row in rows {
         let head = &original[row.head.unwrap()].0;
+        assert_eq!(row.original_head.as_ref(), Some(head));
         assert!(head.end <= row.member.start);
         assert!(after[head.clone()].contains("<step>C</step>"));
     }
+}
+
+// Pure operation-observation controls. They issue no receipt and invoke no
+// music writer; they do not claim an executed ActualCanonicalBeamCapture.
+fn chord_observation_source() -> String {
+    "<score-partwise><part id=\"synthetic\"><measure number=\"arbitrary\"><note><pitch><step>C</step><octave>3</octave></pitch><duration>4</duration><voice>renamed</voice><staff>2</staff></note><note><chord/><pitch><step>E</step><octave>4</octave></pitch><duration>4</duration><voice>renamed</voice><staff>1</staff></note></measure></part></score-partwise>".into()
+}
+
+#[test]
+fn pure_chord_observation_keeps_physical_membership_separate_from_beam_permission() {
+    let source = chord_observation_source();
+    let notes = partial_beat_raw_notes(&source);
+    let map = ActualBeamNoteMap::unchanged(&notes);
+    let rows = capture_actual_chord_beam_attachments(&source, &source, &map, &map, &[]).unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].original_head, Some(notes[0].start..notes[0].end));
+    assert_eq!(rows[0].member, notes[1].start..notes[1].end);
+    assert!(rows[0].head.is_none());
+    assert!(rows[0].unknown.is_some());
+}
+
+#[test]
+fn pure_chord_observation_refuses_a_changed_uncaptured_physical_head() {
+    let source = chord_observation_source();
+    let notes = partial_beat_raw_notes(&source);
+    let map = ActualBeamNoteMap::unchanged(&notes);
+    let changed = source.replacen("<step>C</step>", "<step>D</step>", 1);
+    assert_eq!(source.len(), changed.len());
+    assert!(capture_actual_chord_beam_attachments(&source, &changed, &map, &map, &[]).is_err());
+}
+
+#[test]
+fn pure_chord_observation_does_not_guess_an_ambiguous_physical_head() {
+    let source = chord_observation_source();
+    let notes = partial_beat_raw_notes(&source);
+    let mut beam = ActualBeamNoteMap::unchanged(&notes);
+    beam.0.push(beam.0[0].clone());
+    let rest = ActualBeamNoteMap::unchanged(&notes);
+    let rows = capture_actual_chord_beam_attachments(&source, &source, &beam, &rest, &[]).unwrap();
+    assert!(rows[0].original_head.is_none());
+    assert!(!rows[0].original_head_absent);
+    assert!(rows[0].head.is_none());
+    assert!(rows[0].unknown.is_some());
 }
 
 fn beam_only_input_at(measure: usize) -> String {

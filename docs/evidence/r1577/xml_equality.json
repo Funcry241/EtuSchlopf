@@ -1,0 +1,27 @@
+{
+  "comparison": "r1577 versus r1576",
+  "count": 20,
+  "all_byte_identical": true,
+  "hashes": {
+    "Etüde Nr. 1.musicxml": "a7428cc6ff234a2ad4015ed40fdafa33026b86ffd8979a36fcd158fadece232e",
+    "Etüde Nr. 1.render.musicxml": "d13d747c22f5cdca8bc095a073c63fe0987125951bed7aec1cb991470a0e9c5f",
+    "Etüde Nr. 10.musicxml": "498f6488c49c19f64e187e228f01bca9428a588d64e3f3b2b276dd9c41d5b43f",
+    "Etüde Nr. 10.render.musicxml": "ba1dd30b6dd04b8a83af744ac9051842ab73cc9621e7e5fa0d500809d24f61c1",
+    "Etüde Nr. 2.musicxml": "4a37bf3545cf0ae5896a9c9f07c02514abbd8640c511db19b11da5069b1d44db",
+    "Etüde Nr. 2.render.musicxml": "3afd3fc3882089c871ffd409a136bc0882aeb2ce1037435d52aa38c5717ca373",
+    "Etüde Nr. 3.musicxml": "2759bc43729fc6bda0f0f8f660fa83d3b3fd3ffc605718603151a66eb7557c49",
+    "Etüde Nr. 3.render.musicxml": "5c341473804ad13d182e5b93209b652daf662185f84aeb3975ef478a85db401c",
+    "Etüde Nr. 4.musicxml": "14512514e3b020128b75a7ee10d5254a167eafce4211fdb573e810abf30557b2",
+    "Etüde Nr. 4.render.musicxml": "5f1c5e3de8144d28eb21867a9727789270e51ed534f5406942940e4e9b2772b4",
+    "Etüde Nr. 5.musicxml": "5ba9b0c9118cae464815d4bd5dd98280d1a3d89f98786bc9780aa20c88062ae0",
+    "Etüde Nr. 5.render.musicxml": "668eaf00e5c39f47d91f465216ffc6e30a859aaa950c61b3ca14000032c2b175",
+    "Etüde Nr. 6.musicxml": "ec9e188a833644329c93fb84e043176d016b628154b9f5531b1ca6a30b7277ef",
+    "Etüde Nr. 6.render.musicxml": "3e69429ecbe33e7cc42d6add6df2ce613c7a8bef2a78bda968033be7ec5f816a",
+    "Etüde Nr. 7.musicxml": "bb4a13c5a49857703422ee0c0dca359ec2af2c59a6d57f1b47cfdd8d6f642369",
+    "Etüde Nr. 7.render.musicxml": "59d8fed53960663e0b41294b7df3c8fdf09e2f8f06c6dbdc5fd7f0b27ec4e3c9",
+    "Etüde Nr. 8.musicxml": "a38dca15069dd01567adb549dea290c9297fd59485e94171111bcba13af668d5",
+    "Etüde Nr. 8.render.musicxml": "f0d87f712995fa25889f3215a36e60702e68ac9299d5942b2bc316d94c54a8d3",
+    "Etüde Nr. 9.musicxml": "501a1f772ccd0b9bfdcec7dbba966892b0bef145ff4c697c6baef044079ac134",
+    "Etüde Nr. 9.render.musicxml": "24091be184e01fe6e7f3ad93140e11863d5931917e4242938ca3135eaf84356b"
+  }
+}

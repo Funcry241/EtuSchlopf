@@ -457,6 +457,7 @@ fn consensus_probe_apply_broken_gesture_distribution(
     tones: &[HiddenChordToneRecoveryCandidate],
     slots: &[VisibleChordToneSwapSlot],
     mode: usize,
+    occupancy: &GesturePlacementOccupancy,
 ) -> (
     String,
     usize,
@@ -464,6 +465,7 @@ fn consensus_probe_apply_broken_gesture_distribution(
     Vec<CandidateMaterialExactNoteMoveCarrier>,
     master_state_identity::OwnerReceipts,
 ) {
+    let mut placement = occupancy.clone();
     let mut used: BTreeSet<(usize, usize, String, i64)> = BTreeSet::new();
     let mut edits: Vec<(usize, usize, String)> = Vec::new();
     let mut moves: Vec<(usize, usize, usize)> = Vec::new();
@@ -481,9 +483,10 @@ fn consensus_probe_apply_broken_gesture_distribution(
         if !single_note_gesture_support_is_independent(&base_xml[tone.abs_start..tone.abs_end]) {
             continue;
         }
-        let Some(anchor) = consensus_broken_anchor_for_tone(tone, slots, &used, mode, idx) else {
+        let Some(anchor) = consensus_guarded_broken_anchor(tone, slots, &used, mode, idx, &placement) else {
             continue;
         };
+        if !placement.advance(tone, anchor, false) { continue; }
         let source_block = &base_xml[tone.abs_start..tone.abs_end];
         let clone = consensus_note_block_as_visible_chord(source_block, anchor);
         used.insert((anchor.measure, anchor.staff, anchor.voice.clone(), anchor.start_tick));
@@ -554,6 +557,7 @@ fn consensus_gauss_anchor_for_tone<'a>(
     slots: &'a [VisibleChordToneSwapSlot],
     used: &BTreeSet<(usize, usize, String, i64)>,
     ordinal: usize,
+    occupied: Option<&[AtomicNote]>,
 ) -> Option<&'a VisibleChordToneSwapSlot> {
     let half = consensus_probe_half_of_tick(tone.start_tick);
     slots
@@ -562,12 +566,46 @@ fn consensus_gauss_anchor_for_tone<'a>(
         .filter(|slot| consensus_probe_half_of_tick(slot.start_tick) == half)
         .filter(|slot| (slot.start_tick - tone.start_tick).abs() <= 144)
         .filter(|slot| midi_distance(slot.midi, tone.midi) <= 24)
+        .filter(|slot| occupied.is_none_or(|notes| gauss_destination_is_available(tone, slot, notes)))
         .min_by_key(|slot| (
             consensus_gauss_slot_score(tone, slot, used, ordinal),
             slot.note_start,
         ))
 }
-fn consensus_gauss_cell_score(tones: &[HiddenChordToneRecoveryCandidate], slots: &[VisibleChordToneSwapSlot]) -> i64 {
+fn gauss_destination_is_available(
+    tone: &HiddenChordToneRecoveryCandidate,
+    slot: &VisibleChordToneSwapSlot,
+    notes: &[AtomicNote],
+) -> bool {
+    let Some(midi) = tone.midi else { return false; };
+    let Some(end) = slot.start_tick.checked_add(slot.duration) else { return false; };
+    if slot.duration <= 0 {
+        return false;
+    }
+    // Bind the legacy slot's coordinates to the existing physical XML parser.
+    // A pitched member (including a hidden one) may occupy the destination even
+    // when the visible anchor has a different pitch. Earlier planned insertions
+    // use the same list, so they cannot silently acquire the same key/voice span.
+    let bound = notes.iter().any(|note| note.note_start == slot.note_start
+        && note.note_end == slot.note_end
+        && note.measure.parse::<usize>().ok() == Some(slot.measure)
+        && note.start == slot.start_tick
+        && note.staff == slot.staff.to_string()
+        && note.voice == slot.voice
+        && note.pitch.is_some());
+    let source_bound = notes.iter().any(|note| note.note_start == tone.abs_start
+        && note.note_end == tone.abs_end
+        && note.pitch.as_ref().is_some_and(|pitch| pitch.midi == midi));
+    source_bound && bound && !notes.iter().any(|note| {
+        let source = note.note_start == tone.abs_start && note.note_end == tone.abs_end;
+        !source && note.measure.parse::<usize>().ok() == Some(slot.measure)
+            && note.staff == slot.staff.to_string() && note.voice == slot.voice
+            && note.pitch.as_ref().is_some_and(|pitch| pitch.midi == midi)
+            && note.start < end && slot.start_tick < note.start.saturating_add(note.duration)
+    })
+}
+fn consensus_gauss_cell_score(tones: &[HiddenChordToneRecoveryCandidate], slots: &[VisibleChordToneSwapSlot], occupancy: &GesturePlacementOccupancy) -> i64 {
+    let mut placement = occupancy.clone();
     let mut used: BTreeSet<(usize, usize, String, i64)> = BTreeSet::new();
     let mut ordered = tones.to_vec();
     ordered.sort_by(|a, b| {
@@ -577,7 +615,11 @@ fn consensus_gauss_cell_score(tones: &[HiddenChordToneRecoveryCandidate], slots:
     });
     let mut residual = 0_i64;
     for (idx, tone) in ordered.iter().enumerate() {
-        if let Some(anchor) = consensus_gauss_anchor_for_tone(tone, slots, &used, idx) {
+        if let Some(anchor) = consensus_guarded_gauss_anchor(tone, slots, &used, idx, &placement) {
+            if !placement.advance(tone, anchor, true) {
+                residual += 9_000_000;
+                continue;
+            }
             residual += consensus_gauss_slot_score(tone, anchor, &used, idx);
             used.insert((anchor.measure, anchor.staff, anchor.voice.clone(), anchor.start_tick));
         } else {
@@ -590,6 +632,7 @@ fn consensus_probe_apply_gauss_gesture_distribution(
     base_xml: &str,
     tones: &[HiddenChordToneRecoveryCandidate],
     slots: &[VisibleChordToneSwapSlot],
+    occupancy: &GesturePlacementOccupancy,
 ) -> (
     String,
     usize,
@@ -598,12 +641,13 @@ fn consensus_probe_apply_gauss_gesture_distribution(
     Vec<CandidateMaterialExactNoteMoveCarrier>,
     master_state_identity::OwnerReceipts,
 ) {
-    consensus_probe_apply_gauss_gesture_distribution_inner(base_xml, tones, slots, false)
+    consensus_probe_apply_gauss_gesture_distribution_inner(base_xml, tones, slots, false, occupancy)
 }
 fn consensus_probe_apply_gauss_gesture_distribution_tail_residual_reduced(
     base_xml: &str,
     tones: &[HiddenChordToneRecoveryCandidate],
     slots: &[VisibleChordToneSwapSlot],
+    occupancy: &GesturePlacementOccupancy,
 ) -> (
     String,
     usize,
@@ -612,7 +656,7 @@ fn consensus_probe_apply_gauss_gesture_distribution_tail_residual_reduced(
     Vec<CandidateMaterialExactNoteMoveCarrier>,
     master_state_identity::OwnerReceipts,
 ) {
-    consensus_probe_apply_gauss_gesture_distribution_inner(base_xml, tones, slots, true)
+    consensus_probe_apply_gauss_gesture_distribution_inner(base_xml, tones, slots, true, occupancy)
 }
 fn consensus_gauss_tail_ordinal(
     tone: &HiddenChordToneRecoveryCandidate,
@@ -637,7 +681,9 @@ fn consensus_gauss_distribution_residual(
     tones: &[HiddenChordToneRecoveryCandidate],
     slots: &[VisibleChordToneSwapSlot],
     split_by_cell: bool,
+    occupancy: &GesturePlacementOccupancy,
 ) -> i64 {
+    let mut placement = occupancy.clone();
     let mut used: BTreeSet<(usize, usize, String, i64)> = BTreeSet::new();
     let mut ordinal_by_cell: BTreeMap<(usize, usize, usize, String), usize> = BTreeMap::new();
     let mut ordered = tones.to_vec();
@@ -650,7 +696,11 @@ fn consensus_gauss_distribution_residual(
     let mut residual = 0_i64;
     for (idx, tone) in ordered.iter().enumerate() {
         let local_ordinal = consensus_gauss_tail_ordinal(tone, idx, split_by_cell, &mut ordinal_by_cell);
-        if let Some(anchor) = consensus_gauss_anchor_for_tone(tone, slots, &used, local_ordinal) {
+        if let Some(anchor) = consensus_guarded_gauss_anchor(tone, slots, &used, local_ordinal, &placement) {
+            if !placement.advance(tone, anchor, true) {
+                residual += 9_000_000;
+                continue;
+            }
             residual += consensus_gauss_slot_score(tone, anchor, &used, local_ordinal);
             used.insert((anchor.measure, anchor.staff, anchor.voice.clone(), anchor.start_tick));
         } else {
@@ -664,6 +714,7 @@ fn consensus_probe_apply_gauss_gesture_distribution_inner(
     tones: &[HiddenChordToneRecoveryCandidate],
     slots: &[VisibleChordToneSwapSlot],
     split_by_cell: bool,
+    occupancy: &GesturePlacementOccupancy,
 ) -> (
     String,
     usize,
@@ -672,6 +723,7 @@ fn consensus_probe_apply_gauss_gesture_distribution_inner(
     Vec<CandidateMaterialExactNoteMoveCarrier>,
     master_state_identity::OwnerReceipts,
 ) {
+    let mut placement = occupancy.clone();
     let mut used: BTreeSet<(usize, usize, String, i64)> = BTreeSet::new();
     let mut ordinal_by_cell: BTreeMap<(usize, usize, usize, String), usize> = BTreeMap::new();
     let mut edits: Vec<(usize, usize, String)> = Vec::new();
@@ -693,9 +745,10 @@ fn consensus_probe_apply_gauss_gesture_distribution_inner(
             continue;
         }
         let local_ordinal = consensus_gauss_tail_ordinal(tone, idx, split_by_cell, &mut ordinal_by_cell);
-        let Some(anchor) = consensus_gauss_anchor_for_tone(tone, slots, &used, local_ordinal) else {
+        let Some(anchor) = consensus_guarded_gauss_anchor(tone, slots, &used, local_ordinal, &placement) else {
             continue;
         };
+        if !placement.advance(tone, anchor, true) { continue; }
         let local_residual = consensus_gauss_slot_score(tone, anchor, &used, local_ordinal);
         residual += local_residual;
         let source_block = &base_xml[tone.abs_start..tone.abs_end];
@@ -754,6 +807,12 @@ fn run_gauss_gesture_candidate_extension(
     next_iteration: &mut usize,
     stats: &mut ConsensusGestureProbeStats,
 ) -> anyhow::Result<ConsensusGestureCandidateOutcome> {
+    let Some(occupancy) = GesturePlacementOccupancy::from_seed(seed) else {
+        if stats.examples.len() < 10 {
+            stats.examples.push("gesture placement: seed identity/time binding unavailable; no new move".to_string());
+        }
+        return Ok(None);
+    };
     let baseline_hints = seed.final_result.summary.hints;
     let seed_visible = visible_pitched_note_count(seed.layout_xml());
     let hidden = collect_hidden_chord_tone_recovery_candidates(seed.layout_xml(), 4096);
@@ -780,7 +839,7 @@ fn run_gauss_gesture_candidate_extension(
                 .then_with(|| a.midi.unwrap_or(0).cmp(&b.midi.unwrap_or(0)))
                 .then_with(|| a.staff.cmp(&b.staff))
         });
-        let residual = consensus_gauss_cell_score(&tones, &slots);
+        let residual = consensus_gauss_cell_score(&tones, &slots, &occupancy);
         let substance: i64 = tones.iter().map(consensus_gesture_candidate_weight).sum();
         (key, tones, residual, substance)
     }).collect::<Vec<_>>();
@@ -814,6 +873,7 @@ fn run_gauss_gesture_candidate_extension(
                     seed.layout_xml(),
                     &selected,
                     &slots,
+                &occupancy,
                 );
             if changed == 0 {
                 stats.rejected_not_improved += 1;
@@ -946,6 +1006,12 @@ fn run_gauss_gesture_chain_extension(
     stats: &mut ConsensusGestureProbeStats,
     economy_constrained_tail: bool,
 ) -> anyhow::Result<ConsensusGestureCandidateOutcome> {
+    let Some(occupancy) = GesturePlacementOccupancy::from_seed(seed) else {
+        if stats.examples.len() < 10 {
+            stats.examples.push("gesture placement: seed identity/time binding unavailable; no new move".to_string());
+        }
+        return Ok(None);
+    };
     let baseline_hints = seed.final_result.summary.hints;
     let seed_visible = visible_pitched_note_count(seed.layout_xml());
     let hidden = collect_hidden_chord_tone_recovery_candidates(seed.layout_xml(), 4096);
@@ -971,7 +1037,7 @@ fn run_gauss_gesture_chain_extension(
                 .then_with(|| a.midi.unwrap_or(0).cmp(&b.midi.unwrap_or(0)))
                 .then_with(|| a.staff.cmp(&b.staff))
         });
-        let residual = consensus_gauss_cell_score(&tones, &slots);
+        let residual = consensus_gauss_cell_score(&tones, &slots, &occupancy);
         let substance: i64 = tones.iter().map(consensus_gesture_candidate_weight).sum();
         (key, tones, residual, substance)
     }).collect::<Vec<_>>();
@@ -1052,7 +1118,7 @@ fn run_gauss_gesture_chain_extension(
         let first_half = selected.first().map_or(1, |tone| consensus_probe_half_of_tick(tone.start_tick));
         let candidate_name = format!("gauss_chain_{label}_least_squares_chain");
         let residual_before_reduction = if economy_constrained_tail {
-            consensus_gauss_distribution_residual(&selected, &slots, false)
+            consensus_gauss_distribution_residual(&selected, &slots, false, &occupancy)
         } else {
             0
         };
@@ -1061,12 +1127,14 @@ fn run_gauss_gesture_chain_extension(
                 seed.layout_xml(),
                 &selected,
                 &slots,
+                &occupancy,
             )
         } else {
             consensus_probe_apply_gauss_gesture_distribution(
                 seed.layout_xml(),
                 &selected,
                 &slots,
+                &occupancy,
             )
         };
         if changed == 0 {
@@ -1234,6 +1302,12 @@ fn run_consensus_broken_gesture_extension(
     next_iteration: &mut usize,
     stats: &mut ConsensusGestureProbeStats,
 ) -> anyhow::Result<ConsensusGestureCandidateOutcome> {
+    let Some(occupancy) = GesturePlacementOccupancy::from_seed(seed) else {
+        if stats.examples.len() < 10 {
+            stats.examples.push("gesture placement: seed identity/time binding unavailable; no new move".to_string());
+        }
+        return Ok(None);
+    };
     let baseline_hints = seed.final_result.summary.hints;
     let seed_visible = visible_pitched_note_count(seed.layout_xml());
     let hidden = collect_hidden_chord_tone_recovery_candidates(seed.layout_xml(), 4096);
@@ -1278,6 +1352,7 @@ fn run_consensus_broken_gesture_extension(
                         &selected,
                         &slots,
                         mode,
+                        &occupancy,
                     );
                 if changed == 0 {
                     stats.rejected_not_improved += 1;
@@ -1907,6 +1982,10 @@ fn single_note_gesture_support_is_independent(note: &str) -> bool {
 #[cfg(test)]
 #[path = "../../tests/unit/initial_chord_course_consumer_safety.rs"]
 mod initial_chord_course_consumer_safety_tests;
+
+#[cfg(test)]
+#[path = "../../tests/unit/gauss_destination.rs"]
+mod gauss_destination_tests;
 
 
 

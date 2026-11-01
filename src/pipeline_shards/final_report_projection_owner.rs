@@ -67,6 +67,9 @@ fn append_repair_loop_invocation_evidence_body(
     let final_release_blocked = release_blocker_count > 0;
 
     let mut report_preamble = write_text_report(&best.final_result, &report_options);
+    report_preamble.push_str(&format!("\nSourceTimeDomain: divisions={}; NotationDivisions=96; SourceTiming=exact_forward_provenance; NotationTiming=explicit_projection\nSourceMeterMap: {} measures\n",
+        best.midi_seed_stats.notation_time.source_domain.divisions,
+        best.midi_seed_stats.notation_time.metric.len()));
     if strict_staff_blocks_release {
         report_preamble = apply_strict_staff_incomplete_release_block(
             report_preamble,
@@ -130,6 +133,113 @@ fn append_repair_loop_invocation_evidence_body(
     // The compact report now retains only the current result preamble. Every later
     // projection is forced through the exact-heading section ledger; retired historical
     // sections cannot recreate release gates by being absent from the standard report.
+    text.project_owned_section(
+        "material_conservation",
+        crate::audit_only::material_conservation::SECTION,
+        crate::audit_only::material_conservation::SECTION_RULE,
+        |out| {
+            use crate::audit_only::material_conservation::{
+                AttackRow, MaterialPopulation, OriginRecord, SourceRow,
+            };
+            let origin_rows = best.material_lineage.receipts.iter().map(|entry| {
+                OriginRecord {
+                    owner: &entry.owner,
+                    sources: &entry.changed_source_ordinals,
+                    existence_changes: entry.existence_changes,
+                    other_changes: entry.onset_changes + entry.sounding_end_changes
+                        + entry.pitch_changes + entry.staff_changes + entry.voice_changes,
+                }
+            }).collect::<Vec<_>>();
+            let initial_states = best.midi_seed_stats.source_selection_full_causal
+                .productive_post_legacy_disposition_plan.rows.iter().map(|row| {
+                    (row.source_ordinal, matches!(row.disposition,
+                        crate::source_selection::SourceDurationMaterialDisposition::Restified))
+                }).collect::<std::collections::BTreeMap<_,_>>();
+            let source_rows = best.midi_seed_stats.source_selection_full_causal
+                .shadow_rows.iter().map(|row| SourceRow {
+                    ordinal: row.source_ordinal,
+                    retained: row.retained,
+                    raw_onset: row.pos,
+                    raw_duration: row.len,
+                    pitch: row.midi,
+                    removal_reason: row.removal_reason.map(|reason| reason.as_str().to_string()),
+                    restified_at_entry: initial_states.get(&row.source_ordinal).copied(),
+                }).collect::<Vec<_>>();
+            let retained_ids = best.material_lineage.source_events.iter()
+                .map(|id| id.0).collect::<Vec<_>>();
+            let attack_rows = best.material_lineage.attacks.iter().map(|row| AttackRow {
+                    source: row.source_event_id.0,
+                    exists: row.exists,
+                    grace: row.is_grace,
+                    measure: row.measure,
+                    onset: row.onset,
+                    end: row.sounding_end,
+                    pitch: row.pitch,
+                    staff: &row.staff,
+                    voice: &row.voice,
+                    notated_duration: best.midi_seed_stats.notation_time
+                        .event(row.source_event_id.0).ok().map(|event| event.len),
+                }).collect::<Vec<_>>();
+            let population = MaterialPopulation {
+                authority_bound: best.material_lineage.authority_bound
+                    && best.midi_seed_stats.source_selection_full_causal.productive_plan_authority,
+                canonical: best.midi_seed_stats.source_selection_full_causal.canonical_source_event_count,
+                lineage: best.material_lineage.source_event_count,
+                active: best.material_lineage.active_attack_count,
+                source_divisions: best.midi_seed_stats.notation_time.source_domain.divisions,
+                sources: &source_rows,
+                retained_ids: &retained_ids,
+                attacks: &attack_rows,
+                origins: &origin_rows,
+            };
+            crate::audit_only::material_conservation::append_material_conservation(
+                out, &population, best.layout_xml(),
+                render_musicxml_artifact_for_audit.as_deref(),
+            );
+            let absolute_positions = best.material_lineage.attacks.iter().map(|row| {
+                row.measure.checked_sub(1)
+                    .and_then(|ordinal| best.midi_seed_stats.notation_time.measure(ordinal).ok())
+                    .map(|measure| measure.start)
+                    .and_then(|start| start.checked_add(row.onset))
+            }).collect::<Vec<_>>();
+            crate::audit_only::material_coincidence::append_coincidences(
+                out, &population, &absolute_positions,
+            );
+        },
+    )?;
+    text.project_owned_section(
+        "material_reference_coverage",
+        crate::audit_only::material_reference_coverage::SECTION,
+        crate::audit_only::material_reference_coverage::SECTION_RULE,
+        |out| {
+            use crate::audit_only::material_reference_coverage::MaterialPoint;
+            let active_ids = best.material_lineage.attacks.iter().filter(|row| row.exists)
+                .map(|row| row.source_event_id.0).collect::<std::collections::BTreeSet<_>>();
+            let points = best.midi_seed_stats.source_selection_full_causal.shadow_rows.iter()
+                .filter(|row| !row.retained || !active_ids.contains(&row.source_ordinal))
+                .map(|row| MaterialPoint { source: row.source_ordinal, retained: row.retained,
+                    tick: best.midi_seed_stats.notation_time.event(row.source_ordinal).ok().map(|event| event.pos),
+                }).collect::<Vec<_>>();
+            crate::audit_only::material_reference_coverage::append_reference_coverage(out,
+                best.layout_xml(), best.material_lineage.active_attack_count,
+                best.material_lineage.source_event_count,
+                best.midi_seed_stats.source_selection_full_causal.canonical_source_event_count,
+                best.material_lineage.authority_bound && best.midi_seed_stats.source_selection_full_causal.productive_plan_authority,
+                &points);
+        },
+    )?;
+    text.project_owned_section(
+        "notation_invariant_balance",
+        crate::audit_only::notation_invariants::SECTION,
+        crate::audit_only::notation_invariants::SECTION_RULE,
+        |out| {
+            crate::audit_only::notation_invariants::append_notation_balance(
+                out,
+                best.layout_xml(),
+                render_musicxml_artifact_for_audit.as_deref(),
+            );
+        },
+    )?;
     text.project_owned_section(
         "register_planner_input",
         crate::audit_only::register_planner_input::SECTION,
@@ -1689,6 +1799,7 @@ fn append_repair_loop_invocation_evidence_body(
         frozen_sounding_unbound_members,
         frozen_sounding_voice_spans,
     ) = {
+        let notation = &best.midi_seed_stats.notation_time;
         let mut spans = Vec::<(usize, u8, i64, i64, String)>::new();
         let mut unbound_members = 0usize;
         for row in frozen_sounding_temporal_lane_plan.rows.iter() {
@@ -1703,27 +1814,22 @@ fn append_repair_loop_invocation_evidence_body(
                     unbound_members = unbound_members.saturating_add(1);
                 }
             }
-            let first_measure = row
-                .absolute_start
-                .div_euclid(FROZEN_SOUNDING_TEMPORAL_MEASURE_DIVISIONS);
-            let last_measure = row
-                .absolute_end
-                .saturating_sub(1)
-                .div_euclid(FROZEN_SOUNDING_TEMPORAL_MEASURE_DIVISIONS);
+            let first_measure = notation.metric.ordinal_at(row.absolute_start)
+                .ok_or_else(|| anyhow!("Report notation start outside bound metric"))?;
+            let last_measure = notation.metric.ordinal_at(row.absolute_end.saturating_sub(1).max(row.absolute_start))
+                .ok_or_else(|| anyhow!("Report notation end outside bound metric"))?;
             for measure_index in first_measure..=last_measure {
-                let measure_base = measure_index
-                    .saturating_mul(FROZEN_SOUNDING_TEMPORAL_MEASURE_DIVISIONS);
+                let bar = notation.measure(measure_index)?;
+                let measure_base = bar.start;
                 let local_start = row
                     .absolute_start
                     .max(measure_base)
                     .saturating_sub(measure_base);
                 let local_end = row
                     .absolute_end
-                    .min(measure_base.saturating_add(FROZEN_SOUNDING_TEMPORAL_MEASURE_DIVISIONS))
+                    .min(bar.end)
                     .saturating_sub(measure_base);
-                let Ok(measure_number) = usize::try_from(measure_index.saturating_add(1)) else {
-                    continue;
-                };
+                let measure_number = measure_index.saturating_add(1);
                 for label in &labels {
                     spans.push((measure_number, row.staff, local_start, local_end, label.clone()));
                 }

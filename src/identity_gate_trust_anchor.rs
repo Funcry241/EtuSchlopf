@@ -291,7 +291,7 @@ const _: () = assert!(MULTI_REVISION_EVASION_FNV1A64 == 0xf98f0a2f26197655);
 const _: () = assert!(SHARED_SHA256_FNV1A64 == 0xcbf211b6ba70da9c);
 const _: () = assert!(RUST_SOURCE_SCAN_PRIMITIVES_FNV1A64 == 0x61df2ba9b1c6f485);
 const _: () = assert!(RUST_SOURCE_FACT_PRIMITIVES_FNV1A64 == 0x779750c64c86fb48);
-const _: () = assert!(SEMANTIC_CAPABILITY_DIFF_FNV1A64 == 0x55062ee600a06c98);
+const _: () = assert!(SEMANTIC_CAPABILITY_DIFF_FNV1A64 == 0x09963d22624f321e);
 const _: () = assert!(KODEX_CAPABILITY_RETIREMENTS_FNV1A64 == 0x673a3b9e21cb7fa0);
 const _: () = assert!(PRODUCTIVE_WRITE_PATH_SCANNER_FNV1A64 == 0x933947523b68dee2);
 const _: () = assert!(DESTRUCTIVE_POPULATION_FREEZE_GATE_FNV1A64 == 0xfed307252852a38f);
@@ -497,10 +497,10 @@ const _: () = assert!(SSC_CONTRACT_6_FNV1A64 == 0x2d1738807d14f4ce);
 // r1242 compiled governance additions
 const K2_CLOSED_0_BYTES: &[u8] = include_bytes!("build_gate/ssc_k2_retirement_governance.rs");
 const K2_CLOSED_0_FNV1A64: u64 = fnv1a64(K2_CLOSED_0_BYTES);
-const _: () = assert!(K2_CLOSED_0_FNV1A64 == 0xfc653fedbd6de24e);
+const _: () = assert!(K2_CLOSED_0_FNV1A64 == 0x78def9e19bf3641d);
 const K2_CLOSED_1_BYTES: &[u8] = include_bytes!("build_gate/ssc_k2_retirement_governance_tests.rs");
 const K2_CLOSED_1_FNV1A64: u64 = fnv1a64(K2_CLOSED_1_BYTES);
-const _: () = assert!(K2_CLOSED_1_FNV1A64 == 0x14f188f93864d84b);
+const _: () = assert!(K2_CLOSED_1_FNV1A64 == 0xaef87c8abd65dd05);
 const K2_CLOSED_2_BYTES: &[u8] = include_bytes!("build_gate/ssc_structural_erasure.rs");
 const K2_CLOSED_2_FNV1A64: u64 = fnv1a64(K2_CLOSED_2_BYTES);
 const _: () = assert!(K2_CLOSED_2_FNV1A64 == 0x0b85f088d45e4e26);
@@ -575,7 +575,7 @@ const _: () = assert!(CURSOR_TEMPORAL_RETIREMENT_FNV1A64 == 0x72a366646188d86c);
 
 
 const CHECKPOINT58_PREPARE_BYTES: &[u8] = include_bytes!("build_gate/render_checkpoint_prepare_kodex.rs");
-const _: () = assert!(fnv1a64(CHECKPOINT58_PREPARE_BYTES) == 0x817ab9d4154f2319);
+const _: () = assert!(fnv1a64(CHECKPOINT58_PREPARE_BYTES) == 0x0b5f378234ca8717);
 const CHECKPOINT58_HISTORICAL_ADOPTION: &[u8] = include_bytes!("build_gate/ssc_test_fixture_r1449_render_adopted_state.txt");
 const _: () = assert!(fnv1a64(CHECKPOINT58_HISTORICAL_ADOPTION) == 0x51997746bec0b556);
 
@@ -657,3 +657,6 @@ mod tests {
 }
 
 
+
+// Explicitly authorized C3 prerequisite: the exact old checked initial-render
+// image plus two owner calls. No general Stage or Render-owner pin renewal.

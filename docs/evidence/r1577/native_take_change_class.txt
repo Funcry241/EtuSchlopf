@@ -1,0 +1,9 @@
+schema_version=1
+change_class=GovernedChange
+from_version=0.10.1839
+to_version=0.10.1839
+reason=Reuse exact complete read-only original register preview costs within one immutable input epoch; preserve every musical candidate and decision
+music_effect=none
+change=modified|ZIP_KIND.txt|fnv64:774419a8c340da92
+change=added|docs/selector_derivation_contract_original_register_preview_exact_memo.md|fnv64:1ef491bd5b5c6b81
+change=modified|src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs|fnv64:50b11314fd04c69f

@@ -7,6 +7,8 @@
 //! bestehenden zentralen StructuralWriteAuthority-Writer.
 
 mod gemeinsame_spanne;
+mod gemeinsamer_lesekurs;
+pub(crate) use gemeinsamer_lesekurs::{vergleiche_gebundene_lesekurse, JointLowerCourseCost};
 mod ottava_kontext;
 pub(crate) mod reader_policy;
 pub(crate) use ottava_kontext::OttavaCarrier;
@@ -286,6 +288,8 @@ struct RegisternotationsBeweis {
 
 #[derive(Debug, Clone, Default)]
 struct Sitzung {
+    eigener_eingang: Option<String>,
+    gemeinsame_lesekurse: Vec<String>,
     eingang: Option<crate::audit_only::register_planner_input::InputSnapshot>,
     beweis: Option<Result<RegisternotationsBeweis, String>>,
     materialisierung: Option<RegisternotationsMaterialisierungsZeugnis>,
@@ -305,6 +309,7 @@ pub(crate) fn sperre_fuer_tests() -> std::sync::MutexGuard<'static, ()> {
 }
 
 pub(crate) fn loesche() {
+    crate::pipeline::reset_joint_reading_course();
     reader_policy::reset();
     let mut zustand = sitzung()
         .lock()
@@ -313,6 +318,7 @@ pub(crate) fn loesche() {
 }
 
 pub(crate) fn beobachte_vor_k00(xml: &str) {
+    crate::pipeline::reset_joint_reading_course();
     reader_policy::reset();
     let eingang = crate::audit_only::register_planner_input::InputSnapshot::capture(xml);
     let beweis = crate::musicxml::parse_musicxml(xml)
@@ -321,6 +327,10 @@ pub(crate) fn beobachte_vor_k00(xml: &str) {
     let mut zustand = sitzung()
         .lock()
         .unwrap_or_else(|vergiftet| vergiftet.into_inner());
+    zustand.materialisierung = None;
+    zustand.ottava_kontext = None;
+    zustand.gemeinsame_lesekurse.clear();
+    zustand.eigener_eingang = Some(xml.to_owned());
     zustand.eingang = Some(eingang);
     zustand.beweis = Some(beweis);
 }
@@ -1919,7 +1929,10 @@ pub(crate) fn materialisierungsauftrag() -> Result<RegisternotationsMaterialisie
     let beweis = zustand
         .beweis
         .ok_or_else(|| "Registernotationsplan vor K00 fehlt".to_string())??;
+    materialisierungsauftrag_fuer_beweis(&beweis)
+}
 
+fn materialisierungsauftrag_fuer_beweis(beweis: &RegisternotationsBeweis) -> Result<RegisternotationsMaterialisierungsauftrag, String> {
     if beweis.leere_betroffene_mengen != 0
         || beweis.nullspannen != 0
         || beweis.ereignisse_ausserhalb_spanne != 0
@@ -2056,6 +2069,10 @@ pub(crate) fn sichtmaterialisierungsauftrag(
     let beweis = zustand
         .beweis
         .ok_or_else(|| "Registernotationsplan vor Sichtmaterialisierung fehlt".to_string())??;
+    sichtauftrag_fuer_beweis(&beweis, semantisch)
+}
+
+fn sichtauftrag_fuer_beweis(beweis: &RegisternotationsBeweis, semantisch: RegisternotationsMaterialisierungsauftrag) -> Result<RegisternotationsSichtmaterialisierungsauftrag, String> {
     if beweis.plaene.len() != semantisch.plaene.len() {
         return Err("Semantik- und Materialisierungsplananzahl weichen ab".to_string());
     }
@@ -2343,6 +2360,11 @@ pub(crate) fn beobachte_materialisierung(
     Ok(())
 }
 
+pub(crate) fn observe_joint_materialized_context(visible: RegisternotationsSichtmaterialisierungsauftrag,carriers:Vec<OttavaCarrier>) {
+    let mut state=sitzung().lock().unwrap_or_else(|error|error.into_inner());
+    state.ottava_kontext=Some(ottava_kontext::MaterializedContext {visible,carriers});
+}
+
 pub(crate) fn fuege_ottava_kontext_hinzu(out: &mut String, master: &str, render: Option<&str>) {
     let zustand = sitzung()
         .lock()
@@ -2356,6 +2378,7 @@ pub(crate) fn fuege_ottava_kontext_hinzu(out: &mut String, master: &str, render:
         render,
     );
     reader_policy::append_report(out);
+    crate::audit_only::c3_diagnostics::append_report(out);
 }
 
 pub(crate) fn fuege_eingangsbeobachtung_hinzu(out: &mut String) {
@@ -2379,6 +2402,7 @@ pub(crate) fn fuege_berichtsteil_hinzu(out: &mut String) {
         .lock()
         .unwrap_or_else(|vergiftet| vergiftet.into_inner())
         .clone();
+    for row in &zustand.gemeinsame_lesekurse { let _ = writeln!(out, "{row}"); }
     let Some(beweis) = zustand.beweis else {
         return;
     };
@@ -3453,3 +3477,7 @@ mod pruefungen {
     }
 
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/joint_register_course.rs"]
+mod joint_register_course_tests;

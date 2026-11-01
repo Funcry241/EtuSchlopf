@@ -87,6 +87,11 @@ fn forwards(xml: &str) -> Result<ForwardReadback> {
 }
 
 fn exact_partition(mut spans: Vec<Range<i64>>, original: &Range<i64>) -> Result<()> {
+    if original.start == original.end {
+        ensure!(spans.len() == 1 && spans[0] == *original,
+            "Grace encoding lost or duplicated its original point");
+        return Ok(());
+    }
     spans.sort_by_key(|range| (range.start, range.end));
     let mut end = original.start;
     for span in spans {
@@ -98,6 +103,21 @@ fn exact_partition(mut spans: Vec<Range<i64>>, original: &Range<i64>) -> Result<
 }
 
 impl OwnedRhythmicContinuation {
+    /// Read the original source carried by each received pitched occurrence.
+    /// XML locates and validates the already carried occurrence; it creates no identity.
+    pub(crate) fn original_joint_source_occurrences(&self, xml: &str)
+        -> Result<Vec<(Range<usize>, usize)>> {
+        self.require_complete_course_context(xml)?;
+        ensure!(self.final_chord_execution.is_none() && self.encoded.is_empty(),
+            "Joint reading source input is outside the received course epoch");
+        let sources = self.occurrences.iter().filter(|old|
+            self.snapshot[old.bytes.clone()].contains("<pitch>"))
+            .map(|old| Ok((old.bytes.clone(), old.origin.source
+                .ok_or_else(|| anyhow!("Joint pitched occurrence has no carried source"))?)))
+            .collect::<Result<Vec<_>>>()?;
+        self.validate_original_respelling_sources(&sources)?;
+        Ok(sources)
+    }
     pub(crate) fn validate_original_respelling_sources(&self,
         sources: &[(Range<usize>, usize)]) -> Result<()> {
         self.validate_binding(&self.snapshot)?;
@@ -229,7 +249,7 @@ impl OwnedRhythmicContinuation {
 
     pub(super) fn retain_original_visible_copy(next: &mut Self, old: &Occurrence,
         note: &PhysicalOccurrence, original_emission: crate::master_state_identity::MintedIdentity) -> Result<()> {
-        let correspondence = OriginImage::new(old.origin.interval.clone(), note.interval.clone())?;
+        let correspondence = original_note_correspondence(old.origin.interval.clone(), note)?;
         let provenance = vec![OriginalEmission { execution: EncodingExecution::VisibleCopy(original_emission),
             input: (old.bytes.start, old.bytes.end), ordinal: 0 }];
         next.encoded.push(EncodedOccurrence { received: old.clone(), emission_count: 1,
@@ -261,7 +281,9 @@ impl OwnedRhythmicContinuation {
         for old in &self.occurrences {
             roots.push((old, vec![EncodingFragment { bytes: old.bytes.clone(), ordinal: 0,
                 original_emissions: Vec::new(), interval: old.origin.interval.clone(),
-                correspondence: OriginImage::new(old.origin.interval.clone(), old.origin.interval.clone())?,
+                correspondence: original_note_correspondence(old.origin.interval.clone(),
+                    before_physical.get(&(old.bytes.start, old.bytes.end))
+                        .ok_or_else(|| anyhow!("Original input carrier is missing"))?)?,
                 forward: false, rest: self.snapshot[old.bytes.clone()].contains("<rest"),
                 chord: self.snapshot[old.bytes.clone()].contains("<chord"),
                 ties: tie_marks(&self.snapshot[old.bytes.clone()]) }]));
@@ -347,7 +369,7 @@ impl OwnedRhythmicContinuation {
                 }
             }
             let spans = encoded.fragments.iter().map(|fragment| {
-                OriginImage::new(fragment.correspondence.origin.clone(), fragment.correspondence.image.clone())?;
+                fragment.correspondence.validate()?;
                 ensure!(fragment.correspondence.image == fragment.interval, "Partial carrier lacks certified partition");
                 Ok(fragment.correspondence.origin.clone())
             }).collect::<Result<Vec<_>>>()?;
@@ -429,7 +451,12 @@ fn read_original_final_chord_row(
         fragments.push(EncodingFragment { bytes: bytes.clone(), ordinal: *ordinal,
             original_emissions: vec![OriginalEmission { execution: EncodingExecution::FinalChord(*receipt.ssc_bound_origin().0),
                 input: (row.input().start, row.input().end), ordinal: *ordinal }],
-            correspondence: OriginImage::translated(interval.clone(), row.original_offset())?, interval,
+            correspondence: if old_text.contains("<grace") && !old_text.contains("<duration>") {
+                ensure!(row.source().is_some() && !*is_forward && interval.start == interval.end,
+                    "Grace emission lost original source or point support");
+                OriginImage::grace_point(interval.start.checked_add(row.original_offset())
+                    .ok_or_else(|| anyhow!("Grace origin overflow"))?, interval.start)
+            } else { OriginImage::translated(interval.clone(), row.original_offset())? }, interval,
             forward: *is_forward, rest, chord, ties });
     }
     exact_partition(fragments.iter().map(|fragment| fragment.correspondence.origin.clone()).collect(), &source.interval)?;
@@ -458,3 +485,13 @@ fn read_original_final_chord_row(
 #[cfg(test)]
 #[path = "../tests/unit/final_export_course_continuation.rs"]
 mod tests;
+
+// Physical inventory proves that zero-duration notes are actual grace notes;
+// original source membership is authenticated by the enclosing owner capture.
+fn original_note_correspondence(origin: Range<i64>, note: &PhysicalOccurrence) -> Result<OriginImage> {
+    if note.text.contains("<grace") && !note.text.contains("<duration>") {
+        ensure!(origin.start == origin.end && note.interval.start == note.interval.end,
+            "Grace carrier changed original point support");
+        Ok(OriginImage::grace_point(origin.start, note.interval.start))
+    } else { OriginImage::new(origin, note.interval.clone()) }
+}

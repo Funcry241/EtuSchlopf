@@ -55,25 +55,25 @@ pub(crate) struct PdfContext {
     pub(crate) pdf_sha256: String,
     pub(crate) supported: BTreeMap<String, VisibleLine>,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Origin {
     birth: Birth,
     validated: bool,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct FinalPlan {
     source: String,
     directives: String,
     removals: Vec<Range<usize>>,
     omissions: BTreeMap<usize, (CueRequest, VisibleLine)>,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct FinalClaim {
     source: String,
     omissions: BTreeMap<usize, (CueRequest, VisibleLine)>,
     adopted: bool,
 }
-#[derive(Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct Session {
     origins: BTreeMap<String, Origin>,
     probes: BTreeMap<(String, String), BTreeMap<String, VisibleLine>>,
@@ -101,7 +101,41 @@ pub(crate) fn issue_origins(
     births: &[Birth],
 ) -> Vec<String> {
     let mut state = session().lock().unwrap_or_else(|e| e.into_inner());
-    births
+    // Keep the original creator's eager issuance semantics. Preparation itself
+    // is immutable, so a later replacement can be validated before committing.
+    let prepared = prepare_origin_update(&state, plan, births, None)
+        .expect("initial origin issuance has no replacement preconditions");
+    commit_origin_update(&mut state, prepared)
+        .expect("locked initial origin session cannot change during issuance")
+}
+
+/// Registry-only preparation: this neither edits MusicXML nor adopts a course.
+/// The original and proposed complete reader sessions remain distinct values.
+pub(crate) struct PreparedOriginUpdate {
+    before: Session,
+    proposed: Session,
+    ids: Vec<String>,
+}
+
+fn prepare_origin_update(
+    state: &Session,
+    plan: &RegisternotationsSichtmaterialisierungsauftrag,
+    births: &[Birth],
+    replacement_source: Option<&str>,
+) -> Result<PreparedOriginUpdate> {
+    let mut proposed = state.clone();
+    if let Some(source) = replacement_source {
+        // Once probes or final plans exist, their geometry/claims would need
+        // their own proven continuation. Never silently discard those readers.
+        ensure!(state.probes.is_empty() && state.plans.is_empty() && state.claims.is_empty(),
+            "Ottava replacement has downstream reader observations");
+        ensure!(state.origins.values().all(|origin| origin.validated),
+            "Ottava replacement has unconfirmed original births");
+        let document = roxmltree::Document::parse(source)?;
+        validate_materialized_origins(&document, &state.origins)?;
+        proposed.origins.clear();
+    }
+    let ids = births
         .iter()
         .map(|birth| {
             let id = format!(
@@ -111,7 +145,7 @@ pub(crate) fn issue_origins(
                     plan.semantischer_plan_fingerabdruck, plan.sicht_fingerabdruck
                 ))
             );
-            state.origins.insert(
+            proposed.origins.insert(
                 id.clone(),
                 Origin {
                     birth: birth.clone(),
@@ -120,7 +154,52 @@ pub(crate) fn issue_origins(
             );
             id
         })
-        .collect()
+        .collect();
+    Ok(PreparedOriginUpdate { before: state.clone(), proposed, ids })
+}
+
+pub(crate) fn prepare_joint_origins(plan: &RegisternotationsSichtmaterialisierungsauftrag,
+    births: &[Birth], master: &str, render: &str) -> Result<PreparedOriginUpdate> {
+    let state = session().lock().unwrap_or_else(|error| error.into_inner());
+    validate_materialized_origins(&roxmltree::Document::parse(render)?,&state.origins)?;
+    prepare_origin_update(&state,plan,births,Some(master))
+}
+impl PreparedOriginUpdate {
+    pub(crate) fn ids(&self) -> &[String] { &self.ids }
+    pub(crate) fn validate_documents(mut self, master: &str, render: &str) -> Result<Self> {
+        self = validate_origin_update(self,master)?;
+        validate_materialized_origins(&roxmltree::Document::parse(render)?,&self.proposed.origins)?;
+        Ok(self)
+    }
+    pub(crate) fn commit_with<T>(self, action: impl FnOnce() -> Result<T>) -> Result<T> {
+        let mut state = session().lock().unwrap_or_else(|error| error.into_inner());
+        ensure!(*state == self.before,"C3 origin session changed before productive materialization");
+        let result = action()?;
+        *state = self.proposed;
+        Ok(result)
+    }
+}
+
+fn validate_origin_update(
+    mut prepared: PreparedOriginUpdate,
+    xml: &str,
+) -> Result<PreparedOriginUpdate> {
+    let document = roxmltree::Document::parse(xml)?;
+    validate_materialized_origins(&document, &prepared.proposed.origins)?;
+    for origin in prepared.proposed.origins.values_mut() {
+        origin.validated = true;
+    }
+    Ok(prepared)
+}
+
+fn commit_origin_update(
+    state: &mut Session,
+    prepared: PreparedOriginUpdate,
+) -> Result<Vec<String>> {
+    ensure!(*state == prepared.before,
+        "Ottava reader session changed while materialization was prepared");
+    *state = prepared.proposed;
+    Ok(prepared.ids)
 }
 fn child<'a>(node: Node<'a, '_>, name: &str) -> Option<&'a str> {
     node.children()
@@ -166,8 +245,19 @@ fn origin_matches(node: Node<'_, '_>, part: &str, origin: &Origin) -> bool {
             == Some(origin.birth.line)
 }
 pub(crate) fn confirm_materialization(xml: &str) -> Result<()> {
-    let document = roxmltree::Document::parse(xml)?;
     let mut state = session().lock().unwrap_or_else(|e| e.into_inner());
+    let prepared = PreparedOriginUpdate {
+        before: state.clone(), proposed: state.clone(), ids: Vec::new(),
+    };
+    let validated = validate_origin_update(prepared, xml)?;
+    commit_origin_update(&mut state, validated)?;
+    Ok(())
+}
+
+fn validate_materialized_origins(
+    document: &roxmltree::Document<'_>,
+    origins: &BTreeMap<String, Origin>,
+) -> Result<()> {
     let mut found = BTreeSet::new();
     for part in document
         .root_element()
@@ -175,9 +265,9 @@ pub(crate) fn confirm_materialization(xml: &str) -> Result<()> {
         .filter(|n| n.has_tag_name("part"))
     {
         for node in part.descendants().filter(|n| n.has_tag_name("direction")) {
-            if let Some(id) = carried_origin(node)
-                && let Some(origin) = state.origins.get(id)
-            {
+            if let Some(id) = carried_origin(node) {
+                let origin = origins.get(id).ok_or_else(|| anyhow::anyhow!(
+                    "Ottava creator marker has no registered origin"))?;
                 ensure!(
                     found.insert(id.to_owned())
                         && origin_matches(node, part.attribute("id").unwrap_or(""), origin),
@@ -186,12 +276,124 @@ pub(crate) fn confirm_materialization(xml: &str) -> Result<()> {
             }
         }
     }
+    let marker_count = document.descendants().filter(|node| node.is_comment()
+        && node.text().is_some_and(|text| text.starts_with("ets-ottava-"))).count();
+    ensure!(marker_count == found.len(),
+        "Ottava creator marker coverage is incomplete or ambiguous");
     ensure!(
-        found.len() == state.origins.len(),
+        found.len() == origins.len(),
         "Ottava creator origin coverage is incomplete"
     );
-    for origin in state.origins.values_mut() {
-        origin.validated = true;
+    Ok(())
+}
+
+#[derive(Debug)]
+struct ConfirmedOriginalOctaveRemoval {
+    source: std::sync::Arc<str>,
+    range: Range<usize>,
+}
+
+impl crate::arrangement::representation_transport::OriginalOctaveRemovalEvidence
+    for ConfirmedOriginalOctaveRemoval
+{
+    fn verifies(&self, source: &str, range: &Range<usize>) -> Result<()> {
+        ensure!(self.source.as_ref() == source && self.range == *range,
+            "Original octave removal evidence belongs to another document or operation");
+        Ok(())
+    }
+}
+
+/// Attach immutable owner evidence only after the journal has been enclosed
+/// into the actual full-document transition. No session or XML is changed.
+pub(crate) fn bind_original_octave_removal_evidence(
+    step: crate::arrangement::representation_transport::RepresentationStep,
+) -> Result<crate::arrangement::representation_transport::RepresentationStep> {
+    let state = session().lock().unwrap_or_else(|error| error.into_inner());
+    bind_original_removals_against(&state, step)
+}
+
+fn bind_original_removals_against(
+    state: &Session,
+    mut step: crate::arrangement::representation_transport::RepresentationStep,
+) -> Result<crate::arrangement::representation_transport::RepresentationStep> {
+    let ranges = step.original_removal_ranges();
+    if ranges.is_empty() { return Ok(step); }
+    let source = std::sync::Arc::<str>::from(step.original_documents().0);
+    for range in ranges {
+        validate_original_direction_removal(state, &source, range.clone())?;
+        step.record_original_octave_removal(range.clone(), std::sync::Arc::new(
+            ConfirmedOriginalOctaveRemoval { source: source.clone(), range }))?;
+    }
+    Ok(step)
+}
+
+fn validate_original_direction_removal(
+    state: &Session,
+    source: &str,
+    range: Range<usize>,
+) -> Result<()> {
+    ensure!(state.probes.is_empty() && state.plans.is_empty() && state.claims.is_empty(),
+        "Ottava removal has downstream reader observations");
+    let document = roxmltree::Document::parse(source)?;
+    let node = document.descendants().find(|node|
+        node.has_tag_name("direction") && node.range() == range)
+        .ok_or_else(|| anyhow::anyhow!("Ottava removal is not a complete original direction"))?;
+    let id = carried_origin(node)
+        .ok_or_else(|| anyhow::anyhow!("Ottava removal has no unique creator marker"))?;
+    let origin = state.origins.get(id)
+        .ok_or_else(|| anyhow::anyhow!("Ottava removal has no registered creator origin"))?;
+    ensure!(origin.validated, "Ottava removal has no confirmed original birth");
+    let part = node.ancestors().find(|node| node.has_tag_name("part"))
+        .and_then(|part| part.attribute("id"))
+        .ok_or_else(|| anyhow::anyhow!("Ottava removal has no bound original part"))?;
+    ensure!(origin_matches(node, part, origin), "Ottava removal differs from its original birth");
+    ensure!(document.descendants().filter(|node|
+        node.is_comment() && node.text() == Some(id)).count() == 1,
+        "Ottava removal has a duplicated original marker");
+    ensure!(node.children().filter(|child| child.has_tag_name("staff")).count() == 1
+        && node.children().filter(|child| child.has_tag_name("offset")).count() <= 1,
+        "Ottava removal has ambiguous staff or offset content");
+    ensure!(node.descendants().filter(|child| child.is_comment())
+        .all(|comment| comment.parent() == Some(node) && comment.text() == Some(id)),
+        "Ottava removal contains a foreign nested comment");
+    ensure!(!node.descendants().any(|child| child.is_pi())
+        && node.descendants().filter(|child| child.has_tag_name("words")).count() <= 1,
+        "Ottava removal contains unsupported instructions or duplicated cues");
+    for child in node.children() {
+        if child.is_comment() {
+            ensure!(child.text() == Some(id), "Ottava removal contains another comment");
+        } else if child.is_text() {
+            ensure!(child.text().unwrap_or_default().trim().is_empty(),
+                "Ottava removal contains foreign text");
+        } else if child.is_element() {
+            match child.tag_name().name() {
+                "staff" => ensure!(!child.children().any(|node| node.is_element()),
+                    "Ottava removal has structured staff content"),
+                "offset" => ensure!(!child.children().any(|node| node.is_element())
+                    && child.text().is_some_and(|text| text.trim().parse::<i64>().is_ok()),
+                    "Ottava removal has unsupported offset content"),
+                "direction-type" => {
+                    for kind in child.children().filter(|node| node.is_element()) {
+                        match kind.tag_name().name() {
+                            "octave-shift" => ensure!(kind.children().all(|node| node.is_text()
+                                && node.text().unwrap_or_default().trim().is_empty()),
+                                "Ottava removal contains structured octave markup"),
+                            "words" => ensure!(origin.birth.kind == "continue"
+                                && !kind.children().any(|node| node.is_element())
+                                && kind.text().map(str::trim) == Some(origin.birth.display.bezeichnung()),
+                                "Ottava removal contains words outside its creator cue"),
+                            _ => anyhow::bail!("Ottava removal contains non-register direction content"),
+                        }
+                    }
+                    ensure!(child.children().filter(|node| node.is_text())
+                        .all(|node| node.text().unwrap_or_default().trim().is_empty()),
+                        "Ottava removal contains foreign direction-type text");
+                }
+                _ => anyhow::bail!("Ottava removal contains a non-register element"),
+            }
+        } else {
+            anyhow::bail!("Ottava removal contains unsupported XML content");
+        }
     }
     Ok(())
 }
@@ -721,3 +923,7 @@ pub(crate) mod synthetic {
 #[cfg(test)]
 #[path = "../../tests/unit/ottava_reader_policy.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../../tests/unit/ottava_origin_registry_transaction.rs"]
+mod origin_registry_transaction_tests;

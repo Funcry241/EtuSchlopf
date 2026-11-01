@@ -1,6 +1,6 @@
 //! Canonical source-note event identity shared by productive source decoders and transition audits.
 //!
-//! This owner defines only the lossless 96-division event representation, its historical
+//! This owner defines the lossless event representation in its bound integer time domain, its historical
 //! ordinal-sensitive identity projection and the read-only causal proof from raw MIDI pairs to
 //! canonical source events. It owns no selection, ranking, hand/staff, solver, phrase or writer
 //! policy.
@@ -42,10 +42,17 @@ pub(crate) struct SourceEventCausalEntry {
     pub(crate) canonical: CanonicalSourceEvent,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub(crate) struct SourceEventCausalLedger {
+    pub(crate) canonical_divisions: i64,
     pub(crate) raw_note_event_count: usize,
     pub(crate) entries: Vec<SourceEventCausalEntry>,
+}
+
+impl Default for SourceEventCausalLedger {
+    fn default() -> Self {
+        Self { canonical_divisions: CANONICAL_DIVISIONS, raw_note_event_count: 0, entries: Vec::new() }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -101,12 +108,12 @@ pub(crate) fn project_source_events(
     }
 }
 
-pub(crate) fn normalize_tick_exact(value: i64, source_ppq: i64) -> anyhow::Result<i64> {
-    let numerator = i128::from(value) * i128::from(CANONICAL_DIVISIONS);
+pub(crate) fn normalize_tick_exact_in_domain(value: i64, source_ppq: i64, divisions: i64) -> anyhow::Result<i64> {
+    let numerator = i128::from(value) * i128::from(divisions);
     let denominator = i128::from(source_ppq);
-    if denominator <= 0 || numerator % denominator != 0 {
+    if denominator <= 0 || divisions <= 0 || numerator % denominator != 0 {
         return Err(anyhow!(
-            "EtuSchlopf unterstuetzt diese Zeitaufloesung noch nicht: MIDI-Tick {value} bei PPQ {source_ppq} ist nicht verlustfrei auf {CANONICAL_DIVISIONS} Divisions abbildbar"
+            "MIDI-Tick {value} bei PPQ {source_ppq} ist nicht verlustfrei auf {divisions} Divisions abbildbar"
         ));
     }
     i64::try_from(numerator / denominator)
@@ -203,7 +210,7 @@ pub(crate) fn project_source_event_causality(
     let mut causal_bytes = Vec::new();
     causal_bytes.extend_from_slice(b"ETUSCHLOPF_SOURCE_EVENT_CAUSAL_LEDGER_V1\0");
     causal_bytes.extend_from_slice(&source_ppq.to_le_bytes());
-    causal_bytes.extend_from_slice(&CANONICAL_DIVISIONS.to_le_bytes());
+    causal_bytes.extend_from_slice(&ledger.canonical_divisions.to_le_bytes());
     append_usize(
         &mut causal_bytes,
         ledger.raw_note_event_count,
@@ -251,8 +258,8 @@ pub(crate) fn project_source_event_causality(
             .map_err(|_| anyhow!("SourceEventCausalLedger: Rohstart überläuft i64"))?;
         let raw_length = i64::try_from(entry.note_off.tick - entry.note_on.tick)
             .map_err(|_| anyhow!("SourceEventCausalLedger: Rohdauer überläuft i64"))?;
-        let normalized_start = normalize_tick_exact(raw_start, source_ppq)?;
-        let normalized_length = normalize_tick_exact(raw_length, source_ppq)?;
+        let normalized_start = normalize_tick_exact_in_domain(raw_start, source_ppq, ledger.canonical_divisions)?;
+        let normalized_length = normalize_tick_exact_in_domain(raw_length, source_ppq, ledger.canonical_divisions)?;
         if normalized_start != canonical.pos || normalized_length != canonical.len {
             return Err(anyhow!(
                 "SourceEventCausalLedger: exakte Normalisierung von Paar {} reproduziert CanonicalSourceEvent nicht",
@@ -416,6 +423,7 @@ mod tests {
             },
         ];
         let ledger = SourceEventCausalLedger {
+            canonical_divisions: CANONICAL_DIVISIONS,
             raw_note_event_count: 6,
             entries: vec![
                 SourceEventCausalEntry {
@@ -471,6 +479,7 @@ mod tests {
             },
         ];
         let ledger = SourceEventCausalLedger {
+            canonical_divisions: CANONICAL_DIVISIONS,
             raw_note_event_count: 4,
             entries: vec![
                 SourceEventCausalEntry {

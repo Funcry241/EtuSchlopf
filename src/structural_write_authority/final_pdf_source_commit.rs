@@ -18,9 +18,21 @@ pub(in crate::pipeline) struct FinalPdfSourceCommit {
     committed_voice_plan: Option<crate::structural_write_authority::FrozenSerializedVoicePlan>,
     primary_beam_voice_partition_changed_voice_elements: usize,
     phrase_occurrence_course: Option<crate::structural_write_authority::BoundPhraseOccurrenceCourse>,
+    /// Shadow-only partial closure: the two primary-clef terms are red (C3 beam/tie
+    /// conflict on pre-partition voices); all other closure terms are green.
+    /// Never closed, never Live, never releasable.
+    shadow_partial: Option<ShadowPartialClosure>,
 }
 
+// Minted only by the Shadow disposition after all unrelated checks pass.
+// It is bound to the witnessed shadow input, never a general render permit.
+#[derive(Debug, Clone)]
+struct ShadowPartialClosure { source_path: std::path::PathBuf }
+
 impl FinalPdfSourceCommit {
+    pub(super) fn permits_shadow_renderer(&self, input: &Path) -> bool {
+        !self.closed && self.shadow_partial.as_ref().is_some_and(|proof| proof.source_path == input)
+    }
     pub(in crate::pipeline) fn approve_phrase_course(&self,
         intents: &[crate::audit_only::phrase_boundary_evidence::PhraseNotationIntentProjection],
     ) -> anyhow::Result<crate::structural_write_authority::ApprovedPhraseOccurrenceCourse> {
@@ -68,6 +80,7 @@ impl FinalPdfSourceCommit {
     pub(in crate::pipeline) fn continue_phrase_course(&mut self,
         course: &crate::structural_write_authority::ApprovedPhraseOccurrenceCourse,
     ) -> anyhow::Result<()> {
+        anyhow::ensure!(self.shadow_partial.is_none(), "E007 phrase continuation cannot target a shadow-partial commit");
         let continuation = self.committed_occurrence_continuation.as_ref()
             .ok_or_else(|| anyhow::anyhow!("E007 phrase continuation lacks committed original occurrences"))?;
         self.phrase_occurrence_course = Some(course.carry(continuation)?);
@@ -78,6 +91,7 @@ impl FinalPdfSourceCommit {
         directives: &[crate::structural_write_authority::HorizontalLayoutMaterializationDirective],
         intents: &[crate::audit_only::phrase_boundary_evidence::PhraseNotationIntentProjection],
     ) -> anyhow::Result<usize> {
+        anyhow::ensure!(self.shadow_partial.is_none(), "Shadow partial closure cannot adopt into Live layout");
         crate::structural_write_authority::adopt_final_layout_phrase_projection_with_course(
             state, directives, intents, self.phrase_occurrence_course.as_ref())
     }
@@ -89,11 +103,14 @@ impl FinalPdfSourceCommit {
     fn horizontal_layout_pipeline_line(&self) -> String {
         // Layout renews the byte witness; it does not replace the actual writer
         // outcome that the final report and corpus manifest must still observe.
+        if self.shadow_partial.is_some() {
+            return format!("{}\nFinalPdfSourceShadowHorizontalLayoutPreservation: partial=true; FullClosure=false; original occurrence course and exact layout bytes rebound; ReleaseEffect=none.", self.pipeline_line);
+        }
         format!("{}\nFinalPdfSourceCommitHorizontalLayoutPreservation: prior committed FinalNotation state preserved through authorized HorizontalLayout; persisted readback rebound; FinalChord occurrence continuation verified; full FinalNotation recommit skipped.", self.pipeline_line)
     }
 
     pub(super) const fn closed(&self) -> bool {
-        self.closed
+        self.closed && self.shadow_partial.is_none()
     }
 
     pub(in crate::pipeline) fn committed_xml(&self) -> Option<&str> {
@@ -123,7 +140,7 @@ pub(in crate::pipeline) fn bind_committed_master_source_before_renderer_authoriz
         committed_xml,
         committed_occurrence_continuation: None,
         committed_voice_plan: None,
-        primary_beam_voice_partition_changed_voice_elements: 0, phrase_occurrence_course: None,
+        primary_beam_voice_partition_changed_voice_elements: 0, phrase_occurrence_course: None, shadow_partial: None,
     }
 }
 
@@ -153,6 +170,7 @@ pub(in crate::pipeline) fn finalize_pdf_source_before_renderer_authorized(
     primary_beam_voice_partition_plan:
         Option<&crate::structural_write_authority::PrimaryBeamVoicePartitionBoundPlan>,
 ) -> std::io::Result<FinalPdfSourceCommit> {
+    let _diagnostics = crate::audit_only::c3_diagnostics::shadow_scope(disposition == FinalPdfSourceDisposition::Shadow);
     let FinalPdfSourcePlans { chord: final_chord_structural_plan, voice: frozen_serialized_voice_plan } = plans;
     if primary_beam_voice_partition_plan.is_some_and(|plan|!plan.permits_pdf_finalization()) {
         return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied,
@@ -202,6 +220,20 @@ pub(in crate::pipeline) fn finalize_pdf_source_before_renderer_authorized(
         }
     };
     let snapshot = finish(&a);
+    if shadow_snapshot_may_continue(disposition, &snapshot, &a) {
+        let line = format!("FinalPdfSourceShadowPartialClosure: Project={:?}; Disposition=shadow; partial=true; PrimaryClefProjectionGreen nein; CommittedPrimaryClefReentryChanges {}; FailureKind=beam_or_tie_conflict; OtherClosureTerms green; Authority=plan_and_phrase_derivation_only; ReleaseEffect=none.", input_musicxml, snapshot.committed_primary_clef_reentry_changes);
+        eprintln!("{line}");
+        crate::audit_only::c3_diagnostics::record("Render","all","shadow_partial_closure",&line);
+        return Ok(FinalPdfSourceCommit {
+            pipeline_line: snapshot.pipeline_line, closed: false,
+            committed_xml: Some(a),
+            committed_occurrence_continuation: snapshot.committed_occurrence_continuation,
+            committed_voice_plan: None,
+            primary_beam_voice_partition_changed_voice_elements: 0,
+            phrase_occurrence_course: None,
+            shadow_partial: Some(ShadowPartialClosure { source_path: input_musicxml.to_path_buf() }),
+        });
+    }
     if !snapshot.closed || snapshot.committed_xml.as_deref() != Some(a.as_str()) {
         count_render_closure_failure(RenderClosureMetric::CandidateCoverageFailures);
         return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, snapshot.pipeline_line));
@@ -213,7 +245,17 @@ pub(in crate::pipeline) fn finalize_pdf_source_before_renderer_authorized(
         committed_voice_plan: snapshot.committed_voice_plan,
         primary_beam_voice_partition_changed_voice_elements: snapshot.primary_beam_voice_partition_changed_voice_elements,
         phrase_occurrence_course: None,
+        shadow_partial: None,
     })
+}
+
+fn shadow_snapshot_may_continue(disposition: FinalPdfSourceDisposition,
+    snapshot: &super::silent_voice_visible_measure_coverage_render_writer::FinalRenderSourceSnapshot,
+    witnessed: &str) -> bool {
+    disposition == FinalPdfSourceDisposition::Shadow
+        && crate::pipeline::joint_reading_course_active()
+        && !snapshot.closed && snapshot.shadow_primary_clef_conflict_only
+        && snapshot.committed_occurrence_continuation.as_ref().is_some_and(|course| course.xml() == witnessed)
 }
 
 /// The existing E007 owner already witnessed the branch layout post. Close
@@ -263,7 +305,11 @@ pub(in crate::pipeline) fn preserve_pdf_source_commit_through_horizontal_layout_
         crate::structural_write_authority::RenderPrunedFinalChordOmissionKey,
     >,
 ) -> std::io::Result<FinalPdfSourceCommit> {
-    if !source_commit.closed {
+    if source_commit.shadow_partial.as_ref().is_some_and(|proof| proof.source_path != input_musicxml) {
+        count_render_closure_failure(RenderClosureMetric::CandidateCoverageFailures);
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "Shadow layout path differs from its original partial closure"));
+    }
+    if !source_commit.closed && source_commit.shadow_partial.is_none() {
         count_render_closure_failure(RenderClosureMetric::CandidateCoverageFailures);
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -317,13 +363,14 @@ pub(in crate::pipeline) fn preserve_pdf_source_commit_through_horizontal_layout_
 
     Ok(FinalPdfSourceCommit {
         pipeline_line: source_commit.horizontal_layout_pipeline_line(),
-        closed: true,
+        closed: source_commit.shadow_partial.is_none(),
         committed_xml: Some(persisted_layout_xml),
         committed_occurrence_continuation: Some(committed_occurrence_continuation),
         committed_voice_plan: source_commit.committed_voice_plan.clone(),
         primary_beam_voice_partition_changed_voice_elements:
             source_commit.primary_beam_voice_partition_changed_voice_elements,
         phrase_occurrence_course: None,
+        shadow_partial: source_commit.shadow_partial.clone(),
     })
 }
 
@@ -369,7 +416,7 @@ mod sovereign_pdf_post_tests {
         let source = FinalPdfSourceCommit {
             pipeline_line: String::new(), closed: true, committed_xml: Some("source".to_string()),
             committed_occurrence_continuation: None, committed_voice_plan: None,
-            primary_beam_voice_partition_changed_voice_elements: 0, phrase_occurrence_course: None,
+            primary_beam_voice_partition_changed_voice_elements: 0, phrase_occurrence_course: None, shadow_partial: None,
         };
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             preserve_pdf_source_commit_through_horizontal_layout_authorized(
@@ -436,3 +483,49 @@ mod sovereign_pdf_post_tests {
 
 }
 
+
+#[cfg(test)]
+mod shadow_partial_tests {
+    use super::*;
+    #[test]
+    fn only_active_shadow_with_exact_occurrence_witness_can_continue() {
+        for ordinal in [17usize,83] {
+            let input=crate::pipeline::actual_beam_owner_capture_tests::input().replace("probe",&ordinal.to_string());
+            let (_,_,course,_)=crate::structural_write_authority::CanonicalFinalChordStructuralPlan::original_beam_alignment_test_fixture(&input);
+            let xml=course.xml().to_string();
+            let mut snapshot=super::super::silent_voice_visible_measure_coverage_render_writer::FinalRenderSourceSnapshot {
+                pipeline_line:String::new(),closed:false,committed_xml:None,
+                committed_occurrence_continuation:Some(course),committed_voice_plan:None,
+                primary_beam_voice_partition_changed_voice_elements:0,
+                shadow_primary_clef_conflict_only:true,committed_primary_clef_reentry_changes:usize::MAX,
+            };
+            let _protection=crate::pipeline::protect_joint_reading_checkpoint(true);
+            assert!(shadow_snapshot_may_continue(FinalPdfSourceDisposition::Shadow,&snapshot,&xml));
+            assert!(!shadow_snapshot_may_continue(FinalPdfSourceDisposition::Live,&snapshot,&xml));
+            assert!(!shadow_snapshot_may_continue(FinalPdfSourceDisposition::Shadow,&snapshot,"stale"));
+            snapshot.closed=true;
+            assert!(!shadow_snapshot_may_continue(FinalPdfSourceDisposition::Shadow,&snapshot,&xml));
+            snapshot.closed=false;snapshot.shadow_primary_clef_conflict_only=false;
+            assert!(!shadow_snapshot_may_continue(FinalPdfSourceDisposition::Shadow,&snapshot,&xml));
+            snapshot.shadow_primary_clef_conflict_only=true;snapshot.committed_occurrence_continuation=None;
+            assert!(!shadow_snapshot_may_continue(FinalPdfSourceDisposition::Shadow,&snapshot,&xml));
+        }
+    }
+    #[test]
+    fn partial_proof_is_bound_to_shadow_input_and_never_full_closure() {
+        let input=Path::new("synthetic-shadow.xml");
+        let mut commit=FinalPdfSourceCommit {
+            pipeline_line:"PrimaryClefProjectionGreen nein".into(),closed:false,committed_xml:Some("A".into()),
+            committed_occurrence_continuation:None,committed_voice_plan:None,
+            primary_beam_voice_partition_changed_voice_elements:0,phrase_occurrence_course:None,
+            shadow_partial:Some(ShadowPartialClosure {source_path:input.to_path_buf()}),
+        };
+        assert!(commit.permits_shadow_renderer(input));
+        assert!(!commit.permits_shadow_renderer(Path::new("other.xml")));
+        assert!(!commit.closed());
+        let line=commit.horizontal_layout_pipeline_line();
+        assert!(line.contains("partial=true"));assert!(line.contains("PrimaryClefProjectionGreen nein"));
+        commit.closed=true;assert!(!commit.closed());assert!(!commit.permits_shadow_renderer(input));
+        commit.closed=false;commit.shadow_partial=None;assert!(!commit.permits_shadow_renderer(input));
+    }
+}

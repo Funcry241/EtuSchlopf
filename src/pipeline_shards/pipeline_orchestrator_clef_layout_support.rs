@@ -211,6 +211,7 @@ fn append_silent_voice_coverage_write_outcome_projection(
 const LOWER_CLEF_SURFACE_SEMANTIC_ROLE: &str =
     "same_measure_f4_g2_surface_overlap_marginal_g2_advantage_visible";
 fn derive_lower_clef_rustig_surface_decision(xml: &str) -> RustigClefSurfaceDecision {
+    if joint_reading_course_active() {return structural_write_authority::derive_rustig_surface_clef_decision(Vec::new());}
     let note_events = collect_clef_surface_note_events(xml);
     let mut candidates = Vec::new();
     let mut scan = 0usize;

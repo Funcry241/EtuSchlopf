@@ -16,6 +16,7 @@ struct ProjectRunPreparationStageOutcome {
 fn run_project_run_preparation_stage(
     inputs: ProjectRunPreparationStageInputs<'_>,
 ) -> anyhow::Result<ProjectRunPreparationStageOutcome> {
+    reset_joint_reading_course();
     let ProjectRunPreparationStageInputs { cli } = inputs;
     let source = resolve_source_plan(
         cli.input.as_deref(),
@@ -23,6 +24,7 @@ fn run_project_run_preparation_stage(
         cli.musicxml_out.as_deref(),
         cli.pdf_out.as_deref(),
     )?;
+    crate::audit_only::c3_diagnostics::start_project(&source.report_out);
     let parallel = resolve_parallel_plan(&cli.jobs, cli.candidate_budget_jobs)?;
     let decoded_midi = validate_project_input_files(&source, cli.reference_wav.as_deref())?;
     let reference = inspect_reference_files(
@@ -328,6 +330,7 @@ fn validate_project_input_files(source: &source::SourcePlan, explicit_wav: Optio
     )?;
     let decoded_midi = crate::midi::read_standard_midi(&source.expected_midi)
         .with_context(|| format!("MIDI-Datei konnte nicht verarbeitet werden: {}", source.expected_midi.display()))?;
+    let _ = crate::midi::notation_time::NotationTimePlan::from_source(&decoded_midi)?;
     if decode_wav_mono_samples(wav).is_none() {
         return Err(anyhow!("WAV kann nicht als Audiodatei gelesen werden: {}. Bitte eine unterstuetzte, nicht leere WAV-Datei bereitstellen.", wav.display()));
     }

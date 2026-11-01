@@ -32,12 +32,12 @@ fn actual_split_members_are_protected_before_gauss_and_broken_writes() {
     let slots = collect_visible_chord_tone_swap_slots(&xml);
     assert!(!hidden.is_empty() && !slots.is_empty());
     assert!(hidden.iter().all(|tone| !single_note_gesture_support_is_independent(&xml[tone.abs_start..tone.abs_end])));
-    let (gauss, changes, _, _, carriers, _) = consensus_probe_apply_gauss_gesture_distribution_inner(&xml, &hidden, &slots, false);
+    let (gauss, changes, _, _, carriers, _) = consensus_probe_apply_gauss_gesture_distribution_inner(&xml, &hidden, &slots, false, &gesture_placement_tests::legacy_fixture(&xml));
     assert_eq!(gauss, xml);
     assert_eq!(changes, 0);
     assert!(carriers.is_empty());
     for mode in 0..3 {
-        let (broken, changes, _, carriers, _) = consensus_probe_apply_broken_gesture_distribution(&xml, &hidden, &slots, mode);
+        let (broken, changes, _, carriers, _) = consensus_probe_apply_broken_gesture_distribution(&xml, &hidden, &slots, mode, &gesture_placement_tests::legacy_fixture(&xml));
         assert_eq!(broken, xml);
         assert_eq!(changes, 0);
         assert!(carriers.is_empty());
@@ -164,11 +164,11 @@ fn independent_sources_still_reach_both_gesture_writers() {
     let xml = physical_chord_fixture(false);
     let hidden = collect_hidden_chord_tone_recovery_candidates(&xml, 4096);
     let slots = collect_visible_gesture_attack_slots(&xml);
-    let (gauss, changes, _, _, carriers, _) = consensus_probe_apply_gauss_gesture_distribution_inner(&xml, &hidden, &slots, false);
+    let (gauss, changes, _, _, carriers, _) = consensus_probe_apply_gauss_gesture_distribution_inner(&xml, &hidden, &slots, false, &gesture_placement_tests::legacy_fixture(&xml));
     assert!(changes > 0 && !carriers.is_empty());
     assert_ne!(gauss, xml);
     parse_musicxml(&gauss).unwrap();
-    let (broken, changes, _, carriers, _) = consensus_probe_apply_broken_gesture_distribution(&xml, &hidden, &slots, 0);
+    let (broken, changes, _, carriers, _) = consensus_probe_apply_broken_gesture_distribution(&xml, &hidden, &slots, 0, &gesture_placement_tests::legacy_fixture(&xml));
     assert!(changes > 0 && !carriers.is_empty());
     assert_ne!(broken, xml);
     parse_musicxml(&broken).unwrap();

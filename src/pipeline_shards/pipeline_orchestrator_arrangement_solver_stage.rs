@@ -1,3 +1,5 @@
+include!("solver_candidate_retention.rs");
+
 #[derive(Debug)]
 struct ArrangementSolverStageOutcome {
     best: SolverCandidate,
@@ -15,7 +17,7 @@ struct ArrangementSolverStageInputs<'a> {
 
 struct ArrangementSolverSearchState {
     best: SolverCandidate,
-    candidates: Vec<SolverCandidate>,
+    candidates: SolverCandidatePool,
     next_iteration: usize,
     source_selection_stage_checkpoints: Vec<crate::source_selection::SourceSelectionSolverStageCheckpoint>,
 }
@@ -89,9 +91,10 @@ fn select_initial_arrangement_solver_search_state(
         best.arrangement_stats.human_potential_notes_moved,
         best.iteration,
     ));
+    let candidates = SolverCandidatePool::from_candidates(candidates);
     let next_iteration = candidates
         .iter()
-        .map(|c| c.iteration)
+        .map(|c| c.projection.frontier.solver_iteration)
         .chain(std::iter::once(best.iteration))
         .max()
         .unwrap_or(0)
@@ -146,7 +149,7 @@ fn run_arrangement_solver_guided_search_stage(
             ));
             let next_iteration = candidates
                 .iter()
-                .map(|c| c.iteration)
+                .map(|c| c.projection.frontier.solver_iteration)
                 .chain(std::iter::once(best.iteration))
                 .max()
                 .unwrap_or(0)
@@ -161,7 +164,7 @@ fn run_arrangement_solver_guided_search_stage(
             for candidate in refine_candidates {
                 if candidate_strictly_beats_guard(&candidate, best) {
                     let previous_best = std::mem::replace(best, candidate);
-                    candidates.push(previous_best);
+                    candidates.push_previous(previous_best);
                 } else {
                     candidates.push(candidate);
                 }
@@ -190,7 +193,7 @@ fn run_arrangement_solver_guided_search_stage(
             ));
             let next_iteration = candidates
                 .iter()
-                .map(|c| c.iteration)
+                .map(|c| c.projection.frontier.solver_iteration)
                 .chain(std::iter::once(best.iteration))
                 .max()
                 .unwrap_or(0)
@@ -205,7 +208,7 @@ fn run_arrangement_solver_guided_search_stage(
             for candidate in residual_candidates {
                 if candidate_strictly_beats_guard(&candidate, best) {
                     let previous_best = std::mem::replace(best, candidate);
-                    candidates.push(previous_best);
+                    candidates.push_previous(previous_best);
                 } else {
                     candidates.push(candidate);
                 }
@@ -231,7 +234,7 @@ fn run_arrangement_solver_guided_search_stage(
             ));
             let next_iteration = candidates
                 .iter()
-                .map(|c| c.iteration)
+                .map(|c| c.projection.frontier.solver_iteration)
                 .chain(std::iter::once(best.iteration))
                 .max()
                 .unwrap_or(0)
@@ -246,7 +249,7 @@ fn run_arrangement_solver_guided_search_stage(
             for candidate in targeted_candidates {
                 if candidate_strictly_beats_guard(&candidate, best) {
                     let previous_best = std::mem::replace(best, candidate);
-                    candidates.push(previous_best);
+                    candidates.push_previous(previous_best);
                 } else {
                     candidates.push(candidate);
                 }
@@ -272,7 +275,7 @@ fn run_arrangement_solver_guided_search_stage(
             ));
             let next_iteration = candidates
                 .iter()
-                .map(|c| c.iteration)
+                .map(|c| c.projection.frontier.solver_iteration)
                 .chain(std::iter::once(best.iteration))
                 .max()
                 .unwrap_or(0)
@@ -287,7 +290,7 @@ fn run_arrangement_solver_guided_search_stage(
             for candidate in micro_candidates {
                 if candidate_strictly_beats_guard(&candidate, best) {
                     let previous_best = std::mem::replace(best, candidate);
-                    candidates.push(previous_best);
+                    candidates.push_previous(previous_best);
                 } else {
                     candidates.push(candidate);
                 }
@@ -508,26 +511,8 @@ fn finish_arrangement_solver_stage(
     ));
 
     let mut by_source_candidate = BTreeMap::<usize, crate::source_selection::SourceSelectionCandidateAuditRow>::new();
-    for candidate in state.candidates.iter().chain(std::iter::once(&state.best)) {
-        let stats = &candidate.midi_seed_stats;
-        let row = crate::source_selection::SourceSelectionCandidateAuditRow {
-            candidate_id: stats.source_selection_candidate_id,
-            origin_stage: stats.source_selection_origin_stage.clone(),
-            profile_name: stats.source_selection_profile_name.clone(),
-            span_limit: stats.profile_span_limit,
-            jump_limit: stats.profile_jump_limit,
-            smooth_jumps: stats.profile_smooth_jumps,
-            left_high_soft_limit: stats.profile_left_high_soft_limit,
-            right_low_soft_limit: stats.profile_right_low_soft_limit,
-            hotspot_source_issue_count: stats.hotspot_plan_audit.source_issue_count,
-            hotspot_group_count_before_truncation: stats.hotspot_plan_audit.group_count_before_truncation,
-            hotspot_requested_limit: stats.hotspot_plan_audit.requested_limit,
-            hotspot_truncated_count: stats.hotspot_plan_audit.truncated_count,
-            hotspot_fingerprint_sha256: stats.hotspot_plan_audit.fingerprint_sha256.clone(),
-            canonical_source_retention_ppm: stats.source_selection_full_causal.canonical_source_retention_ppm,
-            shadow_plan_fingerprint_sha256: stats.source_selection_full_causal.shadow_plan_fingerprint_sha256.clone(),
-            evaluation: stats.source_selection_candidate_evaluation.clone(),
-        };
+    for row in state.candidates.iter().map(|entry| entry.projection.source.clone())
+        .chain(std::iter::once(solver_pool_source_row(&state.best))) {
         if let Some(existing) = by_source_candidate.get(&row.candidate_id) {
             if existing.origin_stage != row.origin_stage
                 || existing.profile_name != row.profile_name
@@ -555,29 +540,11 @@ fn finish_arrangement_solver_stage(
         }
     }
 
-    let solver_frontier_row = |candidate: &SolverCandidate| {
-        let evaluation = source_selection_candidate_evaluation(
-            &candidate.final_result,
-            candidate.fidelity.retained_note_percent,
-            candidate.arrangement_stats.human_potential_notes_moved,
-        );
-        crate::source_selection::SourceSelectionSolverFrontierRow {
-            solver_iteration: candidate.iteration,
-            solver_profile_name: candidate.profile_name.clone(),
-            solver_profile_lineage: format!("{:?}", candidate.profile_lineage),
-            source_selection_candidate_id: candidate.midi_seed_stats.source_selection_candidate_id,
-            evaluation,
-            human_potential_notes_moved: candidate.arrangement_stats.human_potential_notes_moved,
-            blockers: candidate.final_result.summary.blockers,
-            warnings: candidate.final_result.summary.warnings,
-            hints: candidate.final_result.summary.hints,
-        }
-    };
-    let final_solver_row = solver_frontier_row(&state.best);
+    let final_solver_row = solver_pool_frontier_row(&state.best);
     let mut solver_frontier = state
         .candidates
         .iter()
-        .map(solver_frontier_row)
+        .map(|entry| entry.projection.frontier.clone())
         .collect::<Vec<_>>();
     solver_frontier.push(final_solver_row.clone());
     let final_source_selection_candidate_id =

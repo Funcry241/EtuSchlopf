@@ -1016,6 +1016,8 @@ pub(crate) struct BlockTransformationReceipt {
     /// carried move-only to the Render adoption boundary. `None` for buffer
     /// owners, whose post state is supplied by the adopting transition.
     realized_post_document: Option<String>,
+    // Optional evidence from the actual #57 operations; never consulted by commit.
+    original_render_notes: Option<Box<Result<crate::arrangement::representation_transport::RhythmicRepresentationTransport, String>>>,
 }
 
 fn ssc_exact_scope(descriptor: &TransformationDescriptor) -> crate::ssc_evidence_proof::SscOriginScope {
@@ -1053,7 +1055,22 @@ impl BlockTransformationReceipt {
             pre_fingerprint: fingerprint(pre_xml),
             post_fingerprint: fingerprint(post_xml),
             realized_post_document: None,
+            original_render_notes: None,
         })
+    }
+
+    /// Carries only the original cleanup owner's journal. Failure remains
+    /// observational UNKNOWN and cannot refuse or alter the owner's receipt.
+    pub(crate) fn with_original_render_notes(mut self,
+        owner: &crate::pipeline::RenderRow57BlockMint,
+        steps: Vec<crate::arrangement::representation_transport::RepresentationStep>) -> Self {
+        self.original_render_notes = Some(Box::new(
+            crate::arrangement::representation_transport::RhythmicRepresentationTransport::render_cleanup(owner, &self, steps)
+                .map_err(|error| error.to_string())));
+        self
+    }
+    pub(crate) fn original_render_notes(&self) -> Option<&Result<crate::arrangement::representation_transport::RhythmicRepresentationTransport, String>> {
+        self.original_render_notes.as_deref()
     }
 
     /// BLOCK mint of a path-bound owner that persists its own output: the

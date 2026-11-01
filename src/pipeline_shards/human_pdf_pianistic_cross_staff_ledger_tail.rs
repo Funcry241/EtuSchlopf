@@ -4,6 +4,7 @@ fn build_render_xml_print_cleanup_one_safe_visual_trial(
     output_path: &Path,
 ) -> (anyhow::Result<RenderXmlPrintCleanupOneSafeVisualTrial>, Option<BlockTransformationReceipt>) {
     let mut realized_post = None;
+    let mut original_steps = Vec::new();
     
     let output = (|| {
     let (before_events, before_backup_forward_ok) = collect_render_xml_note_events(xml);
@@ -41,9 +42,13 @@ fn build_render_xml_print_cleanup_one_safe_visual_trial(
     // Authorization failure aborts this owner execution before any receipt or
     // planned post exists; RenderSovereignState records it as a failed owner.
     let moved_boundary_bass_clefs =
-        advance_lower_staff_bass_clef_before_preceding_low_or_rest_events(&mut clef_candidate_xml)?;
-    let rest_only_clefs = prune_rest_only_staff2_clef_noops(&mut clef_candidate_xml).0;
-    let (empty_clefs, trailing_clefs, redundant_clefs, advance_clefs) = prune_redundant_lower_staff_clefs(&mut clef_candidate_xml).0;
+        advance_lower_staff_bass_clef_before_preceding_low_or_rest_events(&mut clef_candidate_xml, &mut original_steps)?;
+    let before_rest_clefs = clef_candidate_xml.clone();
+    let (rest_only_clefs, rest_clef_receipt) = prune_rest_only_staff2_clef_noops(&mut clef_candidate_xml);
+    record_original_cleanup_exact(&mut original_steps, &before_rest_clefs, &clef_candidate_xml, rest_clef_receipt.as_ref());
+    let before_redundant_clefs = clef_candidate_xml.clone();
+    let ((empty_clefs, trailing_clefs, redundant_clefs, advance_clefs), redundant_clef_receipt) = prune_redundant_lower_staff_clefs(&mut clef_candidate_xml);
+    record_original_cleanup_exact(&mut original_steps, &before_redundant_clefs, &clef_candidate_xml, redundant_clef_receipt.as_ref());
     let clef_cleanup_count = rest_only_clefs + empty_clefs + trailing_clefs + redundant_clefs + advance_clefs + moved_boundary_bass_clefs;
     if clef_cleanup_count > 0 {
         candidate_xml = clef_candidate_xml;
@@ -161,8 +166,20 @@ fn build_render_xml_print_cleanup_one_safe_visual_trial(
                 Some((0, xml.len())),
             )
             .expect("frozen owner changed bytes without receipt")
+            .with_original_render_notes(&RenderRow57BlockMint { _private: () }, original_steps)
         });
     (output, receipt)
+}
+
+fn record_original_cleanup_exact(
+    steps: &mut Vec<crate::arrangement::representation_transport::RepresentationStep>,
+    before: &str, after: &str, receipt: Option<&ExactTransformationReceipt>) {
+    if let Some(receipt) = receipt {
+        let mut edits = crate::master_state_identity::ssc_exact_edit_spans(receipt).iter()
+            .map(|(start, end, text)| (*start..*end, text.to_string())).collect::<Vec<_>>();
+        edits.sort_by_key(|(range, _)| (range.start, range.end));
+        steps.push(crate::arrangement::representation_transport::RepresentationStep::recorded(before, after, edits));
+    }
 }
 
 fn collect_forward_spans_for_missing_rest_insert(xml: &str) -> Vec<RenderXmlForwardSpan> {

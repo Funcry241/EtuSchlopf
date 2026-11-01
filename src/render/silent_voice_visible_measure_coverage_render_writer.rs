@@ -70,6 +70,16 @@ pub(super) struct FinalRenderSourceSnapshot {
     pub(super) committed_occurrence_continuation: Option<crate::structural_write_authority::FinalPdfSourceOccurrenceContinuation>,
     pub(super) committed_voice_plan: Option<crate::structural_write_authority::FrozenSerializedVoicePlan>,
     pub(super) primary_beam_voice_partition_changed_voice_elements: usize,
+    /// Only the two primary-clef terms are red and their failure is exactly a
+    /// lower clef inside a primary beam group / open tie. All twelve other
+    /// committed-state terms are green. Read only by the Shadow disposition.
+    pub(super) shadow_primary_clef_conflict_only: bool,
+    pub(super) committed_primary_clef_reentry_changes: usize,
+}
+
+fn primary_clef_beam_or_tie_conflict(error: &str) -> bool {
+    matches!(error, "clef course left a lower clef transition inside a primary beam group"
+        | "clef course left a lower clef transition inside an open tie")
 }
 
 fn rejected_pdf_preparation(receipts: RenderTransitionReceipts) -> FinalRenderSourceClosure {
@@ -1635,6 +1645,7 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
         return rejected_pdf_preparation(receipts);
     }
     let source_xml = occurrence_continuation.xml().to_string();
+    crate::audit_only::c3_diagnostics::guard_checkpoint("FinalPdfSource/Entry",&source_xml);
     // Master remains audit context; Render preparation is bound to sovereign continuation bytes.
     let master_xml = final_beam_master_path(input_musicxml).and_then(|path| load_xml_text(&path));
     crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
@@ -1667,7 +1678,9 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
     // jedoch erst in der bestehenden FinalNotation-Write-Authority durch den
     // ClefReadability-Primary-Plan gebunden. RestPlacement sieht weiterhin einen
     // gueltigen Clef-Kontext, besitzt aber keine Clef-Entscheidungsautoritaet.
+    crate::audit_only::c3_diagnostics::guard_checkpoint("FinalPdfSource/AfterSilentCoverage",&silent_candidate);
     let candidate_before_clef_readback = chord_host_candidate;
+    crate::audit_only::c3_diagnostics::guard_checkpoint("FinalPdfSource/AfterOrphanChordHost",&candidate_before_clef_readback);
     crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
         "FinalPdfBeforeClefReadback",
         &candidate_before_clef_readback,
@@ -1704,6 +1717,7 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
 
     // Rest glyph placement consumes the final serialized voice relation below.
     // It remains one invocation of the existing owner, before the same sink.
+    crate::audit_only::c3_diagnostics::guard_checkpoint("FinalPdfSource/AfterLedgerBoundedClefReadback",&clef_bound_candidate);
     let final_candidate_before_same_lane_split = clef_bound_candidate;
 
     // r1027: r1024-r1026 proved that the unique strict-interior same-lane
@@ -1974,6 +1988,7 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
                     render_omissions: Some(render_pruned_final_chord_omissions),
                 },
             );
+    crate::audit_only::c3_diagnostics::guard_checkpoint("FinalPdfSource/AfterSameLaneSplit",&final_candidate);
     let mut candidate_occurrence_continuation = base_candidate_occurrence_continuation;
 
     if let Some(plan) = primary_beam_voice_partition_plan {
@@ -2034,13 +2049,16 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
 
     // r1463: both final clef course and rest anchors depend on the final
     // beam voice relation. The unchanged sink must confirm this fixpoint.
+    crate::audit_only::c3_diagnostics::guard_checkpoint("FinalPdfSource/AfterPrimaryBeamVoicePartition",&final_candidate);
     let before_final_surfaces = final_candidate;
     // v0.10.1772: RestPlacement depends on the committed PrimaryClef course.
     // Project that already-authoritative course writer-free before rest placement,
     // so the later FinalNotation sink can only confirm the same clef fixpoint.
     let mut primary_clef_bound_candidate = before_final_surfaces.clone();
     let (primary_projection, primary_receipt) = crate::structural_write_authority::apply_rustig_clef_course_to_buffer(&mut primary_clef_bound_candidate);
+    if let Err(error)=primary_projection.as_ref() {crate::audit_only::c3_diagnostics::primary_projection_failed(&before_final_surfaces,error);}
     let primary_clef_projection_green = primary_projection.is_ok();
+    let primary_clef_failure_is_beam_or_tie = primary_projection.as_ref().is_err_and(|error| primary_clef_beam_or_tie_conflict(error));
     let mut primary_trial = RenderTransitionReceipts::new();
     primary_trial.push_preserving(primary_receipt, &primary_clef_bound_candidate);
     if primary_clef_projection_green { receipts.append(primary_trial); }
@@ -2105,6 +2123,8 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
     // and retired-TiedTailAccentSuppress regression closure plus timeline noninterference
     // on exactly the committed bytes.
     let mut committed_state_readback_green = false;
+    let mut committed_state_readback_green_except_primary_clef = false;
+    let mut reentry_is_conflict_or_fixpoint = false;
     let mut committed_primary_clef_reentry_changes = usize::MAX;
     let mut committed_rest_vertical_candidates = usize::MAX;
     let mut committed_higher_beam_candidates = usize::MAX;
@@ -2181,6 +2201,10 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
             let mut probe = RenderTransitionReceipts::new();
             probe.push_preserving(probe_receipt, &clef_fixpoint_probe);
             probe.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
+            reentry_is_conflict_or_fixpoint = match &probe_result {
+                Ok(()) => clef_fixpoint_probe == committed_xml,
+                Err(error) => primary_clef_beam_or_tie_conflict(error),
+            };
             committed_primary_clef_reentry_changes = match probe_result {
                     Ok(()) => usize::from(clef_fixpoint_probe != committed_xml),
                     Err(_) => usize::MAX,
@@ -2238,6 +2262,18 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
                     &committed_xml,
                 )
                 .unwrap_or(usize::MAX);
+            committed_state_readback_green_except_primary_clef = committed_final_chord_voice_readback_green
+                && committed_rest_vertical_candidates == 0
+                && committed_higher_beam_candidates == 0
+                && committed_beam_lost_begin_candidates == 0
+                && committed_partial_beat_lane_split_candidates == 0
+                && committed_lower_dual_edge_candidates == 0
+                && committed_shadow_rest_candidates == 0
+                && committed_tied_tail_accent_candidates == 0
+                && committed_same_lane_strict_interior_candidates == 0
+                && committed_raw_cursor_stable
+                && committed_raw_cursor_green
+                && committed_pitched_event_multiset_stable;
             committed_state_readback_green = primary_clef_projection_green
                 && committed_final_chord_voice_readback_green
                 && committed_primary_clef_reentry_changes == 0
@@ -2398,6 +2434,12 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
         } else {
             0
         },
+        shadow_primary_clef_conflict_only: !closed
+            && committed_state_readback_green_except_primary_clef
+            && primary_clef_failure_is_beam_or_tie
+            && reentry_is_conflict_or_fixpoint
+            && crate::pipeline::joint_reading_course_active(),
+        committed_primary_clef_reentry_changes,
     }
     });
     FinalRenderSourceClosure { candidate_xml: Some(prepared_candidate), receipts, finish: Some(finish) }
@@ -3074,4 +3116,17 @@ mod silent_voice_visible_measure_coverage_render_write_tests {
 
 
 
+}
+
+#[cfg(test)]
+mod shadow_failure_kind_tests {
+    use super::*;
+    #[test]
+    fn only_exact_original_beam_and_tie_errors_qualify() {
+        assert!(primary_clef_beam_or_tie_conflict("clef course left a lower clef transition inside a primary beam group"));
+        assert!(primary_clef_beam_or_tie_conflict("clef course left a lower clef transition inside an open tie"));
+        for error in ["", "clef course source changed before materialization", "clef course violated note or clef invariants", "parse failure"] {
+            assert!(!primary_clef_beam_or_tie_conflict(error));
+        }
+    }
 }

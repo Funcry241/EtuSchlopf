@@ -57,6 +57,13 @@ fn apply_octave_notation_policy(xml: &mut String) -> OctaveNotationPolish {
             );
         }
 
+        {
+            let input = JointRegisterPreviewInput::new(xml);
+            crate::registernotation::vergleiche_gebundene_lesekurse(xml, |proposal| {
+                input.evaluate(proposal)
+            }).map_err(|error| anyhow!("GemeinsamerLesekurs: {error}"))?;
+        }
+
         let auftrag = crate::registernotation::sichtmaterialisierungsauftrag()
             .map_err(|fehler| anyhow!("RegisternotationsSichtmaterialisierung: {fehler}"))?;
         let erwartete_sichtlinien = auftrag
@@ -219,6 +226,154 @@ fn apply_octave_notation_policy(xml: &mut String) -> OctaveNotationPolish {
     })
 }
 
+// This context borrows one immutable original input for one comparison only.
+// Lazy parsing preserves the old callback's error/UNKNOWN boundary, including
+// comparisons that never invoke the callback. Exact results stay inside this
+// one immutable input epoch; no generic callback or productive write is cached.
+struct JointRegisterPreviewInput<'a> {
+    source: &'a str,
+    document: std::cell::OnceCell<Result<roxmltree::Document<'a>, String>>,
+    costs: std::cell::RefCell<JointRegisterPreviewMemo>,
+}
+impl<'a> JointRegisterPreviewInput<'a> {
+    fn new(source: &'a str) -> Self {
+        Self { source, document: std::cell::OnceCell::new(),
+            costs: std::cell::RefCell::new(JointRegisterPreviewMemo::new(4096, 16 * 1024 * 1024)) }
+    }
+    fn document(&self) -> anyhow::Result<&roxmltree::Document<'a>> {
+        self.document.get_or_init(|| roxmltree::Document::parse(self.source).map_err(|error| {
+            format!("RegisternotationsSichtmaterialisierung: Dokumentordnung nicht lesbar: {error}")
+        })).as_ref().map_err(|error| anyhow!("{error}"))
+    }
+    fn evaluate(&self, proposal: &crate::registernotation::RegisternotationsSichtmaterialisierungsauftrag)
+        -> Option<JointRegisterPreviewCosts> {
+        {
+            let mut memo = self.costs.borrow_mut();
+            memo.requests += 1;
+            if let Some(result) = memo.lookup(proposal) {
+                memo.hits += 1;
+                return result;
+            }
+        }
+        let result = gemeinsame_registerkurs_gegenrechnung(self, proposal).ok();
+        self.costs.borrow_mut().remember(proposal, &result);
+        result
+    }
+}
+impl Drop for JointRegisterPreviewInput<'_> {
+    fn drop(&mut self) {
+        let memo = self.costs.get_mut();
+        if memo.requests != 0 {
+            eprintln!("JointRegisterPreviewMemo: InputSha256 {}; Requests {}; Hits {}; Evaluated {}; Entries {}; RetainedPayloadBytes {}; CapacityBypasses {}; MusicalDecision none.",
+                crate::sha256::hex(self.source.as_bytes()), memo.requests, memo.hits, memo.requests - memo.hits, memo.entries,
+                memo.payload_bytes, memo.capacity_bypasses);
+        }
+    }
+}
+
+type JointRegisterPreviewCosts = BTreeMap<String, crate::registernotation::JointLowerCourseCost>;
+type JointRegisterPreviewProposal = crate::registernotation::RegisternotationsSichtmaterialisierungsauftrag;
+
+struct JointRegisterPreviewMemo {
+    // Fingerprints only locate a bucket. Every hit requires full proposal Eq,
+    // including plans, repeats, both fingerprints and all metadata.
+    buckets: BTreeMap<String, Vec<(JointRegisterPreviewProposal, Option<JointRegisterPreviewCosts>)>>,
+    entry_limit: usize,
+    payload_limit: usize,
+    entries: usize,
+    payload_bytes: usize,
+    requests: usize,
+    hits: usize,
+    capacity_bypasses: usize,
+}
+impl JointRegisterPreviewMemo {
+    fn new(entry_limit: usize, payload_limit: usize) -> Self {
+        Self { buckets: BTreeMap::new(), entry_limit, payload_limit,
+            entries: 0, payload_bytes: 0, requests: 0, hits: 0, capacity_bypasses: 0 }
+    }
+    // Outer None is a cache miss; Some(None) is the exact cached UNKNOWN.
+    fn lookup(&self, proposal: &JointRegisterPreviewProposal) -> Option<Option<JointRegisterPreviewCosts>> {
+        self.buckets.get(&proposal.sicht_fingerabdruck)?.iter()
+            .find(|(saved, _)| saved == proposal).map(|(_, result)| result.clone())
+    }
+    fn remember(&mut self, proposal: &JointRegisterPreviewProposal, result: &Option<JointRegisterPreviewCosts>) {
+        let bytes = Self::payload(proposal, result);
+        if self.entries >= self.entry_limit || bytes > self.payload_limit.saturating_sub(self.payload_bytes) {
+            self.capacity_bypasses += 1;
+            return;
+        }
+        self.buckets.entry(proposal.sicht_fingerabdruck.clone()).or_default()
+            .push((proposal.clone(), result.clone()));
+        self.entries += 1;
+        self.payload_bytes += bytes;
+    }
+    // Retained logical payload, not an allocator/RSS measurement. The separate
+    // entry bound also limits tree, bucket and allocator overhead. Limits only
+    // disable storage: every miss still executes the entire original preview.
+    fn payload(proposal: &JointRegisterPreviewProposal, result: &Option<JointRegisterPreviewCosts>) -> usize {
+        let mut bytes = std::mem::size_of::<JointRegisterPreviewProposal>()
+            .saturating_add(std::mem::size_of::<Option<JointRegisterPreviewCosts>>())
+            .saturating_add(proposal.semantischer_plan_fingerabdruck.len())
+            .saturating_add(proposal.sicht_fingerabdruck.len().saturating_mul(2));
+        for plan in &proposal.plaene {
+            bytes = bytes.saturating_add(std::mem::size_of_val(plan))
+                .saturating_add(plan.teil.len()).saturating_add(plan.system.len())
+                .saturating_add(plan.sichtwiederholungen.len().saturating_mul(
+                    std::mem::size_of::<crate::registernotation::RegisternotationsSichtwiederholung>()));
+        }
+        if let Some(costs) = result {
+            for (part, cost) in costs {
+                bytes = bytes.saturating_add(std::mem::size_of_val(part))
+                    .saturating_add(part.len()).saturating_add(std::mem::size_of_val(cost));
+            }
+        }
+        bytes
+    }
+}
+
+/// Immutable preview using the original preparers. Only complete costs escape;
+/// this function cannot adopt, write a file, issue origins or mint a receipt.
+fn gemeinsame_registerkurs_gegenrechnung(
+    input: &JointRegisterPreviewInput<'_>,
+    proposal: &crate::registernotation::RegisternotationsSichtmaterialisierungsauftrag,
+) -> anyhow::Result<BTreeMap<String, crate::registernotation::JointLowerCourseCost>> {
+    let source = input.source;
+    let document = input.document()?;
+    let directions = registernotationsrichtungen_im_dokument(source, document, &proposal.plaene)?;
+    let mut fragments = Vec::new();
+    let mut previous = 0;
+    for part in document.root_element().children().filter(|n| n.has_tag_name("part")) {
+        let id = part.attribute("id").ok_or_else(|| anyhow!("joint course part identity missing"))?;
+        for (index, measure) in part.children().filter(|n| n.has_tag_name("measure")).enumerate() {
+            let range = measure.range();
+            let local = directions.iter().filter(|d| d.teil == id && d.takt_ordinal == index + 1).cloned().collect::<Vec<_>>();
+            let original = &source[range.clone()];
+            let octave = if local.is_empty() { original.to_owned() }
+                else { registernotationsrichtungen_in_takt(original, &local)?.0 };
+            fragments.push(source[previous..range.start].to_owned());
+            fragments.push(octave);
+            previous = range.end;
+        }
+    }
+    fragments.push(source[previous..].to_owned());
+    let octave_preview = fragments.concat();
+    let mut state = LowerStaffClefState::Bass;
+    let mut scan = 0;
+    let mut previous = 0;
+    let mut prepared = Vec::new();
+    // Match the next original owner's measure traversal and carried state too.
+    while let Some((start, end, _)) = find_next_measure_bounds(&octave_preview, scan) {
+        let measure = lower_staff_clef_measure(&octave_preview[start..end], state);
+        state = measure.state;
+        prepared.push(octave_preview[previous..start].to_owned());
+        prepared.push(measure.xml);
+        previous = end;
+        scan = end;
+    }
+    prepared.push(octave_preview[previous..].to_owned());
+    Ok(crate::structural_write_authority::RustigClefSurfaceDecision::joint_lower_course_measurements(&prepared.concat()))
+}
+
 fn registernotationsrichtungen_aus_sichtauftrag(
     xml: &str,
     plaene: &[crate::registernotation::RegisternotationsMaterialisierungsPlan],
@@ -228,6 +383,14 @@ fn registernotationsrichtungen_aus_sichtauftrag(
             "RegisternotationsSichtmaterialisierung: Dokumentordnung nicht lesbar: {fehler}"
         )
     })?;
+    registernotationsrichtungen_im_dokument(xml, &dokument, plaene)
+}
+
+fn registernotationsrichtungen_im_dokument(
+    xml: &str,
+    dokument: &roxmltree::Document<'_>,
+    plaene: &[crate::registernotation::RegisternotationsMaterialisierungsPlan],
+) -> anyhow::Result<Vec<RegisternotationsRichtung>> {
     let mut nach_teil = BTreeMap::<
         String,
         Vec<(
@@ -238,7 +401,7 @@ fn registernotationsrichtungen_aus_sichtauftrag(
     >::new();
     for plan in plaene {
         let (erste_grenze, zweite_grenze) =
-            registernotations_dokumentintervall(xml, &dokument, plan)?;
+            registernotations_dokumentintervall(xml, dokument, plan)?;
         nach_teil
             .entry(plan.teil.clone())
             .or_default()
@@ -508,6 +671,32 @@ fn registernotationsrichtungen_in_takt(
     Ok((ersatz, journal))
 }
 
+/// Original octave-owner anchors, before any receipt is minted. The exact
+/// same anchor grouping is used by `registernotationsrichtungen_in_takt`.
+struct JointOctaveWriterAnchor {
+    staff: String,
+    measure: usize,
+    onset: i64,
+    position: usize,
+    kind: RegisternotationsGrenzart,
+}
+fn observe_joint_octave_anchors(source: &str) -> anyhow::Result<Vec<JointOctaveWriterAnchor>> {
+    let document = roxmltree::Document::parse(source)?;
+    let mut result = Vec::new();
+    for part in document.root_element().children().filter(|node| node.has_tag_name("part")) {
+        for (index,measure) in part.children().filter(|node| node.has_tag_name("measure")).enumerate() {
+            let range = measure.range();
+            for anchor in registernotations_tonanker(&source[range.clone()])?.into_iter().filter(|anchor| anchor.sichtbar) {
+                result.push(JointOctaveWriterAnchor { staff: anchor.system.clone(), measure: index+1, onset: anchor.beginn,
+                    position: range.start + anchor.bereich.start, kind: RegisternotationsGrenzart::Start });
+                result.push(JointOctaveWriterAnchor { staff: anchor.system, measure: index+1, onset: anchor.ende,
+                    position: range.start + anchor.bereich.end, kind: RegisternotationsGrenzart::Stop });
+            }
+        }
+    }
+    Ok(result)
+}
+
 fn registernotations_tonanker(takt: &str) -> anyhow::Result<Vec<RegisternotationsTonanker>> {
     let dokument = roxmltree::Document::parse(takt).map_err(|fehler| {
         anyhow!(
@@ -678,12 +867,8 @@ fn registernotationsrichtung_xml(
     ))
 }
 
-fn pruefe_registernotationsmaterialisierung(
-    vorher: &str,
-    nachher: &str,
-    erwartet: &[RegisternotationsRichtung],
-) -> anyhow::Result<()> {
-    let dokument = roxmltree::Document::parse(nachher).map_err(|fehler| {
+fn beobachte_registernotationsrichtungen(source: &str) -> anyhow::Result<(Vec<RegisternotationsRichtung>, Vec<std::ops::Range<usize>>)> {
+    let dokument = roxmltree::Document::parse(source).map_err(|fehler| {
         anyhow!("RegisternotationsSichtmaterialisierung: materialisiertes XML ungueltig: {fehler}")
     })?;
     let mut beobachtet = Vec::<RegisternotationsRichtung>::new();
@@ -859,6 +1044,16 @@ fn pruefe_registernotationsmaterialisierung(
     }
     drop(dokument);
 
+
+    Ok((beobachtet, richtungsbereiche))
+}
+
+fn pruefe_registernotationsmaterialisierung(
+    vorher: &str,
+    nachher: &str,
+    erwartet: &[RegisternotationsRichtung],
+) -> anyhow::Result<()> {
+    let (mut beobachtet, mut richtungsbereiche) = beobachte_registernotationsrichtungen(nachher)?;
 
     let mut erwartet = erwartet.to_vec();
     erwartet.sort();
@@ -2463,11 +2658,11 @@ fn beat_scoped_visible_rest_note(duration: i64, staff: &str, voice: &str) -> Str
     let (note_type, dots) = beat_scoped_rest_type_and_dots(duration);
     let dots_text = (0..dots).map(|_| "        <dot/>\n").collect::<String>();
     format!(
-        "      <note>\n        <rest/>\n        <duration>{}</duration>\n        <type>{}</type>\n{}        <voice>{}</voice>\n        <staff>{}</staff>\n      </note>\n",
+        "      <note>\n        <rest/>\n        <duration>{}</duration>\n        <voice>{}</voice>\n        <type>{}</type>\n{}        <staff>{}</staff>\n      </note>\n",
         duration.max(1),
+        voice,
         note_type,
         dots_text,
-        voice,
         staff
     )
 }
@@ -4289,3 +4484,229 @@ mod behind_bars_beam_single_owner_tests {
 #[cfg(test)]
 #[path = "../../tests/unit/register_common_span_owner.rs"]
 mod register_common_span_owner_tests;
+
+#[cfg(test)]
+mod joint_register_preview_parse_reuse_tests {
+    use super::*;
+    #[test]
+    fn exact_memo_preserves_complete_results_collisions_unknown_and_epochs() {
+        let plain = proposal(Vec::new());
+        let shifted = proposal(vec![plan()]);
+        let mut missing = plan(); missing.teil = "absent".into();
+        let missing = proposal(vec![missing]);
+        let mut metadata = shifted.clone(); metadata.kontaktfusionen += 1;
+        let proposals = [plain, shifted, missing, metadata];
+        // All four deliberately share one fingerprint. Distinct full proposals
+        // must remain distinct entries even when their measured costs coincide.
+        for initial in ["F", "G"] {
+            let source = score("memo-relocated", initial);
+            let input = JointRegisterPreviewInput::new(&source);
+            assert!(!parent_preview(&source, &proposals[0]).unwrap().is_empty());
+            for p in proposals.iter().chain(proposals.iter().rev()) {
+                assert_eq!(input.evaluate(p), parent_preview(&source, p).ok());
+            }
+            let memo = input.costs.borrow();
+            assert_eq!((memo.requests, memo.hits, memo.entries), (8, 4, 4));
+        }
+        let invalid = JointRegisterPreviewInput::new("<score-partwise>");
+        assert_eq!(invalid.evaluate(&proposals[0]), None);
+        assert_eq!(invalid.evaluate(&proposals[0]), None);
+        assert_eq!(invalid.costs.borrow().hits, 1);
+        let empty_source = "<score-partwise/>";
+        let empty = JointRegisterPreviewInput::new(empty_source);
+        assert_eq!(empty.evaluate(&proposals[0]), Some(BTreeMap::new()));
+        assert_eq!(empty.evaluate(&proposals[0]), Some(BTreeMap::new()));
+        assert_eq!(empty.costs.borrow().hits, 1);
+    }
+    #[test]
+    fn memo_limits_only_disable_storage_and_preserve_full_evaluation() {
+        let source = score("bounded", "F");
+        let proposals = [proposal(Vec::new()), proposal(vec![plan()])];
+        for (entries, bytes) in [(0, usize::MAX), (1, usize::MAX), (100, 0)] {
+            let input = JointRegisterPreviewInput::new(&source);
+            *input.costs.borrow_mut() = JointRegisterPreviewMemo::new(entries, bytes);
+            for p in proposals.iter().chain(proposals.iter().rev()) {
+                assert_eq!(input.evaluate(p), parent_preview(&source, p).ok());
+            }
+            let memo = input.costs.borrow();
+            assert!(memo.entries <= entries);
+            assert!(memo.payload_bytes <= bytes);
+            assert!(memo.capacity_bypasses > 0);
+            assert_eq!(memo.hits, usize::from(entries == 1));
+        }
+    }
+    fn generated_comparison_source() -> String {
+        let mut source = String::from("<score-partwise><part id=\"synthetic\">");
+        for ordinal in 0..12 {
+            source.push_str(&format!("<measure number=\"{}\">", ordinal + 701));
+            if ordinal == 0 {
+                source.push_str("<attributes><divisions>96</divisions><time><beats>4</beats><beat-type>4</beat-type></time><staves>2</staves><clef number=\"1\"><sign>G</sign><line>2</line></clef><clef number=\"2\"><sign>F</sign><line>4</line></clef></attributes>");
+            }
+            let octave = if ordinal % 2 == 0 { 8 } else { 3 };
+            for _ in 0..4 {
+                source.push_str(&format!("<note><pitch><step>C</step><octave>{octave}</octave></pitch><duration>96</duration><voice>2</voice><type>quarter</type><staff>2</staff></note>"));
+            }
+            source.push_str("</measure>");
+        }
+        source.push_str("</part></score-partwise>");
+        source
+    }
+    #[test]
+    fn actual_original_owner_selects_identical_complete_proposal_with_memo() {
+        let _lock = crate::registernotation::sperre_fuer_tests();
+        let source = generated_comparison_source();
+        let mut selected = Vec::new();
+        let mut visited = Vec::new();
+        for memoized in [false, true] {
+            crate::registernotation::loesche();
+            crate::registernotation::beobachte_vor_k00(&source);
+            let initial = crate::registernotation::sichtmaterialisierungsauftrag().unwrap();
+            assert!(initial.plaene.len() > 1, "exercise the actual multi-span comparison");
+            let input = JointRegisterPreviewInput::new(&source);
+            let visits = std::cell::RefCell::new(Vec::new());
+            crate::registernotation::vergleiche_gebundene_lesekurse(&source, |p| {
+                visits.borrow_mut().push(p.clone());
+                let original = gemeinsame_registerkurs_gegenrechnung(&input, p).ok();
+                if memoized {
+                    let reused = input.evaluate(p);
+                    assert_eq!(original, reused);
+                    reused
+                } else { original }
+            }).unwrap();
+            selected.push(crate::registernotation::sichtmaterialisierungsauftrag().unwrap());
+            visited.push(visits.into_inner());
+        }
+        assert_eq!(selected[0], selected[1]);
+        assert_eq!(visited[0], visited[1]);
+        crate::registernotation::loesche();
+    }
+    #[test]
+    #[ignore = "manual synthetic timing only; no native corpus runtime claim"]
+    fn exact_preview_memo_synthetic_timing() {
+        let source = generated_comparison_source();
+        let proposals = (0..6).map(|index| {
+            let mut p = plan();
+            p.beginn_takt_ordinal = index * 2 + 1;
+            p.ende_takt_ordinal = p.beginn_takt_ordinal;
+            proposal(vec![p])
+        }).collect::<Vec<_>>();
+        let reference = JointRegisterPreviewInput::new(&source);
+        let started = std::time::Instant::now();
+        let mut expected = Vec::new();
+        for p in proposals.iter().cycle().take(180) {
+            let cost = gemeinsame_registerkurs_gegenrechnung(&reference, p).ok();
+            assert!(cost.as_ref().is_some_and(|map| !map.is_empty()));
+            expected.push(cost);
+        }
+        let parent = started.elapsed();
+        let cached = JointRegisterPreviewInput::new(&source);
+        let started = std::time::Instant::now();
+        for (p, expected) in proposals.iter().cycle().zip(expected).take(180) {
+            assert_eq!(cached.evaluate(p), expected);
+        }
+        let elapsed = started.elapsed();
+        assert_eq!(cached.costs.borrow().hits, 174);
+        println!("JointRegisterPreviewMemoSynthetic: Requests=180; Evaluated=6; Hits=174; ParentMs={}; MemoMs={}; FullCostsEqual=true; NativeCorpusClaim=none", parent.as_millis(), elapsed.as_millis());
+    }
+fn parent_preview(
+    source: &str,
+    proposal: &crate::registernotation::RegisternotationsSichtmaterialisierungsauftrag,
+) -> anyhow::Result<BTreeMap<String, crate::registernotation::JointLowerCourseCost>> {
+    let directions = registernotationsrichtungen_aus_sichtauftrag(source, &proposal.plaene)?;
+    let document = roxmltree::Document::parse(source)?;
+    let mut fragments = Vec::new();
+    let mut previous = 0;
+    for part in document.root_element().children().filter(|n| n.has_tag_name("part")) {
+        let id = part.attribute("id").ok_or_else(|| anyhow!("joint course part identity missing"))?;
+        for (index, measure) in part.children().filter(|n| n.has_tag_name("measure")).enumerate() {
+            let range = measure.range();
+            let local = directions.iter().filter(|d| d.teil == id && d.takt_ordinal == index + 1).cloned().collect::<Vec<_>>();
+            let original = &source[range.clone()];
+            let octave = if local.is_empty() { original.to_owned() }
+                else { registernotationsrichtungen_in_takt(original, &local)?.0 };
+            fragments.push(source[previous..range.start].to_owned());
+            fragments.push(octave);
+            previous = range.end;
+        }
+    }
+    fragments.push(source[previous..].to_owned());
+    let octave_preview = fragments.concat();
+    let mut state = LowerStaffClefState::Bass;
+    let mut scan = 0;
+    let mut previous = 0;
+    let mut prepared = Vec::new();
+    // Match the next original owner's measure traversal and carried state too.
+    while let Some((start, end, _)) = find_next_measure_bounds(&octave_preview, scan) {
+        let measure = lower_staff_clef_measure(&octave_preview[start..end], state);
+        state = measure.state;
+        prepared.push(octave_preview[previous..start].to_owned());
+        prepared.push(measure.xml);
+        previous = end;
+        scan = end;
+    }
+    prepared.push(octave_preview[previous..].to_owned());
+    Ok(crate::structural_write_authority::RustigClefSurfaceDecision::joint_lower_course_measurements(&prepared.concat()))
+}
+
+
+    fn proposal(plans: Vec<crate::registernotation::RegisternotationsMaterialisierungsPlan>) -> crate::registernotation::RegisternotationsSichtmaterialisierungsauftrag {
+        crate::registernotation::RegisternotationsSichtmaterialisierungsauftrag {
+            semantische_plaene: plans.len(), kontaktfusionen: 0, stille_bruecken: 0,
+            plaene: plans, semantischer_plan_fingerabdruck: String::new(), sicht_fingerabdruck: String::new(),
+        }
+    }
+    fn score(label: &str, initial: &str) -> String {
+        let note = "<note><pitch><step>C</step><octave>6</octave></pitch><duration>96</duration><voice>lower</voice><type>quarter</type><staff>2</staff></note>";
+        format!("<score-partwise><part id=\"synthetic\"><measure number=\"{label}\"><attributes><divisions>96</divisions><time><beats>4</beats><beat-type>4</beat-type></time><staves>2</staves><clef number=\"1\"><sign>G</sign><line>2</line></clef><clef number=\"2\"><sign>{initial}</sign><line>{}</line></clef></attributes>{}</measure><measure number=\"{label}-next\">{}</measure></part></score-partwise>", if initial == "F" {4} else {2}, note.repeat(4), note.repeat(4))
+    }
+    fn plan() -> crate::registernotation::RegisternotationsMaterialisierungsPlan {
+        crate::registernotation::RegisternotationsMaterialisierungsPlan {
+            teil: "synthetic".into(), beginn_takt_ordinal: 1, ende_takt_ordinal: 2, system: "2".into(),
+            beginn_einsatz: 0, ende_einsatz: 384,
+            darstellung: crate::registernotation::RegisternotationsDarstellung::Achtva,
+            sichtwiederholungen: Vec::new(),
+        }
+    }
+    fn compare(source: &str, proposals: &[crate::registernotation::RegisternotationsSichtmaterialisierungsauftrag]) {
+        let before = source.to_owned();
+        let input = JointRegisterPreviewInput::new(source);
+        assert!(input.document.get().is_none());
+        for proposal in proposals.iter().chain(proposals.iter().rev()) {
+            let parent = parent_preview(source, proposal).map_err(|error| error.to_string());
+            let prepared = gemeinsame_registerkurs_gegenrechnung(&input, proposal).map_err(|error| error.to_string());
+            assert_eq!(parent, prepared);
+        }
+        assert_eq!(source, before);
+        assert!(input.document.get().is_some());
+        if input.document().is_ok() {
+            assert!(std::ptr::eq(input.document().unwrap(), input.document().unwrap()));
+        }
+    }
+    #[test]
+    fn original_input_reuse_preserves_full_costs_and_unknown_results() {
+        let plain = proposal(Vec::new());
+        let shifted = proposal(vec![plan()]);
+        let mut continued = plan();
+        continued.sichtwiederholungen.push(crate::registernotation::RegisternotationsSichtwiederholung {takt_ordinal: 2, einsatz: 0});
+        let continued = proposal(vec![continued]);
+        let mut missing = plan(); missing.teil = "absent".into();
+        let missing = proposal(vec![missing]);
+        for label in ["alpha", "relocated"] { for initial in ["G", "F"] {
+            let source = score(label, initial);
+            assert!(!parent_preview(&source, &plain).unwrap().is_empty(), "exercise a complete cost, not only equal empty results");
+            compare(&source, &[plain.clone(), shifted.clone(), continued.clone(), missing.clone()]);
+            compare(&source.replace("<duration>96</duration>", "<duration>0</duration>"), &[plain.clone(), shifted.clone()]);
+        }}
+    }
+    #[test]
+    fn parse_failure_is_lazy_repeatable_and_bound_to_one_original_input() {
+        let invalid = "<score-partwise><part>";
+        let empty = proposal(Vec::new());
+        compare(invalid, std::slice::from_ref(&empty));
+        let source = score("new-input", "F");
+        let fresh = JointRegisterPreviewInput::new(&source);
+        assert!(fresh.document.get().is_none());
+        assert!(fresh.document().is_ok());
+        assert!(!gemeinsame_registerkurs_gegenrechnung(&fresh, &empty).unwrap().is_empty());
+    }
+}

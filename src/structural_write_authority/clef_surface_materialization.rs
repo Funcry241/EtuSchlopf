@@ -4,6 +4,9 @@
 //! replacement and the final typed writer boundary. It owns no register,
 //! readability or score-selection heuristic.
 
+#[path = "joint_reading_transaction.rs"]
+pub(crate) mod joint_reading_transaction;
+
 use crate::master_state_identity::BlockTransformationReceipt;
 use super::authority_primitives::fingerprint;
 use super::verified_render_candidate_sink_authority::sink_surface_clef_candidate;

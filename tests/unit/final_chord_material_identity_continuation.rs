@@ -3,11 +3,11 @@ use super::*;
 fn bound_fragment(tie_stop: bool, measure: usize, onset: i64) -> (FinalChordSourceBindingRow, CandidateMaterialAttackState) {
     let source = MaterialSourceEventId(73);
     let attack_id = SoundingAttackId(211);
-    let attack = CandidateMaterialAttackState {
+    let attack = CandidateMaterialAttackState { is_grace: false,
         source_event_id: source, attack_id, exists: true, measure: 17, onset: 0,
         sounding_end: 4, pitch: 76, staff: "1".into(), voice: "1".into(),
     };
-    let fragment = CandidateMaterialFragmentState {
+    let fragment = CandidateMaterialFragmentState { is_grace: false,
         measure, raw_note_index: 2, onset, duration: 2, pitch: Some(76),
         staff: "1".into(), voice: "1".into(), visible: true, is_chord: true,
         tie_start: !tie_stop, tie_stop, source_event_id: Some(source), attack_id: Some(attack_id),
@@ -80,9 +80,9 @@ fn tied_cross_staff_projection_reaches_the_production_material_identity_bridge()
             let source_id = if n.is_chord { 100 + index / 4 } else { 500 + index };
             let attack_id = source_id + 1000;
             let pitch = n.pitch.as_ref().unwrap().midi;
-            let f = CandidateMaterialFragmentState { measure: scope, raw_note_index: index, onset: n.start, duration: n.duration, pitch: Some(pitch), staff: n.staff.clone(), voice: n.voice.clone(), visible: n.visible, is_chord: n.is_chord, tie_start: n.tie_start, tie_stop: n.tie_stop, source_event_id: Some(MaterialSourceEventId(source_id)), attack_id: Some(SoundingAttackId(attack_id)) };
+            let f = CandidateMaterialFragmentState { is_grace: false, measure: scope, raw_note_index: index, onset: n.start, duration: n.duration, pitch: Some(pitch), staff: n.staff.clone(), voice: n.voice.clone(), visible: n.visible, is_chord: n.is_chord, tie_start: n.tie_start, tie_stop: n.tie_stop, source_event_id: Some(MaterialSourceEventId(source_id)), attack_id: Some(SoundingAttackId(attack_id)) };
             evidence.push(structural_write_authority::VoiceFreeFinalChordEvidenceRow { fragment_id: index+1, source_event_id: source_id, attack_id, measure: scope, raw_note_index: index, onset: n.start, duration: n.duration, pitch, staff: n.staff.parse().unwrap(), chord_syntax: n.is_chord, tie_start: n.tie_start, tie_stop: n.tie_stop });
-            attacks.entry(MaterialSourceEventId(source_id)).or_insert(CandidateMaterialAttackState { source_event_id: MaterialSourceEventId(source_id), attack_id: SoundingAttackId(attack_id), exists: true, measure: scope, onset: n.start, sounding_end: n.start + if n.tie_start { 2*n.duration } else { n.duration }, pitch, staff: n.staff.clone(), voice: n.voice.clone() });
+            attacks.entry(MaterialSourceEventId(source_id)).or_insert(CandidateMaterialAttackState { is_grace: false, source_event_id: MaterialSourceEventId(source_id), attack_id: SoundingAttackId(attack_id), exists: true, measure: scope, onset: n.start, sounding_end: n.start + if n.tie_start { 2*n.duration } else { n.duration }, pitch, staff: n.staff.clone(), voice: n.voice.clone() });
             fragments.insert((scope,index),f); ids.insert((scope,index),index+1); ranges.insert((n.note_start,n.note_end),(scope,index,n.start,Some(pitch)));
         }
         let (_, plan) = structural_write_authority::plan_canonical_final_chord_structure_once(&xml,&evidence).unwrap();

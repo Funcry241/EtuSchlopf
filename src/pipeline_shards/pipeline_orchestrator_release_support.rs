@@ -129,6 +129,7 @@ struct CommittedPdfSourceAndRendererOracleOutcome {
     final_pdf_chord_structural_plan: structural_write_authority::CanonicalFinalChordStructuralPlan,
     final_pdf_pruned_omissions: std::collections::BTreeSet<structural_write_authority::RenderPrunedFinalChordOmissionKey>,
     renderer_feasibility_oracle_outcome: RendererFeasibilityOracleOutcome,
+    fixed_page_balance_evidence: Option<RendererFixedPageBalanceEvidence>,
     render_write_pdf_source_adoption_truth_gate_audit:
         RenderWritePdfSourceAdoptionTruthGateAudit,
     render_write_pdf_source_adoption_truth_gate_blocks_release: bool,
@@ -186,6 +187,7 @@ fn run_render_pdf_source_selection_stage(
         final_pdf_chord_structural_plan,
         final_pdf_pruned_omissions,
         renderer_feasibility_oracle_outcome,
+        fixed_page_balance_evidence,
         render_write_pdf_source_adoption_truth_gate_audit,
         render_write_pdf_source_adoption_truth_gate_blocks_release,
         authorized_writer_entry_boundary_audit,
@@ -205,6 +207,11 @@ fn run_render_pdf_source_selection_stage(
     // instead of recomputing the same Joint-Planner evidence in the release owner.
     let selected_final_notation_xml_before_layout = committed_source_xml;
     let initial_final_horizontal_layout_plan = committed_initial_horizontal_layout_plan;
+    if let Some(evidence) = &fixed_page_balance_evidence {
+        anyhow::ensure!(evidence.source_fingerprint == renderer_feasibility_source_fingerprint(&selected_final_notation_xml_before_layout),
+            "PageBalance: final adoption lost immutable source binding");
+    }
+
     let final_horizontal_layout_plan = select_renderer_feasibility_productive_plan(
         &initial_final_horizontal_layout_plan,
         &renderer_feasibility_oracle_outcome,
@@ -432,6 +439,16 @@ fn run_render_pdf_source_selection_stage(
             }
             RenderStatus::NoRenderer | RenderStatus::RendererFailed => {}
         };
+        if let Some(evidence) = &fixed_page_balance_evidence {
+            anyhow::ensure!(render.probe_identity.as_ref().is_some_and(|actual| evidence.consumer.same_consumer_for_bound_paths(
+                actual, &evidence.shadow_input, &evidence.shadow_output, pdf_source_path, &source.pdf_out)),
+                "PageBalance: final consumer changed after geometric confirmation");
+            let final_geometry = crate::audit_only::renderer_system_break_readback::page_clearance_observation(
+                &selected_final_notation_xml_before_renderer, &source.pdf_out)?;
+            anyhow::ensure!(final_geometry.systems.iter().map(|s|s.page).collect::<Vec<_>>() == evidence.selected_system_pages && fixed_page_balance_final_gain(&evidence.before, &final_geometry, evidence.pair),
+                "PageBalance: geometric gain not retained by final consumed representation");
+            eprintln!("ETUSCHLOPF: RendererFixedPageBalance: Phase=final_confirmed | SameBoundConsumer=true | PhysicalGainRetained=true");
+        }
         let projection_message = render.message.clone();
         Some(projection_message)
     } else {

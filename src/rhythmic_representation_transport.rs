@@ -65,17 +65,57 @@ pub(crate) struct RepresentationStep {
     before: String,
     after: String,
     edits: Vec<(Range<usize>, String)>,
+    octave_removals: Vec<(Range<usize>, std::sync::Arc<dyn OriginalOctaveRemovalEvidence>)>,
+}
+
+/// Implemented by the originating register owner, whose private witness is
+/// issued only after checking its confirmed original creator registry. The
+/// transport cannot read or modify that registry and grants no write authority.
+pub(crate) trait OriginalOctaveRemovalEvidence: std::fmt::Debug + Send + Sync {
+    fn verifies(&self, source: &str, range: &Range<usize>) -> Result<()>;
 }
 
 impl RepresentationStep {
     pub(crate) fn recorded(before: &str, after: &str, edits: Vec<(Range<usize>, String)>) -> Self {
-        Self { before: before.to_owned(), after: after.to_owned(), edits }
+        Self { before: before.to_owned(), after: after.to_owned(), edits, octave_removals: Vec::new() }
+    }
+
+    pub(crate) fn original_operations(&self) -> &[(Range<usize>,String)] { &self.edits }
+    pub(crate) fn original_documents(&self) -> (&str, &str) { (&self.before, &self.after) }
+
+    pub(crate) fn original_removal_ranges(&self) -> Vec<Range<usize>> {
+        self.edits.iter().filter_map(|(range, _)|
+            (range.start != range.end).then_some(range.clone())).collect()
+    }
+
+    pub(crate) fn record_original_octave_removal(
+        &mut self,
+        range: Range<usize>,
+        evidence: std::sync::Arc<dyn OriginalOctaveRemovalEvidence>,
+    ) -> Result<()> {
+        self.validate()?;
+        ensure!(self.edits.iter().any(|(edit, text)| *edit == range && text.is_empty())
+            && !self.octave_removals.iter().any(|(bound, _)| *bound == range),
+            "Original octave evidence is not bound to one removal operation");
+        evidence.verifies(&self.before, &range)?;
+        self.octave_removals.push((range, evidence));
+        Ok(())
+    }
+
+    fn verify_original_octave_removal(&self, range: &Range<usize>) -> Result<()> {
+        let mut matches = self.octave_removals.iter().filter(|(bound, _)| bound == range);
+        let (_, evidence) = matches.next()
+            .ok_or_else(|| anyhow::anyhow!("Octave removal has no originating owner evidence"))?;
+        ensure!(matches.next().is_none(), "Ambiguous original octave removal evidence");
+        evidence.verifies(&self.before, range)
     }
 
     /// Lift an emitter's local operation journal into its actual document write.
     /// The original span, unchanged exterior and replay all remain mandatory.
     pub(crate) fn enclosed(self, before: &str, after: &str, span: Range<usize>) -> Result<Self> {
         self.validate()?;
+        ensure!(self.octave_removals.is_empty(),
+            "Original octave evidence must bind the final enclosed document");
         ensure!(before.get(span.clone()) == Some(self.before.as_str()), "Foreign enclosed operation pre-state");
         let mut expected = before[..span.start].to_string();
         expected.push_str(&self.after); expected.push_str(&before[span.end..]);
@@ -100,6 +140,11 @@ impl RepresentationStep {
             .ok_or_else(|| anyhow::anyhow!("Invalid representation tail"))?);
         ensure!(expected == self.after, "Owner operations do not reproduce the representation");
         Ok(())
+    }
+
+    pub(crate) fn carry_original_range(&self, range: Range<usize>) -> Result<Range<usize>> {
+        self.validate()?;
+        self.carry(range)
     }
 
     fn carry(&self, range: Range<usize>) -> Result<Range<usize>> {
@@ -127,6 +172,24 @@ pub(crate) struct RhythmicRepresentationTransport {
 }
 
 impl RhythmicRepresentationTransport {
+    /// Original non-rhythmic operations of the executed #57 cleanup owner.
+    /// Its private token and original receipt bind the complete operation chain.
+    pub(crate) fn render_cleanup(_: &crate::pipeline::RenderRow57BlockMint,
+        receipt: &crate::master_state_identity::BlockTransformationReceipt,
+        steps: Vec<RepresentationStep>) -> Result<Self> {
+        let transport = Self { steps };
+        let (before, after) = transport.recorded_documents()?;
+        receipt.validate_block_transition::<crate::pipeline::RenderRow57BlockMint>(before, after)?;
+        for step in &transport.steps {
+            for (range, replacement) in &step.edits {
+                let removed = step.before.get(range.clone()).ok_or_else(|| anyhow::anyhow!("Invalid cleanup range"))?;
+                ensure!([removed, replacement.as_str()].iter().all(|fragment|
+                    !["<note", "<backup", "<forward", "<measure", "</measure"].iter().any(|token| fragment.contains(token))),
+                    "Original cleanup journal touches a rhythmic element");
+            }
+        }
+        Ok(transport)
+    }
     pub(crate) fn octave_notation(step: RepresentationStep,
         receipt: &crate::master_state_identity::BlockTransformationReceipt) -> Result<Self> {
         step.validate()?;
@@ -135,8 +198,13 @@ impl RhythmicRepresentationTransport {
         let (start, end) = crate::master_state_identity::ssc_block_bound_span(receipt)
             .ok_or_else(|| anyhow::anyhow!("Missing octave owner span"))?;
         for (range, text) in &step.edits {
-            ensure!(range.start == range.end && range.start >= start && range.end <= end,
-                "Octave journal is not a bound insertion");
+            ensure!(range.start >= start && range.end <= end,
+                "Octave journal is outside its original bound measure");
+            if range.start != range.end {
+                ensure!(text.is_empty(), "Octave replacement must separate removal and insertion");
+                step.verify_original_octave_removal(range)?;
+                continue;
+            }
             let doc = roxmltree::Document::parse(text)?;
             ensure!(doc.root_element().tag_name().name() == "direction"
                 && !doc.descendants().any(|n| n.is_element()

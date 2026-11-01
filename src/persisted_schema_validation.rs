@@ -116,6 +116,45 @@ pub(super) fn final_gate_evaluated() -> bool {
     FINAL_GATE_RESULT.get().is_some()
 }
 
+/// A partial Shadow proof cannot authorize either registered XML product or
+/// the registered PDF output, even when only one side of the pair matches.
+pub(super) fn shadow_renderer_paths_outside_products(input: &Path, output: &Path) -> bool {
+    shadow_paths_outside_registered(REGISTERED_ARTIFACTS.get(), input, output)
+}
+
+fn shadow_paths_outside_registered(registered: Option<&RegisteredArtifacts>, input: &Path, output: &Path) -> bool {
+    fn resolved(path: &Path) -> Option<PathBuf> {
+        fs::canonicalize(path).ok().or_else(|| {
+            let parent = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or_else(|| Path::new("."));
+            Some(fs::canonicalize(parent).ok()?.join(path.file_name()?))
+        })
+    }
+    let Some(registered) = registered else { return false; };
+    let Some((input, output, master, render, pdf)) = (|| Some((resolved(input)?, resolved(output)?,
+        resolved(&registered.master)?, resolved(&registered.render)?, resolved(&registered.pdf)?)))() else { return false; };
+    input != master && input != render && output != pdf && input != output
+}
+
+#[cfg(test)]
+mod shadow_target_tests {
+    use super::*;
+    #[test]
+    fn partial_shadow_rejects_both_product_inputs_and_pdf_output_independently() {
+        let root=std::env::temp_dir().join(format!("etuschlopf-shadow-target-{}",std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let registered=RegisteredArtifacts {master:root.join("master.xml"),render:root.join("render.xml"),pdf:root.join("final.pdf")};
+        let input=root.join("shadow.xml"); let output=root.join("shadow.pdf");
+        assert!(shadow_paths_outside_registered(Some(&registered),&input,&output));
+        assert!(!shadow_paths_outside_registered(None,&input,&output));
+        assert!(!shadow_paths_outside_registered(Some(&registered),&registered.master,&output));
+        assert!(!shadow_paths_outside_registered(Some(&registered),&registered.render,&output));
+        assert!(!shadow_paths_outside_registered(Some(&registered),&input,&registered.pdf));
+        assert!(!shadow_paths_outside_registered(Some(&registered),&input,&input));
+        assert!(!shadow_paths_outside_registered(Some(&registered),&input,&root.join("./final.pdf")));
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
 /// Before rendering, validate the actual, already persisted PDF source. The
 /// mandatory unselected product may be realized only at the later sovereign
 /// closure; it is checked independently by the complete final-product gate.
@@ -149,6 +188,10 @@ fn validate_renderer_source(
         "PersistedRendererSourceGate: GREEN; DeclaredVersion={}; SchemaSchlopf {SCHEMASCHLOPF_REVISION} XSD40: GREEN; source={label}; bytes={}; CompleteProductGate=pending_final_product_closure",
         artifact.declared_version, artifact.bytes,
     ))
+}
+
+pub(super) fn registered_final_artifact_paths() -> Option<(PathBuf,PathBuf)> {
+    REGISTERED_ARTIFACTS.get().map(|registered|(registered.master.clone(),registered.render.clone()))
 }
 
 pub(super) fn validate_registered_final_artifacts() -> Result<Option<String>, String> {

@@ -108,6 +108,7 @@ impl CandidateMaterialDeclaredEffects {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CandidateMaterialAttackState {
+    is_grace: bool,
     source_event_id: MaterialSourceEventId,
     attack_id: SoundingAttackId,
     exists: bool,
@@ -135,6 +136,7 @@ impl OriginalNotationVoiceBindings {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CandidateMaterialFragmentState {
+    is_grace: bool,
     measure: usize,
     raw_note_index: usize,
     onset: i64,
@@ -177,7 +179,7 @@ struct CandidateMaterialExactNoteMoveCarrier {
 
 impl CandidateMaterialFragmentState {
     fn exact_material_signature(&self) -> String {
-        format!(
+        let signature = format!(
             "{}|{}|{}|{:?}|{}|{}|{}|{}|{}|{}",
             self.measure,
             self.onset,
@@ -189,7 +191,8 @@ impl CandidateMaterialFragmentState {
             self.is_chord,
             self.tie_start,
             self.tie_stop
-        )
+        );
+        if self.is_grace { format!("{signature}|notated_grace") } else { signature }
     }
 
     fn temporal_key(&self) -> (usize, i64) {
@@ -345,6 +348,7 @@ fn material_fragment_from_atomic(
     let tie_start = block.contains("<tie type=\"start\"") || block.contains("<tie type='start'");
     let tie_stop = block.contains("<tie type=\"stop\"") || block.contains("<tie type='stop'");
     Ok(CandidateMaterialFragmentState {
+        is_grace: block.contains("<grace") && !block.contains("<duration>"),
         measure,
         raw_note_index,
         onset: note.start,
@@ -530,6 +534,7 @@ fn material_lineage_state_fingerprint(
                 .unwrap_or(u64::MAX)
                 .to_le_bytes(),
         );
+        if attack.is_grace { state = material_lineage_fnv1a64_update(state, b"NOTATED_GRACE_V1"); }
         state = material_lineage_fnv1a64_update(state, &[u8::from(attack.exists)]);
         state = material_lineage_fnv1a64_update(
             state,
@@ -786,11 +791,21 @@ fn bind_candidate_material_lineage_from_post_legacy(
             let attack_start_staff = attack_start.staff.clone();
             let attack_start_voice = attack_start.voice.clone();
             let source_onset = attack_start.onset;
-            let sounding_end = source_onset.saturating_add(row.source_len.max(1));
+            let exact_source = candidate.midi_seed_stats.notation_time.source_event(source_ordinal)?;
+            if exact_source.pos != row.source_pos || exact_source.len != row.source_len {
+                return Err(anyhow!("SourceTimeProjection: retained exact source timing changed"));
+            }
+            let notated = candidate.midi_seed_stats.notation_time.event(source_ordinal)?;
+            if attack_start.is_grace != matches!(notated.kind, crate::midi::notation_time::NotationEventKind::Grace { .. }) {
+                return Err(anyhow!("Source notation kind changed across Seed/Arrangement custody"));
+            }
+            let sounding_end = source_onset.checked_add(notated.len)
+                .ok_or_else(|| anyhow!("Notated duration endpoint overflow"))?;
             let expected_staff = row.projected_staff.unwrap_or(row.selection_staff).to_string();
             // r666: CandidateMaterialAttackState uses one measure-local temporal domain.
-            // SourceDuration remains semantic source truth; the current MusicXML fragment duration
-            // is representation and is not promoted to SoundingEnd by ConsensusGesture relocation.
+            // This interval belongs to the derived arranged notation. Exact sounding source
+            // timing remains bound separately in notation_time.source_event; it is never
+            // reconstructed from a zero-duration grace or a relocated XML fragment.
             // The structural SourceIdentity carrier proves which post-VisibleRhythm fragment belongs
             // to this SourceEvent. Pitch and projected staff remain valid post-legacy material checks.
             if attack_start_measure != measure
@@ -812,6 +827,7 @@ fn bind_candidate_material_lineage_from_post_legacy(
                 fragments[fragment_index].attack_id = Some(attack_id);
             }
             attacks.push(CandidateMaterialAttackState {
+                is_grace: matches!(notated.kind, crate::midi::notation_time::NotationEventKind::Grace { .. }),
                 source_event_id,
                 attack_id,
                 exists: true,
@@ -1365,11 +1381,12 @@ fn reconcile_candidate_material_lineage_with_pairs(
                 }
                 let semantic_onset = fragment.onset;
                 let semantic_sounding_end = if declared.sounding_end {
-                    semantic_onset.saturating_add(fragment.duration.max(1))
+                    semantic_onset.saturating_add(if fragment.is_grace { 0 } else { fragment.duration.max(1) })
                 } else {
-                    semantic_onset.saturating_add(source_truth.source_len.max(1))
+                    semantic_onset.saturating_add(candidate.midi_seed_stats.notation_time.event(source_truth.source_ordinal)?.len)
                 };
                 let attack = CandidateMaterialAttackState {
+                    is_grace: fragment.is_grace,
                     source_event_id,
                     attack_id,
                     exists: true,
@@ -1409,7 +1426,7 @@ fn reconcile_candidate_material_lineage_with_pairs(
                         attack
                             .sounding_end
                             .checked_sub(attack.onset)
-                            .filter(|duration| *duration > 0)
+                            .filter(|duration| *duration > 0 || (*duration == 0 && attack.is_grace))
                             .ok_or_else(|| {
                                 anyhow!(
                                     "CandidateMaterialLineageSpine: owner {owner} verschiebt AttackOnset bei nichtpositiver bestehender SoundingDuration"
@@ -2273,7 +2290,7 @@ fn final_sounding_projection_from_material_state(
 ) -> anyhow::Result<Vec<CandidateFinalSoundingProjectionRow>> {
     let mut rows = Vec::with_capacity(spine.active_attack_count);
     for attack in spine.attacks.iter().filter(|attack| attack.exists) {
-        if attack.sounding_end <= attack.onset {
+        if attack.sounding_end < attack.onset || (attack.sounding_end == attack.onset && !attack.is_grace) {
             return Err(anyhow!(
                 "FinalSoundingMaterialFreeze: gebundener SoundingAttack besitzt keine positive SoundingDuration"
             ));
@@ -2387,7 +2404,7 @@ fn reconcile_candidate_material_forward_onset_translations(
         let duration = attack
             .sounding_end
             .checked_sub(attack.onset)
-            .filter(|duration| *duration > 0)
+            .filter(|duration| *duration > 0 || (*duration == 0 && attack.is_grace))
             .ok_or_else(|| {
                 anyhow!(
                     "CandidateMaterialLineageSpine: owner {owner} forward-onset translation has non-positive source SoundingDuration"
@@ -2432,6 +2449,7 @@ fn reconcile_candidate_material_forward_onset_translations(
                 )
             })?;
         if before.attack_id != after.attack_id
+            || before.is_grace != after.is_grace
             || before.exists != after.exists
             || before.measure != after.measure
             || before.pitch != after.pitch
@@ -2446,7 +2464,7 @@ fn reconcile_candidate_material_forward_onset_translations(
         let before_duration = before
             .sounding_end
             .checked_sub(before.onset)
-            .filter(|duration| *duration > 0)
+            .filter(|duration| *duration > 0 || (*duration == 0 && before.is_grace))
             .ok_or_else(|| {
                 anyhow!(
                     "CandidateMaterialLineageSpine: owner {owner} has non-positive pre-translation SoundingDuration"
@@ -2455,7 +2473,7 @@ fn reconcile_candidate_material_forward_onset_translations(
         let after_duration = after
             .sounding_end
             .checked_sub(after.onset)
-            .filter(|duration| *duration > 0)
+            .filter(|duration| *duration > 0 || (*duration == 0 && after.is_grace))
             .ok_or_else(|| {
                 anyhow!(
                     "CandidateMaterialLineageSpine: owner {owner} has non-positive post-translation SoundingDuration"
@@ -2507,10 +2525,9 @@ fn reconcile_candidate_material_forward_onset_translations(
 }
 
 
-const FROZEN_SOUNDING_TEMPORAL_MEASURE_DIVISIONS: i64 = 384;
-
 fn frozen_sounding_temporal_lane_plan(
     spine: &CandidateMaterialLineageSpine,
+    notation: &crate::midi::notation_time::NotationTimePlan,
 ) -> anyhow::Result<FrozenSoundingTemporalLanePlan> {
     if !spine.authority_bound || !spine.final_sounding_material_frozen {
         return Err(anyhow!(
@@ -2562,8 +2579,10 @@ fn frozen_sounding_temporal_lane_plan(
                 attack.source_event_id.0
             ));
         }
-        if attack.measure == 0
-            || !(0..FROZEN_SOUNDING_TEMPORAL_MEASURE_DIVISIONS).contains(&attack.onset)
+        let measure_ordinal = attack.measure.checked_sub(1)
+            .ok_or_else(|| anyhow!("Frozen notation measure has no source ordinal"))?;
+        let bar = notation.measure(measure_ordinal)?;
+        if !(0..bar.end - bar.start).contains(&attack.onset)
         {
             return Err(anyhow!(
                 "FrozenSoundingTemporalLanePlan: invalid measure-local onset for SourceEventId {}",
@@ -2573,27 +2592,14 @@ fn frozen_sounding_temporal_lane_plan(
         let duration = attack
             .sounding_end
             .checked_sub(attack.onset)
-            .filter(|duration| *duration > 0)
+            .filter(|duration| *duration > 0 || (*duration == 0 && attack.is_grace))
             .ok_or_else(|| {
                 anyhow!(
                     "FrozenSoundingTemporalLanePlan: non-positive SoundingDuration for SourceEventId {}",
                     attack.source_event_id.0
                 )
             })?;
-        let measure_index = i64::try_from(attack.measure - 1).map_err(|_| {
-            anyhow!(
-                "FrozenSoundingTemporalLanePlan: measure index overflow for SourceEventId {}",
-                attack.source_event_id.0
-            )
-        })?;
-        let measure_base = measure_index
-            .checked_mul(FROZEN_SOUNDING_TEMPORAL_MEASURE_DIVISIONS)
-            .ok_or_else(|| {
-                anyhow!(
-                    "FrozenSoundingTemporalLanePlan: measure base overflow for SourceEventId {}",
-                    attack.source_event_id.0
-                )
-            })?;
+        let measure_base = bar.start;
         let absolute_start = measure_base.checked_add(attack.onset).ok_or_else(|| {
             anyhow!(
                 "FrozenSoundingTemporalLanePlan: absolute start overflow for SourceEventId {}",
@@ -2674,13 +2680,12 @@ fn frozen_sounding_temporal_lane_plan(
             };
             let lane = lane_index.saturating_add(1);
 
-            let first_measure = absolute_start
-                .div_euclid(FROZEN_SOUNDING_TEMPORAL_MEASURE_DIVISIONS);
-            let last_measure = absolute_end
-                .saturating_sub(1)
-                .div_euclid(FROZEN_SOUNDING_TEMPORAL_MEASURE_DIVISIONS);
+            let first_measure = notation.metric.ordinal_at(absolute_start)
+                .ok_or_else(|| anyhow!("Frozen notation start outside metric"))?;
+            let last_measure = notation.metric.ordinal_at(absolute_end.saturating_sub(1).max(absolute_start))
+                .ok_or_else(|| anyhow!("Frozen notation end outside metric"))?;
             let cohort_boundaries =
-                usize::try_from((last_measure - first_measure).max(0)).unwrap_or(usize::MAX);
+                last_measure.saturating_sub(first_measure);
             let segments = cohort_boundaries.saturating_add(1);
             cohort_segment_count = cohort_segment_count.saturating_add(segments);
             event_segment_count = event_segment_count
@@ -2746,7 +2751,11 @@ fn frozen_sounding_temporal_lane_plan(
 
     let rows_self_consistent = rows.iter().all(|row| {
         matches!(row.staff, 1 | 2)
-            && row.absolute_end > row.absolute_start
+            && (row.absolute_end > row.absolute_start
+                || (row.absolute_end == row.absolute_start && row.members.iter().all(|member| {
+                    spine.attacks.iter().any(|attack| attack.exists && attack.attack_id == member.attack_id
+                        && attack.source_event_id == member.source_event_id && attack.is_grace)
+                })))
             && row.lane > 0
             && !row.members.is_empty()
     });
@@ -2903,7 +2912,7 @@ fn freeze_final_sounding_material(
             "FinalSoundingMaterialFreeze: freeze seal does not match bound material state"
         ));
     }
-    let mut lane_plan = frozen_sounding_temporal_lane_plan(&candidate.material_lineage)?;
+    let mut lane_plan = frozen_sounding_temporal_lane_plan(&candidate.material_lineage, &candidate.midi_seed_stats.notation_time)?;
     let mut frozen_voice_attacks = Vec::<crate::structural_write_authority::FrozenVoiceAttackEvidenceRow>::new();
     for row in lane_plan.rows.iter() {
         for member in row.members.iter() {
@@ -2950,7 +2959,7 @@ fn freeze_final_sounding_material(
             let semantic_duration = attack
                 .sounding_end
                 .checked_sub(attack.onset)
-                .filter(|duration| *duration > 0)
+                .filter(|duration| *duration > 0 || (*duration == 0 && attack.is_grace))
                 .ok_or_else(|| {
                     anyhow!(
                         "NotationVoicePreSerializationConstraintClosureAudit: CandidateMaterial attack has non-positive semantic duration"

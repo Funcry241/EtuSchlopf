@@ -1223,6 +1223,11 @@ pub fn revision_effect_snapshot(
         if executable_master_source_commit_surface(function) {
             effects.insert("master-apply");
         }
+        // Preserve the v1 conservative history signal independently of the
+        // refined admission classifier. Renaming cannot erase prior effects.
+        if legacy_proof_reentry_signal(function) {
+            effects.insert("proof-reentry-reader");
+        }
         for record in inventory.records.values() {
             if record.path != function.path {
                 continue;
@@ -1844,19 +1849,6 @@ fn inventory_function(
             },
         )?;
     }
-    if proof_reentry_reader(function) {
-        add_record(
-            inventory,
-            CapabilityRecord {
-                kind: CapabilityKind::ProofReentryReader,
-                domain: function.domain,
-                path: function.path.clone(),
-                symbol: function.symbol.clone(),
-                fingerprint: fnv1a64(normalized_body.as_bytes()),
-                detail: format!("proof/report reader at line {}", function.start_line),
-            },
-        )?;
-    }
     if function.domain == Domain::Kodex && !function.signature.contains("#[cfg(test)]") {
         let rejection = normalized_rejection_surface(&function.masked_body);
         if !rejection.is_empty() {
@@ -2332,6 +2324,42 @@ fn add_call_graph_capabilities(inventory: &mut Inventory) -> Result<(), String> 
             break;
         }
         reachable = compute_reverse_reachability(&edges, &writer_roots);
+    }
+
+    // Input readers use the same local resolution and additionally resolve
+    // globally unique callees across roles. Writer/provenance edges stay intact.
+    let mut reader_edges = edges.clone();
+    for function in inventory.functions.values() {
+        for called in function.calls.keys() {
+            if global_name_counts.get(called) == Some(&1) {
+                for ((_, name), targets) in &by_domain_name {
+                    if name == called {
+                        reader_edges.entry(function.key.clone()).or_default().extend(targets.iter().cloned());
+                    }
+                }
+            }
+        }
+    }
+    let reader_roots = inventory.functions.values().filter(|function| {
+        direct_proof_input_operation(function) || function.calls.keys().any(|called| {
+            let name = called.to_ascii_lowercase();
+            // Unknown open-named APIs retain the old conservative treatment.
+            name.ends_with("open") && !global_name_counts.contains_key(called)
+        })
+    }).map(|function| function.key.clone()).collect::<BTreeSet<_>>();
+    let reader_reachability = compute_reverse_reachability(&reader_edges, &reader_roots);
+    let reader_functions = inventory.functions.values().filter(|function| {
+        proof_reentry_reader(function) || (proof_reader_context(function)
+            && function.calls.keys().any(|called| called.to_ascii_lowercase().ends_with("open"))
+            && reader_reachability.get(&function.key).is_some_and(|roots| !roots.is_empty()))
+    }).cloned().collect::<Vec<_>>();
+    for function in reader_functions {
+        add_record(inventory, CapabilityRecord {
+            kind: CapabilityKind::ProofReentryReader, domain: function.domain,
+            path: function.path, symbol: function.symbol,
+            fingerprint: fnv1a64(normalize_semantic(&function.masked_body).as_bytes()),
+            detail: format!("input-reader reachability at line {}", function.start_line),
+        })?;
     }
 
     // Productive identity provenance deliberately reuses the finalized semantic call graph.
@@ -4169,7 +4197,7 @@ fn feedback_identity_markers(body: &str, signature: &str) -> BTreeSet<String> {
     .collect()
 }
 
-fn proof_reentry_reader(function: &FunctionInfo) -> bool {
+fn legacy_proof_reentry_signal(function: &FunctionInfo) -> bool {
     let lower_name = function.name.to_ascii_lowercase();
     let lower_body = function.masked_body.to_ascii_lowercase();
     let context = [
@@ -4189,6 +4217,24 @@ fn proof_reentry_reader(function: &FunctionInfo) -> bool {
     .iter()
     .any(|token| lower_body.contains(token));
     context && reader
+}
+
+fn proof_reader_context(function: &FunctionInfo) -> bool {
+    let name = function.name.to_ascii_lowercase();
+    let body = function.masked_body.to_ascii_lowercase();
+    ["proof", "report", "result", "manifest", "evidence", "readback"]
+        .iter().any(|marker| name.contains(marker) || body.contains(marker))
+}
+
+fn direct_proof_input_operation(function: &FunctionInfo) -> bool {
+    let calls = called_identifiers(&function.masked_body.to_ascii_lowercase());
+    ["open", "read_to_string", "parse_report", "parse_proof"]
+        .iter().any(|name| calls.contains_key(*name))
+        || normalize_semantic(&function.masked_body.to_ascii_lowercase()).contains("fs::read(")
+}
+
+fn proof_reentry_reader(function: &FunctionInfo) -> bool {
+    proof_reader_context(function) && direct_proof_input_operation(function)
 }
 
 fn normalized_rejection_surface(masked_body: &str) -> String {
@@ -4638,6 +4684,57 @@ fn cursor_temporal_observational_delta(delta: &CapabilityDelta) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn reader_fixture(body: &str) -> (PathBuf, Inventory) {
+        let tree = root("structured_input_reader");
+        write(&tree, "src/music.rs", body);
+        let inventory = inventory_tree(&tree).unwrap();
+        (tree, inventory)
+    }
+    fn reader_present(inventory: &Inventory, name: &str) -> bool {
+        inventory.records.values().any(|r| r.kind == CapabilityKind::ProofReentryReader
+            && r.path == "src/music.rs" && r.symbol == format!("{name}#1"))
+    }
+    #[test]
+    fn structured_getter_is_not_file_input_and_legacy_history_is_retained() {
+        let (tree, inventory) = reader_fixture("fn span_open() -> bool { false } fn observe() { let result = span_open(); consume(result); }");
+        assert!(!reader_present(&inventory, "observe"));
+        let paths = BTreeSet::from(["src/music.rs".to_owned()]);
+        let snapshot = revision_effect_snapshot(&tree, &paths).unwrap();
+        assert!(snapshot.contains("proof-reentry-reader"));
+        write(&tree,"src/music.rs","fn span_open() -> bool { false } fn observe() { let value = span_open(); consume(value); }");
+        let renamed = revision_effect_snapshot(&tree, &paths).unwrap();
+        assert!(validate_revision_effect_monotonic(&snapshot, &renamed).is_err());
+        fs::remove_dir_all(tree).unwrap();
+    }
+    #[test]
+    fn concrete_reader_operations_remain_input_capabilities() {
+        for operation in ["std::fs::read_to_string(path)", "std::fs::read(path)", "std::fs::File::open(path)", "options.open(path)", "parse_report(path)", "parse_proof(path)"] {
+            let (tree, inventory) = reader_fixture(&format!("fn parse_result() {{ let value = {operation}; consume(value); }}"));
+            assert!(reader_present(&inventory, "parse_result"), "{operation}");
+            fs::remove_dir_all(tree).unwrap();
+        }
+    }
+    #[test]
+    fn input_reading_helpers_cannot_hide_behind_getter_names() {
+        let (tree, inventory) = reader_fixture("fn load() { std::fs::read_to_string(path); } fn span_open() { load(); } fn observe() { let result = span_open(); consume(result); }");
+        assert!(reader_present(&inventory, "observe"));
+        fs::remove_dir_all(tree).unwrap();
+    }
+    #[test]
+    fn unresolved_open_named_api_stays_closed() {
+        for operation in ["foreign_open(path)", "foreign_open (path)", "foreign_open \n(path)"] {
+            let (tree, inventory) = reader_fixture(&format!("fn observe() {{ let result = {operation}; consume(result); }}"));
+            assert!(reader_present(&inventory, "observe"), "{operation}");
+            fs::remove_dir_all(tree).unwrap();
+        }
+    }
+    #[test]
+    fn strings_cannot_introduce_or_remove_reader_operations() {
+        let (tree, inventory) = reader_fixture("fn observe() { let result = 1; consume(\"File::open(path)\"); }");
+        assert!(!reader_present(&inventory, "observe"));
+        fs::remove_dir_all(tree).unwrap();
+    }
 
     fn closed_threshold_fixture() -> (PathBuf, PathBuf, String, String) {
         let parent = root("closed_threshold_parent");

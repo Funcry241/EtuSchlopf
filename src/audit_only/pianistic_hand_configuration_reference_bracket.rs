@@ -552,6 +552,31 @@ pub fn build_for_score_title(score_title: Option<&str>) -> String {
     out
 }
 
+/// Complete static boundary observations; the existing reference evaluators retain authority.
+pub(crate) struct ReferenceCell {
+    pub(crate) tick: i64,
+    pub(crate) attacking: bool,
+    pub(crate) evaluated: bool,
+    pub(crate) structural: bool,
+    pub(crate) r299: bool,
+    pub(crate) reason: String,
+}
+pub(crate) fn reference_cells(score: &PianisticExecutionScore) -> Result<Vec<ReferenceCell>, String> {
+    if score.status != ProjectionStatus::Complete { return Err(score.reason.clone()); }
+    let topology = build_demand_topology(score)?;
+    build_boundaries(&topology.obligations)?.into_iter().map(|boundary| {
+        let active = active_midi_for_boundary(&boundary.active, &topology.obligations)?;
+        let result = bracket_boundary(&active, boundary.tick);
+        Ok(match result {
+            Ok(value) => ReferenceCell { tick: boundary.tick, attacking: !boundary.attacking.is_empty(),
+                evaluated: true, structural: value.structural_partitions > 0,
+                r299: value.r299_supported_partitions > 0, reason: String::new() },
+            Err(reason) => ReferenceCell { tick: boundary.tick, attacking: !boundary.attacking.is_empty(),
+                evaluated: false, structural: false, r299: false, reason: reason.to_string() },
+        })
+    }).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -586,3 +611,4 @@ mod tests {
         assert!(text.contains("OuterSpanLimitSemitones none"));
     }
 }
+

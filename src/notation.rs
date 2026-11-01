@@ -217,6 +217,12 @@
         xml: &str,
         scope: LowerStaffClefReadbackScope,
     ) -> (String, Option<PreservingTransformationReceipt>) {
+        if crate::pipeline::joint_reading_course_active() {
+            if let LowerStaffClefReadbackScope::BeamSafetyCaptured(capture)=&scope {
+                capture.record(RepresentationStep::recorded(xml,xml,Vec::new()));
+            }
+            return (xml.to_owned(),None);
+        }
         let spans = find_measure_spans(xml);
         if spans.is_empty() {
             if let LowerStaffClefReadbackScope::BeamSafetyCaptured(capture) = &scope {

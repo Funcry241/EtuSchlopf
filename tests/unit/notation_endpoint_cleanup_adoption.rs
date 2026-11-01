@@ -25,6 +25,7 @@ fn received_master(rows: &[(usize, i64, u8)], measures: usize)
     (master, state)
 }
 
+// Offbeat fixtures require actual metric ties even when whole-bar tones are preserved.
 fn hidden_tied_master(rows: &[(usize, i64, u8)], measures: usize)
     -> (MasterAdoptedState, OwnedRhythmicContinuation) {
     let (mut master, state) = received_master(rows, measures);
@@ -51,7 +52,7 @@ fn sounding_ties(xml: &str) -> Vec<String> {
 
 #[test]
 fn actual_orphan_cleanup_reaches_original_master_adoption_with_retained_custody() {
-    for rows in [vec![(7, 0, 1)], vec![(91, 0, 1), (53, 384, 2)]] {
+    for rows in [vec![(7, 24, 1)], vec![(91, 24, 1), (53, 408, 2)]] {
         let (mut master, state) = hidden_tied_master(&rows, 2);
         let before = master.document().to_owned();
         let mut after = before.clone();
@@ -74,7 +75,7 @@ fn actual_orphan_cleanup_reaches_original_master_adoption_with_retained_custody(
 
 #[test]
 fn valid_cleanup_custody_never_replaces_dropped_original_master_receipts() {
-    let (mut master, state) = hidden_tied_master(&[(17, 0, 1)], 1);
+    let (mut master, state) = hidden_tied_master(&[(17, 24, 1)], 1);
     let before = master.document().to_owned(); let mut after = before.clone();
     let ((_, removed), receipts) = remove_orphan_slur_and_tie_endpoints(&mut after);
     assert!(removed > 0);

@@ -75,6 +75,7 @@ pub struct PianisticExecutionScoreAudit {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct NoteSegment {
+    visible: bool,
     source_ordinal: usize,
     part_id: String,
     source_staff: String,
@@ -377,6 +378,7 @@ fn parse_timeline(xml: &str) -> Result<ParsedTimeline, String> {
                             .unwrap_or_else(|| "unspecified".to_string());
                         let (tie_start, tie_stop) = tie_flags(child)?;
                         segments.push(NoteSegment {
+                            visible: child.attribute("print-object") != Some("no"),
                             source_ordinal,
                             part_id: part_id.clone(),
                             source_staff,
@@ -744,6 +746,16 @@ fn yes_no(value: bool) -> &'static str {
     if value { "yes" } else { "no" }
 }
 
+/// Printed attack observations on the execution parser's own time axis; no source binding.
+pub(crate) struct PrintedAttackPosition {
+    pub(crate) tick: i64,
+    pub(crate) visible: bool,
+}
+pub(crate) fn printed_attack_positions(xml: &str) -> Result<Vec<PrintedAttackPosition>, String> {
+    Ok(parse_timeline(xml)?.segments.into_iter().filter(|s| !s.tie_stop)
+        .map(|s| PrintedAttackPosition { tick: s.start_tick, visible: s.visible }).collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -860,3 +872,4 @@ mod tests {
         assert!(projection.execution_events.is_empty());
     }
 }
+

@@ -421,3 +421,34 @@ fn original_custody_must_be_valid_before_owned_state_can_be_received() {
     incomplete_support.occurrences.pop();
     assert!(OwnedRhythmicContinuation::receive(&incomplete_support, &xml).is_err());
 }
+
+#[test]
+fn joint_source_input_uses_carried_origins_after_actual_voice_owner() {
+    for ids in [[11, 27], [206, 55]] {
+        let state = received(&[(ids[0], 0, 1), (ids[1], 0, 1)], 2);
+        let old = state.original_joint_source_occurrences(state.document()).unwrap();
+        assert_eq!(old.len(), 2);
+        let mut edits = Vec::new();
+        for occurrence in &state.occurrences {
+            let text = &state.snapshot[occurrence.bytes.clone()];
+            let offset = text.find("<voice>").unwrap() + "<voice>".len();
+            let end = offset + text[offset..].find("</voice>").unwrap();
+            edits.push((occurrence.bytes.start + offset, occurrence.bytes.start + end, "805".into()));
+        }
+        let (post, receipt) = apply_atomic_staff_voice_scalar_batch_authorized(state.document(), edits);
+        let post = post.unwrap();
+        let mut receipts = OwnerReceipts::default(); receipts.push_exact(receipt);
+        let next = receipts.continue_owned_rhythm(&state, &post).unwrap();
+        let carried = next.original_joint_source_occurrences(&post).unwrap();
+        let input = crate::master_state_identity::OriginalFunctionalRespellingChains::received(Ok(Arc::new(next.clone())));
+        assert_eq!(input.joint_source_occurrences(&post).unwrap(), carried);
+        assert!(input.joint_source_occurrences(state.document()).is_err());
+        assert!(crate::master_state_identity::OriginalFunctionalRespellingChains::received(Err("missing original custody".into()))
+            .joint_source_occurrences(&post).is_err());
+        assert_eq!(carried.iter().map(|(_, source)| *source).collect::<BTreeSet<_>>(), ids.into_iter().collect());
+        assert_ne!(old[0].0, carried[0].0);
+        assert!(next.original_joint_source_occurrences(state.document()).is_err());
+        let mut missing = next.clone(); missing.occurrences.pop();
+        assert!(missing.original_joint_source_occurrences(&post).is_err());
+    }
+}

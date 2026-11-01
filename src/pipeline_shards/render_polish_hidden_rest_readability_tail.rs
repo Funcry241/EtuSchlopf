@@ -406,13 +406,17 @@ fn build_render_xml_hidden_rest_dependency_audit(xml: &str) -> RenderXmlHiddenRe
 fn collapse_hidden_timeline_rests_to_forward(xml: &str) -> ((String, RenderXmlHiddenRestVirtualStats), Option<BlockTransformationReceipt>) {
     
     
-    let output = {
+    let mut output = {
     let mut out = String::with_capacity(xml.len());
     let mut stats = RenderXmlHiddenRestVirtualStats::default();
     let mut scan = 0_usize;
     while let Some((start, end, _scope_number)) = find_next_measure_bounds(xml, scan) {
         out.push_str(&xml[scan..start]);
         let (measure, measure_stats) = collapse_hidden_timeline_rests_to_forward_in_measure(&xml[start..end]).0;
+        let output_start = out.len();
+        stats.original_note_emissions.extend(measure_stats.original_note_emissions.into_iter()
+            .map(|(before, after)| (start + before.start..start + before.end,
+                output_start + after.start..output_start + after.end)));
         out.push_str(&measure);
         stats.changed_events += measure_stats.changed_events;
         scan = end;
@@ -422,6 +426,11 @@ fn collapse_hidden_timeline_rests_to_forward(xml: &str) -> ((String, RenderXmlHi
 };
     
     let receipt = Some(output.0.as_str()).filter(|post| *post != xml).map(|post| crate::master_state_identity::BlockTransformationReceipt::mint_block_receipt(RenderRow55BlockMint { _private: () }, xml, post, Some((0, xml.len()))).expect("frozen owner changed bytes without receipt"));
+    if let Some(receipt) = &receipt {
+        output.1.original_note_capture = Some(std::sync::Arc::new(JointRestForwardNoteCapture::seal(
+            &RenderRow55BlockMint { _private: () }, receipt, xml, &output.0,
+            std::mem::take(&mut output.1.original_note_emissions))));
+    }
     (output, receipt)
 }
 fn collapse_hidden_timeline_rests_to_forward_in_measure(measure: &str) -> ((String, RenderXmlHiddenRestVirtualStats), Option<BlockTransformationReceipt>) {
@@ -445,7 +454,9 @@ fn collapse_hidden_timeline_rests_to_forward_in_measure(measure: &str) -> ((Stri
             out.push_str(duration.trim());
             out.push_str("</duration></forward>");
         } else {
+            let output_start = out.len();
             out.push_str(note);
+            stats.original_note_emissions.push((pos..end, output_start..out.len()));
         }
         scan = end;
     }
@@ -497,7 +508,8 @@ fn build_render_xml_hidden_rest_forward_collapse_trial(
     trial.attempted = true;
     let ((collapsed_xml, stats), collapse_receipt) = collapse_hidden_timeline_rests_to_forward(xml);
     let mut render_receipts = crate::master_state_identity::RenderTransitionReceipts::new();
-    render_receipts.push_block(collapse_receipt, &collapsed_xml);
+    render_receipts.push_original_notes(
+        collapse_receipt, stats.original_note_capture.clone(), &collapsed_xml);
     trial.changed_events = stats.changed_events;
     let (after_events, after_backup_ok) = collect_render_xml_note_events(&collapsed_xml);
     trial.hidden_rests_after = after_events.iter().filter(|event| event.is_hidden && event.is_rest).count();
