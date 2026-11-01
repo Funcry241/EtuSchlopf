@@ -103,6 +103,19 @@ fn captured_note_range(xml: &str, range: Range<usize>) -> Result<Range<usize>> {
 }
 
 impl PhysicalRhythmicBirths {
+    /// Original emitter links only. This observes retained ranges and supplies
+    /// no ancestry, musical role or additional mutation permit.
+    pub(crate) fn original_carry_ranges(&self, before: &str, after: &str,
+        ranges: Vec<Range<usize>>) -> Result<Vec<Range<usize>>> {
+        self.validate_binding(before, after)?;
+        ranges.into_iter().map(|range| {
+            let mut found = self.carried.iter().filter(|(input, _)| *input == range);
+            let output = found.next().map(|(_, output)| output.clone())
+                .ok_or_else(|| anyhow::anyhow!("Missing original emitter continuation"))?;
+            ensure!(found.next().is_none(), "Ambiguous original emitter continuation");
+            Ok(output)
+        }).collect()
+    }
     pub(super) fn records(&self) -> &[PhysicalBirth] { &self.records }
     pub(super) fn consolidations(&self) -> &[RestConsolidationCapture] { &self.consolidations }
 

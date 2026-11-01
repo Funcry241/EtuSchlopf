@@ -28,6 +28,11 @@ pub(super) struct CreationEdge {
 }
 
 impl CourseOccurrence {
+    fn is_grace(&self) -> bool {
+        self.source.is_some() && self.interval.start == self.interval.end
+            && self.note.contains("<grace") && !self.note.contains("<duration>")
+    }
+
     fn edge(&self) -> CreationEdge {
         CreationEdge {
             parent: self.parent, root: self.root, course: self.course,
@@ -185,7 +190,8 @@ impl ArrangementRhythmicCourses {
             fragments.sort_by_key(|o| (o.interval.start, o.interval.end));
             let mut end = root.interval.start;
             for fragment in fragments {
-                ensure!(fragment.interval.start == end && fragment.interval.end > end,
+                ensure!(fragment.interval.start == end && (fragment.interval.end > end
+                    || (root.is_grace() && fragment.is_grace())),
                     "Source-origin split lost or duplicated represented support");
                 end = fragment.interval.end;
             }
@@ -246,7 +252,7 @@ impl CourseMeasure {
             let begin = lifetime.start.max(self.offset);
             let end = lifetime.end.min(self.offset + self.duration);
             if begin >= end { continue; }
-            let mut support = occurrences.iter().filter(|o| o.course == course.creation)
+            let mut support = occurrences.iter().filter(|o| o.course == course.creation && !o.is_grace())
                 .map(|o| o.interval.clone()).collect::<Vec<_>>();
             support.sort_by_key(|r| (r.start, r.end));
             let mut cursor = begin;
@@ -271,7 +277,8 @@ impl CourseMeasure {
         let old_staff = extract_first_i64(&occurrence.note, "staff").unwrap_or(0);
         ensure!(note.contains("<chord") == occurrence.note.contains("<chord"),
             "Disposition changed physical host membership");
-        ensure!(extract_first_i64(note, "duration") == Some(occurrence.interval.end - occurrence.interval.start),
+        ensure!(extract_first_i64(note, "duration") == Some(occurrence.interval.end - occurrence.interval.start)
+            || (occurrence.is_grace() && note.contains("<grace") && !note.contains("<duration>")),
             "Disposition changed licensed support");
         ensure!(extract_first_i64(note, "staff") == Some(i64::from(projected_staff)),
             "Staff transition does not match the physical action");
@@ -310,7 +317,8 @@ impl CourseMeasure {
         let mut fragments = Vec::new();
         for (ordinal, note) in parts.iter().enumerate() {
             let duration = extract_first_i64(&note.text, "duration").unwrap_or(0);
-            ensure!(duration > 0 && cursor + duration <= origin.interval.end,
+            ensure!((duration > 0 || (origin.is_grace() && note.text.contains("<grace")
+                && !note.text.contains("<duration>"))) && cursor + duration <= origin.interval.end,
                 "Split extends source-bound support");
             ensure!(extract_first_i64(&note.text, "staff") == extract_first_i64(&origin.note, "staff")
                 && extract_first_text(&note.text, "pitch") == extract_first_text(&origin.note, "pitch")
@@ -388,3 +396,13 @@ impl CourseMeasure {
 #[cfg(test)]
 #[path = "../tests/unit/arrangement_rhythmic_course_continuation.rs"]
 mod tests;
+
+#[cfg(test)]
+pub(super) type SourceOriginSupportRow = (usize, RhythmicCreationIdentity, RhythmicCreationIdentity, i64, i64);
+
+#[cfg(test)]
+impl ArrangementRhythmicCourses {
+    pub(super) fn source_origin_support_rows(&self) -> Vec<SourceOriginSupportRow> {
+        self.occurrences.iter().filter_map(|o| o.source.map(|s| (s, o.root, o.course, o.interval.start, o.interval.end))).collect()
+    }
+}

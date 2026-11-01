@@ -205,7 +205,7 @@
 
     fn planned_advance(xml: &str) -> (String, usize) {
         let mut candidate = xml.to_string();
-        let moved = advance_lower_staff_bass_clef_before_preceding_low_or_rest_events(&mut candidate)
+        let moved = advance_lower_staff_bass_clef_before_preceding_low_or_rest_events(&mut candidate, &mut Vec::new())
             .expect("synthetic local batch must authorize");
         (candidate, moved)
     }
@@ -613,4 +613,33 @@
         identity::record_final_master_lineage(master.lineage(), master.document());
         assert!(state.close_render_sovereignty().closed);
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn original_cleanup_journal_carries_each_received_head_through_the_actual_trial() {
+        for ordinal in [3, 81] {
+            let xml = score(&[treble_opening(ordinal),
+                bar(ordinal+1, &(rest(1, 1, 2) + STAFF2_F + &low_tail()))]);
+            let path = std::env::temp_dir().join("synthetic-original-cleanup-journal.musicxml");
+            let (trial, receipt) = build_render_xml_print_cleanup_one_safe_visual_trial(&xml, "synthetic-original-journal", &path);
+            assert!(trial.unwrap().written);
+            let receipt = receipt.unwrap();
+            let transport = receipt.original_render_notes().unwrap().as_ref().unwrap();
+            let nodes = roxmltree::Document::parse(&xml).unwrap();
+            let ranges = nodes.descendants().filter(|node| node.has_tag_name("note")
+                && node.children().any(|child| child.has_tag_name("pitch"))).map(|node| node.range()).collect::<Vec<_>>();
+            let (before, post) = transport.recorded_documents().unwrap();
+            assert_eq!(before, xml);
+            let carried = transport.carry(&xml, post, ranges.clone()).unwrap();
+            assert_eq!(carried.len(), ranges.len());
+            for (old, new) in ranges.iter().zip(&carried) { assert_eq!(xml[old.clone()], post[new.clone()]); }
+            assert!(transport.carry(&(xml.clone()+" "), post, ranges.clone()).is_err());
+            assert!(transport.carry(&xml, &(post.to_string()+" "), ranges.clone()).is_err());
+            let actual_post = post.to_string();
+            let malformed = crate::arrangement::representation_transport::RepresentationStep::recorded(&xml, &actual_post, Vec::new());
+            let receipt = receipt.with_original_render_notes(&RenderRow57BlockMint { _private: () }, vec![malformed]);
+            assert!(receipt.original_render_notes().unwrap().is_err());
+            let (_, realized) = receipt.split_realized_post_document();
+            assert_eq!(realized.as_deref(), Some(actual_post.as_str()));
+        }
     }

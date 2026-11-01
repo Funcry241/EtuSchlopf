@@ -17,7 +17,7 @@ fn layout_report_renewals_preserve_writer_outcome_for_manifest() {
             pipeline_line: report.clone(), closed: true,
             committed_xml: Some("witnessed".to_string()),
             committed_occurrence_continuation: None, committed_voice_plan: None,
-            phrase_occurrence_course: None,
+            phrase_occurrence_course: None, shadow_partial: None,
             primary_beam_voice_partition_changed_voice_elements: 0,
         };
         for _ in 0..3 {
@@ -41,7 +41,7 @@ fn layout_report_renewal_does_not_invent_missing_writer_evidence() {
     let source = FinalPdfSourceCommit {
         pipeline_line: String::new(), closed: true, committed_xml: None,
         committed_occurrence_continuation: None, committed_voice_plan: None,
-        phrase_occurrence_course: None,
+        phrase_occurrence_course: None, shadow_partial: None,
             primary_beam_voice_partition_changed_voice_elements: 0,
     };
     let report = source.horizontal_layout_pipeline_line();

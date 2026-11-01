@@ -1,0 +1,14 @@
+struct BlockTransformationReceipt {
+    ssc_origin: Box<crate::ssc_evidence_proof::SscOriginState>,
+    identity: MintedIdentity,
+    descriptor: &'static TransformationDescriptor,
+    bound_span: Option<(usize, usize)>,
+    pre_fingerprint: u64,
+    post_fingerprint: u64,
+    /// Post bytes realized inside a path-bound owner's own write transaction,
+    /// carried move-only to the Render adoption boundary. `None` for buffer
+    /// owners, whose post state is supplied by the adopting transition.
+    realized_post_document: Option<String>,
+    // Optional evidence from the actual #57 operations; never consulted by commit.
+    original_render_notes: Option<Box<Result<crate::arrangement::representation_transport::RhythmicRepresentationTransport, String>>>,
+}

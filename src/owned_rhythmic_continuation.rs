@@ -118,7 +118,8 @@ fn physical_inventory(xml: &str) -> Result<Vec<PhysicalOccurrence>> {
         ensure!(notes.len() == metas.len(), "Incomplete rhythmic physical readback");
         for (note, meta) in notes.into_iter().zip(metas) {
             let staff = extract_first_i64(&note.text, "staff");
-            ensure!(matches!(staff, Some(1 | 2)) && meta.duration > 0,
+            ensure!(matches!(staff, Some(1 | 2)) && (meta.duration > 0
+                || (note.text.contains("<grace") && !note.text.contains("<duration>"))),
                 "Unsupported explicit staff or rhythmic duration");
             inventory.push(PhysicalOccurrence {
                 bytes: span.start + note.start..span.start + note.end,

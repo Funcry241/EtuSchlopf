@@ -179,6 +179,7 @@ fn run_initial_render_transaction_stage(
         &render_xml_trial_path,
         &best.master_state,
     );
+    let joint_reading_custody = begin_joint_reading_render_custody(&best);
     console_artifact_line(
         ConsoleArtifactLine::PreRenderXml,
         format!(
@@ -620,6 +621,7 @@ fn run_initial_render_transaction_stage(
         receipts.push_block(receipt, &candidate);
         render_state.adopt_final_notation_checkpoint(root, &candidate, receipts).with_context(|| "Fruehe Rustig-FinalNotation konnte nicht adoptiert werden")?;
     }
+    apply_joint_reading_course(&mut best, &mut render_state, joint_reading_custody)?;
     let pre_preview_render_xml_for_gap = render_state.observed_document_or(best.layout_xml()).to_owned();
     if final_render_source_available {
         let render_preview_source = render_state.require_document("Condensation preview").to_owned();

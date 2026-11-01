@@ -195,6 +195,7 @@
     #[derive(Debug, Clone)]
     struct NoteMeta {
         raw_idx: usize,
+        metric: RhythmContext,
         start: i64,
         duration: i64,
         staff: PianoStaff,
@@ -254,6 +255,18 @@
                 beat_type: extract_first_i64(measure_text, "beat-type").unwrap_or(self.beat_type).max(1),
             }
         }
+        fn metric_rank(self, onset: i64) -> i32 {
+            if onset == 0 || (self.beats == 4 && self.beat_type == 4
+                && onset.rem_euclid(self.beat_duration() * 2) == 0) { 0 }
+            else if onset.rem_euclid(self.beat_duration()) == 0 { 1 } else { 2 }
+        }
+        fn metric_segments(self) -> Vec<std::ops::Range<i64>> {
+            if self.beats == 4 && self.beat_type == 4 {
+                let half = self.expected_duration() / 2;
+                vec![0..half, half..self.expected_duration()]
+            } else { std::iter::once(0..self.expected_duration()).collect() }
+        }
+
         fn expected_duration(self) -> i64 {
             self.divisions * self.beats * 4 / self.beat_type
         }
@@ -521,7 +534,8 @@
         if raw_notes.is_empty() {
             return (text.to_string(), ArrangementStats::default());
         }
-        let metas = collect_note_metas(text, &raw_notes);
+        let mut metas = collect_note_metas(text, &raw_notes);
+        for meta in &mut metas { meta.metric = rhythm_context; }
         let (hidden, support_stats) = select_hidden_notes_for_pianist_profile(&metas, profile);
         let mut stats = ArrangementStats {
             ..ArrangementStats::default()
@@ -758,6 +772,7 @@
                     let voice = extract_first_text(&raw.text, "voice").unwrap_or_else(|| staff.default_voice().to_string());
                     let midi = midi_from_note_text(&raw.text);
                     infos.push(NoteMeta {
+                        metric: RhythmContext::default().update_from_measure(measure_text),
                         raw_idx,
                         start,
                         duration,
@@ -1203,7 +1218,7 @@
     }
     fn human_potential_note_score(meta: &NoteMeta, band: HumanPotentialPitchBand) -> i64 {
         let midi = meta.midi.unwrap_or(band.median);
-        let beat_score = if meta.start.rem_euclid(192) == 0 {
+        let beat_score = if meta.metric.metric_rank(meta.start) == 0 {
             90
         } else if meta.start.rem_euclid(96) == 0 {
             60
@@ -1382,7 +1397,7 @@
         candidates.sort_by_key(|m| {
             (
                 section_candidate_priority(m, group),
-                if m.start.rem_euclid(192) == 0 { 0 } else if m.start.rem_euclid(96) == 0 { 1 } else { 2 },
+                m.metric.metric_rank(m.start),
                 std::cmp::Reverse(m.duration),
                 m.midi.unwrap_or(127),
                 if m.is_chord { 1 } else { 0 },
@@ -1444,7 +1459,7 @@
         candidates.sort_by_key(|m| {
             (
                 // zuerst starke Zählzeiten / Halbtakt-Anker
-                if m.start.rem_euclid(192) == 0 { 0 } else if m.start.rem_euclid(96) == 0 { 1 } else { 2 },
+                m.metric.metric_rank(m.start),
                 // längere Werte stabilisieren die linke Hand besser als Splitter
                 std::cmp::Reverse(m.duration),
                 // Bass vor Innenfüllung
@@ -1488,9 +1503,10 @@
             return;
         }
         let mut anchors = BTreeSet::new();
-        for half in 0..2_i64 {
-            let half_start = half * 192;
-            let half_end = half_start + 192;
+        let metric = metas.first().map_or_else(RhythmContext::default, |m| m.metric);
+        for segment in metric.metric_segments() {
+            let half_start = segment.start;
+            let half_end = segment.end;
             if let Some(anchor) = left_notes
                 .iter()
                 .copied()
@@ -1553,9 +1569,10 @@
     }
     fn count_visible_bass_anchors(metas: &[NoteMeta], hidden: &BTreeSet<usize>) -> usize {
         let mut count = 0usize;
-        for half in 0..2_i64 {
-            let half_start = half * 192;
-            let half_end = half_start + 192;
+        let metric = metas.first().map_or_else(RhythmContext::default, |m| m.metric);
+        for segment in metric.metric_segments() {
+            let half_start = segment.start;
+            let half_end = segment.end;
             let has_visible_anchor = metas.iter().any(|m| {
                 m.staff == PianoStaff::Left
                     && !m.is_rest
@@ -1675,7 +1692,7 @@
             if !meta.is_chord {
                 score += 2;
             }
-            if meta.start.rem_euclid(192) == 0 {
+            if meta.metric.metric_rank(meta.start) == 0 {
                 score += 2;
             }
             *score_by_staff_voice.entry(key).or_insert(0) += score;
@@ -1796,7 +1813,7 @@
         if !meta.is_chord {
             score += 1;
         }
-        if meta.start.rem_euclid(192) == 0 {
+        if meta.metric.metric_rank(meta.start) == 0 {
             score += 2;
         }
         score
@@ -2201,9 +2218,7 @@
         })
     }
     fn normalize_visible_note_values(
-        measure_text: &str,
-        rhythm_context: RhythmContext,
-        stats: &mut VisibleLedgerStats,
+        measure_text: &str, rhythm_context: RhythmContext, stats: &mut VisibleLedgerStats,
         mut course_measure: Option<&mut CourseMeasure>,
     ) -> (String, Vec<VisibleLedgerNormalizedOrigin>) {
         let beat_duration = rhythm_context.beat_duration();
@@ -2246,6 +2261,12 @@
                         rhythm_context.expected_duration(),
                         beat_duration,
                     )
+                } else if whole_bar_single_note_is_eligible(
+                    measure_text, rhythm_context, &raw_notes, &meta_by_raw, idx,
+                ) || aligned_half_bar_note_is_eligible(
+                    measure_text, rhythm_context, &raw_notes, &meta_by_raw, idx,
+                ) {
+                    vec![duration]
                 } else {
                     split_duration_for_metric_notation(start, duration, beat_duration.max(1))
                 };
@@ -2561,3 +2582,87 @@
             note_text.to_string()
         }
     }
+
+// Preserve an existing unambiguous whole-bar occurrence before metric splitting.
+// The source owner and all continuation paths remain unchanged; no chain merging.
+fn whole_bar_single_note_is_eligible(
+    measure_text: &str, context: RhythmContext, raw: &[RawNote],
+    metas: &BTreeMap<usize, NoteMeta>, idx: usize,
+) -> bool {
+    let Some(note) = raw.get(idx) else { return false; };
+    let Some(meta) = metas.get(&idx) else { return false; };
+    if context.divisions != 96 || context.beats != 4 || context.beat_type != 4
+        || meta.start != 0 || meta.duration != 384 || meta.midi.is_none()
+        || meta.is_chord || meta.is_rest || !is_note_block_visible(&note.text)
+        || ["<tie", "<notations", "<grace", "<time-modification", "<lyric"]
+            .iter().any(|tag| note.text.contains(tag))
+        || metas.get(&(idx + 1)).is_some_and(|next| next.is_chord)
+        || metas.values().any(|other| other.start < 0 || other.start + other.duration > 384
+            || (other.raw_idx != idx && other.staff == meta.staff && other.midi.is_some()
+                && raw.get(other.raw_idx).is_some_and(|n| is_note_block_visible(&n.text))))
+        || measure_text.contains("<senza-misura")
+    { return false; }
+    roxmltree::Document::parse(measure_text).is_ok_and(|doc| {
+        if doc.root_element().attribute("implicit") == Some("yes") { return false; }
+        let mut cursor = 0_i64;
+        for node in doc.root_element().children().filter(|node| node.is_element()) {
+            let advance = node.has_tag_name("forward") || (node.has_tag_name("note")
+                && !node.children().any(|child| child.has_tag_name("chord")));
+            if advance || node.has_tag_name("backup") {
+                let duration = node.children().find(|child| child.has_tag_name("duration"))
+                    .and_then(|child| child.text()).and_then(|text| text.trim().parse::<i64>().ok());
+                let Some(duration) = duration else {
+                    if node.has_tag_name("note") && node.children().any(|child| child.has_tag_name("grace")) { continue; }
+                    return false;
+                };
+                if duration < 0 { return false; }
+                let Some(next) = cursor.checked_add(if advance { duration } else { -duration }) else { return false; };
+                if !(0..=384).contains(&next) { return false; }
+                cursor = next;
+            }
+        }
+        true
+    })
+}
+#[cfg(test)]
+#[path = "../tests/unit/whole_bar_single_note.rs"]
+mod whole_bar_single_note;
+
+// Preserve an existing plain value at a half-bar onset; keep the received source custody.
+fn aligned_half_bar_note_is_eligible(
+    measure_text: &str, context: RhythmContext, raw: &[RawNote],
+    metas: &BTreeMap<usize, NoteMeta>, idx: usize,
+) -> bool {
+    let Some(note) = raw.get(idx) else { return false; };
+    let Some(meta) = metas.get(&idx) else { return false; };
+    if context.divisions != 96 || context.beats != 4 || context.beat_type != 4
+        || !matches!(meta.start, 0 | 192) || !matches!(meta.duration, 144 | 192)
+        || meta.midi.is_none() || meta.is_rest || meta.is_chord
+        || !is_note_block_visible(&note.text)
+        || ["<tie", "<notations", "<grace", "<time-modification", "<lyric"]
+            .iter().any(|tag| note.text.contains(tag))
+        || metas.get(&(idx + 1)).is_some_and(|next| next.is_chord)
+        || metas.values().any(|other| other.start < 0 || other.start + other.duration > 384
+            || (other.raw_idx != idx && other.staff == meta.staff && other.midi.is_some()
+                && other.start < meta.start + meta.duration && other.start + other.duration > meta.start))
+        || measure_text.contains("<senza-misura")
+    { return false; }
+    roxmltree::Document::parse(measure_text).is_ok_and(|doc| {
+        if doc.root_element().attribute("implicit") == Some("yes") { return false; }
+        let mut cursor = 0_i64;
+        for node in doc.root_element().children().filter(|node| node.is_element()) {
+            let advance = node.has_tag_name("forward") || (node.has_tag_name("note")
+                && !node.children().any(|child| child.has_tag_name("chord")));
+            if advance || node.has_tag_name("backup") {
+                let duration = node.children().find(|child| child.has_tag_name("duration"))
+                    .and_then(|child| child.text()).and_then(|text| text.trim().parse::<i64>().ok());
+                let Some(duration) = duration else { return false; };
+                if duration < 0 { return false; }
+                let Some(next) = cursor.checked_add(if advance { duration } else { -duration }) else { return false; };
+                if !(0..=384).contains(&next) { return false; }
+                cursor = next;
+            }
+        }
+        true
+    })
+}

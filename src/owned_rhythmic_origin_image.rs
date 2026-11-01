@@ -7,6 +7,7 @@ use anyhow::{Result, ensure, anyhow};
 pub(super) struct OriginImage {
     pub(super) origin: Range<i64>,
     pub(super) image: Range<i64>,
+    grace_point: bool,
 }
 
 impl OriginImage {
@@ -14,7 +15,22 @@ impl OriginImage {
         let original_len = origin.end.checked_sub(origin.start).ok_or_else(|| anyhow!("Origin length overflow"))?;
         let image_len = image.end.checked_sub(image.start).ok_or_else(|| anyhow!("Image length overflow"))?;
         ensure!(original_len > 0 && original_len == image_len, "Non-bijective original carrier piece");
-        Ok(Self { origin, image })
+        Ok(Self { origin, image, grace_point: false })
+    }
+
+    // Only the owner with an authenticated source-bound grace carrier may
+    // create point support. Ordinary interval construction stays positive.
+    pub(super) fn grace_point(origin: i64, image: i64) -> Self {
+        Self { origin: origin..origin, image: image..image, grace_point: true }
+    }
+
+    pub(super) fn validate(&self) -> Result<()> {
+        if self.grace_point {
+            ensure!(self.origin.is_empty() && self.origin.start == self.origin.end
+                && self.image.is_empty() && self.image.start == self.image.end,
+                "Grace carrier is not a point");
+            Ok(())
+        } else { Self::new(self.origin.clone(), self.image.clone()).map(|_| ()) }
     }
 
     pub(super) fn translated(image: Range<i64>, offset: i64) -> Result<Self> {
@@ -26,8 +42,13 @@ impl OriginImage {
     /// `successor` relates a new image to a subdomain of this current image.
     /// The caller has already supplied original operation/emission membership.
     pub(super) fn compose(&self, successor: &Self) -> Result<Option<Self>> {
-        Self::new(self.origin.clone(), self.image.clone())?;
-        Self::new(successor.origin.clone(), successor.image.clone())?;
+        self.validate()?;
+        successor.validate()?;
+        if self.grace_point || successor.grace_point {
+            return Ok((self.grace_point && successor.grace_point
+                && self.image.start == successor.origin.start)
+                .then(|| Self::grace_point(self.origin.start, successor.image.start)));
+        }
         let start = self.image.start.max(successor.origin.start);
         let end = self.image.end.min(successor.origin.end);
         if start >= end { return Ok(None); }

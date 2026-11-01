@@ -370,7 +370,7 @@ struct PatchedCandidateInput {
 
 fn run_corpus_driven_hand_rhythm_primary_repair(
     best: &mut SolverCandidate,
-    candidates: &mut Vec<SolverCandidate>,
+    candidates: &mut SolverCandidatePool,
     next_iteration: &mut usize,
     options: &CheckOptions,
     parallel: &ParallelPlan,
@@ -425,7 +425,7 @@ fn run_corpus_driven_hand_rhythm_primary_repair(
         let Some(accepted) = round_best else { break; };
         let previous_best = std::mem::replace(best, accepted);
         crate::audit_only::destructive_edit_attribution::observe_selected_state(best.layout_xml());
-        candidates.push(previous_best);
+        candidates.push_previous(previous_best);
     }
 
     // Erst wenn die harten Voice-/Rhythmus-Blocker weg sind, werden schnelle
@@ -478,7 +478,7 @@ fn run_corpus_driven_hand_rhythm_primary_repair(
             crate::audit_only::destructive_edit_attribution::observe_selected_state(
                 best.layout_xml(),
             );
-            candidates.push(previous_best);
+            candidates.push_previous(previous_best);
         }
     }
     Ok(())
@@ -659,7 +659,7 @@ fn parse_expected_divisions_value(value: Option<&str>) -> Option<i64> {
 
 fn run_atomic_critical_repair(
     best: &mut SolverCandidate,
-    candidates: &mut Vec<SolverCandidate>,
+    candidates: &mut SolverCandidatePool,
     next_iteration: &mut usize,
     options: &CheckOptions,
     parallel: &ParallelPlan,
@@ -708,7 +708,7 @@ fn run_atomic_critical_repair(
         let Some(accepted_candidate) = round_best else { break; };
         let previous_best = std::mem::replace(best, accepted_candidate);
         crate::audit_only::destructive_edit_attribution::observe_selected_state(best.layout_xml());
-        candidates.push(previous_best);
+        candidates.push_previous(previous_best);
     }
     Ok(())
 }
@@ -1291,7 +1291,7 @@ fn build_editorial_voice_trial_candidate(
 
 fn run_warning_elimination_repair(
     best: &mut SolverCandidate,
-    candidates: &mut Vec<SolverCandidate>,
+    candidates: &mut SolverCandidatePool,
     next_iteration: &mut usize,
     options: &CheckOptions,
     parallel: &ParallelPlan,
@@ -1350,7 +1350,7 @@ fn run_warning_elimination_repair(
         let Some(accepted_candidate) = round_best else { break; };
         let previous_best = std::mem::replace(best, accepted_candidate);
         crate::audit_only::destructive_edit_attribution::observe_selected_state(best.layout_xml());
-        candidates.push(previous_best);
+        candidates.push_previous(previous_best);
     }
     Ok(())
 }
@@ -1577,7 +1577,7 @@ mod late_playability_best_candidate_selection_decision_owner_tests {
 
 fn run_final_critical_takt_repair(
     best: &mut SolverCandidate,
-    candidates: &mut Vec<SolverCandidate>,
+    candidates: &mut SolverCandidatePool,
     next_iteration: &mut usize,
     options: &CheckOptions,
     parallel: &ParallelPlan,
@@ -1634,7 +1634,7 @@ fn run_final_critical_takt_repair(
         let Some(accepted_candidate) = round_best else { break; };
         let previous_best = std::mem::replace(best, accepted_candidate);
         crate::audit_only::destructive_edit_attribution::observe_selected_state(best.layout_xml());
-        candidates.push(previous_best);
+        candidates.push_previous(previous_best);
     }
     Ok(())
 }
@@ -1642,7 +1642,7 @@ fn run_final_critical_takt_repair(
 
 fn run_final_playability_cleaner(
     best: &mut SolverCandidate,
-    candidates: &mut Vec<SolverCandidate>,
+    candidates: &mut SolverCandidatePool,
     next_iteration: &mut usize,
     options: &CheckOptions,
     parallel: &ParallelPlan,
@@ -1699,14 +1699,14 @@ fn run_final_playability_cleaner(
         let Some(accepted_candidate) = round_best else { break; };
         let previous_best = std::mem::replace(best, accepted_candidate);
         crate::audit_only::destructive_edit_attribution::observe_selected_state(best.layout_xml());
-        candidates.push(previous_best);
+        candidates.push_previous(previous_best);
     }
     Ok(())
 }
 
 fn run_final_playability_polish(
     best: &mut SolverCandidate,
-    candidates: &mut Vec<SolverCandidate>,
+    candidates: &mut SolverCandidatePool,
     next_iteration: &mut usize,
     options: &CheckOptions,
     parallel: &ParallelPlan,
@@ -1767,14 +1767,14 @@ fn run_final_playability_polish(
         let Some(accepted_candidate) = round_best else { break; };
         let previous_best = std::mem::replace(best, accepted_candidate);
         crate::audit_only::destructive_edit_attribution::observe_selected_state(best.layout_xml());
-        candidates.push(previous_best);
+        candidates.push_previous(previous_best);
     }
     Ok(())
 }
 
 fn run_global_hand_trajectory_solver(
     best: &mut SolverCandidate,
-    candidates: &mut Vec<SolverCandidate>,
+    candidates: &mut SolverCandidatePool,
     next_iteration: &mut usize,
     options: &CheckOptions,
     parallel: &ParallelPlan,
@@ -1835,7 +1835,7 @@ fn run_global_hand_trajectory_solver(
         let Some(accepted_candidate) = round_best else { break; };
         let previous_best = std::mem::replace(best, accepted_candidate);
         crate::audit_only::destructive_edit_attribution::observe_selected_state(best.layout_xml());
-        candidates.push(previous_best);
+        candidates.push_previous(previous_best);
     }
     Ok(())
 }

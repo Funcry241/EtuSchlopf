@@ -139,6 +139,45 @@ impl Default for KeySignatureEnharmonicSpellingRenderWriteAudit {
     }
 }
 
+// Shared pure decision of the existing tonal owner. No write or receipt is
+// issued here; the original writer still owns adoption and postconditions.
+#[derive(Debug, Clone)]
+struct TonalSpellingDecision {
+    decision: ScorewideTonalKeySignatureDecision,
+    scorewide_scope_bound: bool,
+    scorewide_attempted: bool,
+    final_section: Option<FinalSectionTonalKeyCandidate>,
+    selected_profile: Option<TonalEvidenceProfile>,
+    target_fifths: Option<i32>,
+    selected_measure: Option<usize>,
+}
+
+fn derive_tonal_spelling_decision(xml: &str, notes: &[AtomicNote]) -> TonalSpellingDecision {
+    let decision = scorewide_tonal_key_signature_decision(xml, notes);
+    let scorewide_target = decision.candidate.map(|profile| profile.fifths);
+    let scorewide_scope_bound = decision.candidate.is_some()
+        && decision.opening_measure.is_some()
+        && decision.source_fifths == Some(0);
+    let scorewide_attempted = scorewide_scope_bound
+        && scorewide_target.is_some()
+        && scorewide_target != decision.source_fifths;
+    let final_section = if scorewide_attempted {
+        None
+    } else {
+        final_section_tonal_key_candidate(xml, notes)
+    };
+    let selected_profile = decision
+        .candidate
+        .or_else(|| final_section.as_ref().map(|candidate| candidate.profile));
+    let target_fifths = selected_profile.map(|profile| profile.fifths);
+    let selected_measure = if scorewide_attempted {
+        decision.opening_measure
+    } else {
+        final_section.as_ref().map(|candidate| candidate.boundary_measure)
+    };
+    TonalSpellingDecision { decision, scorewide_scope_bound, scorewide_attempted, final_section, selected_profile, target_fifths, selected_measure }
+}
+
 fn apply_key_signature_enharmonic_spelling_render_write(
     xml: &str,
     source_label: &str,
@@ -160,28 +199,8 @@ fn apply_key_signature_enharmonic_spelling_render_write(
         .iter()
         .filter(|event| !event.is_hidden && event.is_rest)
         .count();
-    let decision = scorewide_tonal_key_signature_decision(xml, &before_atomic);
-    let scorewide_target = decision.candidate.map(|profile| profile.fifths);
-    let scorewide_scope_bound = decision.candidate.is_some()
-        && decision.opening_measure.is_some()
-        && decision.source_fifths == Some(0);
-    let scorewide_attempted = scorewide_scope_bound
-        && scorewide_target.is_some()
-        && scorewide_target != decision.source_fifths;
-    let final_section = if scorewide_attempted {
-        None
-    } else {
-        final_section_tonal_key_candidate(xml, &before_atomic)
-    };
-    let selected_profile = decision
-        .candidate
-        .or_else(|| final_section.as_ref().map(|candidate| candidate.profile));
-    let target_fifths = selected_profile.map(|profile| profile.fifths);
-    let selected_measure = if scorewide_attempted {
-        decision.opening_measure
-    } else {
-        final_section.as_ref().map(|candidate| candidate.boundary_measure)
-    };
+    let TonalSpellingDecision { decision, scorewide_scope_bound, scorewide_attempted, final_section, selected_profile, target_fifths, selected_measure } =
+        derive_tonal_spelling_decision(xml, &before_atomic);
     let selected_profile_label = selected_profile
         .map_or_else(|| "none".to_string(), |profile| profile.name.to_string());
     let structural_scope_bound = scorewide_scope_bound || final_section.is_some();

@@ -1,6 +1,6 @@
 kind=EtuSchlopfTake
 version=0.10.1839
-revision=r1533
-name=CommunityDocumentationAndTemplates
-parent_revision=r1532
-change_class=RefactorOnly
+revision=r1577
+name=OriginalRegisterPreviewExactMemo
+parent_revision=r1576
+change_class=GovernedChange

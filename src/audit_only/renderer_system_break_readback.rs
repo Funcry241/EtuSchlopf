@@ -159,10 +159,14 @@ pub(crate) fn audit_paths(
     rendered_pdf: &Path,
 ) -> anyhow::Result<RendererSystemBreakReadbackAudit> {
     let planned_xml = std::fs::read_to_string(planned_musicxml)?;
-    let (measure_count, planned_system_starts, planned_page_starts) =
-        planned_breaks_from_musicxml(&planned_xml)?;
     let pdf_bytes = std::fs::read(rendered_pdf)?;
-    let (events, pdf_pages) = extract_pdf_text_events(&pdf_bytes)?;
+    audit_paths_text(&planned_xml, &pdf_bytes)
+}
+
+fn audit_paths_text(planned_xml: &str, pdf_bytes: &[u8]) -> anyhow::Result<RendererSystemBreakReadbackAudit> {
+    let (measure_count, planned_system_starts, planned_page_starts) =
+        planned_breaks_from_musicxml(planned_xml)?;
+    let (events, pdf_pages) = extract_pdf_text_events(pdf_bytes)?;
     if pdf_pages == 0 {
         anyhow::bail!("RendererSystemBreakReadback: keine PDF-Seiten lesbar");
     }
@@ -216,7 +220,7 @@ pub(crate) fn audit_paths(
     let planned_page_set = planned_page_starts.iter().copied().collect::<BTreeSet<_>>();
     let rendered_page_set = rendered_page_starts.iter().copied().collect::<BTreeSet<_>>();
 
-    let ottava_context = crate::audit_only::renderer_ottava_context::observe(&planned_xml, &pdf_bytes);
+    let ottava_context = crate::audit_only::renderer_ottava_context::observe(planned_xml, pdf_bytes);
     Ok(RendererSystemBreakReadbackAudit {
         inserted_system_breaks: rendered_system_set
             .difference(&planned_system_set)
@@ -3355,3 +3359,5 @@ fn historical_phrase_renderer_cell_beam_spans(
     }
     deduplicated
 }
+
+include!("renderer_page_clearance.rs");

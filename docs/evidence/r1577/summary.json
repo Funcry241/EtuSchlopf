@@ -1,0 +1,49 @@
+{
+  "revision": "r1577",
+  "package_version": "0.10.1839",
+  "accepted_take_sha256": "6b04ee95371eebd258cee9f8f64a42d5ee99aeeedb2ea1179ca070bdf1e32776",
+  "executed_source_archive_sha256": "0a3c8b566712a21c133fa10859f0f4c8d3f9f3c71fb3ae5c5683e88bef2b872f",
+  "take_payload_files": 1952,
+  "take_payload_identical": true,
+  "source_snapshot_extra_files": [
+    "Cargo.lock"
+  ],
+  "projects_ok": 10,
+  "final_exit": 0,
+  "tests_passed": 2875,
+  "tests_failed": 0,
+  "tests_ignored": 3,
+  "clippy_warnings": 0,
+  "xml": {
+    "count": 20,
+    "byte_identical_to": "r1576"
+  },
+  "c3": {
+    "adopted_projects": [
+      7,
+      8
+    ],
+    "staves": "both",
+    "bound_through": "FinalLayoutPhraseProjection",
+    "guard_after_voice_partition": "clear",
+    "diagnostics_equal_except_run_directory": true
+  },
+  "timings": {
+    "r1576_master_stage_sum_ms": 594391,
+    "r1577_master_stage_sum_ms": 532224,
+    "r1576_wall_seconds": 863,
+    "r1577_wall_seconds": 874,
+    "concurrent_projects": 3,
+    "solver_workers_per_project": 6,
+    "renderer_slots": 3,
+    "requests": 566,
+    "exact_cache_hits": 89,
+    "actual_evaluations": 477,
+    "capacity_bypasses": 0,
+    "whole_run_speedup_proven": false
+  },
+  "public_download_engine": "r1537",
+  "windows_package_test_for_this_projection": "not_run",
+  "runtime_inventory_entries": 724,
+  "privacy": "No corpus input or complete musical output published"
+}

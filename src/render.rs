@@ -353,6 +353,25 @@ pub(super) struct RendererProbeIdentity {
     executable: String,
     command: String,
 }
+impl RendererProbeIdentity {
+    /// Compare actual successful invocations after rebinding only the explicitly
+    /// declared input/output operands. Exact oracle equality remains unchanged.
+    pub(super) fn same_consumer_for_bound_paths(
+        &self,
+        actual: &Self,
+        original_input: &Path,
+        original_output: &Path,
+        actual_input: &Path,
+        actual_output: &Path,
+    ) -> bool {
+        if self.executable != actual.executable { return false; }
+        let original_variants = render_command_variants(&absolute_path(original_input), &absolute_path(original_output));
+        let actual_variants = render_command_variants(&absolute_path(actual_input), &absolute_path(actual_output));
+        let original = original_variants.iter().find(|variant| format_command(&self.executable, &variant.args) == self.command);
+        let current = actual_variants.iter().find(|variant| format_command(&actual.executable, &variant.args) == actual.command);
+        matches!((original, current), (Some(a), Some(b)) if a.label == b.label)
+    }
+}
 impl std::fmt::Debug for RendererProbeIdentity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("RendererProbeIdentity(bound_invocation)")
@@ -443,7 +462,9 @@ pub fn render_pdf_if_possible(
     output_pdf: &Path,
     final_commit: &final_pdf_source_commit::FinalPdfSourceCommit,
 ) -> RenderResult {
-    if !final_commit.closed() {
+    let shadow_partial_renderable = final_commit.permits_shadow_renderer(input_musicxml)
+        && super::persisted_schema_validation::shadow_renderer_paths_outside_products(input_musicxml, output_pdf);
+    if !final_commit.closed() && !shadow_partial_renderable {
         let _ = fs::remove_file(output_pdf);
         return RenderResult {
             message: format!(
@@ -490,8 +511,9 @@ pub fn render_pdf_if_possible(
     if !renderer_musicxml_unchanged {
         rendered.status = RenderStatus::RendererFailed;
     }
+    let closure_status = if shadow_partial_renderable { "SHADOW_PARTIAL; FullClosure=false; ReleaseEffect=none" } else { "GREEN" };
     rendered.message = format!(
-        "{}\nFinalRenderCommittedStateClosure v{}: PreRenderFinalization GREEN; RendererMusicXmlWrites {}.\n{}",
+        "{}\nFinalRenderCommittedStateClosure v{}: PreRenderFinalization {closure_status}; RendererMusicXmlWrites {}.\n{}",
         final_commit.pipeline_line(),
         env!("CARGO_PKG_VERSION"),
         usize::from(!renderer_musicxml_unchanged),
@@ -2077,3 +2099,7 @@ mod renderer_identity_and_force_tests {
         assert!(renderer_executable_identity(root.join("missing-renderer-identity-fixture").to_str().unwrap()).contains("unavailable"));
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/renderer_profile_binding.rs"]
+mod renderer_profile_binding_tests;

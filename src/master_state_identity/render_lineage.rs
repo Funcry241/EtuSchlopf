@@ -590,6 +590,10 @@ impl StepPlacement {
 
 #[derive(Debug)]
 struct RenderStep {
+    // Observation from the actual E053 emitter; never an adoption capability.
+    original_beam: Option<Result<std::sync::Arc<crate::pipeline::ActualCanonicalBeamCapture>, String>>,
+    original_notes: Option<std::sync::Arc<crate::pipeline::JointRestForwardNoteCapture>>,
+    original_transport: Option<crate::arrangement::representation_transport::RhythmicRepresentationTransport>,
     receipt: TransformationReceipt,
     placement: StepPlacement,
     pre_bytes: Option<String>,
@@ -669,6 +673,9 @@ impl RenderTransitionReceipts {
         if let Some(receipt) = receipt {
             self.obligation.activate();
             self.steps.push(RenderStep {
+                original_beam: None,
+                original_notes: None,
+                original_transport: None,
                 receipt,
                 placement,
                 pre_bytes: pre_bytes.map(str::to_string),
@@ -700,13 +707,45 @@ impl RenderTransitionReceipts {
     /// BLOCK owner on the whole current document with its post bytes.
     pub(crate) fn push_block(&mut self, receipt: impl Into<CapturedBlockReceiptInput>, post: &str) {
         let input=receipt.into();
-        // Beam observation is not a Render adoption capability.
+        // The original emitter observation remains separate from adoption.
+        let beam = input.beam;
+        let before = self.steps.len();
         self.push(
             input.receipt.map(TransformationReceipt::Block),
             StepPlacement::Document,
             None,
             Some(post),
         );
+        if self.steps.len() > before {
+            let step = self.steps.last_mut().expect("just pushed original block");
+            step.original_beam = beam;
+        }
+    }
+
+    /// Read-only original-note companion of the actual Row55 receipt.
+    pub(crate) fn push_original_notes(&mut self, receipt: Option<BlockTransformationReceipt>,
+        capture: Option<std::sync::Arc<crate::pipeline::JointRestForwardNoteCapture>>, post: &str) {
+        let before = self.steps.len();
+        self.push_block(receipt, post);
+        if self.steps.len() > before {
+            self.steps.last_mut().expect("just pushed original Row55").original_notes = capture;
+        }
+    }
+
+    /// Moves an actual original-owner chain into the Render chain. Each
+    /// BLOCK carries its own complete original replay, never a minted bridge.
+    pub(crate) fn append_original_owner_chain(&mut self, mut owners: OwnerReceipts) -> anyhow::Result<()> {
+        for receipt in owners.receipts.drain(..) {
+            let identity=receipt.identity();
+            let index=owners.recorded_block_transports.iter().position(|(bound,_)|*bound==identity)
+                .ok_or_else(||anyhow::anyhow!("Original owner chain has no recorded replay"))?;
+            let (_,transport)=owners.recorded_block_transports.remove(index);
+            let transport=transport.map_err(|error|anyhow::anyhow!("{error}"))?;
+            let (_,after)=transport.recorded_documents()?;let after=after.to_owned();
+            self.push(Some(receipt),StepPlacement::Document,None,Some(&after));
+            self.steps.last_mut().expect("original owner step was appended").original_transport=Some(transport);
+        }
+        Ok(())
     }
 
     /// BLOCK owner on `doc[start..end]` with its post fragment.
@@ -968,11 +1007,18 @@ fn verify_pending_generated_consumer(
 }
 
 fn replay_steps(base: &str, steps: &[RenderStep]) -> Result<(String, Vec<StepTrace>), String> {
+    replay_steps_observed(base, steps, None)
+}
+
+type RenderReplayObserver<'a> = dyn FnMut(&RenderStep, &str, &str) + 'a;
+fn replay_steps_observed(base: &str, steps: &[RenderStep],
+    mut observer: Option<&mut RenderReplayObserver<'_>>) -> Result<(String, Vec<StepTrace>), String> {
     let mut document = base.to_string();
     let mut traces = Vec::with_capacity(steps.len());
     let mut document_before_step = Vec::<u64>::with_capacity(steps.len());
     let mut pending_generated = Vec::<PendingGenerated>::new();
     for (index, step) in steps.iter().enumerate() {
+        let observed_before = observer.as_ref().map(|_| document.clone());
         let doc_pre = fingerprint(&document);
         document_before_step.push(doc_pre);
         if step.placement.advances() && !pending_generated.is_empty() {
@@ -1063,6 +1109,9 @@ fn replay_steps(base: &str, steps: &[RenderStep]) -> Result<(String, Vec<StepTra
             doc_pre,
             doc_post: fingerprint(&document),
         });
+        if let (Some(observer), Some(before)) = (observer.as_mut(), observed_before) {
+            observer(step, &before, &document);
+        }
     }
     if let Some(generated) = pending_generated.first() {
         return Err(format!(
@@ -1312,6 +1361,82 @@ pub(crate) struct VerifiedRenderTransition {
 }
 
 impl VerifiedRenderTransition {
+    /// Read-only custody continuation evaluated on the verified owner chain.
+    /// A missing operation map is UNKNOWN; only a newly executed E053 emitter
+    /// can establish a new group decision on its actual output document.
+    pub(crate) fn observe_actual_beam_continuation(&self,
+        previous: Option<&Result<std::sync::Arc<crate::pipeline::ActualCanonicalBeamCapture>, String>>,
+    ) -> Option<Result<std::sync::Arc<crate::pipeline::ActualCanonicalBeamCapture>, String>> {
+        let mut observed = previous.cloned();
+        for step in &self.steps {
+            if let Some(capture) = &step.original_beam { observed = Some(capture.clone()); continue; }
+            let Some(Ok(capture)) = observed.as_ref() else { continue; };
+            let next = match (&step.placement, &step.receipt) {
+                (StepPlacement::Document, TransformationReceipt::Exact(receipt)) => capture.carry_exact(receipt),
+                (StepPlacement::Document, TransformationReceipt::Preserving(receipt)) =>
+                    receipt.recorded_representation().ok_or_else(|| anyhow::anyhow!("Missing original Render preserving journal"))
+                        .and_then(|transport| capture.carry_recorded(transport)),
+                (StepPlacement::Document, TransformationReceipt::Block(_)) => step.original_transport.as_ref()
+                    .ok_or_else(||anyhow::anyhow!("Missing original Render block transport"))
+                    .and_then(|transport|capture.carry_recorded(transport)),
+                _ => Err(anyhow::anyhow!("Render owner has no original beam continuation journal")),
+            };
+            observed = Some(next.map(std::sync::Arc::new).map_err(|error| error.to_string()));
+        }
+        observed
+    }
+
+    /// Source/attack ancestry carried from the real early Master→Render fork.
+    /// Operation geometry comes only from the actual verified owners. Unknown
+    /// remains sticky; a later XML match cannot reconstruct missing identity.
+    pub(crate) fn observe_joint_material_continuation(&self,
+        previous: Option<&Result<std::sync::Arc<crate::pipeline::JointReadingOwnerInput>, String>>,
+    ) -> Option<Result<std::sync::Arc<crate::pipeline::JointReadingOwnerInput>, String>> {
+        let mut observed = previous.cloned();
+        let base = match observed.as_ref() { Some(Ok(input)) => input.bound_source().to_owned(), _ => return observed };
+        let mut observer = |step: &RenderStep, before: &str, after: &str| {
+            if before == after { return; }
+            let Some(Ok(input)) = observed.as_ref() else { return; };
+            let continued = (|| {
+                anyhow::ensure!(input.binds(before), "Render identity capture does not bind the actual root");
+                match (&step.placement, &step.receipt) {
+                    (StepPlacement::Document, TransformationReceipt::Exact(receipt)) => input.continue_render_exact(receipt, None, after),
+                    (StepPlacement::Fragment { start, end }, TransformationReceipt::Exact(receipt)) => input.continue_render_exact(receipt, Some((*start,*end)), after),
+                    (StepPlacement::Fragment { start, end }, TransformationReceipt::Block(_)) => input.continue_render_fragment_exterior(*start, *end,
+                        step.post_bytes.as_deref().ok_or_else(|| anyhow::anyhow!("Render block fragment has no emitted post"))?, after),
+                    (StepPlacement::Document, TransformationReceipt::Preserving(receipt)) => receipt.recorded_representation()
+                        .ok_or_else(|| anyhow::anyhow!("Missing original Render preserving note journal"))
+                        .and_then(|transport| input.continue_render_recorded(transport, after)),
+                    (StepPlacement::Document, TransformationReceipt::Block(receipt)) => {
+                        if let Some(transport)=&step.original_transport {
+                            input.continue_render_recorded(transport,after)
+                        } else if let Some(capture) = &step.original_beam {
+                            input.continue_render_beam_emission(receipt, capture.as_ref().map_err(|error| anyhow::anyhow!("{error}"))?, after)
+                        } else if let Some(capture) = &step.original_notes {
+                            input.continue_render_rest_emission(receipt, capture, after)
+                        } else if let Some(transport) = receipt.original_render_notes() {
+                            input.continue_render_recorded(transport.as_ref().map_err(|error| anyhow::anyhow!("{error}"))?, after)
+                        } else { Err(anyhow::anyhow!("Missing original Render block note-emission map")) }
+                    }
+                    _ => Err(anyhow::anyhow!("Render placement has no original material continuation")),
+                }
+            })();
+            observed = Some(continued.map(std::sync::Arc::new).map_err(|error| {
+                let owner = match &step.receipt {
+                    TransformationReceipt::Exact(receipt) => receipt.descriptor.owner,
+                    TransformationReceipt::Block(receipt) => receipt.descriptor.owner,
+                    TransformationReceipt::Preserving(receipt) => receipt.descriptor.owner,
+                    TransformationReceipt::Additive(receipt) => receipt.descriptor.owner,
+                };
+                format!("Owner={owner}; Placement={}; {error}", step.placement.label())
+            }));
+        };
+        if let Err(error) = replay_steps_observed(&base, &self.steps, Some(&mut observer)) {
+            return Some(Err(format!("Original Render identity replay unavailable: {error}")));
+        }
+        observed
+    }
+
     /// Verifies a chain against its basis. `current` is the existing sovereign
     /// Render document (None = no history). Every failure is fatal.
     pub(crate) fn verify<B: RenderLineageCommitBoundary>(
@@ -1477,6 +1602,9 @@ impl VerifiedRenderTransition {
             );
         }
         let step = RenderStep {
+            original_beam: None,
+            original_notes: None,
+            original_transport: None,
             receipt: TransformationReceipt::Exact(receipt),
             placement: StepPlacement::Document,
             pre_bytes: None,
@@ -1523,6 +1651,9 @@ impl VerifiedRenderTransition {
                 );
             }
         }
+        let original_joint_context = crate::pipeline::joint_render_custody_context();
+        let next_joint_material = self.observe_joint_material_continuation(original_joint_context.as_ref().map(|context| &context.material));
+        let next_joint_beams = self.observe_actual_beam_continuation(original_joint_context.as_ref().and_then(|context| context.beams.as_ref()));
         let mut lineage = match (lineage, self.origin) {
             (None, Some((origin, epoch_kind, master_head, master_events))) if origin.is_genesis() => {
                 count(&RENDER_GENESIS_ADOPTED);
@@ -1624,6 +1755,10 @@ impl VerifiedRenderTransition {
         }
         self.obligation.close_successfully();
         count(&RENDER_TRANSITIONS_ADOPTED);
+        if let Some(context) = original_joint_context {
+            crate::pipeline::observe_committed_joint_render_custody(context, &self.candidate, next_joint_material, next_joint_beams);
+        }
+        crate::pipeline::observe_joint_render_course_checkpoint(label, &self.candidate);
         (lineage, self.candidate)
     }
 }

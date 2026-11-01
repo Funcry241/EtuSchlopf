@@ -545,10 +545,8 @@ fn midi_seed_genesis_input(
     midi_seed_stats: &MidiSeedStats,
 ) -> master_state_identity::GenesisInputBinding {
     master_state_identity::GenesisInputBinding::ProductiveSourcePlanSha256(
-        midi_seed_stats
-            .source_selection_full_causal
-            .productive_plan_seed_fingerprint_sha256
-            .clone(),
+        midi_seed_stats.notation_time.bind_productive_plan(
+            &midi_seed_stats.source_selection_full_causal.productive_plan_seed_fingerprint_sha256),
     )
 }
 fn build_candidate_batch(

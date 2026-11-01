@@ -191,6 +191,10 @@ pub struct RustigClefCoursePlan {
 #[derive(Debug, Clone)]
 pub struct RustigClefSurfaceDecision {
     candidates: Vec<ClefSurfaceMaterializationPlan>,
+    joint_course: Option<(std::sync::Arc<str>, RustigClefCoursePlan, String)>,
+}
+thread_local! {
+    static JOINT_CLEF_WRITE: std::cell::RefCell<Option<RustigClefCoursePlan>> = const { std::cell::RefCell::new(None) };
 }
 
 impl RustigClefCoursePlan {
@@ -226,7 +230,113 @@ impl RustigClefCoursePlan {
     }
 }
 
+/// Read-only capabilities of this exact E024 source. No course is selected.
+/// Unremovable clefs stay fixed; single insertion probes preserve the productive
+/// normalizer conditions using facts bound to this immutable part source.
+pub(crate) struct JointClefWriterCapabilities {
+    pub(crate) insertions: BTreeSet<usize>,
+    pub(crate) fixed: Vec<(usize, bool)>,
+}
+
+fn joint_clef_plan(xml: &str, removals: Vec<(usize, usize)>, insertions: Vec<(usize, ClefKind)>) -> RustigClefCoursePlan {
+    RustigClefCoursePlan {
+        removed_bytes: removals.iter().map(|(start,end)| end-start).sum(),
+        removed_clef_count: removals.iter().map(|&(start,end)| clef_count(&xml[start..end])).sum(),
+        inserted_bytes: insertions.iter().map(|(_,kind)| clef_readability_primary_clef_block(*kind).len()).sum(),
+        inserted_clef_count: insertions.len(), removals, insertions,
+        source_notes: raw_note_fragments(xml), source_clef_count: clef_count(xml), source_len: xml.len(),
+    }
+}
+
 impl RustigClefSurfaceDecision {
+    /// Ordered layers: chosen clef, original same-time element positions and an
+    /// optional insertion anchor attested by this owner's own normalizer.
+    pub(crate) fn prepare_joint_course(xml: &str, layers: &[(bool, Vec<usize>, Option<usize>)]) -> Result<Self, &'static str> {
+        let mut surfaces = Vec::new();
+        for (start,end) in score_part_ranges(xml) {
+            let part = &xml[start..end];
+            for mut surface in scan_lower_clef_surfaces(part).ok_or("Unsupported original clef surface")? {
+                surface.start += start; surface.end += start; surfaces.push(surface);
+            }
+        }
+        let mut eligible = BTreeSet::new(); let mut keep = BTreeSet::new(); let mut insertions = Vec::new();
+        let mut previous = None;
+        for (index,(treble,positions,anchor)) in layers.iter().enumerate() {
+            let kind = if *treble { ClefKind::Treble } else { ClefKind::Bass };
+            eligible.extend(positions.iter().copied());
+            if index == 0 { keep.extend(positions.iter().copied()); }
+            else if previous != Some(kind) {
+                if let Some(surface) = surfaces.iter().rev().find(|surface|
+                    positions.contains(&surface.start) && surface.kind == kind && surface.visible) {
+                    keep.insert(surface.start);
+                } else {
+                    insertions.push((anchor.ok_or("C3 clef change has no original owner anchor")?, kind));
+                }
+            }
+            previous = Some(kind);
+        }
+        let mut removals = surfaces.iter().filter(|surface|
+            surface.removable && eligible.contains(&surface.start) && !keep.contains(&surface.start))
+            .map(|surface| (surface.start,surface.end)).collect::<Vec<_>>();
+        if !normalize_removal_ranges(xml,&mut removals)
+            || !normalize_clef_readability_insertions(xml,&removals,&mut insertions) { return Err("C3 clef script is not materializable"); }
+        let plan = joint_clef_plan(xml, removals, insertions);
+        let mut edits = plan.removals.iter().map(|&(a,b)| (a,b,String::new()))
+            .chain(plan.insertions.iter().map(|&(a,kind)| (a,a,clef_readability_primary_clef_block(kind).to_owned())))
+            .collect::<Vec<_>>(); edits.sort_by_key(|(a,b,_)| (*a,*b));
+        let mut preview = String::new(); let mut cursor = 0;
+        for (a,b,text) in edits { if a<cursor { return Err("Overlapping C3 clef script"); } preview.push_str(&xml[cursor..a]); preview.push_str(&text); cursor=b; }
+        preview.push_str(&xml[cursor..]);
+        if !plan.verifies(&preview) || lower_clef_surface_inside_open_tie(&preview)
+            || lower_clef_surface_inside_primary_beam_group(&preview) { return Err("C3 clef projection violates existing owner guards"); }
+        Ok(Self { candidates: Vec::new(), joint_course: Some((std::sync::Arc::from(xml), plan, preview)) })
+    }
+    pub(crate) fn joint_course_post(&self) -> Option<&str> { self.joint_course.as_ref().map(|(_,_,post)| post.as_str()) }
+    pub(crate) fn apply_prepared_joint_course(&self, xml: &mut String)
+        -> (Result<(), &'static str>, Option<PreservingTransformationReceipt>) {
+        let Some((source,plan,post)) = &self.joint_course else { return (Err("Missing bound C3 clef plan"),None); };
+        if source.as_ref() != xml { return (Err("C3 clef source epoch changed"),None); }
+        if JOINT_CLEF_WRITE.with(|slot| slot.borrow().is_some()) { return (Err("Another clef owner operation is pending"),None); }
+        JOINT_CLEF_WRITE.with(|slot| *slot.borrow_mut() = Some(plan.clone()));
+        let result = apply_rustig_clef_course_to_buffer(xml);
+        let unconsumed = JOINT_CLEF_WRITE.with(|slot| slot.borrow_mut().take().is_some());
+        if result.0.is_ok() && (unconsumed || xml != post) { panic!("Original E024 writer diverged from its bound C3 preparation"); }
+        result
+    }
+
+    pub(crate) fn observe_joint_boundaries(xml: &str) -> Option<JointClefWriterCapabilities> {
+        let mut timing=JointBoundaryTiming::new(xml);
+        let mut result = JointClefWriterCapabilities { insertions: BTreeSet::new(), fixed: Vec::new() };
+        for (start, end) in score_part_ranges(xml) {
+            let part = &xml[start..end];
+            let started=std::time::Instant::now();
+            let mut prepared = JointBoundaryObservation::observe(part)?;
+            timing.prepare+=started.elapsed();
+            timing.parts+=1;
+            let started=std::time::Instant::now();
+            let surfaces = scan_lower_clef_surfaces_with_time(part, Some(&prepared.temporal))?;
+            for (index,surface) in surfaces.iter().enumerate() {
+                if !surface.removable && !surfaces[index+1..].iter().any(|later| later.at == surface.at) {
+                    result.fixed.push((start + surface.start, surface.kind == ClefKind::Treble));
+                }
+            }
+            let pitches = scan_lower_pitches_with_prepared_time(part, None, &prepared.boundaries, Some(&prepared.temporal));
+            timing.scan+=started.elapsed();
+            let started=std::time::Instant::now();
+            for pitch in pitches {
+                let Some(anchor) = pitch.clef_transition_anchor else { continue; };
+                timing.requests+=1;
+                if prepared.permits_single_insertion(anchor) {
+                    result.insertions.insert(start + anchor);
+                }
+            }
+            timing.anchors+=started.elapsed();
+            timing.unique+=prepared.eligible.len();
+        }
+        timing.complete=true;
+        Some(result)
+    }
+
     pub fn materialization_plan(&self) -> Option<ClefSurfaceMaterializationPlan> {
         (self.candidates.len() == 1).then(|| self.candidates[0])
     }
@@ -344,7 +454,17 @@ pub(crate) struct RustigClefCoursePreservingMint {
 }
 
 pub(super) fn derive_clef_readability_primary_course_plan(xml: &str) -> RustigClefCoursePlan {
+    if let Some(plan) = JOINT_CLEF_WRITE.with(|slot| slot.borrow_mut().take()) { return plan; }
+    if crate::pipeline::joint_reading_course_active() {
+        return joint_clef_plan(xml, Vec::new(), Vec::new());
+    }
     crate::audit_only::clef_planner_input::emit(xml, super::authority_primitives::fingerprint(xml));
+    crate::audit_only::joint_register_reading::emit(xml, crate::audit_only::joint_register_reading::Costs {
+        transition: READABILITY_CLEF_TRANSITION_COST,
+        redundant: REDUNDANT_CLEF_COST,
+        short: READABILITY_SHORT_EXCURSION_REFERENCE_COST,
+        short_attacks: READABILITY_SHORT_EXCURSION_MAX_ATTACKS,
+    });
     let mut removals = Vec::new();
     let mut insertions = Vec::new();
     for (part_index, (part_start, part_end)) in score_part_ranges(xml).into_iter().enumerate() {
@@ -415,6 +535,69 @@ pub(super) fn derive_clef_readability_primary_course_plan(xml: &str) -> RustigCl
         inserted_bytes,
         inserted_clef_count,
     }
+}
+
+/// Complete original-owner solution costs for an immutable prepared course.
+/// This read-only edge exports no plan, candidate XML, edit or writer token.
+impl RustigClefSurfaceDecision {
+pub(crate) fn joint_lower_course_measurements(xml: &str) -> BTreeMap<String, crate::registernotation::JointLowerCourseCost> {
+    let mut result = BTreeMap::new();
+    let Ok(document) = roxmltree::Document::parse(xml) else { return result; };
+    for node in document.root_element().children().filter(|n| n.has_tag_name("part")) {
+        let Some(id) = node.attribute("id") else { continue; };
+        let part = &xml[node.range()];
+        if TemporalPart::observe(part).is_none() { continue; }
+        let Some(surfaces) = scan_lower_clef_surfaces(part) else { continue; };
+        let pitches = scan_lower_pitches(part, None);
+        let Some(first) = surfaces.first() else { continue; };
+        if pitches.iter().any(|pitch| pitch.at < first.at) { continue; }
+        let Some(solution) = solve_readability_course(part, &surfaces, &pitches) else { continue; };
+        let mut removals = surfaces.iter().zip(&solution.retained)
+            .filter_map(|(surface, keep)| (!keep).then_some((surface.start, surface.end))).collect::<Vec<_>>();
+        let mut insertions = solution.insertions.clone();
+        if !normalize_removal_ranges(part, &mut removals)
+            || !normalize_clef_readability_insertions(part, &removals, &mut insertions) { continue; }
+        // Read-only representation projection of the original owner's exact
+        // normalized script. No source buffer, adoption or receipt is available.
+        let mut geometry = removals.iter().map(|&(start, end)| (start, end, ""))
+            .chain(insertions.iter().map(|&(start, kind)| (start, start, clef_readability_primary_clef_block(kind))))
+            .collect::<Vec<_>>();
+        geometry.sort_by_key(|&(start, end, _)| (start, end));
+        let mut previous = 0;
+        let mut fragments = Vec::new();
+        let mut closed = true;
+        for (start, end, block) in geometry {
+            if start < previous { closed = false; break; }
+            fragments.push(&part[previous..start]); fragments.push(block); previous = end;
+        }
+        if !closed { continue; }
+        fragments.push(&part[previous..]);
+        let projected = fragments.concat();
+        if raw_note_fragments(&projected) != raw_note_fragments(part)
+            || lower_clef_surface_inside_open_tie(&projected)
+            || lower_clef_surface_inside_primary_beam_group(&projected) { continue; }
+        let Some(projected_surfaces) = scan_lower_clef_surfaces(&projected) else { continue; };
+        let projected_pitches = scan_lower_pitches(&projected, None);
+        let Some(projected_cost) = score_readability_course(&projected, &projected_surfaces, &projected_pitches,
+            &vec![true; projected_surfaces.len()]) else { continue; };
+        if projected_cost != solution.cost || projected_pitches.len() != pitches.len() { continue; }
+        let Some(temporal) = TemporalPart::observe(&projected) else { continue; };
+        let course = projected_surfaces.iter().map(|surface| (surface.at, surface.kind)).collect::<Vec<_>>();
+        result.insert(id.to_owned(), crate::registernotation::JointLowerCourseCost {
+            total: projected_cost.total(), pressure: projected_cost.ledger_pressure,
+            transitions: projected_cost.clef_transitions, octave_changes: temporal.mapping_change_count(),
+            octave_reminders: node.descendants().filter(|n| n.has_tag_name("direction")
+                && n.children().any(|c| c.has_tag_name("staff") && c.text() == Some("2"))
+                && n.descendants().any(|c| c.has_tag_name("octave-shift") && c.attribute("type") == Some("continue"))).count(),
+            objects: projected_pitches.len(), maximum_ledgers: projected_pitches.iter().filter_map(|pitch| {
+            let kind = course.iter().rev().find(|&&(at, _)| at <= pitch.at)?.1;
+            Some(match kind { ClefKind::Bass => PianoClef::BassF4, ClefKind::Treble => PianoClef::TrebleG2 }.ledger_lines(pitch.pitch))
+        }).max().unwrap_or(0),
+        });
+    }
+    result
+}
+
 }
 
 /// Input-bound evidence before normalization or writing; not an error classifier.
@@ -587,6 +770,7 @@ pub fn derive_rustig_surface_clef_decision(
 ) -> RustigClefSurfaceDecision {
     RustigClefSurfaceDecision {
         candidates: candidates.into_iter().collect(),
+        joint_course: None,
     }
 }
 
@@ -1388,6 +1572,10 @@ fn passage_cost(notes: &[PitchedEvent], start: i128, end: i128, kind: ClefKind) 
 
 fn scan_lower_clef_surfaces(part: &str) -> Option<Vec<SurfaceEvent>> {
     let temporal = TemporalPart::observe(part);
+    scan_lower_clef_surfaces_with_time(part, temporal.as_ref())
+}
+
+fn scan_lower_clef_surfaces_with_time(part: &str, temporal: Option<&TemporalPart>) -> Option<Vec<SurfaceEvent>> {
     let mut events = Vec::new();
     let mut cursor = 0usize;
     while let Some(relative) = part[cursor..].find("<attributes") {
@@ -1520,10 +1708,19 @@ fn scan_lower_pitches_with_beam_audit(
 
 fn scan_lower_pitches_with_boundary_policy(
     part: &str,
-    mut observations: Option<&mut Vec<BeamAnchorObservation>>,
+    observations: Option<&mut Vec<BeamAnchorObservation>>,
     boundaries: &BTreeSet<usize>,
 ) -> Vec<PitchedEvent> {
     let temporal = TemporalPart::observe(part);
+    scan_lower_pitches_with_prepared_time(part, observations, boundaries, temporal.as_ref())
+}
+
+fn scan_lower_pitches_with_prepared_time(
+    part: &str,
+    mut observations: Option<&mut Vec<BeamAnchorObservation>>,
+    boundaries: &BTreeSet<usize>,
+    temporal: Option<&TemporalPart>,
+) -> Vec<PitchedEvent> {
     // Unsupported input cannot enter the solver. Keep parent observations for
     // its unchanged baseline validators and diagnostics, never a new course.
     let serial_shifts = if temporal.is_none() { scan_octave_events(part) } else { Vec::new() };
@@ -3014,3 +3211,217 @@ mod lower_staff_chord_attack_checkpoint58;
 #[cfg(test)]
 #[path = "../../tests/unit/staff_notation_temporal_context.rs"]
 mod temporal_context_tests;
+
+
+/// Immutable part-bound facts and memoized answers for single-insertion probes.
+/// It borrows exactly the XML it observes; it is never reused for a successor.
+struct JointBoundaryObservation<'a> {
+    source: &'a str,
+    temporal: TemporalPart,
+    boundaries: BTreeSet<usize>,
+    eligible: BTreeMap<usize,bool>,
+}
+impl<'a> JointBoundaryObservation<'a> {
+    fn observe(source: &'a str) -> Option<Self> {
+        Some(Self {source, temporal:TemporalPart::observe(source)?, boundaries:beam_boundary::observe(source), eligible:BTreeMap::new()})
+    }
+    fn permits_single_insertion(&mut self, start: usize) -> bool {
+        if let Some(&answer)=self.eligible.get(&start) {return answer;}
+        // The caller probes exactly one Bass insertion with no removals.
+        // Under the required supported temporal context, normalization's None
+        // branch is already rejected before any serial fallback can matter.
+        let answer=start<=self.source.len() && self.source.is_char_boundary(start)
+            && self.source.get(start..).is_some_and(|tail|tail.starts_with("<note"))
+            && !self.temporal.tie_open(start)
+            && match self.temporal.beam_inside(start) {
+                Some(false)=>true,
+                Some(true)=>self.boundaries.contains(&start),
+                None=>false,
+            };
+        self.eligible.insert(start,answer);answer
+    }
+}
+
+#[cfg(test)]
+mod joint_boundary_reuse_tests {
+    use super::*;
+    fn parent_reference(xml: &str) -> Option<JointClefWriterCapabilities> {
+        let mut result = JointClefWriterCapabilities { insertions: BTreeSet::new(), fixed: Vec::new() };
+        for (start, end) in score_part_ranges(xml) {
+            let part = &xml[start..end];
+            TemporalPart::observe(part)?;
+            let surfaces = scan_lower_clef_surfaces(part)?;
+            for (index,surface) in surfaces.iter().enumerate() {
+                if !surface.removable && !surfaces[index+1..].iter().any(|later| later.at == surface.at) {
+                    result.fixed.push((start + surface.start, surface.kind == ClefKind::Treble));
+                }
+            }
+            for pitch in scan_lower_pitches(part, None) {
+                let Some(anchor) = pitch.clef_transition_anchor else { continue; };
+                let mut insertion = vec![(anchor, ClefKind::Bass)];
+                if normalize_clef_readability_insertions(part, &[], &mut insertion) {
+                    result.insertions.insert(start + anchor);
+                }
+            }
+        }
+        Some(result)
+    }
+
+    fn fixture(body:&str,label:&str,initial:&str)->String {
+        format!("<score-partwise><part id=\"synthetic\"><measure number=\"{label}\"><attributes><divisions>96</divisions><time><beats>4</beats><beat-type>4</beat-type></time><staves>2</staves><clef number=\"1\"><sign>G</sign><line>2</line></clef><clef number=\"2\"><sign>{initial}</sign><line>{}</line></clef></attributes>{body}</measure></part></score-partwise>",if initial=="F" {4}else{2})
+    }
+    fn note(staff:&str,voice:&str,extra:&str,mark:&str)->String {
+        format!("<note {extra}><pitch><step>C</step><octave>4</octave></pitch><duration>48</duration><voice>{voice}</voice><type>eighth</type><staff>{staff}</staff>{mark}</note>")
+    }
+    fn compare(xml:&str) {
+        let before=parent_reference(xml);let after=RustigClefSurfaceDecision::observe_joint_boundaries(xml);
+        assert_eq!(before.is_some(),after.is_some());
+        if let (Some(before),Some(after))=(before,after) {
+            assert_eq!(before.insertions,after.insertions);assert_eq!(before.fixed,after.fixed);
+        }
+    }
+    #[test]
+    fn prepared_boundaries_equal_parent_for_complete_hidden_cross_staff_and_unknown_material() {
+        for label in ["alpha","relocated"] {for initial in ["G","F"] {
+            let plain=note("2","a","","").repeat(8);
+            let tied=note("2","a","","<tie type=\"start\"/>")+&note("2","a","","<tie type=\"stop\"/>");
+            let beam=note("2","a","","<beam number=\"1\">begin</beam>")+&note("2","a","","<beam number=\"1\">continue</beam>")+&note("2","a","","<beam number=\"1\">end</beam>");
+            let cross=note("1","a","","<beam number=\"1\">begin</beam>")+&note("2","a","","<beam number=\"1\">end</beam>");
+            let member=note("2","a","","").replacen("<pitch>","<chord/><pitch>",1);
+            let chord=note("1","a","","")+&member;
+            let hidden=note("2","a","print-object=\"no\"","")+&plain;
+            let unresolved=note("2","a","","<beam number=\"1\">continue</beam>");
+            let grace=note("2","a","","").replacen("<pitch>","<grace/><pitch>",1);
+            let offset="<direction><direction-type><octave-shift type=\"down\" size=\"8\"/></direction-type><offset>0</offset><staff>2</staff></direction>".to_owned()+&beam;
+            for body in [&plain,&tied,&beam,&cross,&chord,&hidden,&unresolved,&grace,&offset] {compare(&fixture(body,label,initial));}
+            let xml=fixture(&plain,label,initial);compare(&xml.replace("96</divisions>","0</divisions>"));
+        }}
+    }
+    #[test]
+    fn every_cached_anchor_matches_single_insertion_normalization() {
+        let body=note("2","a","","<beam number=\"1\">begin</beam>")+&note("2","a","","<beam number=\"1\">end</beam>")+&note("2","b","","");
+        let xml=fixture(&body,"synthetic", "F");let (start,end)=score_part_ranges(&xml)[0];let part=&xml[start..end];
+        let mut prepared=JointBoundaryObservation::observe(part).unwrap();
+        let mut anchors=note_ranges(part).into_iter().map(|(start,_,_)|start).collect::<Vec<_>>();anchors.extend([0,part.len(),part.len()+1]);
+        for anchor in anchors {
+            let mut probe=vec![(anchor,ClefKind::Bass)];let expected=normalize_clef_readability_insertions(part,&[],&mut probe);
+            assert_eq!(prepared.permits_single_insertion(anchor),expected);
+            assert_eq!(prepared.permits_single_insertion(anchor),expected);
+        }
+        assert_eq!(prepared.eligible.len(),note_ranges(part).len()+3);
+    }
+    #[test]
+    #[ignore = "explicit local synthetic benchmark; no corpus fixture or acceptance threshold"]
+    fn synthetic_boundary_observation_benchmark() {
+        let body=(0..64).map(|_|note("2","a","","<beam number=\"1\">begin</beam>")+&note("2","a","","<beam number=\"1\">end</beam>")).collect::<String>();
+        let xml=fixture(&body,"benchmark","F");
+        let start=std::time::Instant::now();let before=parent_reference(&xml).unwrap();let parent=start.elapsed();
+        let start=std::time::Instant::now();let after=RustigClefSurfaceDecision::observe_joint_boundaries(&xml).unwrap();let prepared=start.elapsed();
+        assert_eq!(before.insertions,after.insertions);assert_eq!(before.fixed,after.fixed);
+        println!("JointBoundarySyntheticBenchmark: ParentMs={}; PreparedMs={}; Heads=128; SameCapabilities=true; NativeCorpusClaim=none",parent.as_millis(),prepared.as_millis());
+    }
+}
+
+
+/// Console-only sub-times. These are not read by planning or report decisions.
+struct JointBoundaryTiming<'a> {
+    source:&'a str,
+    started:std::time::Instant,
+    prepare:std::time::Duration,
+    scan:std::time::Duration,
+    anchors:std::time::Duration,
+    parts:usize,
+    requests:usize,
+    unique:usize,
+    complete:bool,
+}
+impl<'a> JointBoundaryTiming<'a> {
+    fn new(source:&'a str)->Self {
+        Self {source,started:std::time::Instant::now(),prepare:std::time::Duration::ZERO,
+            scan:std::time::Duration::ZERO,anchors:std::time::Duration::ZERO,parts:0,requests:0,unique:0,complete:false}
+    }
+}
+impl Drop for JointBoundaryTiming<'_> {
+    fn drop(&mut self) {
+        let project=first_tag_text(self.source,"movement-title").unwrap_or_default().replace(['\n','\r',';']," ");
+        for (stage,elapsed) in [("Prepare",self.prepare),("Scan",self.scan),("Anchors",self.anchors),("Total",self.started.elapsed())] {
+            eprintln!("ETUSCHLOPF: PhaseTiming: project={project}; stage=InitialRenderTransaction/JointBoundaries/{stage}; ms={}; parts={}; requests={}; unique={}; complete={}; Authority=none",elapsed.as_millis(),self.parts,self.requests,self.unique,self.complete);
+        }
+    }
+}
+
+
+/// Diagnostic evaluation of the unchanged original guard predicates. No plan,
+/// source identity, receipt, permission or musical verdict is returned.
+pub(crate) fn observe_lower_clef_guard_conflicts(xml:&str)->Result<Vec<String>, &'static str> {
+    let mut rows=Vec::new();
+    for (part_index,(part_start,part_end)) in score_part_ranges(xml).into_iter().enumerate() {
+        let part=&xml[part_start..part_end];
+        let surfaces=scan_lower_clef_surfaces(part).ok_or("unsupported lower clef surfaces")?;
+        let temporal=TemporalPart::observe(part);
+        let boundaries=beam_boundary::observe(part);
+        let doc=roxmltree::Document::parse(part).map_err(|_|"part XML parse failed")?;
+        for surface in surfaces.iter().skip(1) {
+            if !surface.visible || lower_octave_shift_boundary_precedes_position(part,surface.start) {continue;}
+            let tie=lower_tie_open_at_position(part,surface.start);
+            let beam=lower_primary_beam_group_contains_position(part,surface.start)
+                && (!boundaries.contains(&surface.start)
+                    || temporal_part_at(part,surface.start).is_some_and(|(time,local)|time.beam_inside(local).is_none()));
+            if !(tie||beam) {continue;}
+            let measure=doc.descendants().filter(|n|n.has_tag_name("measure")).enumerate()
+                .find(|(_,n)|n.range().contains(&surface.start)).map(|(i,n)|(i+1,n.attribute("number").unwrap_or("")));
+            let at=temporal.as_ref().and_then(|time|time.guard_time(surface.start));
+            let mut serial_groups=Vec::new();
+            let mut open=BTreeMap::<String,(usize,bool)>::new();
+            for (start,end,note) in note_ranges(part) {
+                if note.contains("print-object=\"no\"") || note.contains("print-object='no'") {continue;}
+                let Some(voice)=first_tag_text(note,"voice") else {continue;};
+                let lower=first_tag_text(note,"staff").as_deref()==Some("2");
+                match primary_beam_state(note) {
+                    Some(PrimaryBeamState::Begin)=>{open.insert(voice,(start,lower));},
+                    Some(PrimaryBeamState::Continue)=>{if let Some((_,touches))=open.get_mut(&voice) {*touches|=lower;}},
+                    Some(PrimaryBeamState::End)=>{if let Some((begin,touches))=open.remove(&voice)
+                        && (touches||lower) && begin<surface.start && surface.start<end {
+                        serial_groups.push(format!("Voice={voice:?}; BeginNoteByte={begin}; EndNoteByte={start}; EndNodeByte={end}; PartLocal=true"));
+                    }},
+                    Some(PrimaryBeamState::Hook)=>{},
+                    None=>{if !note.contains("<chord") {open.remove(&voice);}},
+                }
+            }
+
+            let context=temporal.as_ref().map_or_else(||"TemporalContext=unsupported; serial guard remains authoritative".into(),|time|time.guard_group_context(surface.start));
+            rows.push(format!("PartOrdinal={}; Staff=2; MeasureOrdinalAndLabel={measure:?}; Clef={:?}; QuarterTimeNumeratorDenominator={at:?}; SourceAttributesBytes=({},{}); OpenTieGuard={tie}; PrimaryBeamGuard={beam}; FreshAttackException={}; SerialBeamContext={serial_groups:?}; {context}",
+                part_index+1,surface.kind,part_start+surface.start,part_start+surface.end,boundaries.contains(&surface.start)));
+        }
+    }
+    Ok(rows)
+}
+
+
+#[cfg(test)]
+mod c3_guard_diagnostic_tests {
+    use super::*;
+    fn sample(tie:bool,hidden:bool,label:&str)->String {
+        let first=if tie {"<tie type=\"start\"/>"}else{"<beam number=\"1\">begin</beam>"};
+        let last=if tie {"<tie type=\"stop\"/>"}else{"<beam number=\"1\">end</beam>"};
+        format!("<score-partwise><part id=\"P1\"><measure number=\"{label}\"><attributes><divisions>96</divisions><time><beats>4</beats><beat-type>4</beat-type></time><staves>2</staves><clef number=\"2\"><sign>G</sign><line>2</line></clef></attributes><note><pitch><step>C</step><octave>4</octave></pitch><duration>96</duration><voice>2</voice><type>quarter</type><staff>2</staff>{first}</note><backup><duration>48</duration></backup><attributes><clef number=\"2\"{}><sign>F</sign><line>4</line></clef></attributes><forward><duration>48</duration></forward><note><pitch><step>C</step><octave>4</octave></pitch><duration>96</duration><voice>2</voice><type>quarter</type><staff>2</staff>{last}</note></measure></part></score-partwise>",if hidden {" print-object=\"no\""}else{""})
+    }
+    #[test]
+    fn diagnostic_conflict_rows_match_original_guards_and_locate_groups() {
+        for label in ["synthetic-a","relocated-b"] {for tie in [false,true] {for hidden in [false,true] {
+            let xml=sample(tie,hidden,label);let original=xml.clone();
+            let rows=observe_lower_clef_guard_conflicts(&xml).unwrap();
+            let tie_failed=lower_clef_surface_inside_open_tie(&xml);
+            let beam_failed=lower_clef_surface_inside_primary_beam_group(&xml);
+            assert_eq!(!rows.is_empty(),tie_failed||beam_failed);
+            if !hidden {
+                assert!(!rows.is_empty(),"synthetic inside-held-note boundary must exercise its original guard");
+                let row=&rows[0];assert!(row.contains(&format!("MeasureOrdinalAndLabel=Some((1, {label:?}))")));
+                assert!(row.contains("QuarterTimeNumeratorDenominator=Some((48, 96))"));
+                assert!(row.contains(if tie {"TieKey="}else{"PrimaryBeamVoice="}));
+                assert!(row.contains(if tie {"OpenTieGuard=true"}else{"PrimaryBeamGuard=true"}));
+            }
+            assert_eq!(xml,original);
+        }}}
+    }
+}

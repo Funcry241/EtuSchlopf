@@ -406,3 +406,20 @@ fn composed_origin_images_reject_gaps_aliases_overflow_and_changed_emissions() {
     let mut altered = state.clone();altered.encoded[0].fragments[0].ordinal += 1;
     assert!(altered.validate_binding(altered.document()).is_err());
 }
+
+#[test]
+fn grace_origin_points_compose_only_through_the_same_point_and_cannot_be_duplicated() {
+    for offset in [0, 19, 1600] {
+        let first = OriginImage::grace_point(offset, offset + 7);
+        let second = OriginImage::grace_point(offset + 7, offset + 13);
+        let composed = first.compose(&second).unwrap().unwrap();
+        assert_eq!(composed.origin, offset..offset);
+        assert_eq!(composed.image, offset + 13..offset + 13);
+        assert!(first.compose(&OriginImage::grace_point(offset + 8, offset + 13)).unwrap().is_none());
+        assert!(first.compose(&OriginImage::new(offset + 7..offset + 9, offset + 7..offset + 9).unwrap()).unwrap().is_none());
+        assert!(OriginImage::new(offset..offset, offset..offset).is_err());
+        assert!(exact_partition(std::iter::once(offset..offset).collect(), &(offset..offset)).is_ok());
+        assert!(exact_partition(vec![offset..offset, offset..offset], &(offset..offset)).is_err());
+        assert!(exact_partition(vec![], &(offset..offset)).is_err());
+    }
+}

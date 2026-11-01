@@ -1120,6 +1120,7 @@ primary_beam_voice_partition_plan.as_ref())?,
         );
     }
 
+    let mut fixed_page_balance_evidence: Option<RendererFixedPageBalanceEvidence> = None;
     let renderer_feasibility_oracle_outcome = if pdf_render_requested {
         let oracle_result = (|| -> anyhow::Result<RendererFeasibilityOracleOutcome> {
             const MAX_ORACLE_ROUNDS: usize = 8;
@@ -1158,6 +1159,8 @@ primary_beam_voice_partition_plan.as_ref())?,
             let shadow_pdf = shadow_dir.join("constraint_candidate.pdf");
 
             let mut candidate_plan = initial_plan.clone();
+            let mut same_system_incumbent: Option<HorizontalLayoutPlan> = None;
+            let mut balance_trial: Option<RendererFixedPageBalanceTrial> = None;
             let mut page_rejections = RendererPartitionRejections::new(&committed_source_xml);
             let mut no_goods = std::collections::BTreeSet::<(usize, usize)>::new();
             for round in 1..=MAX_ORACLE_ROUNDS {
@@ -1249,7 +1252,8 @@ primary_beam_voice_partition_plan.as_ref())?,
                     source.input_label, round, shadow_observation,
                 );
 
-                if !page_rejections.partitions.is_empty() || !no_goods.is_empty() {
+                if same_system_incumbent.is_some()
+                    || !page_rejections.partitions.is_empty() || !no_goods.is_empty() {
                     page_rejections.bind(&committed_source_xml, shadow_render.probe_identity.as_ref())?;
                     page_rejections.validate_horizontal_context(&initial_plan, &candidate_plan)?;
                 }
@@ -1262,8 +1266,69 @@ primary_beam_voice_partition_plan.as_ref())?,
                         "ETUSCHLOPF: RendererFeasibilityRound: Project={:?} | Round={} | Phase=confirmed | Reason=all_four_boundary_differences_empty | ProjectionOnly=true | Authority=none",
                         source.input_label, round,
                     );
+                    if let Some(trial) = balance_trial.take() {
+                        let physical = crate::audit_only::renderer_system_break_readback::page_clearance_observation(shadow_committed_xml, &shadow_pdf);
+                        let improves = physical.as_ref().is_ok_and(|after| fixed_page_balance_improves(&trial.before, after, trial.pair));
+                        eprintln!("ETUSCHLOPF: RendererFixedPageBalance: Phase=trial_observed | GeometricGain={} | PhysicalReadback={:?}", improves, physical.as_ref().map(|p| &p.gaps).map_err(|e| e.to_string()));
+                        if !improves {
+                            return Ok(RendererFeasibilityOracleOutcome::Confirmed {
+                                plan: trial.incumbent, rounds: round, no_goods, source_fingerprint,
+                            });
+                        }
+                        crate::registernotation::reader_policy::observe_probe(
+                            &committed_source_xml, shadow_committed_xml, &shadow_directives, &shadow_observation.ottava_context);
+                        fixed_page_balance_evidence = Some(RendererFixedPageBalanceEvidence {
+                            before: trial.before, pair: trial.pair,
+                            consumer: shadow_render.probe_identity.clone().with_context(|| "PageBalance: missing consumer binding")?,
+                            source_fingerprint,
+                            shadow_input: shadow_musicxml.to_path_buf(),
+                            shadow_output: shadow_pdf.clone(),
+                            selected_system_pages: physical.as_ref().map(|p|p.systems.iter().map(|s|s.page).collect()).unwrap_or_default(),
+                        });
+                        return Ok(RendererFeasibilityOracleOutcome::Confirmed {
+                            plan: candidate_plan, rounds: round, no_goods, source_fingerprint,
+                        });
+                    }
                     crate::registernotation::reader_policy::observe_probe(
                         &committed_source_xml, shadow_committed_xml, &shadow_directives, &shadow_observation.ottava_context);
+                    let confirmed_shape = authoritative_page_shape(&candidate_plan)?;
+                    if round < MAX_ORACLE_ROUNDS
+                        && let Some(refinement) = build_renderer_same_system_page_candidate(
+                            &confirmed_shape.page_system_lengths, &renderer_feasibility_basis,
+                        )?
+                        && !page_rejections.partitions.contains(&refinement.page_system_lengths)
+                    {
+                        page_rejections.bind(&committed_source_xml, shadow_render.probe_identity.as_ref())?;
+                        same_system_incumbent = Some(candidate_plan.clone());
+                        candidate_plan = promote_renderer_feasibility_constraint_candidate(
+                            &initial_plan, &refinement, &renderer_feasibility_basis, &no_goods,
+                        )?;
+                        page_rejections.validate(&candidate_plan)?;
+                        eprintln!(
+                            "ETUSCHLOPF: RendererSameSystemPageRefinement: Phase=trial_ready | FromPages={} | ToPages={} | SameOrderedSystems=true | SourceBound=true | FreshConsumerConfirmationRequired=true",
+                            confirmed_shape.page_starts.len(), refinement.pages(),
+                        );
+                        continue;
+                    }
+                    if round < MAX_ORACLE_ROUNDS {
+                        let physical = crate::audit_only::renderer_system_break_readback::page_clearance_observation(shadow_committed_xml, &shadow_pdf);
+                        match physical {
+                            Ok(before) => {
+                                if let Some((trial, pair)) = build_renderer_fixed_page_balance_candidate(
+                                    &confirmed_shape.page_system_lengths, &renderer_feasibility_basis, &before, &page_rejections.partitions,
+                                ) {
+                                    page_rejections.bind(&committed_source_xml, shadow_render.probe_identity.as_ref())?;
+                                    same_system_incumbent = Some(candidate_plan.clone());
+                                    balance_trial = Some(RendererFixedPageBalanceTrial { incumbent: candidate_plan.clone(), before, pair });
+                                    candidate_plan = promote_renderer_feasibility_constraint_candidate(&initial_plan, &trial, &renderer_feasibility_basis, &no_goods)?;
+                                    page_rejections.validate(&candidate_plan)?;
+                                    eprintln!("ETUSCHLOPF: RendererFixedPageBalance: Phase=trial_ready | Pair={} | SamePageCount={} | SameOrderedSystems=true | FreshPhysicalGainRequired=true", pair, trial.pages());
+                                    continue;
+                                }
+                            }
+                            Err(error) => eprintln!("ETUSCHLOPF: RendererFixedPageBalance: Phase=unavailable | Reason={:?} | Selected=confirmed_incumbent", error.to_string()),
+                        }
+                    }
                     return Ok(RendererFeasibilityOracleOutcome::Confirmed {
                         plan: candidate_plan,
                         rounds: round,
@@ -1286,6 +1351,21 @@ primary_beam_voice_partition_plan.as_ref())?,
                     );
                 }
 
+                // A complete, bound rejection of the optional page-only trial
+                // does not invalidate its already confirmed incumbent. Unknown
+                // output, changed consumers and collapsed boundaries still fail
+                // above exactly as before; no unconfirmed source is adopted.
+                if let Some(confirmed) = same_system_incumbent.take() {
+                    eprintln!(
+                        "ETUSCHLOPF: RendererSameSystemPageRefinement: Phase=trial_not_realized | Selected=previously_confirmed_incumbent | SameImmutableSource=true | SameBoundConsumer=true",
+                    );
+                    return Ok(RendererFeasibilityOracleOutcome::Confirmed {
+                        plan: confirmed,
+                        rounds: round,
+                        no_goods,
+                        source_fingerprint,
+                    });
+                }
                 let before = no_goods.len();
                 let page_before = page_rejections.partitions.len();
                 if !shadow_observation.inserted_page_breaks.is_empty() {
@@ -1429,6 +1509,7 @@ primary_beam_voice_partition_plan.as_ref())?,
             final_pdf_chord_structural_plan: render_final_chord_structural_plan.clone(),
             final_pdf_pruned_omissions: render_pruned_final_chord_omissions.clone(),
             renderer_feasibility_oracle_outcome,
+            fixed_page_balance_evidence,
             render_write_pdf_source_adoption_truth_gate_audit,
             render_write_pdf_source_adoption_truth_gate_blocks_release,
             authorized_writer_entry_boundary_audit,

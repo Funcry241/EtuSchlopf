@@ -1,0 +1,93 @@
+impl BlockTransformationReceipt {
+    pub(crate) fn ssc_bound_origin(&self) -> (&MintedIdentity, &crate::ssc_evidence_proof::SscOriginState) { (&self.identity, &self.ssc_origin) }
+    /// Mints a BLOCK receipt at the owner's execution. An unchanged transition is
+    /// no event and yields `None`. `bound_span` is the pre-state byte range the
+    /// owner was bound to, when the owner has one.
+    pub(crate) fn mint_block_receipt<O: BlockMintOwner>(
+        _owner: O,
+        pre_xml: &str,
+        post_xml: &str,
+        bound_span: Option<(usize, usize)>,
+    ) -> Option<Self> {
+        if pre_xml == post_xml {
+            return None;
+        }
+        if !O::DESCRIPTOR.identity.is_block() {
+            count_owner_receipt_refusal();
+            return None;
+        }
+        count(&BLOCK_RECEIPTS_MINTED);
+        Some(Self {
+            ssc_origin: Box::new(crate::ssc_evidence_proof::SscOriginState::capture(&SSC_ORIGIN_ACCESS, pre_xml, post_xml, crate::ssc_evidence_proof::SscOriginScope::Unproved)),
+            identity: MintedIdentity::mint_fresh(),
+            descriptor: O::DESCRIPTOR,
+            bound_span,
+            pre_fingerprint: fingerprint(pre_xml),
+            post_fingerprint: fingerprint(post_xml),
+            realized_post_document: None,
+            original_render_notes: None,
+        })
+    }
+
+    /// Carries only the original cleanup owner's journal. Failure remains
+    /// observational UNKNOWN and cannot refuse or alter the owner's receipt.
+    pub(crate) fn with_original_render_notes(mut self,
+        owner: &crate::pipeline::RenderRow57BlockMint,
+        steps: Vec<crate::arrangement::representation_transport::RepresentationStep>) -> Self {
+        self.original_render_notes = Some(Box::new(
+            crate::arrangement::representation_transport::RhythmicRepresentationTransport::render_cleanup(owner, &self, steps)
+                .map_err(|error| error.to_string())));
+        self
+    }
+    pub(crate) fn original_render_notes(&self) -> Option<&Result<crate::arrangement::representation_transport::RhythmicRepresentationTransport, String>> {
+        self.original_render_notes.as_deref()
+    }
+
+    /// BLOCK mint of a path-bound owner that persists its own output: the
+    /// receipt carries the post bytes the owner wrote, bound to its post
+    /// fingerprint, so the adoption needs no artifact reimport.
+    pub(crate) fn mint_file_bound_block_receipt<O: BlockMintOwner>(
+        owner: O,
+        pre_xml: &str,
+        post_xml: String,
+        bound_span: Option<(usize, usize)>,
+    ) -> Option<Self> {
+        let mut receipt = Self::mint_block_receipt(owner, pre_xml, &post_xml, bound_span)?;
+        receipt.realized_post_document = Some(post_xml);
+        Some(receipt)
+    }
+
+    /// Splits the realized post bytes of a path-bound owner from its receipt.
+    pub(crate) fn split_realized_post_document(mut self) -> (Self, Option<String>) {
+        let document = self
+            .realized_post_document
+            .take()
+            .filter(|document| fingerprint(document) == self.post_fingerprint);
+        (self, document)
+    }
+
+    /// Validates owner contract and pre/post binding. Never recomputes identity.
+    pub(crate) fn validate_block_transition<O: BlockMintOwner>(
+        &self,
+        pre_xml: &str,
+        post_xml: &str,
+    ) -> anyhow::Result<()> {
+        ensure!(
+            self.descriptor.same_contract(O::DESCRIPTOR),
+            "BlockTransformationReceipt: owner contract drift"
+        );
+        ensure!(
+            self.descriptor.identity.is_block(),
+            "BlockTransformationReceipt: descriptor is not a BLOCK contract"
+        );
+        ensure!(
+            self.pre_fingerprint == fingerprint(pre_xml),
+            "BlockTransformationReceipt: pre fingerprint drift"
+        );
+        ensure!(
+            self.post_fingerprint == fingerprint(post_xml),
+            "BlockTransformationReceipt: post fingerprint drift"
+        );
+        Ok(())
+    }
+}

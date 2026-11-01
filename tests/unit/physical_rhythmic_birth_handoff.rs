@@ -46,7 +46,8 @@ fn actual_transfer_captures_both_creations_for_both_insertion_orders() {
 #[test]
 fn actual_normalizer_captures_splits_and_accepted_gap_rests_and_hands_off_its_block() {
     for label in ["Renamed", "Örtlich"] {
-        let pre = document(&note("7001", 144), label);
+        // 120 units require a genuine quarter-plus-sixteenth partition.
+        let pre = document(&note("7001", 120), label);
         let normalized = normalize_visible_rhythm_musicxml(&pre);
         assert!(normalized.stats.visible_rhythm_values_split > 0);
         assert!(normalized.stats.visible_rhythm_rests_inserted > 0);
@@ -91,7 +92,7 @@ fn compound_original_exact_and_block_handoff_keeps_original_creations_in_order()
     assert!(births.len() >= 2);
 }
 
-fn base_candidate() -> SolverCandidate {
+pub(super) fn base_candidate() -> SolverCandidate {
     static NEXT_INPUT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let input = NEXT_INPUT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let path = std::env::temp_dir().join(format!("etus_birth_handoff_{}_{input}.mid", std::process::id()));

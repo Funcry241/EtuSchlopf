@@ -1362,3 +1362,7 @@ mod horizontal_layout_global_page_system_tests {
         assert!(selected.system_lengths.iter().all(|length| *length <= 3));
     }
 }
+
+include!("renderer_same_system_page_compaction.rs");
+
+include!("renderer_fixed_page_balance.rs");

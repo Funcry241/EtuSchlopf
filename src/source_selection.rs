@@ -68,6 +68,7 @@ pub(crate) struct RemovedSourceSelectionReason {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum SourceSelectionDecisionPass {
     InitialPitchStaff,
+    GraceHostStaff,
     PianoHandSplit,
     SmoothFastStaffJump,
     SmoothWideSimultaneity,
@@ -86,6 +87,7 @@ impl SourceSelectionDecisionPass {
     pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::InitialPitchStaff => "initial_pitch_staff",
+            Self::GraceHostStaff => "grace_host_staff",
             Self::PianoHandSplit => "piano_hand_split",
             Self::SmoothFastStaffJump => "smooth_fast_staff_jump",
             Self::SmoothWideSimultaneity => "smooth_wide_simultaneity",
@@ -104,6 +106,7 @@ impl SourceSelectionDecisionPass {
     const fn discriminator(self) -> u8 {
         match self {
             Self::InitialPitchStaff => 1,
+            Self::GraceHostStaff => 15,
             Self::PianoHandSplit => 2,
             Self::SmoothFastStaffJump => 3,
             Self::SmoothWideSimultaneity => 4,

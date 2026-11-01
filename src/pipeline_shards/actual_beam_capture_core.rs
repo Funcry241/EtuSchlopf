@@ -323,6 +323,9 @@ impl ActualCanonicalBeamCapture {
                         next.member = readback
                             .carry_range(row.member.clone())
                             .map_err(|e| e.to_string())?;
+                        next.original_head = row.original_head.as_ref().map(|range|
+                            readback.carry_range(range.clone()).map_err(|e| e.to_string()))
+                            .transpose()?;
                         Ok(next)
                     })
                     .collect::<Result<Vec<_>, String>>()
@@ -361,12 +364,25 @@ impl ActualCanonicalBeamCapture {
                 if moved.len() != rows.len() {
                     return Err("Incomplete original chord-member carry".into());
                 }
+                let head_indices = rows.iter().enumerate().filter_map(|(index, row)|
+                    row.original_head.as_ref().map(|range| (index, range.clone())))
+                    .collect::<Vec<_>>();
+                let moved_heads = transport.carry(before, after,
+                    head_indices.iter().map(|(_, range)| range.clone()).collect())
+                    .map_err(|error| error.to_string())?;
+                if moved_heads.len() != head_indices.len() {
+                    return Err("Incomplete original chord-head carry".into());
+                }
+                let moved_heads = head_indices.into_iter().zip(moved_heads)
+                    .map(|((index, _), range)| (index, range)).collect::<std::collections::BTreeMap<_, _>>();
                 Ok(rows
                     .iter()
                     .cloned()
                     .zip(moved)
-                    .map(|(mut row, range)| {
+                    .enumerate()
+                    .map(|(index, (mut row, range))| {
                         row.member = range;
+                        row.original_head = moved_heads.get(&index).cloned();
                         row
                     })
                     .collect())
@@ -409,6 +425,19 @@ impl ActualCanonicalBeamCapture {
                 return Err("Incomplete chord attachment continuation".into());
             }
             for (before, next) in prior.iter().zip(&rows) {
+                match (&before.original_head, &next.original_head) {
+                    (Some(old), Some(new)) => {
+                        let old = self.current.get(old.clone()).ok_or("Invalid original physical chord head")?;
+                        let new = after.get(new.clone()).ok_or("Invalid continued physical chord head")?;
+                        if actual_beam_note_signature(old, false).map_err(|error| error.to_string())?
+                            != actual_beam_note_signature(new, false).map_err(|error| error.to_string())?
+                        {
+                            return Err("Original physical chord-head content changed at a following owner".into());
+                        }
+                    }
+                    (None, None) => {}
+                    _ => return Err("Original physical chord-head binding changed at a following owner".into()),
+                }
                 let old = self
                     .current
                     .get(before.member.clone())
@@ -456,6 +485,12 @@ impl ActualCanonicalBeamCapture {
 #[derive(Debug, Clone)]
 pub(crate) struct ActualBeamChordAttachment {
     pub(crate) member: std::ops::Range<usize>,
+    /// Physical head emitted from the same original operation, including heads
+    /// outside the beam decision scope. This is not a positive beam decision.
+    pub(crate) original_head: Option<std::ops::Range<usize>>,
+    /// Original emitter proved there was no pitched physical head. Distinct
+    /// from a head whose operation continuation is missing or ambiguous.
+    pub(crate) original_head_absent: bool,
     pub(crate) head: Option<usize>,
     pub(crate) unknown: Option<String>,
 }
@@ -511,6 +546,14 @@ fn capture_actual_chord_beam_attachments(
                 .as_ref()
                 .and_then(|range| beam_map.carry(range))
                 .and_then(|range| rest_map.carry(&range));
+            if let (Some(input), Some(output)) = (&physical_head, &head_range) {
+                anyhow::ensure!(
+                    actual_beam_note_signature(&before[input.clone()], true)?
+                        == actual_beam_note_signature(after.get(output.clone())
+                            .ok_or_else(|| anyhow::anyhow!("Invalid emitted physical chord head"))?, true)?,
+                    "Original physical chord head changed inside the beam owner"
+                );
+            }
             let head = head_range.as_ref().and_then(|range| {
                 let mut heads = occurrences
                     .iter()
@@ -528,6 +571,8 @@ fn capture_actual_chord_beam_attachments(
             });
             rows.push(ActualBeamChordAttachment {
                 member: output,
+                original_head: head_range,
+                original_head_absent: physical_head.is_none(),
                 head,
                 unknown,
             });

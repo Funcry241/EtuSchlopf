@@ -1,6 +1,8 @@
 //! Exact parent-bound preparation of the existing #58 event before its sink.
 //! No generic pin exception, musical selector or new writer authority.
 use std::path::Path;
+#[path = "c3_initial_stage_admission.rs"]
+mod c3_stage;
 const MARKER: &str = "docs/final_notation_checkpoint_preparation_r1460.md";
 const SUCCESSORS: &[(&str, &str)] = &[
     ("docs/final_notation_checkpoint_preparation_r1460.md", "40ca4fee8cd6ed4fecdd9c1eacc96122123a716db8a0a399d6008780eff9eb47"),
@@ -25,7 +27,9 @@ const PARENTS: &[(&str, &str)] = &[
     ("src/structural_write_authority/orchestrator_artifact_sink_authority.rs", "9f2096067d0dcfa2eefe56551b006eb3ba7b25f7cb203d0ae5ce24e3e4900e4f"),
 ];
 pub(crate) fn render_successor(bytes: &[u8]) -> bool { crate::sha256::hex(bytes)=="9f8bb3e6d95b0d8af3a2bf7829a1d32647e23d0cf9092b0a2f812e39821920c7" }
-pub(crate) fn stage_successor(bytes: &[u8]) -> bool { crate::sha256::hex(bytes)=="72a4088ddbdde09c7961e9be6d9026658ae117685a632f3fd3dff6379523801c" }
+pub(crate) fn stage_successor(bytes: &[u8]) -> bool {
+    crate::sha256::hex(bytes)=="72a4088ddbdde09c7961e9be6d9026658ae117685a632f3fd3dff6379523801c" || c3_stage::accepts(bytes)
+}
 fn installed(root: &Path) -> bool {
     root.join(MARKER).exists() || std::fs::read(root.join("src/structural_write_authority/master_adoption/render_adopted_state.rs")).is_ok_and(|bytes| render_successor(&bytes))
         || std::fs::read(root.join("src/pipeline_shards/pipeline_orchestrator_initial_render_stage.rs")).is_ok_and(|bytes| stage_successor(&bytes))
@@ -37,13 +41,14 @@ fn read(root: &Path, path: &str) -> Result<Vec<u8>, String> {
         } else { Err(error) }
     }).map_err(|error| format!("Checkpoint58 {path}: {error}"))
 }
-// User-authorized limited E007 transport prerequisite. Only these three exact
-// implementations may succeed the accepted pins; every other #58 binding stays exact.
+// The original exact E007 images and the single exact C3 Shadow successor
+// below may succeed the accepted pins; every other #58 binding stays exact.
 fn phrase_transport_successor(path: &str, digest: &str) -> bool {
     const EXACT: &[(&str, &str)] = &[
         ("src/structural_write_authority/mod.rs", "5d550e4ca788a368e740c65c76ff92d8194caf9bdba9638f5e4ed04c2d402b44"),
         ("src/structural_write_authority/final_notation_phrase_projection_transaction.rs", "c174c1d328c01d0628fd1675043bc856db5b735c96f29047017a89e01c899057"),
         ("src/structural_write_authority/final_pdf_source_commit.rs", "b6ca7c96cdaab00a246b18916c7c6a69463c00ad751f3a93102ef149a59cfc47"),
+        ("src/structural_write_authority/final_pdf_source_commit.rs", "cf90e7b1f6c45020062a386d983092117cbb4858e304ae4c3786118d1627c63b"), // Exact C3 Shadow partial closure successor only.
     ];
     EXACT.iter().any(|(bound_path, bound_digest)| path == *bound_path && digest == *bound_digest)
 }
@@ -90,6 +95,9 @@ fn required_product_state(root: &Path) -> Result<bool, String> {
     Ok(true)
 }
 fn required_product_bound_image(root: &Path, path: &str, digest: &str) -> Result<bool,String> {
+    if path == "src/pipeline_shards/pipeline_orchestrator_initial_render_stage.rs" && c3_stage::accepts(&read(root,path)?) {
+        return Ok(true);
+    }
     Ok(REQUIRED_PRODUCT_IMAGES.iter().any(|(p,d)|*p==path && *d==digest) && required_product_state(root)?)
 }
 fn required_product_transition(parent: &Path, child: &Path, class: &str) -> Result<(),String> {

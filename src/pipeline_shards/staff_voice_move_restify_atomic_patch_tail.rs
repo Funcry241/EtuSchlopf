@@ -1,3 +1,32 @@
+fn substance_guard_choice(
+    evaluations: impl IntoIterator<Item = SubstanceGuardEval>,
+    start_visible_notes: usize,
+    incumbent_hints: usize,
+    incumbent_key: CandidateDecisionKey,
+) -> Option<(usize, usize)> {
+    let mut best_index: Option<usize> = None;
+    let mut best_visible = start_visible_notes;
+    let mut best_hints = incumbent_hints;
+    let mut best_decision_key = incumbent_key;
+    for eval in evaluations {
+        if !eval.compatible || eval.hints > incumbent_hints + 4 {
+            continue;
+        }
+        let better = eval.visible > best_visible
+            || (eval.visible == best_visible && eval.hints < best_hints)
+            || (eval.visible == best_visible
+                && eval.hints == best_hints
+                && eval.decision_key < best_decision_key);
+        if better {
+            best_index = Some(eval.index);
+            best_visible = eval.visible;
+            best_hints = eval.hints;
+            best_decision_key = eval.decision_key;
+        }
+    }
+    best_index.filter(|_| best_visible > start_visible_notes).map(|index| (index, best_visible))
+}
+
 fn hotspot_plan_audit_fingerprint(
     critical_only: bool,
     limit: usize,
@@ -239,19 +268,19 @@ let alter = tag_text(pitch, "alter").and_then(|v| v.parse::<i32>().ok()).unwrap_
   
      
  #[derive(Debug, Clone)]
-struct SubstanceGuardEval { index: usize, compatible: bool, visible: usize, hints: usize, decision_key: CandidateDecisionKey, } fn evaluate_substance_guard_candidates( candidates: &[SolverCandidate], best: &SolverCandidate,
+struct SubstanceGuardEval { index: usize, compatible: bool, visible: usize, hints: usize, decision_key: CandidateDecisionKey, } fn evaluate_substance_guard_candidates( candidates: &SolverCandidatePool, best: &SolverCandidate,
 parallel: &ParallelPlan, phase_started: Instant, ) -> Vec<SubstanceGuardEval> { let total_candidates = candidates.len(); if total_candidates == 0 { return Vec::new(); } let worker_count = parallel.workers.min(total_candidates).max(1);
-report_progress("SubstanzGuard", 0, total_candidates, worker_count, phase_started); let evaluate_one = |index: usize, candidate: &SolverCandidate| { let compatible = candidate.final_result.summary.blockers == 0
-&& candidate.final_result.summary.warnings == 0; let hints = candidate.final_result.summary.hints; let visible = if compatible && hints <= best.final_result.summary.hints + 4 { visible_pitched_note_count(candidate.layout_xml()) } else { 0 };
-SubstanceGuardEval { index, compatible, visible, hints, decision_key: candidate_decision_key(candidate), } }; if worker_count == 1 {
+report_progress("SubstanzGuard", 0, total_candidates, worker_count, phase_started); let evaluate_one = |index: usize, candidate: &SolverPoolEntry| { let compatible = candidate.projection.frontier.blockers == 0
+&& candidate.projection.frontier.warnings == 0; let hints = candidate.projection.frontier.hints; let visible = if compatible && hints <= best.final_result.summary.hints + 4 { visible_pitched_note_count(candidate.full().layout_xml()) } else { 0 };
+SubstanceGuardEval { index, compatible, visible, hints, decision_key: candidate.projection.decision_key, } }; if worker_count == 1 {
 let mut out = Vec::with_capacity(total_candidates); for (index, candidate) in candidates.iter().enumerate() { let eval = evaluate_one(index, candidate); let done = index + 1; if should_report_progress_tick(done, total_candidates) {
 report_progress("SubstanzGuard", done, total_candidates, worker_count, phase_started); } out.push(eval); } return out; } console_progress(format!( "SubstanzGuard: analysiere {total_candidates} Kandidaten parallel mit {worker_count} Workern" )); let next = AtomicUsize::new(0); let completed = AtomicUsize::new(0); let results: Mutex<Vec<SubstanceGuardEval>> = Mutex::new(Vec::with_capacity(total_candidates)); thread::scope(|scope| { for _ in 0..worker_count {
 let next = &next; let completed = &completed; let results = &results; let evaluate_one = &evaluate_one; scope.spawn(move || { loop { let index = next.fetch_add(1, Ordering::Relaxed); if index >= candidates.len() { break; }
-let eval = evaluate_one(index, &candidates[index]); results.lock().expect("SubstanzGuard Mutex vergiftet").push(eval); let done = completed.fetch_add(1, Ordering::Relaxed) + 1; if should_report_progress_tick(done, total_candidates) {
+let eval = evaluate_one(index, &candidates.entries[index]); results.lock().expect("SubstanzGuard Mutex vergiftet").push(eval); let done = completed.fetch_add(1, Ordering::Relaxed) + 1; if should_report_progress_tick(done, total_candidates) {
 report_progress("SubstanzGuard", done, total_candidates, worker_count, phase_started); } } }); } }); let mut out = results.into_inner().expect("SubstanzGuard Mutex vergiftet"); out.sort_by_key(|eval| eval.index); out }
 fn run_substance_guard(
     best: &mut SolverCandidate,
-    candidates: &mut Vec<SolverCandidate>,
+    candidates: &mut SolverCandidatePool,
     parallel: &ParallelPlan,
 ) {
     let phase_started = Instant::now();
@@ -259,28 +288,11 @@ fn run_substance_guard(
     if best.final_result.summary.blockers != 0 || best.final_result.summary.warnings != 0 {
         return;
     }
-    let mut best_index: Option<usize> = None;
-    let mut best_visible = start_visible_notes;
-    let mut best_hints = best.final_result.summary.hints;
-    let mut best_decision_key = candidate_decision_key(best);
-    for eval in evaluate_substance_guard_candidates(candidates, best, parallel, phase_started) {
-        if !eval.compatible || eval.hints > best.final_result.summary.hints + 4 {
-            continue;
-        }
-        let better = eval.visible > best_visible
-            || (eval.visible == best_visible && eval.hints < best_hints)
-            || (eval.visible == best_visible
-                && eval.hints == best_hints
-                && eval.decision_key < best_decision_key);
-        if better {
-            best_index = Some(eval.index);
-            best_visible = eval.visible;
-            best_hints = eval.hints;
-            best_decision_key = eval.decision_key;
-        }
-    }
-    if let Some(index) = best_index.filter(|_| best_visible > start_visible_notes) {
-        let chosen = &candidates[index];
+    let evaluations = evaluate_substance_guard_candidates(candidates, best, parallel, phase_started);
+    let chosen_index = substance_guard_choice(evaluations, start_visible_notes,
+        best.final_result.summary.hints, candidate_decision_key(best));
+    if let Some((index, best_visible)) = chosen_index {
+        let chosen = candidates.entries[index].full();
         console_progress(format!(
             "SubstanceGuardCandidateAudit: pool_index={index} iteration={} profile_name={} profile_lineage={:?} source_selection_candidate_id={} source_selection_origin_stage={} best_visible_before={} chosen_visible_after={} visible_gain={}",
             chosen.iteration,
@@ -336,9 +348,9 @@ fn run_substance_guard(
                 "SubstanceGuardCandidateLineageAudit: diagnostic_unavailable error={error:#}"
             )),
         }
-        let chosen = candidates.remove(index);
+        let chosen = candidates.remove_full(index);
         let previous = std::mem::replace(best, chosen);
-        candidates.push(previous);
+        candidates.push_previous(previous);
     }
 }
 fn visible_pitched_note_count(xml: &str) -> usize { let mut count = 0_usize; let mut pos = 0_usize; while let Some(relative_start) = xml[pos..].find("<note") { let start = pos + relative_start;

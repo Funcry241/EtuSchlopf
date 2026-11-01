@@ -1,0 +1,30 @@
+ETUSCHLOPF-RUN-OUTCOME-AUDIT
+================================
+Version: 0.10.1839
+Mode: all_run
+FatalOutcome: not_observed
+IntegrationMode: typed_run_outcome_export_projection_owner
+IntegrationScope: console_visual_summary_manifest_context_and_run_audit
+PanicCapture: typed_state_existing_panic_hook_authoritative
+TypedOutcomeOwnsConsoleProjection: ja
+TypedOutcomeOwnsVisualPreflightSummaryStatus: ja
+TypedOutcomeOwnsAssistantContextStatus: ja
+TypedOutcomeOwnsAssistantManifestStatus: ja
+TypedOutcomeOwnsRunAuditStatus: ja
+TypedOutcomeOwnsExitCode: nein
+RunSeverity: dark_green
+ReleaseDecision: released
+ConsoleProjectionStatus: OK
+ConsoleProjectionSeverity: dark_green
+FinalExit: 0
+BuildOutcome: passed
+BuildExit: 0
+ClippyOutcome: passed
+ClippyExit: 0
+AuditSignal: not_evaluated
+RendererOutcome: passed
+EmergenceOutcome: not_applicable
+Status: typed_projection_recorded
+TextHeuristicUsedByRunOutcomeModel: nein
+LegacyConsoleClassificationPresent: nein
+Policy: One typed RunOutcome projection owns console, visual-preflight summary, assistant context, assistant manifest and run-audit status fields. Process exit ownership remains unchanged.

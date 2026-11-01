@@ -22,6 +22,7 @@ pub(crate) struct TemporalPart {
     shifts: BTreeMap<i128, i64>,
     notes: Vec<Note>,
     length: usize,
+    diagnostic_unit: i128,
     ambiguous_voices: BTreeSet<String>,
 }
 
@@ -67,6 +68,7 @@ impl TemporalPart {
             shifts: BTreeMap::new(),
             notes: Vec::new(),
             length: xml.len(),
+            diagnostic_unit: unit,
             ambiguous_voices: BTreeSet::new(),
         };
         let mut divisions = 1i128;
@@ -304,6 +306,13 @@ impl TemporalPart {
         Some(result)
     }
 
+    /// Actual lower mapping changes in musical time; reminders add no state.
+    pub(crate) fn mapping_change_count(&self) -> usize {
+        self.shifts.values().fold((0, 0), |(previous, count), &shift| {
+            (shift, count + usize::from(previous != shift))
+        }).1
+    }
+
     pub(crate) fn origin_supported(&self, position: usize) -> bool {
         self.notes
             .iter()
@@ -451,5 +460,66 @@ impl TemporalPart {
             }
         }
         Some(false)
+    }
+}
+
+
+impl TemporalPart {
+    /// Read-only context for the original guards, never an insertion permission.
+    pub(crate) fn guard_time(&self, position: usize) -> Option<(i128,i128)> {
+        Some((self.at(position)?,self.diagnostic_unit))
+    }
+    pub(crate) fn guard_group_context(&self, position: usize) -> String {
+        let Some(at)=self.at(position) else {return "unresolved temporal position".into();};
+        let scope=self.scope(position).unwrap_or(-1);
+        let mut rows=Vec::new();
+        let mut ties=BTreeMap::<&str,Vec<&Note>>::new();
+        for n in self.notes.iter().filter(|n|n.lower && (n.tie_start || n.tie_stop)) {
+            ties.entry(&n.key).or_default().push(n);
+        }
+        for (key,notes) in &mut ties {
+            notes.sort_by_key(|n|(n.at,n.start));
+            let mut open:Option<&Note>=None;
+            for n in notes.iter() {
+                if n.tie_stop {
+                    let conflict=match open {
+                        Some(first)=>if first.end!=n.at {first.at<at} else {first.at<at && at<n.end},
+                        None=>at<n.end,
+                    };
+                    if conflict {
+                        rows.push(format!("TieKey={key:?}; Open={:?}; Stop={:?}; Voice={:?}; Unit={}",
+                            open.map(|n|(n.start,n.at,n.end)),(n.start,n.at,n.end),n.voice,self.diagnostic_unit));
+                    }
+                    open=None;
+                }
+                if n.tie_start {open=Some(n);}
+            }
+            if let Some(n)=open.filter(|n|n.at<at) {
+                rows.push(format!("TieKey={key:?}; Open={:?}; Stop=missing; Voice={:?}; Unit={}",(n.start,n.at,n.end),n.voice,self.diagnostic_unit));
+            }
+        }
+        let mut streams=BTreeMap::<&str,Vec<&Note>>::new();
+        for n in self.notes.iter().filter(|n|n.visible && n.start==n.head) {
+            streams.entry(&n.voice).or_default().push(n);
+        }
+        for (voice,notes) in &mut streams {
+            notes.sort_by_key(|n|(n.at,n.start));
+            let mut open:Option<(&Note,bool)>=None;
+            for n in notes.iter() {
+                let lower=self.notes.iter().any(|member|member.visible && member.head==n.start && member.lower);
+                match n.beam.as_deref() {
+                    Some("begin")=>{open=Some((n,lower));},
+                    Some("continue")=>{if let Some((_,touches))=&mut open {*touches|=lower;}},
+                    Some("end")=>{if let Some((first,touches))=open.take()
+                        && (touches||lower) && scope<=first.at && first.at<at && at<n.end {
+                        rows.push(format!("PrimaryBeamVoice={voice:?}; Begin={:?}; End={:?}; Unit={}; Coordinates=(NodeStartByte,OnsetTicks,EndTicks)",
+                            (first.start,first.at,first.end),(n.start,n.at,n.end),self.diagnostic_unit));
+                    }},
+                    Some("forward hook"|"backward hook")=>{},
+                    _=>{open=None;},
+                }
+            }
+        }
+        format!("TemporalTieOpen={}; TemporalBeamInside={:?}; Groups={rows:?}; ContextAuthority=none",self.tie_open(position),self.beam_inside(position))
     }
 }

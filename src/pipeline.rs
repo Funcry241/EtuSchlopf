@@ -94,6 +94,7 @@ impl PipelineExit {
 }
 
 pub(super) fn run() -> std::process::ExitCode {
+    let _c3_failure_evidence = crate::audit_only::c3_diagnostics::FailureEvidenceGuard;
     match real_main() {
         Ok(code) => {
             if code == 0 {
@@ -112,6 +113,11 @@ pub(super) fn run() -> std::process::ExitCode {
                     }
                 }
             }
+            if code == 0 && let Some((master,render))=persisted_schema_validation::registered_final_artifact_paths()
+                && let Err(error)=validate_joint_reading_final_artifacts(&master,&render) {
+                eprintln!("C3FinalReadback: FAIL; {error:#}");
+                return std::process::ExitCode::FAILURE;
+            }
             PipelineExit::from_process_code(code).into_exit_code()
         }
         Err(error) => {
@@ -124,6 +130,14 @@ pub(super) fn run() -> std::process::ExitCode {
 
 include!("pipeline_shards/pipeline_runtime_progress_console_core.rs");
 include!("pipeline_shards/candidate_material_lineage_spine_core.rs");
+include!("pipeline_shards/joint_reading_owner_input.rs");
+use crate::structural_write_authority::clef_surface_materialization::joint_reading_transaction::{apply_joint_reading_course, JointReadingCandidate,
+    PreparedJointOctaveWrite, PreparedJointReadingCourse};
+include!("pipeline_shards/joint_reading_render_custody.rs");
+include!("pipeline_shards/joint_reading_owner_course.rs");
+use etuschlopf::joint_reading_course as c3_course;
+#[path = "pipeline_shards/joint_reading_c3_adapter.rs"]
+mod c3_adapter;
 include!("pipeline_shards/pipeline_foundation_runtime_passorder_tail.rs");
 include!("pipeline_shards/sheaf_noether_harmonic_micro_tail.rs");
 include!("pipeline_shards/sheaf_noether_projection_core.rs");
@@ -151,6 +165,9 @@ include!("pipeline_shards/human_pdf_pianistic_quality_core.rs");
 include!("pipeline_shards/human_pdf_pianistic_cross_staff_ledger_tail.rs");
 include!("pipeline_shards/cross_staff_editorial_voice_math_gate_tail.rs");
 include!("pipeline_shards/hidden_chord_math_reduction_core.rs");
+#[path = "pipeline_shards/coincidence_occupancy.rs"]
+mod coincidence_occupancy;
+include!("pipeline_shards/gesture_placement_occupancy.rs");
 include!("pipeline_shards/hidden_chord_reduction_texture_rebuild_tail.rs");
 include!("pipeline_shards/composer_recovery_hand_cause_core.rs");
 include!("pipeline_shards/composer_metric_beam_observation_core.rs");

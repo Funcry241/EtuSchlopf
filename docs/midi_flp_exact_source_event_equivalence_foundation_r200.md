@@ -56,3 +56,18 @@ Alle zehn MIDI-Dateien sind Format 1, verwenden PPQ 96, enthalten 4/4 und 461538
 3. Im Bericht muss `MIDI TRANSITION EQUIVALENCE PROVEN` erscheinen.
 4. Master- und Render-MusicXML muessen gegen r199 byte-identisch bleiben.
 5. Danach Vollkorpus 10/10 ausfuehren; erst dessen gruener Beweis autorisiert den produktiven MIDI-Cutover in r203.
+
+
+## Versionierte Erweiterung: SourceTimeNotationProjection
+
+Die historische r200-Grenze oben bleibt die Beschreibung des damaligen
+96er-Vertrags. Mit Annahme der Fehlerklassendefinition
+`selector_derivation_contract_source_time_notation_projection.md` darf eine
+separat angenommene Umsetzung exakte Quellzeit in einer explizit gebundenen
+verlustfreien Einheit und chronologische Taktart-Metadaten vorwaerts tragen.
+Die bestehende Rohpaar-Identitaet bleibt erhalten. Die Notationsabbildung ist
+ein getrennter Owner; ihre 96er-Koordinaten ueberschreiben keine Quellzeit.
+Nur die explizite Taktkarte erhaelt Notations-Metrik-Bedeutung; Tempo-Metadaten
+bleiben beobachtend. Daraus entsteht keine Audio-, Hand-/Staff-, Spielbarkeits-,
+Writer- oder freie MusicMutation-Autoritaet. Alle bestehenden Auswahl-,
+Herkunfts-, Souveraenitaets- und Produktgates bleiben bestehen.

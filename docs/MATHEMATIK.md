@@ -2,7 +2,7 @@
 
 EtuSchlopf macht aus MIDI- und WAV-Aufnahmen von Klavieretüden Notensatz (MusicXML und PDF). Viele Teilaufgaben dabei sind Entscheidungen: In welchem System steht ein Ton? Welcher Schlüssel gilt? Wird ein Akkordton gezeigt oder verborgen? Diese Seite zeigt, wo wir dafür Mathematik einsetzen, woher sie stammt und wie belastbar sie heute ist.
 
-**Stand:** r1562, nativ angenommen (Oktober 2026). Korpuszahlen nennen jeweils die Revision, auf der sie gemessen wurden.
+**Stand:** r1577, nativ angenommen (1. November 2026). Die [Prüfbelege](evidence/r1577/README.md) trennen den Entwicklungsquellstand von der weiterhin veröffentlichten Download-Engine r1537. Historische Korpuszahlen behalten ihre jeweilige Revision.
 
 ## Ehrlichkeitsregel
 
@@ -29,7 +29,7 @@ Der **Status** sagt, was die Mathematik heute tut:
 2. **Topologische Reihenfolge.** Entschieden wird in der Reihenfolge der Abhängigkeiten, also Schreibweise → Register → Layout. Wie viele Hilfslinien ein Ton braucht, hängt von seiner Schreibweise ab: Es3 und Dis3 sind derselbe Ton, liegen aber auf verschiedenen Linien.
 3. **Invarianten am Ende.** Was eine Stufe nicht ändern darf, wird als Invariante formuliert und nach der Stufe geprüft.
 
-*Herkunft:* bekannt (gerichtete azyklische Graphen und topologisches Sortieren; Invarianten im Sinne von Hoare). *Status:* Prinzip. An der Registerentscheidung (C3) ist es noch nicht durchgesetzt: Ein erster Versuch scheiterte gerade daran, dass zwei Stellen über dieselbe Größe entscheiden.
+*Herkunft:* bekannt (gerichtete azyklische Graphen und topologisches Sortieren; Invarianten im Sinne von Hoare). *Status:* Prinzip mit begrenzter produktiver Umsetzung. Seit r1576 übernimmt C3 im Korpus beide Systeme von Etüde 7 und 8; der Verlauf bleibt bis zum Abschluss gebunden. Die übrigen acht Etüden behalten ihren bisherigen Verlauf. Eine vollständige gemeinsame Registerentscheidung für alle unterstützten Eingaben ist damit noch nicht erreicht.
 
 ## Die drei projekteigenen Formeln
 
@@ -66,7 +66,7 @@ Dabei ist $p$ die Zahl der erlaubenden Einstufungen dieses einen Belegs (keine W
 - Beobachtete Lücken aus echten Stücken sind keine Mindestmaße.
 - Horizontal und vertikal sind getrennte Dimensionen.
 
-*Herkunft:* eigene Konstruktion. Verwandt mit dem Zeilenumbruch nach Knuth und Plass (1981) und mit Packungsproblemen (*bin packing*). *Status:* **geplant.** Eingefroren ist bisher nur die Fehlerklasse „unnötig beibehaltene Seite“ (r1541, `docs/selector_derivation_contract_redundant_page_retention.md`). Die Formel selbst ist nicht implementiert, und die Mindestbreiten und -abstände sind noch nicht verifiziert.
+*Herkunft:* eigene Konstruktion. Verwandt mit dem Zeilenumbruch nach Knuth und Plass (1981) und mit Packungsproblemen (*bin packing*). *Status:* **Die vollständige Formel ist geplant.** Begrenzte Teilumsetzungen erproben bereits eine niedrigere Seitenzahl bei unverändertem Systemverlauf und einen Systemtransfer zur Balance bei gleicher Seitenzahl. Sie verlangen eine frische Bestätigung durch den bestehenden Renderer und sind kein globaler Formeloptimierer. Siehe die Verträge zur [Seitenverfeinerung](selector_derivation_contract_same_system_page_refinement.md) und [festen Seitenbalance](selector_derivation_contract_fixed_page_balance_implementation.md). Die vollständige Formel und ihre Mindestbreiten und -abstände sind dadurch nicht verifiziert.
 
 ### Symbolische Spielformel: was eine Stelle von den Händen verlangt
 
@@ -89,7 +89,7 @@ Die Variablen sind die physischen Verpflichtungen einer Stelle (welche Töne gle
 | 5 | Wohin verteilt man verborgene Akkordtöne? | kleinste Quadrate (Gauss) mit gewichteter Zielfunktion | Prinzip bekannt; Zielfunktion: eigene Modellierung | entscheidet |
 | 6 | Welcher Lösungskandidat ist der beste? | lexikografische Ordnung | bekannt | entscheidet |
 | 7 | Wie schwer ist ein Ton mit $l$ Hilfslinien zu lesen? | Druckfunktion $p(l)$, genutzt von zwei Schlüsselplanern | eigene Modellierung | entscheidet |
-| 8 | Welcher Schlüsselverlauf im unteren System? | dynamische Programmierung über Zustände (Lesbarkeitskurs); gemeinsame Optimierung mit Oktavierung nur als Prototyp | bekannt; Kosten: eigene Modellierung | entscheidet (Schlüssel); Prototyp (Schlüssel + Oktavierung) |
+| 8 | Welcher Schlüssel- und Oktavverlauf? | dynamische Programmierung über vollständige Registerzustände; außerhalb übernommener C3-Kurse bisheriger Lesbarkeitskurs | bekannt; Kosten: eigene Modellierung | entscheidet; C3 im Korpus seit r1576 in E7/E8 übernommen |
 | 9 | Legt die Pipeline getrennte Anschläge zusammen? | Injektivität modulo Quellgleichheit | bekannt; Formulierung: eigene Modellierung | misst (R6-Bericht); entscheidet seit r1562 in der Gestenplatzierung; für die übrigen Platzierer geplant |
 | 10 | Was hat sich zwischen zwei Versionen geändert? | Differenz je Größe auf einer Identitätsabbildung | eigene Modellierung | Prüfwerkzeug |
 | 11 | Wie viele Töne muss man mindestens weglassen? | monotone Zweiteilung, Untergrenze | eigene Modellierung | Prüfwerkzeug |
@@ -190,7 +190,7 @@ Der quadratische Term bestraft viele Hilfslinien stärker. Der Zusatzterm macht 
 - im **Hilfslinien-Readback** (`src/notation.rs`, `ledger_bounded_lower_staff_clef_readback`): Er fügt einen Schlüssel ein, sobald ein Ton im unteren System mehr als drei Hilfslinien bräuchte. Im Render-Pfad schlägt er außerdem ganztaktige Wechsel vor, wenn ein Takt mindestens 3 Anschläge und mindestens 2 Viertel betroffene Dauer hat und der Druck um mindestens 3 sinkt.
 
 *Herkunft:* eigene Modellierung. *Status:* entscheidet.
-*Bekannte Grenze:* Zwei Stellen schreiben Schlüssel, nach der Leitidee darf es nur einen Entscheider geben. Beide sind im Korpus sichtbar wirksam (siehe „Was wirkt auf das Notenbild?“).
+*Bekannte Grenze:* Historisch schrieben beide Stellen Schlüssel (siehe die unten ausdrücklich auf r1556 bezogenen Belege). Bei übernommenen C3-Kursen ist deren Schutzbindung maßgeblich. Die älteren Kosten und Schreiber bleiben für beibehaltene Verläufe relevant; ihre historische Einzelwirkung darf nicht als aktuelle Wirkung in E7/E8 gelesen werden.
 
 ### 8. Schlüsselverlauf als kürzester Weg (dynamische Programmierung)
 
@@ -203,7 +203,19 @@ C = \sum_{\text{Töne}} p(l) + 24\cdot\#\text{Wechsel} + 1\cdot\#\text{redundant
 Ein kurzer Ausflug umfasst höchstens 2 Anschläge.
 *Herkunft:* bekannt (Bellman; Viterbi-artige Vorwärtsrechnung). Zustandsraum und Gewichte sind eigene Modellierung. *Status:* entscheidet.
 
-**Als Prototyp (gemeinsam mit Oktavierung):** Zustand Schlüssel ∈ {G, F} × Oktavierung ∈ {0, +8, −8}, mit lexikografischem Kostenvektor je Takt (Kollisionen, Hilfslinien-Histogramm von schwer nach leicht, Wechselzahl). *Status:* Prüfwerkzeug und Entwurf für die gemeinsame Registerentscheidung (C3). Ein erster Versuch scheiterte, weil die Schreibweise erst danach entschieden wurde und weitere Schlüsselschreiber folgten.
+**Produktives C3, gemeinsam mit Oktavierung:** Der Zustand besteht aus G- oder F-Schlüssel und einer Oktavabbildung von −2 bis +2 Oktaven, also zehn Zuständen. Verglichen werden vollständige gebundene Verläufe statt isolierter Takte. Die festgelegte lexikografische Reihenfolge lautet:
+
+```math
+(h_8,h_7,h_6,h_5,h_4,ko,uk,ks,gb,h_3,ch,h_2,h_1).
+```
+
+Die Größen $h_i$ zählen sichtbare Köpfe mit genau $i$ Hilfslinien; $h_8$ fasst acht oder mehr zusammen. Danach folgen gleichzeitige Schlüssel-/Oktavwechsel ($ko$), Köpfe in unüblichen Kombinationen ($uk$), kurze Registerabschnitte ($ks$) und aufgetrennte gebundene Gruppen ($gb$). $ch$ zählt Schlüsselwechsel und Oktav-Anfangs-/Endoperationen gemeinsam. Ein direkter Wechsel zwischen zwei unterschiedlichen Oktavierungen zählt zwei Oktavoperationen. Eine neue oder verstärkte Belastung eines sichtbaren Kopfes mit mindestens vier Hilfslinien ist zusätzlich hart ausgeschlossen. Herkunfts-, Gruppen- und Schreibschutzregeln bleiben verbindlich.
+
+Die Reihenfolge ist eine **eigene festgelegte Modellierung**, keine gemessene Lesezeit. Es gibt weder eine gewichtete Summe noch die Forderung, dass jede einzelne Kennzahl sinken muss. Insbesondere können mehr Schlüsselwechsel zulässig sein, wenn ein früheres Kriterium besser wird. Das separate Ziel „höchstens 48 Schlüsselwechsel im Render“ ist mit r1577 weiterhin nicht erreicht; Policy-Konformität und dieses Ziel sind verschiedene Prüfungen. Die vollständige Definition steht in der [C3-Policy](joint_register_dp_policy_v1.md).
+
+*Status:* entscheidet. r1576 übernimmt im Zehnerkorpus beide Systeme von E7/E8; r1577 erhält alle zwanzig XML-Dateien bytegleich. Die anderen acht Etüden behalten ihre bisherigen Verläufe, weil Eingabe-, Abhängigkeits- oder Schutzbedingungen eine Übernahme verhindern. Das ist keine vollständige Lösung des Korpus. Die Schlussprüfung bindet den übernommenen Verlauf bis zur finalen Ausgabe. Der Schattenlauf darf ausschließlich zwei noch nicht abschließbare Schlüsselbedingungen beobachtend weiterreichen; nach der Balken-Stimmenteilung muss der Live-Lauf vollständig grün schließen.
+
+**Reine Rechenwiederverwendung in r1577:** Die ältere Register-Gegenrechnung verwendet Ergebnisse nur dann erneut, wenn der gesamte typisierte Vorschlag innerhalb derselben unveränderten Eingabe exakt gleich ist. Ein Fingerabdruck allein genügt nicht. Das ist bekannte Memoisierung, keine neue musikalische Zielfunktion. Nativ entfallen 89 von 566 Berechnungen; alle zwanzig XML bleiben unverändert. Die betroffene Master-Stufe sinkt aufsummiert von 594,391 auf 532,224 Sekunden, die Korpusdauer steigt zugleich von 14:23 auf 14:34 Minuten. Ein schnellerer Gesamtlauf ist damit nicht belegt.
 
 ### 9. Keine neue Koinzidenz
 
@@ -286,12 +298,12 @@ Die Spalte „Status“ sagt, was eine Stelle **darf**. Ob sie im Korpus auch **
 | Beobachtungsäquivalenz (13) | **Speicheraufbewahrung**: musikalische Ergebnisse unverändert | r1559 nativ angenommen |
 | Schlöpfchen-Formel (16) | **keine**: geplant | – |
 
-**Folgerung:** Sichtbar wirken heute fünf Mathematik-Bausteine:
+**Folgerung für die historische r1556-Messung:** Sichtbar wirkten fünf Mathematik-Bausteine:
 - zwei Verteiler (Gauss und Geste);
 - zwei Schlüsselplaner, die dieselbe Druckfunktion nutzen;
 - die gemeinsame Spanne.
 
-Dazu kommt mittelbar die Kandidatenwahl. Alle Schwellen und Gewichte, die diese Bausteine steuern, sind eigene Setzungen (siehe nächster Abschnitt). Dort lohnt sich mehr Mathematik am meisten.
+Dazu kam mittelbar die Kandidatenwahl. Seit r1576 kommt die belegte gemeinsame C3-Registerentscheidung in E7/E8 hinzu. Die Tabelle ist keine erneute Messung aller historischen Einzelwirkungen unter r1577. Alle Schwellen, Gewichte und Prioritäten sind eigene Setzungen (siehe nächster Abschnitt).
 
 ## Was ist nicht bekannte Mathematik?
 
@@ -308,7 +320,7 @@ Ob davon etwas über EtuSchlopf hinaus trägt, ist nicht extern geprüft. Wir be
 - **Haltebögen als Zuordnungsproblem:** Bogenanfänge und Bogenenden je Taste als bipartites Matching, statt sie der Reihe nach abzuarbeiten.
 - **Eine Belegungsregel für alle Platzierer** (Nr. 9), dazu dieselbe Regel in Bewertung und Ausführung (Nr. 5).
 - **Überlappungen** gleicher Tasten: Nr. 9 von Zeitpunkten auf Intervalle erweitern.
-- **Ein Entscheider für das Register** (Nr. 7 und 8 zusammenführen), mit der Schreibweise als Eingabe.
+- **Die gemeinsame Registerentscheidung vervollständigen** (Nr. 7 und 8): verbleibende Eingabe- und Gruppenbedingungen schließen und die endgültige Balken-/Stimmenverteilung bei der Planung berücksichtigen. C3 ist in E7/E8 produktiv, aber noch kein vollständiger Ersatz aller bisherigen Verläufe.
 - **Prüfschranken als Aufrufgraph:** Erreichbarkeit statt Textsuche, ob neuer Code in eine Musikentscheidung einfließt.
 - **Kalibrierung** der Gewichte in Nr. 5 und Nr. 7 an Beispielen, die ein Mensch beurteilt hat, statt per Setzung.
 

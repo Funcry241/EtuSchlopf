@@ -2,10 +2,11 @@ use super::*;
 use crate::master_state_identity::OwnerReceipts;
 use crate::structural_write_authority::remove_allowed_xml_ranges_authorized;
 
+/// Off-beat source: requires a genuine metric split under either policy.
 /// Received single course, split by the actual visible-rhythm normalizer into
 /// tied fragments that carry both a sounding `<tie>` and a notation `<tied>`.
 fn tied_fragments() -> OwnedRhythmicContinuation {
-    let (xml, seed) = crate::midi_seed::rhythmic_course_creation_tests::arrangement_fixture(&[(7, 0, 1)], 1);
+    let (xml, seed) = crate::midi_seed::rhythmic_course_creation_tests::arrangement_fixture(&[(7, 24, 1)], 1);
     let custody = ArrangementRhythmicCourses::receive(&seed, &xml).unwrap();
     let state = OwnedRhythmicContinuation::receive(&custody, &xml).unwrap();
     let normalized = crate::arrangement::normalize_visible_rhythm_musicxml(&xml);

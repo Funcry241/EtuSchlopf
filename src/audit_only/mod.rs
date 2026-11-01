@@ -58,3 +58,15 @@ pub(crate) mod register_planner_input;
 pub(crate) mod clef_planner_input;
 
 pub(crate) mod renderer_ottava_context;
+
+pub(crate) mod joint_register_reading;
+
+pub(crate) mod notation_invariants;
+
+pub(crate) mod material_conservation;
+
+pub(crate) mod material_reference_coverage;
+
+pub(crate) mod material_coincidence;
+
+pub(crate) mod c3_diagnostics;
