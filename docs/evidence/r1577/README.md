@@ -1,8 +1,10 @@
 # Dokumentierte Abnahme r1577
 
 Stand 1. November 2026, Paketversion 0.10.1839. Der öffentliche Entwicklungsbaum
-wird mit dem nativ angenommenen r1577 synchronisiert. Die veröffentlichte
-Windows-Download-EXE bleibt r1537. Dieser Quellabgleich erstellt keinen Release.
+wird mit dem nativ angenommenen r1577 synchronisiert. Beim ursprünglichen
+Quellabgleich blieb der Download r1537. Nach erfolgreicher Paketprüfung wurde
+[r1577 als Windows-Testversion veröffentlicht](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1577-windows-preview).
+Die historische `summary.json` beschreibt den Stand vor dieser Veröffentlichung.
 
 | Prüfung | Ergebnis |
 |---|---|
@@ -13,9 +15,18 @@ Windows-Download-EXE bleibt r1537. Dieser Quellabgleich erstellt keinen Release.
 | Privater Zehnerkorpus | 10/10 erfolgreich und vollständig |
 | MusicXML gegen r1576 | alle zehn Master- und zehn Render-Dateien bytegleich |
 | C3 in E7/E8 | beide Systeme bis zum Abschluss gebunden; Schutzprüfung nach der Balken-Stimmenteilung grün |
-| Windows-Paket dieser Git-Projektion | noch kein neuer Workflow-/Anwenderlauf belegt |
+| Windows-Paket des geprüften Quellbaums | Workflow #14 erfolgreich; interaktiver Anwenderlauf weiter offen |
 
 ## Belege und Prüfgrenzen
+
+Die veröffentlichte EXE stammt unverändert aus
+[Windows download #14](https://github.com/Funcry241/EtuSchlopf/actions/runs/41326070573),
+Commit `55be4dc022739fed83c9d13a5e73d0cce03dfcb4`.
+Quellprüfung, Windows-Engine-Build, drei Distributionstests, Version/Hilfe ohne
+Entwickler-PATH und isolierter `--no-pdf`-Starttest sind bestanden. Die EXE hat
+SHA-256 `fc413fbcefbfc80026f34ddaa591c7ce49e4f2b5daee3943d2085aa5350aac29`.
+Das Quellarchiv im Release gehört zu diesem geprüften Commit. Die spätere
+Aktualisierung der Download-Dokumentation verändert keine Runtime-Datei.
 
 - [Native Acceptance-Metadaten](native_acceptance.txt), unverändert aus dem Export.
 - [Nativer RunOutcome](native_run_outcome.txt), unverändert aus dem Export. Sein

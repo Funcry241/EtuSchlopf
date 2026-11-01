@@ -1,7 +1,7 @@
 # Technische Referenz und Quellenarbeit
 
 Diese Seite enthält den technischen Einstieg des angenommenen r1577-Stands samt
-vollständiger Optionsreferenz. Für die separate Windows-Testversion r1537 gilt die
+vollständiger Optionsreferenz. Für die veröffentlichte Windows-Testversion r1577 gilt die
 [Download-Anleitung](../README.md). Git-Dokumentation und Take-Identität sind
 unterschiedliche Ebenen; die Runtime-Dateien entsprechen dem angenommenen Take.
 Die [aktuellen Prüfbelege](evidence/r1577/README.md) dokumentieren die native Abnahme.
