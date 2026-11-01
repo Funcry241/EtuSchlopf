@@ -3,6 +3,11 @@
 EtuSchlopf ist ein experimentelles, privat gepflegtes Projekt. Beginne je nach
 Aufgabe mit einem der folgenden Einstiege:
 
+Die aktuellen Einstiegsseiten beziehen sich auf r1577. Historische Abnahmen,
+Forschungsnotizen und revisionsgebundene Fachverträge behalten ihren jeweiligen
+Stand; eine alte Revisionsnummer ist dort keine aktuelle Produktzusage. Für den
+bestätigten Lauf- und Paketstand gilt die [r1577-Abnahme](evidence/r1577/README.md).
+
 | Aufgabe | Einstieg |
 | --- | --- |
 | Windows-EXE herunterladen und erstes Stück verarbeiten | [Erster Start](../README.md#dein-erstes-stück) und [Download](../README.md) |

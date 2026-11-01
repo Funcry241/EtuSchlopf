@@ -1,9 +1,46 @@
 # 050 – Aktueller Stand
 
-Stand 25.10.2026. Advisory only. Massgeblich sind immer die aktuellen hashgebundenen
-Lifecycle-/Acceptance-Belege und die Runtime-Belege des Exports, nicht dieser Text.
+Stand 1.11.2026. Advisory only. Massgeblich sind die hashgebundenen
+Lifecycle-/Acceptance-Belege und Runtime-Belege; dieser Text erteilt keine
+normative oder musikalische Schreibfreigabe.
 
-## Jetzt
+## Jetzt: r1577
+
+- Nativ angenommen: r1577 / 0.10.1839, Take-SHA-256
+  `6b04ee95371eebd258cee9f8f64a42d5ee99aeeedb2ea1179ca070bdf1e32776`.
+- Zehnerkorpus: 10/10 erfolgreich und vollstaendig; 2875 Tests bestanden,
+  0 fehlgeschlagen, 3 ignoriert; Build und Clippy gruen.
+- Alle 20 Master-/Render-XML sind bytegleich zu r1576. Das ist keine Aussage
+  ueber Bytegleichheit zu r1514 oder zur frueheren Download-Version r1537.
+- C3 uebernimmt seit r1576 im Korpus beide Systeme von E7/E8 und haelt deren
+  Verlauf bis zum Abschluss gebunden. Die anderen acht Etueden behalten ihre
+  bisherigen Verlaeufe. Die lexikografische Policy bleibt unveraendert; das
+  separate Schluesselziel bleibt offen.
+- r1577 verwendet exakte Preview-Kosten innerhalb derselben Eingabe erneut:
+  566 Anfragen, 89 Cache-Treffer, 477 Berechnungen. Master-Stufensumme
+  594,391 auf 532,224 Sekunden; Korpusdauer 14:23 auf 14:34 Minuten.
+  Ein Gewinn der Gesamtlaufzeit ist nicht belegt.
+- PR #7 wurde nach main uebernommen. Die Windows-Testversion r1577 ist
+  veroeffentlicht; ihre EXE stammt unveraendert aus dem erfolgreichen
+  [Windows-Lauf #14](https://github.com/Funcry241/EtuSchlopf/actions/runs/41326070573).
+  Pakettests und isolierter Start ohne PDF sind bestanden. Eine neue
+  interaktive Anwender- oder unabhaengige PDF-Abnahme ist damit nicht belegt.
+- Aktuelle Belege: [r1577-Abnahme](../evidence/r1577/README.md).
+  Fachlicher Ueberblick: [Mathematik](../MATHEMATIK.md).
+  Download und Grenzen: [Startseite](../../README.md).
+- Naechste musikalische Eingriffe bleiben eigene Arbeiten mit den bestehenden
+  Fehlerklassen-, Herkunfts-, Owner-, Gruppen- und Schutzvertraegen. Diese
+  Dokumentationspflege installiert keine neue Policy und hebt keine bestehenden
+  fachlichen Einschraenkungen oder zurueckgestellten Entscheidungen auf.
+
+## Historischer Kurzstand vom 25.10.2026
+
+Die folgenden Abschnitte sind die damaligen Notizen. Angaben wie "Aktueller
+Kandidat", "Offen" oder "Annahme steht aus" beziehen sich auf ihren jeweiligen
+historischen Stand. Sie sind keine Fortsetzungsanweisung fuer r1577.
+
+### Damals bestaetigter Stand
+
 
 - Angenommen bis r1514 / 0.10.1839 (d69b4895...): 10/10 dunkelgruen,
   2485 Tests bestanden, 0 fehlgeschlagen, 1 ignoriert (15 Testprogramme); Build/Clippy Exit 0.
@@ -76,7 +113,7 @@ Lifecycle-/Acceptance-Belege und die Runtime-Belege des Exports, nicht dieser Te
   Details: ../launcher_himem_console_k8_r1503.md.
   Annahme durch den hashgebundenen Lifecycle-/Acceptance-Beleg bestaetigt.
 
-## Aktueller Kandidat
+### Aktueller Kandidat
 
 - r1504 (RefactorOnly, Maus): Balkenanker-Diagnose im bestehenden finalen
   Master-/Render-Bericht. Gleicher Scanner, rohe Akkord-, Tie-, gespeicherte Balken-
@@ -86,7 +123,7 @@ Lifecycle-/Acceptance-Belege und die Runtime-Belege des Exports, nicht dieser Te
   Produktive Planer- und Writerentscheidung unveraendert. Details:
   ../beam_anchor_distance_audit_r1504.md. Native Annahme steht aus.
 
-## Offen
+### Offen
 
 - E6/T22 (Fis2/Cis3 im Violinschluessel): Regelentscheidung Wolfgang.
 - Beam-Fernbindung offener unterer Primaerbalken: r1504 liefert die Endstand-Messung;
@@ -94,25 +131,25 @@ Lifecycle-/Acceptance-Belege und die Runtime-Belege des Exports, nicht dieser Te
 - Laufzeit E6: ArrangementSolver bewertet rund 1830 Varianten (E1: rund 130); Ansatz
   inkrementelle Bewertung bzw. Parallelitaet erst nach Messung und Entscheidung.
 
-## Offen und abgestimmt (Maus/Dachs, 23.10.2026)
+### Offen und abgestimmt (Maus/Dachs, 23.10.2026)
 
 - Laufzeit-Kandidaten (Q16/Q17/Q23/Q24, Q25/Q26, Q27) nur nach tatsaechlicher Messung.
 - Vorlaufzeit eines Takes: die Bibliothek wird vor dem Launcher dreimal uebersetzt bzw. geprueft
   (Bootstrap-Build, `cargo check --lib` der Cargo.lock-Pruefung, Launcher-Build). Erst mit
   `cargo build --timings` messen, dann entscheiden; keine Optimierungsstufe aendern.
 
-## Zurueckgestellt (Entscheidung Wolfgang)
+### Zurueckgestellt (Entscheidung Wolfgang)
 
 Spielbarkeit nach objektiven Kriterien statt Dichtegrenzen; WAV- und Boegen-Themen;
 Source-Selection-Rueckbau; Taktverschiebungstest mit echten Etueden.
 
-## Testpraxis ab r1477
+### Testpraxis ab r1477
 
 Taktnummern in Test-XML nur ueber Variablen oder tests/support/synthetic_score.rs.
 Writer-Tests mit Einzeltakt-Fixture zusaetzlich durch assert_shift_invariant fuehren.
 Siehe 010 Muster 31 und ../measure_shift_test_bench_r1477.md.
 
-## Historie (nur zur Einordnung, kein Auftrag)
+### Historie (nur zur Einordnung, kein Auftrag)
 
 - r1469: lokale validate_binding-Memoisierung. r1470: abgeschlossene Report-Abschnitte
   entfernt (../closed_audit_report_sections_retirement_r1470.md).
@@ -128,14 +165,14 @@ Siehe 010 Muster 31 und ../measure_shift_test_bench_r1477.md.
 - r1485: Diagnosezaehler bereinigt (../diagnostic_counter_cleanup_r1485.md).
 
 
-## r1505 – BeamAnchorPlannerInputTrace (candidate, parent r1504 accepted)
+### r1505 – BeamAnchorPlannerInputTrace (candidate, parent r1504 accepted)
 
 r1504 native acceptance confirmed with exact candidate hash 9c4c34bb5cea949d07e709c2f99915ecacdbc62f53a227c34757642206091e7c; Windows 2450 tests passed, 0 failed, 1 ignored, 10/10 corpus; 20 XMLs byte-identical and 50 pages pixel-identical at 200 dpi to r1503.
 
 r1505 adds input-bound stderr diagnostics at actual eligible clef planner calls. It observes existing scanner anchors, actual part solution and candidates; no continuity rule, counterfactual solver, error classification or musical change. It does not prove committed writer effects. Final-document r1504 audit remains unchanged. See docs/beam_anchor_planner_input_trace_r1505.md. Native acceptance and full Windows corpus comparison pending.
 
 
-## r1506 - BeamClefOctaveScopeDefinition (Stage A candidate)
+### r1506 - BeamClefOctaveScopeDefinition (Stage A candidate)
 
 Last confirmed accepted parent: r1505, exact take SHA-256 78b2a231f0b7d5775512dd1e7f9caf787adcc64b393720c8259c99cc33c3edd5.
 Native r1505: 2453 tests passed, 0 failed, 1 ignored; build/clippy green; 10/10 corpus; 20 XMLs byte-identical and 50 pages pixel-identical at 200 dpi to r1504. All 1641 managed candidate files match the accepted snapshot.
@@ -145,14 +182,14 @@ Analysis found inconsistent lower octave-display scope handling between the anch
 The existing KODEX requires a frozen parent error-class definition before selector-sensitive implementation. The chord/Unknown parent contract explicitly excludes general beam policy, and the older clef-relocation envelope contract describes another mechanism. r1506 therefore freezes only docs/selector_derivation_contract_primary_beam_lower_octave_scope.md, with necessity review, same-scope/pre-boundary protection and synthetic/multiplicity obligations. No runtime selector, scope reset or musical repair is installed by this take. No gate/pin/lock change. Native acceptance pending. Only after acceptance may a later implementation reference this contract unchanged; no future revision is reserved or accepted here.
 
 
-## r1507 - BeamClefOctaveScopeClosure (MusicMutation candidate)
+### r1507 - BeamClefOctaveScopeClosure (MusicMutation candidate)
 
 Parent r1506 accepted: a4bc2f0bc8bf65ca822bddc066936ecf8171e13652cd27b5516f8d420a477fcf. Native 2453 passed, 0 failed, 1 ignored, build/clippy green, 10/10; 20 XMLs byte-identical and 50 pages pixel-identical at 200 dpi to r1505. The scope class definition is frozen at SHA-256 80ba736a0aa531e90d588a0cdf8c0e1dd7884d9f9850992dabc4ef4c9ce3c2e4.
 
 r1507 implements only the second primary-beam guard's part-local lower octave decision scope. Query-relative scoping prevents stale protection after a boundary. Proven interiors before future boundaries remain protected; unresolved prefixes block new insertions without forcing existing-clef removal. An earlier boolean-prefix prototype was rejected after an isolated E4 pressure regression; it is not the delivered code. Scanner, costs, tie/chord rules, writers and gates unchanged. No generic temporal-gap rule. Musical effect is declared through the existing pure-clef course; actual Windows artifacts and native acceptance pending. E6/T22 musical approval is not implied. See the separate repair contract. No further revision is assumed accepted.
 
 
-## r1508 - LicenseNoticeAndPdfiumDiagnostics (RefactorOnly candidate)
+### r1508 - LicenseNoticeAndPdfiumDiagnostics (RefactorOnly candidate)
 
 Parent r1507 accepted: `2a2ce714d783101956ace0753c6ff2f9b3a9a8603c143081dc23a5288a286a66`.
 The supplied native export reports 2465 passed, 0 failed, 1 ignored, build/clippy green, 10/10 corpus.
@@ -162,7 +199,7 @@ All Rust source files except the required change-manifest text, qualified compon
 Native acceptance and the fresh Windows full-corpus comparison remain pending. See ../license_take_r1508.md.
 
 
-## r1509 - RegisterGestureContextDefinition (Stage A candidate)
+### r1509 - RegisterGestureContextDefinition (Stage A candidate)
 
 Parent r1508 accepted: `2b5b26a70bf1e4807a56ad25bea036fab31b2854d063de297712637df0450144`.
 Native 2465 passed, 0 failed, 1 ignored; build/clippy green; 10/10 corpus.
@@ -173,7 +210,7 @@ All Rust sources, musical decisions, gates, tests and Cargo files remained uncha
 See ../register_gesture_work_plan_r1509.md and ../selector_derivation_contract_register_gesture_context.md.
 
 
-## r1510 - RegisterPlannerInputReadback (RefactorOnly candidate)
+### r1510 - RegisterPlannerInputReadback (RefactorOnly candidate)
 
 Parent r1509 accepted: `e16ca7354500e6076ea9b701ec2d6f51ef7cb7db297756857b9bc745e92bf783`.
 Export: native 2465 passed, 0 failed, 1 ignored; build/clippy 0; corpus 10/10; final exit 0.
@@ -185,7 +222,7 @@ Essence E01 gains two advisory sentences on alternatives and falsifying experime
 Native r1510 accepted; see the r1511 parent record below. See ../register_planner_input_readback_r1510.md.
 
 
-## r1511 - RegisterCommonSpanExclusionDefinition (Stage A candidate)
+### r1511 - RegisterCommonSpanExclusionDefinition (Stage A candidate)
 
 Parent r1510 accepted: `a2612a9712bdc01d6345c203242acfc12d16e706253e8266bcca4f241eb34187`.
 Export: 2469 passed, 0 failed, 1 ignored; build/clippy passed; corpus 10/10; final exit 0.
@@ -201,7 +238,7 @@ no classifier or repair is installed. Native r1511 accepted; see the r1512 paren
 See ../selector_derivation_contract_register_common_span_exclusion.md.
 
 
-## r1512 - RegisterCommonSpanClosedComparison (MusicMutation candidate)
+### r1512 - RegisterCommonSpanClosedComparison (MusicMutation candidate)
 
 Parent r1511 accepted: `6aaf1fd728c6000a41f51b085628c1127793b7584fc3bd36213fb8dafe81965b`.
 Export: 2469 passed, 0 failed, 1 ignored; build/clippy passed; corpus 10/10; final exit 0.
@@ -217,7 +254,7 @@ actual downstream output comparison and new PDF readback remain pending.
 See ../register_common_span_closed_comparison_r1512.md.
 
 
-## r1513 - LowerClefBeamInteriorContextDefinition (Stage A candidate)
+### r1513 - LowerClefBeamInteriorContextDefinition (Stage A candidate)
 
 Parent r1512 accepted: `ea977b4a07e176a72f046b256cb0a4258df678241f32ecd491822ff05c5ed3e8`.
 The 20261025-112259 export supplies the parent source and native lifecycle record.
@@ -236,7 +273,7 @@ See ../lower_clef_beam_interior_context_r1513.md and
 ../selector_derivation_contract_lower_clef_beam_interior_context.md.
 
 
-## r1514 - ClefPlannerExactInputReadback (RefactorOnly candidate)
+### r1514 - ClefPlannerExactInputReadback (RefactorOnly candidate)
 
 Parent r1513 accepted: `fdb4270fb2d193b719bc188f7ffd8176cdd14d466ef42adcfad89454c1205ee8`.
 Native: 2482 passed, 0 failed, 1 ignored; build/clippy 0; corpus 10/10 dark-green.
@@ -251,7 +288,7 @@ without separate caller/receipt evidence. Native acceptance is pending.
 See ../clef_planner_exact_input_readback_r1514.md.
 
 
-## r1515 - LowerClefFreshBeamBoundary (MusicMutation candidate)
+### r1515 - LowerClefFreshBeamBoundary (MusicMutation candidate)
 
 Parent r1514 accepted: `d69b4895a41aed42c9a5d40b7eb1b9eb67affd9703adfbb56ff28e60edc5c762`.
 Native 2485 passed, 0 failed, 1 ignored; build/clippy passed; ten-piece corpus dark-green.
@@ -268,7 +305,7 @@ Correction: E-sharp3 has three treble ledger lines, not four as earlier reported
 The r1513 class bytes remain unchanged. Native r1515 acceptance is pending.
 See ../lower_clef_fresh_beam_boundary_r1515.md.
 
-## r1516 - OttavaRecueContextDefinition (Stage A candidate)
+### r1516 - OttavaRecueContextDefinition (Stage A candidate)
 
 Parent r1515 accepted: `15cb8e29f849c4f1d27f431f9d940ec6faf2e5bd323b87f8b59ac10fdf9e848d`.
 Native 2493 passed, 0 failed, 1 ignored; 15 test programs; build/clippy passed;
@@ -286,7 +323,7 @@ All prior contracts and runtime/test source bytes stay unchanged. Native accepta
 is pending. See ../ottava_recue_context_r1516.md and
 ../selector_derivation_contract_ottava_recue_context.md.
 
-## r1517 - Ottava-Kontextbeobachtung (Kandidat)
+### r1517 - Ottava-Kontextbeobachtung (Kandidat)
 
 - Frischer Parent-Beleg: r1516 accepted; 2493 Tests, 10/10 dunkelgruen,
   Build/Clippy erfolgreich. r1516 friert nur die fehlende Kontextfrage ein.
@@ -297,7 +334,7 @@ is pending. See ../ottava_recue_context_r1516.md and
   und Leserbedarf bleiben UNKNOWN; finales XML rekonstruiert keine fruehe Identitaet.
 - Details: ../ottava_context_observation_r1517.md. Native Annahme steht aus.
 
-## r1518 - Leserregel und Reparaturumfang (Kandidat)
+### r1518 - Leserregel und Reparaturumfang (Kandidat)
 
 - Frischer r1517-Beleg: accepted, 2500 Tests bestanden, 0 fehlgeschlagen,
   1 ignoriert; Build/Clippy erfolgreich, 10/10 dunkelgruen. Gegen r1516 sind
@@ -310,7 +347,7 @@ is pending. See ../ottava_recue_context_r1516.md and
 - Details: ../ottava_reader_reminder_scope_r1518.md und
   ../ottava_reader_reminder_repair_scope_v1.md. Native Annahme steht aus.
 
-## r1519 - Belegte Leserentscheidung (Kandidat)
+### r1519 - Belegte Leserentscheidung (Kandidat)
 
 - Parent r1518 accepted, 2500 Tests / 10/10 dunkelgruen, 20/20 XML bytegleich
   und 50/50 PDF-Seiten bei 144 dpi pixelgleich zu r1517.
@@ -321,7 +358,7 @@ is pending. See ../ottava_recue_context_r1516.md and
   Keine Aenderung eingefrorener E007-/Checkpoint58-/Render-Adoptionsdateien.
 - Details: ../ottava_reader_decision_r1519.md. Native Annahme steht aus.
 
-## r1520 - Vertikale Ottava-Renderbewegung (Kandidat)
+### r1520 - Vertikale Ottava-Renderbewegung (Kandidat)
 
 - Parent bleibt r1518, hashgebunden angenommen. r1519 (4329c5be...) wurde
   nativ verworfen und auf r1518 zurueckgerollt: 2509 Tests, Build/Clippy gruen;

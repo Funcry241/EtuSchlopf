@@ -22,9 +22,11 @@ Programme und bleiben Gegenstand von Gegenbeispielen und Prüfung.
 
 **Zum Verständnis des Projekts:**
 
-- [Was tatsächlich implementiert ist, einschließlich SchlopfFormel und Mathematik](../docs/IMPLEMENTED_FOUNDATIONS.md)
+- [Aktueller fachlicher Überblick und Mathematik](MATHEMATIK.md)
+- [Historischer Architektur-Wegweiser auf Basis r1526](IMPLEMENTED_FOUNDATIONS.md)
 - [Forschungsbezüge und ihre genaue Rolle](../docs/RESEARCH_CONTEXT.md)
-- [Dokumentierte Abnahme von r1533](evidence/r1533/README.md)
+- [Aktuelle dokumentierte Abnahme r1577](evidence/r1577/README.md)
+- [Historische Abnahme r1533](evidence/r1533/README.md)
 - [Kaltstart ohne Gesprächsgedächtnis](../docs/assistant_memory/000_start_here.md)
 
 

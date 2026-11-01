@@ -4,6 +4,10 @@ Bibliografische Prüfung: 25.10.2026. Hier stehen Bezüge, deren Rolle am aktuel
 Quellbaum nachvollziehbar ist. Eine Referenz ist weder eine pauschale Bestätigung
 von EtuSchlopf noch eine empirische Kalibrierung seiner Heuristiken.
 
+Das Prüfdatum bezeichnet die damalige bibliografische Einordnung; es wurde mit
+der Veröffentlichung von r1577 nicht neu datiert. Den fortgeschriebenen
+Produktstand beschreibt die [Mathematik-Seite](MATHEMATIK.md).
+
 ## 1. Integrierte Modellgrundlage: Basic Pitch
 
 Rachel M. Bittner et al. (2022):

@@ -1,6 +1,10 @@
 # Was EtuSchlopf tatsächlich implementiert
 
 Stand: angenommene r1526-Quelle plus öffentliche Erläuterungen, 26.10.2026.
+Dies ist ein historischer Architektur-Wegweiser zu diesem Stand. Spätere
+Register-, Zeit- und Layoutarbeiten werden hier nicht vollständig nachgeführt.
+Den aktuellen fachlichen Überblick enthält die [Mathematik-Seite](MATHEMATIK.md),
+den bestätigten r1577-Stand die [Abnahme](evidence/r1577/README.md).
 Diese Beschreibung ist ein Wegweiser zum Code. Sie ersetzt keinen Contract,
 keine fachliche Authority und keinen Laufbeleg.
 
