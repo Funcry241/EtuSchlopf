@@ -18,11 +18,11 @@ Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI u
 
 ## Ein Blick auf die Noten
 
-[![EtuSchlopf-Notenbeispiel: erstes Klaviersystem der Etüde Nr. 1, Entwicklungsstand r1537](docs/images/etude-1-r1537-ausschnitt.png)](docs/examples/etude-1-r1537.pdf)
+[![EtuSchlopf-Notenbeispiel: erstes Klaviersystem der Etüde Nr. 1, bestätigter Stand r1577](docs/images/etude-1-r1577-ausschnitt.png)](docs/examples/etude-1-r1577.pdf)
 
 *Etüde Nr. 1 aus dem eigenen Evaluationskorpus: unveränderter PDF-Ausschnitt,
-Entwicklungsstand r1537. Bild anklicken für die vollständige PDF.
-Die aktuelle Download-EXE enthält r1577; das Beispiel zeigt weiterhin r1537.*
+Bestätigter nativer Stand r1577. Bild anklicken für die vollständige PDF.
+Bild, Beispiel-PDF und aktuelle Download-Engine gehören damit zu r1577.*
 
 ## Für wen ist EtuSchlopf gedacht?
 
