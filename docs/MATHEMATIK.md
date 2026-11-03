@@ -2,7 +2,7 @@
 
 EtuSchlopf macht aus MIDI- und WAV-Aufnahmen von Klavieretüden Notensatz (MusicXML und PDF). Viele Teilaufgaben dabei sind Entscheidungen: In welchem System steht ein Ton? Welcher Schlüssel gilt? Wird ein Akkordton gezeigt oder verborgen? Diese Seite zeigt, wo wir dafür Mathematik einsetzen, woher sie stammt und wie belastbar sie heute ist.
 
-**Entwicklungsstand r1601.** Die [native Abnahme](evidence/r1601/README.md) dokumentiert die Korpusprüfung. Die [Windows-Testversion r1577](evidence/r1577/README.md) hat eigene Paketbelege. Korpuszahlen gelten für die jeweils angegebene Revision.
+**Entwicklungsstand r1601.** Die [native Abnahme](evidence/r1601/README.md) dokumentiert die Korpusprüfung. Die [Windows-Testversion r1601](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1601-windows-preview) hat eigene Paketbelege. Korpuszahlen gelten für die jeweils angegebene Revision.
 
 ## Ehrlichkeitsregel
 

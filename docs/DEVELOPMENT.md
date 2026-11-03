@@ -1,6 +1,6 @@
 # Technische Referenz und Quellenarbeit
 
-Diese Seite beschreibt den Entwicklungsstand r1601. Die [nativen Prüfbelege](evidence/r1601/README.md) binden den Lauf an seinen Take. Die [Download-Anleitung](../README.md) gehört zur verfügbaren Windows-Testversion r1577.
+Diese Seite beschreibt den Entwicklungsstand r1601. Die [nativen Prüfbelege](evidence/r1601/README.md) binden den Lauf an seinen Take. Die [Download-Anleitung](../README.md) gehört zur verfügbaren Windows-Testversion r1601.
 
 Das Projekt hat zwei eng verbundene Gegenstände:
 

@@ -6,6 +6,6 @@ Ziehe deine MIDI-Datei auf die EXE oder starte die EXE und gib den Dateipfad ein
 
 Öffne nach erfolgreichem Lauf die PDF. Zum Bearbeiten in MuseScore dient die Datei mit der Endung `.render.musicxml`.
 
-Der Windows-Workflow prüft den nativ abgenommenen Quellstand r1601 und baut daraus die Engine. Der Build prüft die EXE ohne Entwickler-PATH und führt den isolierten Starttest aus. Die Windows-Testversion r1577 bleibt bis zur Veröffentlichung des geprüften Pakets der verfügbare Download.
+Der Windows-Workflow prüft den nativ abgenommenen Quellstand r1601 und baut daraus die Engine. Der Build prüft die EXE ohne Entwickler-PATH und führt den isolierten Starttest aus. Der Download enthält die geprüfte Engine r1601.
 
 Die EXE ist nicht codesigniert. Den SHA-256 findest du in `SHA256SUMS.txt`. Die enthaltenen Fremdlizenzen liegen im eingebetteten Laufzeitpaket; der Quellcode einschließlich Distribution ist im zugehörigen Git-Commit einsehbar.

@@ -3,7 +3,7 @@
 EtuSchlopf ist ein experimentelles, privat gepflegtes Projekt. Beginne je nach
 Aufgabe mit einem der folgenden Einstiege:
 
-Die Einstiegsseiten beschreiben den Entwicklungsstand r1601. Die Windows-Testversion hat ihre eigene [Paketabnahme für r1577](evidence/r1577/README.md). Historische Abnahmen, Forschungsnotizen und Fachverträge behalten ihre jeweilige Revision.
+Die Einstiegsseiten beschreiben den Entwicklungsstand r1601. Die [Windows-Testversion r1601](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1601-windows-preview) hat eigene Paketbelege. Historische Abnahmen, Forschungsnotizen und Fachverträge behalten ihre jeweilige Revision.
 
 | Aufgabe | Einstieg |
 | --- | --- |

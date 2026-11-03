@@ -21,8 +21,16 @@ vorliegenden Änderungen und den Versuch mit Zielstimme 2 als zulässig.
 Die hörzeitbasierte Kanalprüfung bleibt bestehen.
 
 Der [native Laufstatus](native_run_outcome.txt) führt separat
-`audit_blocked_expected_audit_block`. Die Windows-Paketprüfung läuft
-getrennt im GitHub-Workflow.
+`audit_blocked_expected_audit_block`. Die Windows-Paketprüfung lief getrennt im GitHub-Workflow.
+
+## Windows-Testversion
+
+Der [Windows-Workflow](https://github.com/Funcry241/EtuSchlopf/actions/runs/41727617295)
+hat Build, Pakettests und den isolierten Starttest bestanden.
+Die [Windows-Testversion r1601](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1601-windows-preview)
+enthält die EXE, das zum Build gehörende Quellarchiv und die SHA-256-Prüfsummen.
+Die EXE hat SHA-256
+`b01d0d88547cf7e26375414477e82cbdc5d9a027460ed4a9fd01f5ebfd9277e8`.
 
 [Annahmebeleg](native_acceptance.txt) ·
 [Quellprüfsummen](accepted_runtime_sha256.tsv) ·

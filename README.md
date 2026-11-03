@@ -6,11 +6,11 @@ EtuSchlopf ordnet musikalische Ereignisse zu einer zweihändigen Klavierdarstell
 und bearbeitet unter anderem Stimmen, Rhythmus, Pausen, Balken und Register.
 Das Ergebnis ist ein Ausgangspunkt für deine weitere musikalische Arbeit.
 
-**[Windows-EXE herunterladen · Testversion r1577](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1577-windows-preview/EtuSchlopf-Windows-x64.exe)**
+**[Windows-EXE herunterladen · Testversion r1601](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1601-windows-preview/EtuSchlopf-Windows-x64.exe)**
 
 Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI und WAV als Eingabe
 
-[Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1577-windows-preview) ·
+[Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1601-windows-preview) ·
 [Erstes Stück](#dein-erstes-stück) · [Grenzen der Testversion](#aktueller-stand) ·
 [Technische Dokumentation](docs/DEVELOPMENT.md) · [Mathematik dahinter](docs/MATHEMATIK.md)
 
@@ -22,7 +22,7 @@ Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI u
 
 *Etüde Nr. 1 aus dem eigenen Evaluationskorpus: unveränderter PDF-Ausschnitt,
 Bestätigter nativer Stand r1577. Bild anklicken für die vollständige PDF.
-Bild, Beispiel-PDF und aktuelle Download-Engine gehören damit zu r1577.*
+Bild und Beispiel-PDF stammen aus r1577.*
 
 ## Für wen ist EtuSchlopf gedacht?
 
@@ -89,23 +89,23 @@ Laufbericht zusammentragen. Unbekannte technische Angaben kannst du offenlassen.
 
 ## Aktueller Stand
 
-Die Windows-Testversion enthält **Engine r1577 / 0.10.1839** und den verbesserten
+Die Windows-Testversion enthält **Engine r1601 / 0.10.1839** und den verbesserten
 Starter. Unterstützt sind 2/4, 3/4 und 4/4 sowie Taktwechsel an Taktgrenzen.
 Andere Taktarten, Triolen und Wechsel mitten im Takt bleiben nicht unterstützt.
 
 Der Windows-Build, Pakettests, der isolierte Start ohne PDF sowie Strict-Clippy
 und native Tests sind bestanden. Der private native Korpus umfasst zehn vollständige
-Etüden mit MuseScore. Die [Versionshinweise mit Prüfbelegen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1577-windows-preview)
+Etüden mit MuseScore. Die [Versionshinweise mit Prüfbelegen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1601-windows-preview)
 beschreiben den Umfang. Das ersetzt keine unabhängige Bewertung fremder Stücke
 und keinen interaktiven Anwender-Probelauf. Lesbarkeit und Spielbarkeit prüfst
 du am eigenen Ergebnis.
 
 ## Quellstand und Beiträge
 
-Der Entwicklungsquellstand ist **r1601**. Die [native Abnahme](docs/evidence/r1601/README.md) dokumentiert den Vergleich mit r1599 und die geprüften Balkenstellen. Die verfügbare Windows-Testversion und das oben gezeigte Notenbeispiel stammen aus **r1577**.
+Der Entwicklungsquellstand ist **r1601**. Die [native Abnahme](docs/evidence/r1601/README.md) dokumentiert den Vergleich mit r1599 und die geprüften Balkenstellen. Die Windows-Testversion enthält r1601. Das oben gezeigte Notenbeispiel stammt aus r1577.
 
-Die Download-Engine wurde aus dem angenommenen nativen Stand **r1577** gebaut.
-Der [zum geprüften Build gehörende r1577-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1577-windows-preview/EtuSchlopf-r1577-source.zip)
+Die Download-Engine wurde aus dem angenommenen nativen Stand **r1601** gebaut.
+Der [zum geprüften Build gehörende r1601-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1601-windows-preview/EtuSchlopf-r1601-source.zip)
 und das Dateiprüfsummen-Manifest stehen beim Release bereit. Für den exakten
 Engine-Build ist dieser Snapshot maßgeblich; der zugehörige Prüfzweig enthält
 den Starter und die Skripte zur vollständigen Rekonstruktion und Verifikation.
