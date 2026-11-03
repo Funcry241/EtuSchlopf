@@ -1,10 +1,15 @@
 # EtuSchlopf
 
-**Klaviernoten aus zusammengehörigen MIDI- und WAV-Dateien – als PDF und zum Bearbeiten in MuseScore.**
+**Mach aus deiner Einspielung Klaviernoten. Zwei Dateien genügen.**
 
-EtuSchlopf ordnet musikalische Ereignisse zu einer zweihändigen Klavierdarstellung
-und bearbeitet unter anderem Stimmen, Rhythmus, Pausen, Balken und Register.
-Das Ergebnis ist ein Ausgangspunkt für deine weitere musikalische Arbeit.
+EtuSchlopf ist für Musikerinnen und Musiker. Ob Etüde, Song oder eigene Komposition, spielt dabei keine Rolle.
+
+- `Mein Stück.mid` liefert die gespielten Noten und ihr Timing.
+- `Mein Stück.wav` enthält den hörbaren Klang derselben Einspielung und dient als Audioreferenz.
+
+Leg beide Dateien in denselben Ordner und zieh die MIDI-Datei auf EtuSchlopf. **Das war’s.** EtuSchlopf verwendet seine Voreinstellungen. Du bekommst ein PDF zum Lesen, Teilen und Ausdrucken und eine MusicXML-Datei zum Weiterbearbeiten in MuseScore.
+
+Der Name darf dich zum Schmunzeln bringen. Die Mathematik dahinter nehmen wir ernst. Probier EtuSchlopf mit deinem eigenen Stück aus oder schau dir an, wie es arbeitet. [Die Mathematik hinter EtuSchlopf](docs/MATHEMATIK.md)
 
 **[Windows-EXE herunterladen · Testversion r1601](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1601-windows-preview/EtuSchlopf-Windows-x64.exe)**
 
@@ -18,32 +23,17 @@ Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI u
 
 ## Ein Blick auf die Noten
 
-[![Erstes Klaviersystem der Etüde Nr. 1 aus r1601](docs/images/etude-1-r1601-ausschnitt.png)](docs/examples/etude-1-r1601.pdf)
+[![Erstes Klaviersystem der Etüde Nr. 1 aus r1602](docs/images/etude-1-r1602-ausschnitt.png)](docs/examples/etude-1-r1602.pdf)
 
-*Etüde Nr. 1 aus dem nativen r1601-Lauf. Bild anklicken für die vollständige PDF.*
-
-## Für wen ist EtuSchlopf gedacht?
-
-Für Menschen, die zu einem Stück eine MIDI-Datei und eine passende WAV-Datei
-besitzen und daraus eine Klavierfassung zum Lesen und Weiterbearbeiten gewinnen
-möchten. MIDI liefert die Notenereignisse und ihre Zeitstruktur; WAV steht als
-Klangaufnahme für die Audio-Beobachtung zur Verfügung. Beide Dateien werden
-im derzeitigen Ablauf benötigt.
+*Etüde Nr. 1 aus dem nativen r1602-Lauf. Bild anklicken für die vollständige PDF.*
 
 Das Projekt ist experimentell und privat gepflegt. Prüfe am eigenen Stück,
-ob dir die Fassung bei der weiteren Arbeit hilft; musikalische Nachbearbeitung
+ob dir die Fassung bei der weiteren Arbeit hilft. Musikalische Nachbearbeitung
 kann erforderlich sein.
 
 ## Dein erstes Stück
 
-**[Kleines Startbeispiel herunterladen](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1537-windows-preview/EtuSchlopf-Beispiel-r1537.zip)** – synthetisches MIDI/WAV-Paar mit der zugehörigen PDF aus dem Windows-Test.
-
-Du brauchst eine MIDI-Datei und eine gleichnamige WAV-Datei, zum Beispiel:
-
-```text
-Mein Stück.mid
-Mein Stück.wav
-```
+**[Kleines Startbeispiel herunterladen](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1537-windows-preview/EtuSchlopf-Beispiel-r1537.zip)** – synthetisches MIDI/WAV-Paar mit einer Vergleichs-PDF aus dem Windows-Test r1537.
 
 1. Lade die Windows-EXE herunter. Für die PDF-Ausgabe brauchst du außerdem **[MuseScore](https://musescore.org/de/download)**.
 2. Lege MIDI und WAV in denselben Ordner. Die Namen vor der Dateiendung müssen übereinstimmen: `Mein Stück.mid` und `Mein Stück.wav`.
@@ -100,7 +90,7 @@ du am eigenen Ergebnis.
 
 ## Quellstand und Beiträge
 
-Der Entwicklungsquellstand ist **r1601**. Die [native Abnahme](docs/evidence/r1601/README.md) dokumentiert den Vergleich mit r1599 und die geprüften Balkenstellen. Die Windows-Testversion enthält r1601. Das Notenbeispiel stammt aus dem nativen r1601-Lauf.
+Der Entwicklungsquellstand ist **r1602**. Der native Lauf war dunkelgrün. Alle 20 MusicXML-Dateien stimmen bytegenau mit r1601 überein. [Native Abnahme r1602](docs/evidence/r1602/README.md) Die Windows-Testversion enthält r1601. Das Notenbeispiel stammt aus dem nativen r1602-Lauf.
 
 Die Download-Engine wurde aus dem angenommenen nativen Stand **r1601** gebaut.
 Der [zum geprüften Build gehörende r1601-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1601-windows-preview/EtuSchlopf-r1601-source.zip)

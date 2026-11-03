@@ -1,9 +1,7 @@
 # 050 – Aktueller Stand
 
-r1601 ist nativ angenommen. Die [Abnahme](../evidence/r1601/README.md)
-dokumentiert den Vergleich aller zehn Etüden gegen r1599.
-Etüde 6 T32 hat wieder eine durchgehende Balkengruppe auf Stimme 2.
-T34 und Etüde 5 T37 behalten ihre Brücken.
+r1602 ist nativ dunkelgrün und angenommen. Gegenüber r1601 sind alle 20
+MusicXML-Dateien bytegleich und alle 39 PDF-Seiten bei 150 dpi pixelgleich.
+[Native Abnahme](../evidence/r1602/README.md)
 
-Die Seitenverdichtung bei festen Systemen bleibt ein Entwurf. Die Messung
-der Abstände innerhalb der Systeme und die PDF-Gegenproben stehen aus.
+Die Seitenverdichtung bei festen Systemen bleibt ein Entwurf.

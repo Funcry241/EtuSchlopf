@@ -343,7 +343,7 @@ fn primary_beam_structure_counts(events: &[BeamOwnershipEvent]) -> [usize; 4] {
         match event.beam1.as_deref() {
             Some("begin") => { if open.insert(key, true) == Some(true) { counts[0] += 1; } }
             Some("continue") => { if open.get(&key) != Some(&true) { counts[1] += 1; } }
-            Some("end") => { if open.insert(key, false) != Some(true) { counts[2] += 1; } }
+            Some("end") if open.insert(key, false) != Some(true) => { counts[2] += 1; }
             _ => {}
         }
     }

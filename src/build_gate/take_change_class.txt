@@ -1,8 +1,8 @@
 schema_version=1
-change_class=MusicMutation
+change_class=RefactorOnly
 from_version=0.10.1839
 to_version=0.10.1839
-reason=Consider distinct existing canonical channels for the same staff role
-change=modified|ZIP_KIND.txt|fnv64:b18830e062bc037c
-change=modified|docs/selector_derivation_contract_foreign_beam_target_preservation.md|fnv64:ba57cd90f1dcc425
-change=modified|src/structural_write_authority/original_beam_voice_alignment.rs|fnv64:53cd79ed4c681877
+reason=Close collapsible match warning without changing beam counts
+warning_debt_closure=closed_current_warning_debt_v1
+change=modified|ZIP_KIND.txt|fnv64:f2b826d267e87ec2
+change=modified|src/audit_only/final_notation_voice_beam_ownership_audit.rs|fnv64:afd044c44d737980

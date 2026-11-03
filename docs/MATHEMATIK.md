@@ -2,7 +2,7 @@
 
 EtuSchlopf macht aus MIDI- und WAV-Aufnahmen von Klavieretüden Notensatz (MusicXML und PDF). Viele Teilaufgaben dabei sind Entscheidungen: In welchem System steht ein Ton? Welcher Schlüssel gilt? Wird ein Akkordton gezeigt oder verborgen? Diese Seite zeigt, wo wir dafür Mathematik einsetzen, woher sie stammt und wie belastbar sie heute ist.
 
-**Entwicklungsstand r1601.** Die [native Abnahme](evidence/r1601/README.md) dokumentiert die Korpusprüfung. Die [Windows-Testversion r1601](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1601-windows-preview) hat eigene Paketbelege. Korpuszahlen gelten für die jeweils angegebene Revision.
+**Entwicklungsstand r1602.** Die [native Abnahme](evidence/r1602/README.md) dokumentiert die Korpusprüfung. Die [Windows-Testversion r1601](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1601-windows-preview) hat eigene Paketbelege. Korpuszahlen gelten für die jeweils angegebene Revision.
 
 ## Ehrlichkeitsregel
 
@@ -289,6 +289,78 @@ $F$ ist die Zahl der aufbewahrten Kandidaten, $G$ die Zahl der neu erzeugten Mas
 - **Exakte Zeitordnung:** Alle Dauern werden mit ggT/kgV auf eine gemeinsame Teilung gebracht, ohne Gleitkomma. Stille Intervalle werden entlang der metrischen Hierarchie des Takts zerlegt. *Ort:* `src/model/metric_rest_notation.rs`.
 - **Harmonik-Kandidaten:** Kostenvektoren und Pareto-Vergleich: Ein Kandidat schlägt einen anderen nur, wenn er in keiner Komponente schlechter und in mindestens einer besser ist. *Ort:* `src/pipeline_shards/sheaf_noether_projection_core.rs`. Dateinamen wie *sheaf* oder *noether* sind dabei **keine** Belege für einen bewiesenen Satz aus Garben- oder Symmetrietheorie. Belegbar sind nur die konkreten Operationen.
 - **Gemeinsame Spanne:** Ein neuer Registerplan ersetzt den alten nur innerhalb eines geschlossenen Konfliktbereichs, mit Pflichtabdeckung, echten Ankern und Prüfung der Haltebögen. *Ort:* `src/registernotation/gemeinsame_spanne.rs`. Mit r1512 wurden so in 7 Stücken 16 bessere Alternativen bestätigt. In Etüde 4 sank die höchste Hilfslinienzahl von 5 auf 3.
+
+## Mathematik im Launcher
+
+Die folgenden Regeln steuern Ressourcen, Wiederverwendung und Freigabe. Die
+Notationsentscheidungen bleiben bei den oben beschriebenen Musikverfahren.
+
+### Parallelität als ganzzahliges Budget
+
+Sei $n$ die Zahl der verfügbaren logischen Threads, mindestens eins. Der
+Launcher gibt Cargo $\max(1,n-[n\ge4])$ Jobs. Für die Pipeline meldet er
+$\max(1,n-1)$ als Auto-Hinweis. Die Pipeline löst ihren eigenen Jobplan aus
+dem Aufruf und dem verfügbaren Budget. Bei acht Threads ergeben beide
+Launcher-Werte sieben, bei drei Threads ergeben sie drei beziehungsweise zwei.
+Die Schwelle vier ist eine Projektentscheidung.
+
+*Code:* [ThreadPlan](../src/bin/etuschlopf_launcher.rs) und
+[Aufrufreferenz](DEVELOPMENT.md#vollständige-aufrufreferenz).
+
+### Prüfsummen und Wiederverwendung
+
+Der Launcher sortiert und dedupliziert die ausgewählten Quellpfade und
+berechnet über ihre gerahmten Pfade und Inhalte eine FNV-1a-Signatur.
+Bei FNV-1a wird pro Byte XOR und anschließend Multiplikation modulo $2^{64}$
+angewandt. Die Build-Wiederverwendung prüft Profil, Version, Quellsignatur
+und die gespeicherte Prüfsumme der EXE. Die All-Targets-Prüfung hat eine
+breitere Quellbasis. Wiederverwendung des Builds ersetzt die aktuelle
+Clippy-Prüfung nicht. Beim visuellen Preflight bindet ein eigener
+Wiederverwendungsbeleg die Renderer-Ausgabe an den Projekteingang und
+den Stand der Verarbeitung. Mit `--force` lässt sich neu prüfen.
+
+*Code:* [Build- und Prüfbelege](../src/bin/etuschlopf_launcher/launcher_build_control.rs)
+und [Launcher](../src/bin/etuschlopf_launcher.rs).
+
+### Zustände, Priorität und Warnungsbudget
+
+`RunOutcome` bildet typisierte Beobachtungen auf eine Freigabe und eine
+Farbe ab. Die geordnete Fallunterscheidung prüft zuerst einen Panic sowie
+Build- und Clippy-Fehler, danach Renderer-Sonderfälle und anschließend
+Exitcode und Audit-Signal. Ein Exitcode von null mit einem ungelösten
+Blocker ergibt einen inkonsistenten Zustand. Die Konsolen- und Exportanzeigen
+projizieren den Laufstatus. Der Prozess-Exitcode hat eine eigene Zuständigkeit.
+
+Für Clippy zählt der Launcher Warnungsdiagnosen und lässt die zusammenfassenden
+Cargo-Warnungszeilen aus. Er führt getrennte Zähler für bestimmte Lints und
+einen Restzähler, der bei null abgeschnitten wird. Liegt ein ansonsten
+freigegebener Lauf vor und die Warnungszahl ist größer als null, setzt der
+Launcher die Anzeige auf Gelb und den Freigabestatus auf Audit-Block.
+r1601 traf dieser Fall wegen einer einzigen `collapsible_match`-Warnung.
+r1602 korrigiert den Match-Arm und lief ohne Warnung dunkelgrün durch.
+Alle 20 MusicXML-Dateien blieben bytegleich.
+
+*Code:* [RunOutcome](../src/run_outcome.rs),
+[Warnungszählung](../src/bin/etuschlopf_launcher/launcher_build_control.rs)
+und [Statusprojektion](../src/bin/etuschlopf_launcher/assistant_export.rs).
+
+### Take, Export und Pfadlängen
+
+SHA-256 bindet den akzeptierten Take an seine Annahmemetadaten. Ein
+Source-Snapshot erfasst die Dateien des ausgeführten Quellbaums. Der
+Abgleich mit dem Take vergleicht die tatsächlichen Bytes. Die Root-`Cargo.lock`
+kann zusätzlich im Snapshot liegen. Der Windows-Build vergleicht die
+Quellprüfsummen und die gesondert dokumentierten GitHub-Dateien vor dem
+Kompilieren.
+
+Beim Snapshot-Export zählt der Launcher UTF-16-Codeeinheiten. Er prüft
+Archivname, Dateiname, relativen Pfad und den gesamten relativen
+Entpackpfad. Für den letzten Wert addiert er die Längen von Archivstamm
+und relativem Pfad sowie eine Einheit für das Trennzeichen. Überschreitet
+ein Eintrag sein Budget, lehnt der Launcher den Snapshot ab.
+
+*Code:* [Take-Bootstrap](../src/bin/etuschlopf_take_bootstrap.rs) und
+[Assistant-Export](../src/bin/etuschlopf_launcher/assistant_export.rs).
 
 ## Was wirkt auf das Notenbild?
 
