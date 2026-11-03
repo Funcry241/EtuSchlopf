@@ -132,7 +132,7 @@ fn hide_exact_duplicate_visible_noteheads(
 
 
 fn hide_redundant_visible_staff_rests(
-    xml: &mut String,
+    xml: &str,
 ) -> (usize, master_state_identity::OwnerReceipts) {
     let notes = parse_atomic_notes(xml);
     let mut groups: BTreeMap<(String, String, String), Vec<&AtomicNote>> = BTreeMap::new();
@@ -162,16 +162,12 @@ fn hide_redundant_visible_staff_rests(
     }
 
     ranges.sort_by_key(|a| std::cmp::Reverse(a.0));
-    let mut changed = 0usize;
-    let mut receipts = master_state_identity::OwnerReceipts::default();
-    for (start, end) in ranges {
-        let (hidden, receipt) = hide_note_print_object_range(xml, start, end);
-        receipts.push_exact(receipt);
-        if hidden {
-            changed += 1;
-        }
-    }
-    (changed, receipts)
+    // Candidate discovery above remains unchanged. A rest-only XML label and
+    // retaining one orientation glyph do not prove that the other complete
+    // rhythmic intervals are dispensable. This owner has no such bound proof.
+    // Retire only this elision: preserve existing visible and hidden carriers;
+    // later canonical rest owners retain their own independent authority.
+    (0, master_state_identity::OwnerReceipts::default())
 }
 
 
@@ -1470,3 +1466,7 @@ fn ensure_final_barline(xml: &mut String) -> Option<master_state_identity::Addit
         .1
 }
 
+
+#[cfg(test)]
+#[path = "../../tests/unit/rest_only_orientation_elision_retirement.rs"]
+mod rest_only_orientation_elision_retirement;

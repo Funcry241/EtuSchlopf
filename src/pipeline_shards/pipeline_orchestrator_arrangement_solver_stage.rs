@@ -124,6 +124,8 @@ fn run_arrangement_solver_guided_search_stage(
         next_iteration,
         ..
     } = state;
+    let mut detail = crate::audit_only::performance_timings::SequentialTimings::new(
+        &inputs.source.input_label, "run_arrangement_solver_guided_search_stage", "CorpusHandRhythmPrimaryRepair");
     if !cli.no_polish {
         run_corpus_driven_hand_rhythm_primary_repair(
             best,
@@ -133,6 +135,7 @@ fn run_arrangement_solver_guided_search_stage(
             parallel,
         )?;
     }
+    detail.enter("LocalBestRefinement");
     // v0.1.50: LocalBestRefinement. Statt das Zusatzbudget breit in schlechte
     // Varianten zu streuen, wird um die aktuell gewählte Guard-/Best-Fassung
     // lokal weitergesucht. Die Profile bleiben generisch und werden aus dem
@@ -171,6 +174,7 @@ fn run_arrangement_solver_guided_search_stage(
             }
         }
     }
+    detail.enter("ResidualCriticalPass");
     // v0.1.48: echter ResidualCriticalPass-Nachbrenner.
     // Der erste ResidualCriticalPass war nur Teil der allgemeinen Profilmatrix.
     // Jetzt wird nach dem BestKnownGuard die konkret gewählte Fassung erneut
@@ -215,6 +219,7 @@ fn run_arrangement_solver_guided_search_stage(
             }
         }
     }
+    detail.enter("TargetedCriticalPass");
     // v0.1.50: TargetedCriticalPass. Nach dem generischen Nachbrenner wird
     // nicht mehr breit gesucht, sondern ausschließlich auf verbliebene kritische
     // Pianistik-Befunde gezielt. Übernommen wird nur eine objektive Verbesserung
@@ -256,6 +261,7 @@ fn run_arrangement_solver_guided_search_stage(
             }
         }
     }
+    detail.enter("CriticalMicroRepair");
     // v0.1.51: CriticalMicroRepair. Nach den groben Kandidaten wird nicht
     // weiter breit gesucht, sondern sehr klein um die verbliebenen kritischen
     // Einzelbefunde herum repariert. Die Profile sind absichtlich konservativ:
@@ -313,6 +319,8 @@ fn run_arrangement_solver_atomic_playability_repair_stage(
         next_iteration,
         ..
     } = state;
+    let mut detail = crate::audit_only::performance_timings::SequentialTimings::new(
+        &inputs.source.input_label, "run_arrangement_solver_atomic_playability_repair_stage", "AtomicCriticalRepair");
     // v0.1.53: SafeAtomicRepair. v0.1.52 hat gezeigt, dass einzelne
     // Staff-Umhängungen musikalisch bessere Kandidaten finden, aber formale
     // Blocker erzeugen. Diese Phase ergänzt deshalb notationssichere Varianten:
@@ -335,6 +343,7 @@ fn run_arrangement_solver_atomic_playability_repair_stage(
             CandidateMaterialDeclaredEffects::candidate_material(),
         )?;
     }
+    detail.enter("WarningEliminationRepair");
     // v0.1.54: StrictWarningCleaner. Wenn der Nutzer explizit keine Warnungen
     // mehr will, werden nach der kritischen Reparatur auch normale pianistische
     // Warnungen einzelbefundbasiert und notationssicher bereinigt. Der Pass
@@ -356,6 +365,7 @@ fn run_arrangement_solver_atomic_playability_repair_stage(
             CandidateMaterialDeclaredEffects::candidate_material(),
         )?;
     }
+    detail.enter("FinalCriticalTaktRepair");
     // v0.1.55: FinalCriticalTaktRepair. Der breite StrictWarningCleaner räumt
     // normale Warnungen ab. Falls danach noch genau einzelne kritische Reste
     // übrig bleiben, werden ausschließlich die betroffenen Takte als lokale
@@ -378,6 +388,7 @@ fn run_arrangement_solver_atomic_playability_repair_stage(
             CandidateMaterialDeclaredEffects::candidate_material(),
         )?;
     }
+    detail.enter("FinalPlayabilityCleaner");
     // v0.1.142: FinalPlayabilityCleaner. Nach der Validator-Härtung entstehen
     // neue, fachlich präzisere Voice-/Außenstimmen-Sprungbefunde. Dieser Pass
     // darf keine festen Takte oder Tonhöhen kennen; er leitet alle Ziele aus
@@ -400,6 +411,7 @@ fn run_arrangement_solver_atomic_playability_repair_stage(
             CandidateMaterialDeclaredEffects::candidate_material(),
         )?;
     }
+    detail.enter("FinalPlayabilityPolish");
     // v0.1.143: FinalPlayabilityPolish. Falls nach dem generischen Cleaner
     // nur noch wenige nichtkritische Spielbarkeitswarnungen übrig bleiben,
     // werden zusammengesetzte Endpunkt-/Spannweitenvarianten geprüft. Auch
@@ -423,6 +435,7 @@ fn run_arrangement_solver_atomic_playability_repair_stage(
             CandidateMaterialDeclaredEffects::candidate_material(),
         )?;
     }
+    detail.enter("GlobalHandTrajectorySolver");
     // v0.1.144: GlobalHandTrajectorySolver. Falls lokale Restpolitur nicht
     // genügt, werden handkohärente Mehrnoten-/Zeitfenster-Varianten geprüft.
     // Staff ist dabei nur Notationssystem, nicht blind gleich Hand. Keine
@@ -459,27 +472,34 @@ fn run_arrangement_solver_substance_gesture_stage(
         next_iteration,
         ..
     } = state;
+    let mut detail = crate::audit_only::performance_timings::SequentialTimings::new(
+        &inputs.source.input_label, "run_arrangement_solver_substance_gesture_stage", "SubstanceGuard");
     run_substance_guard(best, candidates, parallel);
+    detail.enter("SubstanceGuardReconcile");
     reconcile_candidate_material_lineage(
         best,
         "SubstanceGuard",
         CandidateMaterialDeclaredEffects::candidate_material(),
     )?;
+    detail.enter("ComposerSubstanceReconcile");
     reconcile_candidate_material_lineage(
         best,
         "ComposerSubstancePass",
         CandidateMaterialDeclaredEffects::candidate_material(),
     )?;
+    detail.enter("NearMissReconcile");
     reconcile_candidate_material_lineage(
         best,
         "NearMissRepairPass",
         CandidateMaterialDeclaredEffects::candidate_material(),
     )?;
+    detail.enter("HandTrajectoryReconcile");
     reconcile_candidate_material_lineage(
         best,
         "HandTrajectoryV2SubstanceBridge",
         CandidateMaterialDeclaredEffects::candidate_material(),
     )?;
+    detail.enter("ConsensusGestureProbe");
     let _ = run_consensus_gesture_probe(
         best,
         options,
@@ -489,6 +509,7 @@ fn run_arrangement_solver_substance_gesture_stage(
         "ArrangementAfterConsensusGestureProbe",
         best.layout_xml(),
     );
+    detail.enter("ConsensusExitReconcile");
     reconcile_candidate_material_lineage(
         best,
         "ConsensusGestureProbe/ExitInvariant",

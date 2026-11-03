@@ -1,6 +1,6 @@
 kind=EtuSchlopfTake
 version=0.10.1839
-revision=r1577
-name=OriginalRegisterPreviewExactMemo
-parent_revision=r1576
-change_class=GovernedChange
+revision=r1601
+name=ConsiderDistinctCanonicalBeamTargetChannels
+parent_revision=r1600
+change_class=MusicMutation

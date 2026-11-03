@@ -108,7 +108,9 @@ pub(super) fn base_candidate() -> SolverCandidate {
     let reference = ReferenceReport::default(); let score = parse_musicxml(&arrangement.xml).unwrap();
     let signature = build_reference_signature(&reference, &score);
     let variant = evaluate_arrangement_variant("SyntheticBirth", arrangement, &reference, &signature,
-        &CheckOptions { strict: true }, Some(2)).unwrap();
+        &CheckOptions { strict: true }, Some(2),
+        &crate::audit_only::performance_timings::BatchTimings::new(
+            "Synthetic", "DirectTestCall", 0, ["TestPhase"; 9])).unwrap();
     SolverCandidate { iteration: 0, profile_name: "SyntheticBirth".into(), profile_contract: profile.clone(),
         profile_lineage: CandidateLineage::from_profile(&profile), final_result: variant.final_result,
         master_state: variant.master_state, midi_seed_stats: seed, midi_seed_genesis,
@@ -130,7 +132,9 @@ fn actual_patch_and_candidate_receiver_carry_original_birth_and_keep_missing_rec
     let original = receipts.physical_birth_readback(base.layout_xml(), &xml).unwrap();
     assert_eq!(original[0].count(), 1);
     let result = build_atomic_candidate(1, "SyntheticRestify", AtomicPatchedDocument {
-        xml: xml.clone(), lineage_receipts: receipts }, None, &[], &base, &CheckOptions { strict: true }).unwrap();
+        xml: xml.clone(), lineage_receipts: receipts }, None, &[], &base, (&CheckOptions { strict: true },
+        &crate::audit_only::performance_timings::BatchTimings::new(
+            "Synthetic", "DirectTestCall", 0, ["TestPhase"; 9]))).unwrap();
     assert!(result.arrangement_stats.physical_births[0].same_creations_as(&original[0]));
     assert_eq!(result.arrangement_stats.physical_birth_capture_unknown, 0);
     let owned = result.arrangement_stats.owned_rhythm.as_ref().unwrap();
@@ -141,7 +145,9 @@ fn actual_patch_and_candidate_receiver_carry_original_birth_and_keep_missing_rec
     original_receipt.as_mut().unwrap().take_physical_births().unwrap();
     let mut missing_capture = master_state_identity::OwnerReceipts::default(); missing_capture.push_exact(original_receipt);
     let unknown = build_atomic_candidate(3, "MissingPhysicalCapture", AtomicPatchedDocument {
-        xml: same_xml, lineage_receipts: missing_capture }, None, &[], &base, &CheckOptions { strict: true }).unwrap();
+        xml: same_xml, lineage_receipts: missing_capture }, None, &[], &base, (&CheckOptions { strict: true },
+        &crate::audit_only::performance_timings::BatchTimings::new(
+            "Synthetic", "DirectTestCall", 0, ["TestPhase"; 9]))).unwrap();
     assert_eq!(unknown.arrangement_stats.physical_birth_capture_unknown, 1);
     assert!(unknown.arrangement_stats.owned_rhythm.is_none());
     assert!(unknown.arrangement_stats.owned_rhythm_unknown.as_deref().unwrap().contains("capture"));
@@ -150,10 +156,14 @@ fn actual_patch_and_candidate_receiver_carry_original_birth_and_keep_missing_rec
     assert!(first_failure.contains("AtomicPatch/OriginalOwners: OwnerStep=1 PopulationRow="));
     let descendant = build_atomic_candidate(4, "LaterUnchangedOwner", AtomicPatchedDocument {
         xml: unknown.layout_xml().to_owned(), lineage_receipts: master_state_identity::OwnerReceipts::default(),
-    }, None, &[], &unknown, &CheckOptions { strict: true }).unwrap();
+    }, None, &[], &unknown, (&CheckOptions { strict: true },
+        &crate::audit_only::performance_timings::BatchTimings::new(
+            "Synthetic", "DirectTestCall", 0, ["TestPhase"; 9]))).unwrap();
     let control = build_atomic_candidate(4, "LaterUnchangedOwner", AtomicPatchedDocument {
         xml: result.layout_xml().to_owned(), lineage_receipts: master_state_identity::OwnerReceipts::default(),
-    }, None, &[], &result, &CheckOptions { strict: true }).unwrap();
+    }, None, &[], &result, (&CheckOptions { strict: true },
+        &crate::audit_only::performance_timings::BatchTimings::new(
+            "Synthetic", "DirectTestCall", 0, ["TestPhase"; 9]))).unwrap();
     assert_eq!(descendant.layout_xml(), control.layout_xml());
     assert_eq!(descendant.arrangement_stats.owned_rhythm_unknown.as_deref(), Some(first_failure.as_str()));
     let evidence = owned_rhythm_diagnostic_line("Synthetic\nRenamed", &descendant);
@@ -163,7 +173,9 @@ fn actual_patch_and_candidate_receiver_carry_original_birth_and_keep_missing_rec
     assert!(evidence.contains("MusicMutation=none"));
     let refusal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         build_atomic_candidate(2, "MissingOriginalReceipt", AtomicPatchedDocument {
-            xml, lineage_receipts: master_state_identity::OwnerReceipts::default() }, None, &[], &base, &CheckOptions { strict: true })
+            xml, lineage_receipts: master_state_identity::OwnerReceipts::default() }, None, &[], &base, (&CheckOptions { strict: true },
+        &crate::audit_only::performance_timings::BatchTimings::new(
+            "Synthetic", "DirectTestCall", 0, ["TestPhase"; 9])))
     }));
     assert!(refusal.is_err());
 }
@@ -182,7 +194,9 @@ fn actual_candidate_diagnostic_checks_current_bytes_and_cannot_change_adoption()
     let mut receipts = master_state_identity::OwnerReceipts::default(); receipts.push_exact(receipt);
     let current = build_atomic_candidate(5, "VoiceRename", AtomicPatchedDocument {
         xml: post.unwrap(), lineage_receipts: receipts,
-    }, None, &[], &base, &CheckOptions { strict: true }).unwrap();
+    }, None, &[], &base, (&CheckOptions { strict: true },
+        &crate::audit_only::performance_timings::BatchTimings::new(
+            "Synthetic", "DirectTestCall", 0, ["TestPhase"; 9]))).unwrap();
     let mut stale = current.clone(); stale.arrangement_stats.owned_rhythm = base.arrangement_stats.owned_rhythm.clone();
     assert!(owned_rhythm_diagnostic_line("Renamed", &stale).contains("Unknown: Owned rhythm belongs to another document state"));
     assert_eq!(base.layout_xml(), original);
@@ -224,13 +238,17 @@ fn actual_staff_patch_candidate_carries_context_and_missing_capture_preserves_mu
     let (xml, receipt) = apply_atomic_patch(base.layout_xml(), &patch);
     let mut receipts = master_state_identity::OwnerReceipts::default(); receipts.push_exact(receipt);
     let result = build_atomic_candidate(1, "SyntheticStaffMove", AtomicPatchedDocument {
-        xml, lineage_receipts: receipts }, None, &[], &base, &CheckOptions { strict: true }).unwrap();
+        xml, lineage_receipts: receipts }, None, &[], &base, (&CheckOptions { strict: true },
+        &crate::audit_only::performance_timings::BatchTimings::new(
+            "Synthetic", "DirectTestCall", 0, ["TestPhase"; 9]))).unwrap();
     result.arrangement_stats.owned_rhythm.as_ref().unwrap().require_complete_course_context(result.layout_xml()).unwrap();
     let (same_xml, mut receipt) = apply_atomic_patch(base.layout_xml(), &patch);
     receipt.as_mut().unwrap().take_staff_transition().unwrap();
     let mut receipts = master_state_identity::OwnerReceipts::default(); receipts.push_exact(receipt);
     let unknown = build_atomic_candidate(1, "SyntheticStaffMove", AtomicPatchedDocument {
-        xml: same_xml, lineage_receipts: receipts }, None, &[], &base, &CheckOptions { strict: true }).unwrap();
+        xml: same_xml, lineage_receipts: receipts }, None, &[], &base, (&CheckOptions { strict: true },
+        &crate::audit_only::performance_timings::BatchTimings::new(
+            "Synthetic", "DirectTestCall", 0, ["TestPhase"; 9]))).unwrap();
     assert_eq!(result.layout_xml(), unknown.layout_xml());
     assert!(unknown.arrangement_stats.owned_rhythm.is_none());
     assert!(unknown.arrangement_stats.owned_rhythm_unknown.as_deref().unwrap().contains("PopulationRow=4"));

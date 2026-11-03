@@ -542,6 +542,13 @@ fn collect_source_snapshot_tree_files(
                 normalize_catalog_path(&relative)
             ));
         }
+        // Python bytecode is derived cache, not source. Symlinks remain
+        // rejected above, including entries with a cache-like name.
+        if (metadata.is_dir() && child.file_name() == "__pycache__")
+            || (metadata.is_file() && path.extension().is_some_and(|extension| extension == "pyc"))
+        {
+            continue;
+        }
         if metadata.is_dir() {
             collect_source_snapshot_tree_files(project_root, &path, &relative, files)?;
         } else if metadata.is_file() {
@@ -6144,6 +6151,21 @@ mod source_snapshot_tests {
         fs::write(root.join("tests/proof.rs"), b"#[test] fn proof() {}\n").expect("test");
         fs::write(root.join("tools/proof.txt"), b"tool\n").expect("tool");
         fs::write(root.join("docs/proof.md"), b"doc\n").expect("doc");
+    }
+
+    #[test]
+    fn source_snapshot_omits_derived_python_cache_but_keeps_source() {
+        let root = unique_test_root("python_cache");
+        seed_complete_source_root(&root);
+        fs::create_dir_all(root.join("tools/__pycache__")).unwrap();
+        fs::write(root.join("tools/__pycache__/probe.cpython.pyc"), b"cache").unwrap();
+        fs::write(root.join("tools/loose.pyc"), b"cache").unwrap();
+        fs::write(root.join("tools/probe.py"), b"print('source')\n").unwrap();
+        let files = collect_source_snapshot_files(&root).unwrap();
+        assert!(files.contains(&PathBuf::from("tools/probe.py")));
+        assert!(!files.iter().any(|path| path.extension().is_some_and(|extension| extension == "pyc")));
+        assert!(!files.iter().any(|path| path.components().any(|component| component.as_os_str() == "__pycache__")));
+        fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

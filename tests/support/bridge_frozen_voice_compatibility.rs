@@ -382,3 +382,106 @@ fn withheld_split_group_without_beam_change_is_counted_as_unchanged() {
     assert_eq!(changing.frozen_voice_split_groups, 1);
     assert_eq!(changing.frozen_voice_unchanged_split_groups, 0);
 }
+
+
+fn adopted_bridge_alignment_chain_with_sealed(input: &str, sealed: &[&str]) -> String {
+    let (_, post, guard) = adopted_provisional(input, sealed);
+    let (source, voices, plan) = guard.synthetic_adopted_bridge_alignment(&post, ["7", "11"]);
+    assert!(plan.scope_candidates() > 0);
+    let bound = guard.bind_rest_bridge_withdrawal(&source, &plan).unwrap();
+    let ((kept, audit), receipt, pending) = apply_structural_rest_bridge_beam_variant_a_render_write(
+        source.xml(), "synthetic bound bridge alignment", std::path::Path::new("synthetic.xml"), &bound);
+    assert!(!audit.written, "the complete admitted connection must survive withdrawal");
+    assert!(receipt.is_none() && pending.is_none());
+    assert_eq!(kept, source.xml());
+    let rebound = crate::structural_write_authority::rebind_primary_beam_voice_partition_plan_to_current_xml(source.xml(), &source, &plan).unwrap();
+    let result = apply_actual_alignment(&source, &guard, &rebound);
+    let carried = crate::structural_write_authority::transport_final_pdf_source_occurrence_continuation_through_primary_beam_voice_partition(
+        &source,source.xml(),&result,&guard,&rebound,Some(&std::collections::BTreeSet::new())).unwrap();
+    assert_eq!(beam_image(&result), beam_image(source.xml()));
+    assert!(result.contains("<voice>7</voice>"));
+    assert!(!result.contains("<voice>11</voice>"));
+    guard.synthetic_assert_adopted_bridge_alignment_negatives(&source,&voices,&plan,&carried);
+    result
+}
+fn adopted_bridge_alignment_chain(input: &str) -> String {
+    adopted_bridge_alignment_chain_with_sealed(input,&["7","7","11"])
+}
+#[test]
+fn adopted_bridge_alignment_preserves_the_actual_connection() {
+    let scope = 173usize;
+    let xml = score(&synthetic_bridge_measure(&scope.to_string()));
+    assert_shift_invariant("adopted_bridge_atomic_voice_resources", &xml, adopted_bridge_alignment_chain);
+}
+
+#[test]
+fn adopted_bridge_alignment_carries_the_tied_continuation() {
+    let scope=251usize;
+    let measure=synthetic_bridge_measure(&scope.to_string())
+        .replace("<divisions>96</divisions>","<divisions>96</divisions><time><beats>2</beats><beat-type>4</beat-type></time>")
+        .replace("<step>E</step><octave>3</octave></pitch><duration>24</duration>","<step>E</step><octave>3</octave></pitch><duration>24</duration><tie type=\"start\"/>")
+        .replace("</measure>","<note><pitch><step>E</step><octave>3</octave></pitch><duration>96</duration><tie type=\"stop\"/><voice>2</voice><type>quarter</type><staff>2</staff></note></measure>");
+    assert_shift_invariant("adopted_bridge_tied_atomic_resource",&score(&measure),|input|
+        adopted_bridge_alignment_chain_with_sealed(input,&["7","7","11","11"]));
+}
+
+fn bridge_with_foreign_tied_beam(scope: usize) -> String {
+    synthetic_bridge_measure(&scope.to_string())
+        .replace("<divisions>96</divisions>", "<divisions>96</divisions><time><beats>2</beats><beat-type>4</beat-type></time>")
+        .replace("<step>E</step><octave>3</octave></pitch><duration>24</duration>", "<step>E</step><octave>3</octave></pitch><duration>24</duration><tie type=\"start\"/>")
+        .replace("</measure>", "<note><pitch><step>E</step><octave>3</octave></pitch><duration>24</duration><tie type=\"stop\"/><voice>2</voice><type>16th</type><staff>2</staff><beam number=\"1\">begin</beam><beam number=\"2\">begin</beam></note><note><pitch><step>F</step><octave>3</octave></pitch><duration>24</duration><voice>2</voice><type>16th</type><staff>2</staff><beam number=\"1\">end</beam><beam number=\"2\">end</beam></note><note><rest/><duration>48</duration><voice>2</voice><type>eighth</type><staff>2</staff></note></measure>")
+}
+
+#[test]
+fn adopted_bridge_alignment_refuses_a_tied_resource_in_another_original_beam() {
+    let scope = 317usize;
+    let measure = bridge_with_foreign_tied_beam(scope);
+    assert_shift_invariant("foreign_beam_tied_resource_refusal", &score(&measure), |input| {
+        let (_, post, guard) = adopted_provisional(input, &["7", "7", "11", "11", "11"]);
+        use crate::structural_write_authority::SerializedVoicePresentationRole::{LowerPrimary, LowerSecondary};
+        let (source, _voices, plan) = guard.synthetic_adopted_bridge_alignment_with_roles(
+            &post, ["7", "11"], &[LowerPrimary, LowerPrimary, LowerSecondary, LowerSecondary]);
+        assert_eq!(plan.scope_candidates(), 0, "a tied resource cannot split a different original beam");
+        assert!(plan.edits().is_empty());
+        source.xml().to_owned()
+    });
+}
+
+#[test]
+fn adopted_bridge_alignment_preserves_a_foreign_beam_already_on_target() {
+    let scope = 317usize;
+    let measure = bridge_with_foreign_tied_beam(scope);
+    assert_shift_invariant("foreign_beam_unchanged_target", &score(&measure), |input| {
+        let (_, post, guard) = adopted_provisional(input, &["11", "7", "7", "7", "7"]);
+        use crate::structural_write_authority::SerializedVoicePresentationRole::{LowerPrimary, LowerSecondary};
+        let (source, _, plan) = guard.synthetic_adopted_bridge_alignment_with_roles(
+            &post, ["7", "11"], &[LowerSecondary, LowerPrimary, LowerPrimary, LowerPrimary]);
+        assert!(plan.scope_candidates() > 0);
+        let rebound = crate::structural_write_authority::rebind_primary_beam_voice_partition_plan_to_current_xml(
+            source.xml(), &source, &plan).unwrap();
+        let after = apply_actual_alignment(&source, &guard, &rebound);
+        crate::structural_write_authority::transport_final_pdf_source_occurrence_continuation_through_primary_beam_voice_partition(
+            &source, source.xml(), &after, &guard, &rebound, Some(&std::collections::BTreeSet::new())).unwrap();
+        assert_eq!(beam_image(&after), beam_image(source.xml()));
+        assert!(!after.contains("<voice>11</voice>"));
+        after
+    });
+}
+
+#[test]
+fn adopted_bridge_alignment_preserves_an_authenticated_auxiliary_head_role() {
+    let scope = 419usize;
+    assert_shift_invariant("auxiliary_bridge_head_role", &score(&synthetic_bridge_measure(&scope.to_string())), |input| {
+        let (_, post, guard) = adopted_provisional(input, &["7", "7", "11"]);
+        use crate::structural_write_authority::SerializedVoicePresentationRole::{LowerAuxiliary, LowerPrimary};
+        let (source, _voices, plan) = guard.synthetic_adopted_bridge_alignment_with_roles(
+            &post, ["7", "11"], &[LowerPrimary, LowerPrimary, LowerAuxiliary]);
+        assert!(plan.scope_candidates() > 0);
+        let rebound = crate::structural_write_authority::rebind_primary_beam_voice_partition_plan_to_current_xml(source.xml(), &source, &plan).unwrap();
+        let after = apply_actual_alignment(&source, &guard, &rebound);
+        crate::structural_write_authority::transport_final_pdf_source_occurrence_continuation_through_primary_beam_voice_partition(
+            &source, source.xml(), &after, &guard, &rebound, Some(&std::collections::BTreeSet::new())).unwrap();
+        assert_eq!(beam_image(&after), beam_image(source.xml()));
+        after
+    });
+}

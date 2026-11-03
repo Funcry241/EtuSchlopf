@@ -41,6 +41,7 @@ pub(super) struct OriginalBeamVoiceGroup {
     // Canonical original source identity, not additional beam membership.
     // Shared unchanged across the real owner's groups and their transports.
     source_resources: std::sync::Arc<[FinalChordCanonicalSourceLocator]>,
+    notation_voices: std::sync::Arc<BTreeMap<(usize, usize), String>>,
 }
 
 impl CanonicalFinalChordStructuralPlan {
@@ -120,6 +121,11 @@ impl CanonicalFinalChordStructuralPlan {
                 levels.clone(),
             ));
         }
+        // This independent pre-lane witness is captured once at its actual owner.
+        // Missing entries never acquire a semantic voice from later XML labels.
+        let notation_voices: std::sync::Arc<BTreeMap<(usize, usize), String>> = std::sync::Arc::new(self.source_locators.iter().filter_map(|row|
+            notation.original_voice(original, row.source_event_id, row.attack_id)
+                .map(|voice| ((row.source_event_id, row.attack_id), voice.to_owned()))).collect());
         for (identity, mut rows) in groups {
             if incomplete.contains(&identity) {
                 continue;
@@ -195,6 +201,7 @@ impl CanonicalFinalChordStructuralPlan {
                         .collect(),
                     primary_group_count: 1,
                     source_resources: self.source_locators.clone(),
+                    notation_voices: notation_voices.clone(),
                 });
         }
         let bound_seeds = self.original_beam_voice_groups.iter().map(|group|group.id.clone()).collect::<BTreeSet<_>>();
@@ -295,6 +302,7 @@ fn close_shared_sources(mut pending: Vec<OriginalBeamVoiceGroup>) -> Vec<Origina
             staff: first.staff,
             semantic_voice: first.semantic_voice.clone(),
             source_resources: first.source_resources.clone(),
+            notation_voices: first.notation_voices.clone(),
             primary_group_count: component
                 .iter()
                 .map(|group| group.primary_group_count)
@@ -396,6 +404,7 @@ pub(super) struct AlignmentInput<'a> {
 }
 
 pub(super) struct AlignmentOutput<'a> {
+    pub(super) bridge_proofs: &'a mut Vec<rest_bridge_extension_course::BridgeAlignmentProof>,
     pub(super) repaired: &'a mut FrozenSerializedVoicePlan,
     pub(super) edits: &'a mut Vec<PrimaryBeamVoicePartitionBoundEdit>,
     pub(super) selected: &'a mut Vec<PrimaryBeamVoicePartitionSelectedMember>,
@@ -413,6 +422,7 @@ pub(super) fn append_proven_alignment(
         visible_fragments,
     } = input;
     let AlignmentOutput {
+        bridge_proofs,
         repaired,
         edits,
         selected,
@@ -465,6 +475,15 @@ pub(super) fn append_proven_alignment(
     }
     let mut proposals = Vec::new();
     for group in &source.receipt.original_beam_voice_groups {
+        let bridges = source.receipt.rest_bridge_extension_course.as_ref()
+            .filter(|_| voices.has_canonical_role_allocation()).map_or_else(Vec::new,
+            |course| course.alignment_resources(source.xml(), &group.source_resources,
+                &group.bridge_component_occurrences(), &group.notation_voices,
+                &group.semantic_voice, (group.measure, group.staff)));
+        let bridges = bridges.into_iter().filter(|proof| proof.head_sources().all(|id|
+            voices.role_for_source(id).is_some_and(|role|
+                channel_role_staff(role) == group.staff))).collect::<Vec<_>>();
+        let bridge_split = bridges.iter().any(|proof| proof.split_labels());
         let observe = |reason: &str| {
             let unusual = beam_diagnostics::record(Observation::Decision(reason));
             if unusual || beam_diagnostics::detail_requested_for_measure(group.measure) {
@@ -473,8 +492,8 @@ pub(super) fn append_proven_alignment(
         };
         let import_component = group_labels.get(&group.id)
             .is_some_and(|labels| labels.len() > 1 && !labels.is_disjoint(&component_labels));
-        if visible_fragments.get(&group.id).is_none() && !import_component { observe("geometry_unknown"); continue; }
-        if visible_fragments.get(&group.id).is_some_and(|count| *count <= group.primary_group_count) && !import_component { observe("original_components_preserved"); continue; }
+        if visible_fragments.get(&group.id).is_none() && !import_component && !bridge_split { observe("geometry_unknown"); continue; }
+        if visible_fragments.get(&group.id).is_some_and(|count| *count <= group.primary_group_count) && !import_component && !bridge_split { observe("original_components_preserved"); continue; }
         if import_component { observe("original_import_resource_component"); }
         if group.members.iter().any(|member| claimed.contains(member)) { observe("existing_partition_claim"); continue; }
         let Some(rows) = exact_members(source, group) else {
@@ -582,19 +601,47 @@ pub(super) fn append_proven_alignment(
             if let Some(index) = notes.iter().position(|note| channel_role(note) == Some(expected_secondary))
                 && !targets.contains(&index) { targets.push(index); }
         }
+        // Different technical channels can carry the same presentation role.
+        // Keep the established anchors first, then consider each remaining
+        // channel already occupied by an original member of this component.
+        if voices.has_canonical_role_allocation() {
+            let mut seen = targets.iter().map(|&index| notes[index].voice.trim())
+                .collect::<BTreeSet<_>>();
+            for (index, note) in notes.iter().enumerate() {
+                if channel_role(note).is_some_and(|role| role == expected_primary || role == expected_secondary)
+                    && seen.insert(note.voice.trim())
+                {
+                    targets.push(index);
+                }
+            }
+        }
         if targets.is_empty() {
             eprintln!("OriginalBeamAllocationRejection: group={}; canonical_allocation={}; source_and_channel_roles={:?}; authority=none",group.id,voices.has_canonical_role_allocation(),group.members.iter().zip(&notes).map(|(&(id,_),note)|(voices.role_for_source(id),channel_role(note))).collect::<Vec<_>>());
             observe("no_existing_congruent_staff_anchor"); continue;
         }
-        let Some(resources) = bound_chord_resources(BoundChordResourceContext { source, classification_xml, group, current: &current, classification: &classification, voices, claimed: &claimed }, &notes, &rows) else {
+        let Some(resources) = bound_chord_resources(BoundChordResourceContext { source, classification_xml, group, current: &current, classification: &classification, voices, claimed: &claimed, bridge_occurrences: bridges.iter().flat_map(|proof| proof.occurrences()).collect() }, &notes, &rows) else {
             observe("chord_resource_closure"); continue;
         };
         if resources.iter().map(|(note,_)|note.voice.trim()).collect::<BTreeSet<_>>().len()<=1 {
             observe("complete_resource_image_already_one_label");continue;
         }
+        let original_component = group.bridge_component_occurrences();
+        let foreign_members = source.receipt.original_beam_voice_groups.iter()
+            .flat_map(OriginalBeamVoiceGroup::bridge_component_occurrences)
+            .filter(|identity| !original_component.contains(identity))
+            .collect::<BTreeSet<_>>();
         let mut admitted_target = None;
         for target_index in targets {
             let target_label = notes[target_index].voice.trim();
+            // Tied resources may already occupy this target. Their complete
+            // custody stays bound, but a foreign original member may not move.
+            if resources.iter().any(|(note, row)| {
+                note.voice.trim() != target_label
+                    && foreign_members.contains(&(row.source_event_id, row.attack_id, row.fragment_id))
+            }) {
+                observe("foreign_original_beam_member_would_move");
+                continue;
+            }
             let Some(target_channel) = voices.channel_for_label(target_label) else { continue; };
             let mut group_edits = Vec::new();
             for (note, row) in &resources {
@@ -614,12 +661,22 @@ pub(super) fn append_proven_alignment(
             if unusual || beam_diagnostics::detail_requested_for_measure(group.measure) {
                 eprintln!("OriginalBeamTargetResourceAdmission: group={}; target={target_label}; scalar_changes={}; collisions={collisions:?}; lost_registration={lost_registration:?}; authority=none",group.id,group_edits.len());
             }
+            if beam_diagnostics::detail_requested_for_measure(group.measure) {
+                eprintln!("BeamImportProfileTrial: group={}; measure={}; target={target_label}; existing_edits={}; candidate_edits={:?}; occupancy_admissible={}",
+                    group.id, group.measure, edits.len(), group_edits.iter().map(|edit|
+                        (edit.measure, edit.pitched_ordinal, &edit.expected_old_label, &edit.target_label)
+                    ).collect::<Vec<_>>(), collisions.is_empty() && lost_registration.is_empty());
+                let _ = validate_batch_import_profile(source_xml, edits, Some("existing_edits"));
+                if collisions.is_empty() && lost_registration.is_empty() {
+                    let _ = validate_batch_import_profile(source_xml, &trial, Some("trial"));
+                }
+            }
             // A bystander rest/pitched collision is still a whole-group veto.
             // An alternative is considered for an actual import resource loss,
             // never merely to evade that existing occupancy negative.
             if !collisions.is_empty() && lost_registration.is_empty() { break; }
             if collisions.is_empty() && lost_registration.is_empty()
-                && validate_batch_import_profile(source_xml, &trial).is_ok() {
+                && validate_batch_import_profile(source_xml, &trial, None).is_ok() {
                 let improves = admitted_target.as_ref().is_none_or(|(_,_,_,prior): &(usize,usize,String,Vec<PrimaryBeamVoicePartitionBoundEdit>)|group_edits.len()<prior.len());
                 if improves { admitted_target = Some((target_index,target_channel,target_label.to_owned(),group_edits)); }
                 // All options retain exactly the original musical membership.
@@ -634,14 +691,21 @@ pub(super) fn append_proven_alignment(
             observe("all_existing_channel_targets_violate_occupancy_or_import_profile"); continue;
         };
         observe("proposal");
-        proposals.push((group,target_index,target_channel,target_label,group_edits,resources));
+        proposals.push((group,target_index,target_channel,target_label,group_edits,resources,bridges));
     }
     // All proposals are evaluated together. If simultaneous assignments
     // conflict, every proposal whose changed occurrence participates is
     // withdrawn. No opaque group ordering chooses a winner.
     loop {
+        // Shared actual resources are a conflict group, never a ranked winner.
+        let mut counts = BTreeMap::new();
+        for (_,_,_,_,_,resources,_) in &proposals {
+            for (_,row) in resources { *counts.entry((row.source_event_id,row.attack_id,row.fragment_id)).or_insert(0usize) += 1; }
+        }
+        proposals.retain(|(_,_,_,_,_,resources,_)| resources.iter().all(|(_,row)|
+            counts[&(row.source_event_id,row.attack_id,row.fragment_id)] == 1));
         let mut batch = edits.clone();
-        for (_, _, _, _, proposed, _) in &proposals {
+        for (_, _, _, _, proposed, _, _) in &proposals {
             batch.extend(proposed.clone());
         }
         let (conflicts, headless) = new_batch_conflicts(source_xml, &batch)?;
@@ -649,7 +713,7 @@ pub(super) fn append_proven_alignment(
             break;
         }
         let before = proposals.len();
-        proposals.retain(|(_, _, _, _, proposed, _)| {
+        proposals.retain(|(_, _, _, _, proposed, _, _)| {
             !proposed.iter().any(|edit| {
                 if headless.contains(&edit.expected_old_label) {
                     return true;
@@ -676,7 +740,8 @@ pub(super) fn append_proven_alignment(
         }
     }
     let mut admitted = Vec::new();
-    for (group, target_index, target_channel, target_label, proposed, resources) in proposals {
+    for (group, target_index, target_channel, target_label, proposed, resources, proofs) in proposals {
+        bridge_proofs.extend(proofs);
         edits.extend(proposed);
         let target = group.members[target_index];
         for (_, resource) in resources {
@@ -827,18 +892,24 @@ pub(super) fn validate_batch_occupancy(
             "original beam alignment introduces a channel occupancy conflict",
         ));
     }
-    validate_batch_import_profile(source, edits)
+    validate_batch_import_profile(source, edits, None)
 }
 
 fn validate_batch_import_profile(
     source: &str,
     edits: &[PrimaryBeamVoicePartitionBoundEdit],
+    trace_stage: Option<&str>,
 ) -> io::Result<()> {
     let mut projected = source.to_owned();
     let mut ordered = edits.iter().collect::<Vec<_>>();
     ordered.sort_by_key(|edit| std::cmp::Reverse(edit.voice_text_start));
     for edit in ordered {
         projected.replace_range(edit.voice_text_start..edit.voice_text_end, &edit.target_label);
+    }
+    if let Some(stage) = trace_stage {
+        use crate::audit_only::import_channel_profile_readback::partwide_import_channels_admissible;
+        eprintln!("BeamImportProfile: stage={stage}; source={}; projected={}",
+            partwide_import_channels_admissible(source), partwide_import_channels_admissible(&projected));
     }
     if !crate::audit_only::import_channel_profile_readback::partwide_import_channels_admissible(source)
         || !crate::audit_only::import_channel_profile_readback::partwide_import_channels_admissible(&projected)
@@ -1090,19 +1161,26 @@ struct BoundChordResourceContext<'a> {
     classification: &'a [FinalChordBindingMeasure],
     voices: &'a FrozenSerializedVoicePlan,
     claimed: &'a BTreeSet<(usize, usize)>,
+    bridge_occurrences: BTreeSet<(usize, usize, usize)>,
 }
 fn bound_chord_resources<'a>(
     context: BoundChordResourceContext<'a>,
     heads: &[&'a FinalChordEncodingNote],
     rows: &[&'a FinalChordTransactionOutputOccurrenceWitness],
 ) -> Option<Vec<(&'a FinalChordEncodingNote, &'a FinalChordTransactionOutputOccurrenceWitness)>> {
-    let BoundChordResourceContext { source, classification_xml, group, current, classification, voices, claimed } = context;
+    let BoundChordResourceContext { source, classification_xml, group, current, classification, voices, claimed, bridge_occurrences } = context;
+    if bridge_occurrences.iter().any(|identity| source.receipt.occurrences.iter()
+        .filter(|row| (row.source_event_id,row.attack_id,row.fragment_id) == *identity).count() != 1) {
+        return None;
+    }
     let mut resources=heads.iter().copied().zip(rows.iter().copied()).collect::<Vec<_>>();
     loop {
         let before=resources.len();
         let keys=resources.iter().map(|(_,r)|(r.source_event_id,r.attack_id)).collect::<BTreeSet<_>>();
         let mut required=source.receipt.occurrences.iter().filter(|r|keys.contains(&(r.source_event_id,r.attack_id)))
             .collect::<Vec<_>>();
+        required.extend(source.receipt.occurrences.iter().filter(|row|
+            bridge_occurrences.contains(&(row.source_event_id,row.attack_id,row.fragment_id))));
         // Physical chord attachment is a resource relation. It does not create
         // another original positive group or erase any negative beam decision.
         for (head,_) in resources.iter().filter(|(n,_)|!n.chord_member) {
@@ -2007,4 +2085,49 @@ mod tests {
         transport_final_pdf_source_occurrence_continuation_through_primary_beam_voice_partition(&source,source.xml(),&after,&canonical,&rebound,Some(&BTreeSet::new())).unwrap();
     }
 
+}
+
+#[cfg(test)]
+impl CanonicalFinalChordStructuralPlan {
+    pub(crate) fn synthetic_assert_adopted_bridge_alignment_negatives(
+        &self, source: &FinalPdfSourceOccurrenceContinuation, voices: &FrozenSerializedVoicePlan,
+        prepared: &PrimaryBeamVoicePartitionBoundPlan, carried: &FinalPdfSourceOccurrenceContinuation,
+    ) {
+        let bind = |candidate: &FinalPdfSourceOccurrenceContinuation, labels: &FrozenSerializedVoicePlan| {
+            bind_primary_beam_voice_partition_plan(candidate.xml(), PrimaryBeamVoicePartitionBindingContext {
+                source_continuation: candidate, voice_plan: labels, candidates: &[], classification_xml: candidate.xml(),
+                renderer_visible_fragments_by_metric_line_id: &BTreeMap::new(),
+                materialization_safety_proven_metric_line_ids: &BTreeSet::new(),
+            }).unwrap()
+        };
+        assert!(!prepared.bridge_alignment_proofs.is_empty());
+        let mut unallocated = voices.clone();
+        unallocated.canonical_role_allocation = None;
+        assert_eq!(bind(source,&unallocated).scope_candidates(),0,"extension resources require canonical allocation; existing original-only admission stays separate");
+        let mut missing = source.clone();
+        missing.receipt.rest_bridge_extension_course = None;
+        assert_eq!(bind(&missing,voices).scope_candidates(),0,"beam tags do not recreate adoption");
+        assert!(rebind_primary_beam_voice_partition_plan_to_current_xml(missing.xml(),&missing,prepared).is_err());
+        assert!(transport_final_pdf_source_occurrence_continuation_through_primary_beam_voice_partition(
+            &missing,missing.xml(),carried.xml(),self,prepared,Some(&BTreeSet::new())).is_err(),
+            "direct typed transport must also refuse lost adoption");
+        assert!(rebind_primary_beam_voice_partition_plan_to_current_xml(carried.xml(),carried,prepared).is_err(),"old connection proof is stale after the admitted voice write");
+        let proof = &prepared.bridge_alignment_proofs[0];
+        let group = source.receipt.original_beam_voice_groups.iter().find(|group|
+            proof.head_sources().any(|id| group.members.iter().any(|member|member.0==id))).unwrap();
+        let extension = proof.head_sources()
+            .find(|id| !group.members.iter().any(|member|member.0==*id)).unwrap();
+        let mut foreign = source.clone();
+        for group in &mut foreign.receipt.original_beam_voice_groups {
+            for ((id,_), voice) in std::sync::Arc::make_mut(&mut group.notation_voices) {
+                if *id==extension {*voice="independent-semantic-course".to_owned();}
+            }
+        }
+        assert!(bind(&foreign,voices).scope_candidates()<prepared.scope_candidates(),"a foreign semantic line is not an extension resource");
+        let mut incomplete = source.clone();
+        incomplete.receipt.occurrences.retain(|row|row.source_event_id!=extension);
+        assert!(bind(&incomplete,voices).scope_candidates()<prepared.scope_candidates(),"every actual extension occurrence must be present");
+        let again = bind(carried,&prepared.repaired_voice_plan);
+        assert_eq!(again.scope_candidates(),0,"a completed component is idempotent");
+    }
 }

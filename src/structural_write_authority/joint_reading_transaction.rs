@@ -114,6 +114,11 @@ pub(crate) fn apply_joint_reading_course<C: JointReadingCandidate>(
 }
 
 
+/// Read-only diagnostic projection through the existing C3 module surface.
+pub(crate) fn observe_guard_conflicts(xml:&str)->Result<Vec<String>, &'static str> {
+    super::super::rustig_clef_planning::observe_lower_clef_guard_conflicts(xml)
+}
+
 #[cfg(test)]
 mod checkpoint_protection_tests {
     use crate::pipeline::{joint_reading_course_active, protect_joint_reading_checkpoint};
@@ -149,12 +154,12 @@ mod checkpoint_protection_tests {
     #[test]
     fn checkpoint_protection_restores_on_error_unwind_and_nested_scopes() {
         let before=joint_reading_course_active();
-        let aborted=(||->Result<(),()> {
+        let aborted: Result<(),()> = {
             let _protection=protect_joint_reading_checkpoint(true);
             assert!(joint_reading_course_active());
             {let _nested=protect_joint_reading_checkpoint(false);assert!(joint_reading_course_active());}
             Err(())
-        })();
+        };
         assert!(aborted.is_err());assert_eq!(joint_reading_course_active(),before);
         let unwound=std::panic::catch_unwind(||{
             let _protection=protect_joint_reading_checkpoint(true);
@@ -164,9 +169,4 @@ mod checkpoint_protection_tests {
         {let _not_selected=protect_joint_reading_checkpoint(false);assert_eq!(joint_reading_course_active(),before);}
         assert_eq!(joint_reading_course_active(),before);
     }
-}
-
-/// Read-only diagnostic projection through the existing C3 module surface.
-pub(crate) fn observe_guard_conflicts(xml:&str)->Result<Vec<String>, &'static str> {
-    super::super::rustig_clef_planning::observe_lower_clef_guard_conflicts(xml)
 }

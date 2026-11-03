@@ -62,6 +62,7 @@ impl Connection {
 /// once at its actual successful Main adoption, or simply discarded.
 #[derive(Debug)]
 pub(crate) struct RestBridgeExtensionOccurrenceEvidence {
+    projected_pre: Option<String>,
     course: RestBridgeExtensionCourse,
     state_address: usize,
 }
@@ -73,6 +74,8 @@ pub(super) struct RestBridgeExtensionCourse {
     xml: String,
     source: std::sync::Arc<[FinalChordCanonicalSourceLocator]>,
     connections: Vec<Connection>,
+    // Independent E050 writes have no original extension seed.
+    authored: Vec<AuthoredConnection>,
     // Origins of every provisional connection bound at capture; never narrowed.
     provisional_origins: BTreeSet<(usize, usize)>,
 }
@@ -128,6 +131,58 @@ fn beams(xml: &str, note: &FinalChordEncodingNote) -> io::Result<BeamImage> {
         }
     }
     Ok(result.into_iter().collect())
+}
+
+fn projected_bridge_note_surface(fragment: &str) -> io::Result<Vec<String>> {
+    fn visit(node: roxmltree::Node<'_, '_>, out: &mut Vec<String>) -> io::Result<()> {
+        if node.has_tag_name("beam") && node.parent().is_some_and(|parent| parent.has_tag_name("note")) {
+            let level = node.attribute("number").unwrap_or("1").parse::<u8>()
+                .map_err(|_| invalid("Projected bridge has invalid beam number"))?;
+            if level <= 2 { return Ok(()); }
+        }
+        if node.is_element() {
+            out.push(format!("E:{}", node.tag_name().name()));
+            out.extend(node.attributes().map(|attr| format!("A:{}={}", attr.name(), attr.value())));
+            for child in node.children() { visit(child, out)?; }
+            out.push("/E".to_owned());
+        } else if node.is_text() {
+            if let Some(text) = node.text().filter(|text| !text.trim().is_empty()) { out.push(format!("T:{text}")); }
+        } else { out.push(format!("X:{:?}", node.node_type())); }
+        Ok(())
+    }
+    let document = roxmltree::Document::parse(fragment).map_err(|_| invalid("Projected bridge note parse failed"))?;
+    let mut out = Vec::new();
+    visit(document.root_element(), &mut out)?;
+    Ok(out)
+}
+
+fn verify_projected_bridge_footprint(
+    before: &str, after: &str, selected: &[Vec<(usize, usize)>],
+) -> io::Result<()> {
+    final_chord_verify_pitched_sequence_transition(before, after, false)?;
+    let pre_notes = notes(before)?;
+    let post_notes = notes(after)?;
+    let mut selected_positions = BTreeSet::new();
+    for range in selected.iter().flatten() {
+        let matches = pre_notes.iter().filter(|(_, note)| (note.range.start, note.range.end) == *range).collect::<Vec<_>>();
+        let [(position, _)] = matches.as_slice() else { return Err(invalid("Projected bridge selected head is not exact")); };
+        if !selected_positions.insert(**position) { return Err(invalid("Projected bridge selected head duplicated")); }
+    }
+    let mut pre_cursor = 0;
+    let mut post_cursor = 0;
+    for position in selected_positions {
+        let pre = &pre_notes[&position];
+        let post = post_notes.get(&position).ok_or_else(|| invalid("Projected bridge lost selected head"))?;
+        if before[pre_cursor..pre.range.start] != after[post_cursor..post.range.start]
+            || projected_bridge_note_surface(&before[pre.range.clone()])? != projected_bridge_note_surface(&after[post.range.clone()])? {
+            return Err(invalid("Projected bridge changed bytes outside its owned beam levels"));
+        }
+        pre_cursor = pre.range.end;
+        post_cursor = post.range.end;
+    }
+    if before[pre_cursor..] != after[post_cursor..] { return Err(invalid("Projected bridge changed its unselected tail")); }
+    Ok(())
+
 }
 
 fn complete_resource_image(
@@ -227,12 +282,16 @@ fn attachments_match(
     connection: &Connection,
     current: &BTreeMap<Position, FinalChordEncodingNote>,
 ) -> bool {
-    for member in connection.all() {
+    resource_attachments_match(&connection.all().collect::<Vec<_>>(), current)
+}
+
+fn resource_attachments_match(members: &[&Member], current: &BTreeMap<Position, FinalChordEncodingNote>) -> bool {
+    for member in members {
         let Some(note) = current.get(&member.position) else {
             return false;
         };
         if let Some(identity) = member.anchor {
-            let Some(anchor) = connection.all().find(|m| m.identity == identity) else {
+            let Some(anchor) = members.iter().find(|m| m.identity == identity) else {
                 return false;
             };
             let Some(head) = current.get(&anchor.position) else {
@@ -254,8 +313,7 @@ fn attachments_match(
                 })
                 .map(|(position, _)| *position)
                 .collect::<BTreeSet<_>>();
-            let carried = connection
-                .all()
+            let carried = members.iter()
                 .filter(|m| m.anchor == Some(member.identity))
                 .map(|m| m.position)
                 .collect::<BTreeSet<_>>();
@@ -316,6 +374,82 @@ impl Connection {
     }
 }
 
+/// Actual adopted E050 custody, never reconstructed from current beam tags.
+#[derive(Debug, Clone)]
+pub(super) struct BridgeAlignmentProof {
+    source: std::sync::Arc<[FinalChordCanonicalSourceLocator]>,
+    connection: Connection,
+}
+impl BridgeAlignmentProof {
+    pub(super) fn occurrences(&self) -> impl Iterator<Item = OccurrenceKey> + '_ {
+        self.connection.all().map(|member| member.identity)
+    }
+    pub(super) fn head_sources(&self) -> impl Iterator<Item = usize> + '_ {
+        self.connection.members.iter().filter(|member| member.head).map(|member| member.identity.0)
+    }
+    pub(super) fn split_labels(&self) -> bool {
+        self.connection.members.iter().filter(|member| member.head)
+            .map(|member| member.voice.trim()).collect::<BTreeSet<_>>().len() > 1
+    }
+    fn belongs_to(&self, course: &RestBridgeExtensionCourse) -> bool {
+        std::sync::Arc::ptr_eq(&self.source, &course.source)
+            && course.connections.iter().any(|connection| connection == &self.connection)
+    }
+}
+
+pub(super) fn validate_alignment_proofs(
+    source: &FinalPdfSourceOccurrenceContinuation,
+    proofs: &[BridgeAlignmentProof],
+) -> io::Result<()> {
+    if proofs.is_empty() { return Ok(()); }
+    let course = source.receipt.rest_bridge_extension_course.as_ref()
+        .ok_or_else(|| invalid("Bridge alignment lost its adopted connection custody"))?;
+    if course.xml != source.xml() || proofs.iter().any(|proof| !proof.belongs_to(course)) {
+        return Err(invalid("Bridge alignment has stale or withdrawn connection custody"));
+    }
+    Ok(())
+}
+
+impl RestBridgeExtensionCourse {
+    pub(super) fn alignment_resources(
+        &self,
+        xml: &str,
+        source: &std::sync::Arc<[FinalChordCanonicalSourceLocator]>,
+        component: &BTreeSet<OccurrenceKey>,
+        notation: &BTreeMap<(usize, usize), String>,
+        semantic_voice: &str,
+        location: (usize, u8),
+    ) -> Vec<BridgeAlignmentProof> {
+        let (measure,staff) = location;
+        if self.xml != xml || !std::sync::Arc::ptr_eq(source, &self.source) {
+            return Vec::new();
+        }
+        if !self.connections.iter().any(|connection| connection.component == *component) {
+            return Vec::new();
+        }
+        let Ok(current) = notes(xml) else { return Vec::new(); };
+        self.connections.iter().filter(|connection| {
+            connection.component == *component
+                && connection.members.iter().filter(|member| member.head).all(|member|
+                    notation.get(&(member.identity.0,member.identity.1))
+                        .is_some_and(|voice| voice == semantic_voice))
+                && connection.all().all(|member|
+                    member.position.0 == measure && member.staff.parse::<u8>().ok() == Some(staff)
+                        && current.get(&member.position).is_some_and(|note| member.matches(xml,note,false)))
+                && attachments_match(connection,&current)
+        }).map(|connection| BridgeAlignmentProof { source: self.source.clone(), connection: connection.clone() }).collect()
+    }
+
+    pub(super) fn through_voice_partition(
+        &mut self, before: &str, after: &str, plan: &PrimaryBeamVoicePartitionBoundPlan,
+    ) -> io::Result<()> {
+        if self.xml != before || plan.bridge_alignment_proofs.iter().any(|proof| !proof.belongs_to(self)) {
+            return Err(invalid("Bridge alignment transport has stale actual-owner custody"));
+        }
+        self.through_impl(before,after,Some(plan))
+    }
+}
+
 impl RestBridgeExtensionCourse {
     /// Every provisional connection bound at capture must still be carried.
     fn require_provisional_custody(&self) -> io::Result<()> {
@@ -337,6 +471,12 @@ impl RestBridgeExtensionCourse {
 }
 
 impl RestBridgeExtensionCourse {
+    pub(super) fn protected_occurrences(&self) -> BTreeSet<(usize, usize, usize)> {
+        self.connections.iter().flat_map(|connection| connection.all())
+            .chain(self.authored.iter().flat_map(|connection| connection.members.iter()))
+            .map(|member| member.identity).collect()
+    }
+
     pub(super) fn current_xml(&self) -> &str {
         &self.xml
     }
@@ -344,6 +484,9 @@ impl RestBridgeExtensionCourse {
     // separately the participating connection. Relevant drift retires a whole
     // connection permanently; an unchanged later image cannot recreate it.
     pub(super) fn through(&mut self, before: &str, after: &str) -> io::Result<()> {
+        self.through_impl(before,after,None)
+    }
+    fn through_impl(&mut self, before: &str, after: &str, partition: Option<&PrimaryBeamVoicePartitionBoundPlan>) -> io::Result<()> {
         if self.xml != before {
             return Err(invalid(
                 "Bridge continuation has a skipped/stale owner transition",
@@ -352,14 +495,29 @@ impl RestBridgeExtensionCourse {
         let topology = final_chord_verify_pitched_sequence_transition(before, after, false).is_ok();
         let current = notes(after)?;
         let prior_count = self.connections.len();
-        self.connections.retain(|connection| {
-            let retained = topology
-                && connection.all().all(|member| {
-                    current
-                        .get(&member.position)
-                        .is_some_and(|note| member.matches(after, note, false))
-                })
-                && attachments_match(connection, &current);
+        self.connections.retain_mut(|connection| {
+            let aligned = partition.is_some_and(|plan| plan.bridge_alignment_proofs.iter()
+                .any(|proof| proof.connection == *connection));
+            let retained = if aligned {
+                let plan = partition.expect("bound alignment transport");
+                connection.all().all(|member| current.get(&member.position).is_some_and(|note|
+                    member.matches(after,note,true)
+                        && plan.repaired_voice_plan.label_for_source(member.identity.0) == Some(note.voice.trim())))
+                    && attachments_match(connection,&current)
+                    && connection.members.iter().filter(|member| member.head)
+                        .map(|member| current.get(&member.position).map(|note| note.voice.trim()))
+                        .collect::<Option<BTreeSet<_>>>().is_some_and(|labels| labels.len() == 1)
+            } else {
+                topology && connection.all().all(|member| current.get(&member.position)
+                    .is_some_and(|note| member.matches(after,note,false)))
+                    && attachments_match(connection,&current)
+            };
+            if retained && aligned {
+                for member in connection.members.iter_mut().chain(&mut connection.resources) {
+                    member.voice = current[&member.position].voice.clone();
+                    member.sealed_voice = member.voice.clone();
+                }
+            }
             if !retained {
                 connection.diagnostic(
                     &self.project,
@@ -374,6 +532,14 @@ impl RestBridgeExtensionCourse {
             }
             retained
         });
+        if let Some(plan) = partition {
+            for proof in &plan.bridge_alignment_proofs {
+                if !self.connections.iter().any(|connection| connection.origin == proof.connection.origin
+                    && connection.component == proof.connection.component) {
+                    return Err(invalid("Bridge alignment failed to preserve the complete adopted connection"));
+                }
+            }
+        }
         if prior_count != self.connections.len() {
             eprintln!(
                 "BridgeExtensionCustody: phase=owner_transition; retained={}; retired={}",
@@ -381,6 +547,17 @@ impl RestBridgeExtensionCourse {
                 prior_count - self.connections.len()
             );
         }
+        // Authoring occurred after projection. Unrelated authorized lane or
+        // chord normalization may change other notes; its own whole resource
+        // image and inherited physical sequence must remain unchanged.
+        let prior = notes(before)?;
+        let stable_sequence = prior.len() == current.len() && prior.iter().all(|(p,a)|
+            current.get(p).is_some_and(|b| a.onset == b.onset && a.duration == b.duration
+                && a.pitch_midi == b.pitch_midi && a.staff == b.staff
+                && a.tie_start == b.tie_start && a.tie_stop == b.tie_stop));
+        self.authored.retain(|connection| stable_sequence
+            && connection.members.iter().all(|m| current.get(&m.position).is_some_and(|n|m.matches(after,n,false)))
+            && resource_attachments_match(&connection.members.iter().collect::<Vec<_>>(),&current));
         self.xml = after.to_owned();
         Ok(())
     }
@@ -393,6 +570,9 @@ impl RestBridgeExtensionCourse {
     ) -> io::Result<Self> {
         if self.xml != input {
             return Err(invalid("Bridge FinalChord handover has stale source"));
+        }
+        if !self.authored.is_empty() {
+            return Err(invalid("Post-projection authored connections cannot enter a new projection epoch"));
         }
         let current = notes(output)?;
         let mut result = self.clone();
@@ -717,7 +897,14 @@ impl CanonicalFinalChordStructuralPlan {
             connections.push(connection);
             bound_offers.insert(offer_index);
         }
-        if connections.is_empty() {
+        let authored = if self.bridge_is_post_projection() {
+            self.capture_authored_connections(input, output, selected, offered, &bound_offers)?
+        } else { Vec::new() };
+        let projected_pre = if self.bridge_is_post_projection() && input != output {
+            verify_projected_bridge_footprint(input, output, selected)?;
+            Some(input.to_owned())
+        } else { None };
+        if connections.is_empty() && projected_pre.is_none() {
             return Ok((None, bound_offers));
         }
         let provisional_origins = connections
@@ -726,6 +913,7 @@ impl CanonicalFinalChordStructuralPlan {
             .map(|connection| connection.origin)
             .collect();
         Ok((Some(RestBridgeExtensionOccurrenceEvidence {
+            projected_pre,
             state_address: *state_address,
             course: RestBridgeExtensionCourse {
                 project: project.clone(),
@@ -733,6 +921,7 @@ impl CanonicalFinalChordStructuralPlan {
                 xml: output.to_owned(),
                 source: self.source_locators.clone(),
                 connections,
+                authored,
                 provisional_origins,
             },
         }), bound_offers))
@@ -755,12 +944,47 @@ impl CanonicalFinalChordStructuralPlan {
             ));
         }
         eprintln!(
-            "BridgeExtensionCustody: project={:?}; branch=main; phase=main_adopted; connections={}",
+            "BridgeExtensionCustody: project={:?}; branch=main; phase=main_adopted; connections={}; authored={}",
             evidence.course.project,
-            evidence.course.connections.len()
+            evidence.course.connections.len(),
+            evidence.course.authored.len()
         );
         self.rest_bridge_extension_course = Some(evidence.course);
         Ok(())
+    }
+
+    pub(crate) fn adopt_projected_rest_bridge_output(
+        &mut self,
+        source: &FinalPdfSourceOccurrenceContinuation,
+        evidence: Option<RestBridgeExtensionOccurrenceEvidence>,
+        state: &super::super::RenderSovereignState,
+        voices: &FrozenSerializedVoicePlan,
+        omissions: &BTreeSet<RenderPrunedFinalChordOmissionKey>,
+    ) -> io::Result<FinalPdfSourceOccurrenceContinuation> {
+        let mut evidence = evidence.ok_or_else(|| invalid("Projected bridge lacks actual writer evidence"))?;
+        if evidence.projected_pre.as_deref() != Some(source.xml()) || !source.has_authentic_beam_surface()? {
+            return Err(invalid("Projected bridge has stale occurrence input"));
+        }
+        let post = evidence.course.xml.clone();
+        if let Some(previous) = &source.receipt.rest_bridge_extension_course {
+            let mut previous = previous.clone();
+            previous.through(source.xml(), &post)?;
+            let protected = previous.protected_occurrences();
+            if evidence.course.protected_occurrences().iter().any(|key| protected.contains(key)) {
+                return Err(invalid("Projected bridge overlaps an adopted prior connection"));
+            }
+            evidence.course.connections.extend(previous.connections);
+            evidence.course.authored.extend(previous.authored);
+            evidence.course.provisional_origins.extend(previous.provisional_origins);
+        }
+        // This existing adoption checks the actual Main address, post bytes and
+        // canonical source epoch before activating the writer-authored course.
+        self.adopt_rest_bridge_extension_output(Some(evidence), state)?;
+        let mut carried = source.receipt.clone();
+        carried.rest_bridge_extension_course = self.rest_bridge_extension_course.clone();
+        let result = FinalPdfSourceOccurrenceContinuation::from_original_transport(post, carried)?;
+        verify_final_pdf_source_occurrence_continuation(result.xml(), self, voices, Some(omissions), &result)?;
+        Ok(result)
     }
 
     pub(crate) fn continue_rest_bridge_extensions_at_state(
@@ -1213,6 +1437,53 @@ impl CanonicalFinalChordStructuralPlan {
         let guard = canonical.bind_bridge_voice_guard(&original, &voices, &BTreeSet::new()).unwrap();
         (original, guard)
     }
+
+    /// Synthetic declared roles, followed by the actual production projection and
+    /// canonical alignment owner. Every independent triple repeats the premise.
+    pub(crate) fn synthetic_adopted_bridge_alignment(
+        &self, post: &str, labels: [&str; 2],
+    ) -> (FinalPdfSourceOccurrenceContinuation, FrozenSerializedVoicePlan, PrimaryBeamVoicePartitionBoundPlan) {
+        self.synthetic_adopted_bridge_alignment_with_roles(post, labels, &[
+            SerializedVoicePresentationRole::LowerPrimary,
+            SerializedVoicePresentationRole::LowerPrimary,
+            SerializedVoicePresentationRole::LowerSecondary,
+        ])
+    }
+
+    pub(crate) fn synthetic_adopted_bridge_alignment_with_roles(
+        &self, post: &str, labels: [&str; 2], roles: &[SerializedVoicePresentationRole],
+    ) -> (FinalPdfSourceOccurrenceContinuation, FrozenSerializedVoicePlan, PrimaryBeamVoicePartitionBoundPlan) {
+        assert!(!roles.is_empty());
+        let mut voices = FrozenSerializedVoicePlan { authority_bound: true,
+            semantic_fingerprint_fnv64: 1, ..Default::default() };
+        for (index, id) in self.source_locators.iter().map(|row|row.source_event_id)
+            .collect::<BTreeSet<_>>().into_iter().enumerate() {
+            let role = roles[index % roles.len()];
+            let secondary = role != SerializedVoicePresentationRole::LowerPrimary;
+            let channel = if secondary {2} else {1};
+            voices.source_to_channel.insert(id,channel);
+            voices.source_to_role.insert(id,role);
+            voices.source_to_label.insert(id,labels[usize::from(secondary)].to_owned());
+            voices.channel_to_label.insert(channel,labels[usize::from(secondary)].to_owned());
+            voices.channel_to_role.insert(channel,role);
+            voices.label_to_role.insert(labels[usize::from(secondary)].to_owned(),role);
+        }
+        voices.canonical_role_allocation = Some(std::sync::Arc::new(CanonicalFrozenRoleAllocation {
+            source_roles: voices.source_to_role.clone(), channel_roles: voices.channel_to_role.clone(),
+        }));
+        let projected = project_canonical_final_chord_render_occurrence_continuation(post,self,&voices,&BTreeSet::new()).unwrap();
+        let source = FinalPdfSourceOccurrenceContinuation::from_original_transport(projected.xml().to_owned(),projected.projected.receipt.clone()).unwrap();
+        let plan = bind_primary_beam_voice_partition_plan(source.xml(),PrimaryBeamVoicePartitionBindingContext {
+            source_continuation: &source, voice_plan: &voices, candidates: &[], classification_xml: source.xml(),
+            renderer_visible_fragments_by_metric_line_id: &BTreeMap::new(),
+            materialization_safety_proven_metric_line_ids: &BTreeSet::new(),
+        }).unwrap();
+        assert_eq!(plan.repaired_voice_plan().source_to_role, voices.source_to_role);
+        if plan.scope_candidates() == 0 {
+            assert_eq!(plan.repaired_voice_plan().source_to_label, voices.source_to_label);
+        }
+        (source,voices,plan)
+    }
     pub(crate) fn synthetic_without_original_groups(mut self) -> Self {
         self.original_beam_voice_groups.clear();
         self
@@ -1259,7 +1530,7 @@ impl CanonicalFinalChordStructuralPlan {
             edits: Vec::new(),
             selected_members: Vec::new(),
             scope_candidates: 1,
-            original_group_alignment: Vec::new(),
+            original_group_alignment: Vec::new(), bridge_alignment_proofs: Vec::new(),
             historical_phrase_decision_only: false,
         };
         self.bind_rest_bridge_withdrawal(&source, &plan)
@@ -1427,7 +1698,7 @@ impl CanonicalFinalChordStructuralPlan {
             edits: Vec::new(),
             selected_members: Vec::new(),
             scope_candidates: 1,
-            original_group_alignment: Vec::new(),
+            original_group_alignment: Vec::new(), bridge_alignment_proofs: Vec::new(),
             historical_phrase_decision_only: false,
         };
         (
@@ -1484,6 +1755,7 @@ mod tests {
                 origin: (0, 0),
                 provisional: false,
             }],
+            authored: Vec::new(),
             provisional_origins: BTreeSet::new(),
         }
     }
@@ -1641,6 +1913,7 @@ mod tests {
                 origin: (0, 0),
                 provisional: false,
             }],
+            authored: Vec::new(),
             provisional_origins: BTreeSet::new(),
         });
         let projected = project_canonical_final_chord_render_occurrence_continuation(
@@ -1749,6 +2022,7 @@ mod tests {
             xml: xml.clone(),
             source: std::sync::Arc::from(Vec::<FinalChordCanonicalSourceLocator>::new()),
             connections,
+            authored: Vec::new(),
             provisional_origins: BTreeSet::new(),
         };
         let n = &current[&(104, 0)];
@@ -1768,3 +2042,36 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod projected_bridge_footprint_tests {
+    use super::*;
+    #[test]
+    fn selected_beam_only_transport_refuses_rest_voice_pitch_higher_beam_and_outside_changes() {
+        let ordinal=usize::from(u8::MAX)%17;
+        let note="<note><pitch><step>C</step><octave>3</octave></pitch><duration>24</duration><voice>2</voice><type>16th</type><staff>2</staff><beam number=\"3\">forward hook</beam></note>";
+        let rest="<note><rest/><duration>72</duration><voice>2</voice><type>eighth</type><dot/><staff>2</staff></note>";
+        let pre=format!("<score-partwise><part id=\"P\"><measure number=\"{ordinal}\"><attributes><divisions>96</divisions></attributes>{note}{rest}</measure></part></score-partwise>");
+        let range=notes(&pre).unwrap().into_values().next().unwrap().range;
+        let selected=vec![vec![(range.start,range.end)]];
+        let post=pre.replacen("</note>","<beam number=\"1\">begin</beam></note>",1);
+        verify_projected_bridge_footprint(&pre,&post,&selected).unwrap();
+        for invalid in [
+            post.replace("<rest/>","<rest measure=\"yes\"/>"),
+            post.replacen("<voice>2</voice>","<voice>4</voice>",1),
+            post.replace("<step>C</step>","<step>D</step>"),
+            post.replace("forward hook","backward hook"),
+            post.replace("<divisions>96</divisions>","<divisions>192</divisions>"),
+        ] {assert!(verify_projected_bridge_footprint(&pre,&invalid,&selected).is_err());}
+        assert!(verify_projected_bridge_footprint(&pre,&post,&[]).is_err());
+        assert!(verify_projected_bridge_footprint(&pre,&post,&[selected[0].clone(),selected[0].clone()]).is_err());
+    }
+}
+
+#[path = "cursor_exchange_course.rs"]
+mod cursor_exchange_course;
+pub(super) use cursor_exchange_course::BoundCursorExchange;
+
+#[path="authored_rest_bridge_course.rs"]
+mod authored_rest_bridge_course;
+use authored_rest_bridge_course::AuthoredConnection;

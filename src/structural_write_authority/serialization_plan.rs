@@ -1600,6 +1600,7 @@ pub(crate) struct CanonicalFinalChordStructuralPlan {
     rest_bridge_extension_course: Option<RestBridgeExtensionCourse>,
     rest_bridge_withdrawal: Option<BoundRestBridgeWithdrawal>,
     bridge_voice_guard: Option<BoundBridgeVoiceGuard>,
+    cursor_exchange: Option<rest_bridge_extension_course::BoundCursorExchange>,
     authority_bound: bool,
     original_respelling_input: Option<crate::master_state_identity::OriginalFunctionalRespellingChains>,
     original_beam_voice_groups: Vec<original_beam_voice_alignment::OriginalBeamVoiceGroup>,
@@ -1621,6 +1622,7 @@ impl Default for CanonicalFinalChordStructuralPlan {
     fn default() -> Self {
         Self {
             bridge_voice_guard: None,
+            cursor_exchange: None,
             rest_bridge_main_state: None,
             rest_bridge_extension_course: None,
             rest_bridge_withdrawal: None,
@@ -2009,6 +2011,7 @@ pub(crate) struct PrimaryBeamVoicePartitionBoundPlan {
     selected_members: Vec<PrimaryBeamVoicePartitionSelectedMember>,
     scope_candidates: usize,
     original_group_alignment: Vec<String>,
+    bridge_alignment_proofs: Vec<rest_bridge_extension_course::BridgeAlignmentProof>,
     historical_phrase_decision_only: bool,
 }
 
@@ -2204,6 +2207,7 @@ pub(crate) fn rebind_primary_beam_voice_partition_plan_to_current_xml(
         ));
     }
 
+    rest_bridge_extension_course::validate_alignment_proofs(source_continuation, &plan.bridge_alignment_proofs)?;
     if !plan.original_group_alignment.is_empty() {
         original_beam_voice_alignment::validate_late_groups(source_xml, source_continuation, &plan.original_group_alignment)?;
         original_beam_voice_alignment::validate_batch_occupancy(source_xml, &edits)?;
@@ -2215,6 +2219,7 @@ pub(crate) fn rebind_primary_beam_voice_partition_plan_to_current_xml(
         selected_members: plan.selected_members.clone(),
         scope_candidates: plan.scope_candidates,
         original_group_alignment: plan.original_group_alignment.clone(),
+        bridge_alignment_proofs: plan.bridge_alignment_proofs.clone(),
         historical_phrase_decision_only: plan.historical_phrase_decision_only,
     })
 }
@@ -4074,6 +4079,7 @@ pub(crate) fn plan_canonical_final_chord_structure_once(
         rest_bridge_extension_course: None,
         rest_bridge_withdrawal: None,
         bridge_voice_guard: None,
+            cursor_exchange: None,
         authority_bound: true,
         original_respelling_input: None,
         original_beam_voice_groups: Vec::new(),
@@ -5097,6 +5103,36 @@ pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
     let mut source_to_channel = std::collections::BTreeMap::new();
     for (&source, &class) in &class_by_source {
         source_to_channel.insert(source, channel_by_class[&class]);
+    }
+
+    for (&measure, occurrences) in &written_by_measure {
+        if !crate::audit_only::original_beam_diagnostics::detail_requested_for_measure(measure) {
+            continue;
+        }
+        for (index, left) in occurrences.iter().enumerate() {
+            for right in &occurrences[index + 1..] {
+                if left.staff != right.staff {
+                    continue;
+                }
+                let left_class = class_by_source[&left.source_event_id];
+                let right_class = class_by_source[&right.source_event_id];
+                let pair = (left_class.min(right_class), left_class.max(right_class));
+                if !semantic_different.contains(&pair) {
+                    continue;
+                }
+                let a = attack_by_source[&left.source_event_id];
+                let b = attack_by_source[&right.source_event_id];
+                eprintln!("FrozenChannelConflict: measure={}; staff={}; sources={:?}; midi={:?}; written={:?}; sounding={:?}; channels={:?}; sounding_pair={}; sounding_class_edge=true; written_class_edge={}; role_incompatible={}",
+                    left.measure, left.staff, (left.source_event_id, right.source_event_id),
+                    (left.pitch_midi, right.pitch_midi),
+                    ((left.onset, left.end), (right.onset, right.end)),
+                    ((a.absolute_start, a.absolute_end), (b.absolute_start, b.absolute_end)),
+                    (channel_by_class[&left_class], channel_by_class[&right_class]),
+                    a.staff == b.staff && a.absolute_start < b.absolute_end && b.absolute_start < a.absolute_end,
+                    written_different.contains(&pair), channel_incompatible.contains(&pair));
+            }
+        }
+
     }
 
     let mut semantic_signature = String::from("ETUSCHLOPF_SERIALIZATION_CHANNEL_WRITTEN_SEMANTICS_V2\n");
@@ -9241,16 +9277,18 @@ fn bind_primary_beam_voice_partition_plan_for_purpose(
     if historical_phrase_decision_only {
         return Ok(PrimaryBeamVoicePartitionBoundPlan {
             source_fingerprint_fnv64: fingerprint(source_xml), repaired_voice_plan,
-            edits, selected_members, scope_candidates, original_group_alignment: Vec::new(),
+            edits, selected_members, scope_candidates, original_group_alignment: Vec::new(), bridge_alignment_proofs: Vec::new(),
             historical_phrase_decision_only: true,
         });
     }
+    let mut bridge_alignment_proofs = Vec::new();
     let added = original_beam_voice_alignment::append_proven_alignment(
         original_beam_voice_alignment::AlignmentInput {
             source_xml, source: source_continuation, voices: voice_plan, classification_xml,
             visible_fragments: renderer_visible_fragments_by_metric_line_id,
         },
         original_beam_voice_alignment::AlignmentOutput {
+            bridge_proofs: &mut bridge_alignment_proofs,
             repaired: &mut repaired_voice_plan, edits: &mut edits, selected: &mut selected_members,
         },
     )?;
@@ -9278,6 +9316,7 @@ fn bind_primary_beam_voice_partition_plan_for_purpose(
         selected_members,
         scope_candidates,
         original_group_alignment: added,
+        bridge_alignment_proofs,
         historical_phrase_decision_only: false,
     })
 }
@@ -9296,6 +9335,8 @@ pub(crate) fn transport_final_pdf_source_occurrence_continuation_through_primary
             "PrimaryBeamVoicePartition continuation source binding is stale",
         ));
     }
+
+    rest_bridge_extension_course::validate_alignment_proofs(source, &plan.bridge_alignment_proofs)?;
 
     let before_measures = final_chord_parse_binding_measures(observed_source_xml)?;
     let after_measures = final_chord_parse_binding_measures(target_xml)?;
@@ -9384,7 +9425,13 @@ pub(crate) fn transport_final_pdf_source_occurrence_continuation_through_primary
         ));
     }
 
-    let continuation = FinalPdfSourceOccurrenceContinuation::from_original_transport(target_xml.to_string(), source.receipt.clone())?;
+    let mut receipt = source.receipt.clone();
+    if !plan.bridge_alignment_proofs.is_empty() {
+        receipt.rest_bridge_extension_course.as_mut()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData,"Bridge alignment lost its actual course"))?
+            .through_voice_partition(observed_source_xml, target_xml, plan)?;
+    }
+    let continuation = FinalPdfSourceOccurrenceContinuation::from_original_transport(target_xml.to_string(), receipt)?;
     verify_final_pdf_source_occurrence_continuation(
         target_xml,
         canonical,
@@ -10290,6 +10337,7 @@ mod tests {
         }).collect();
         (CanonicalFinalChordStructuralPlan {
             bridge_voice_guard: None,
+            cursor_exchange: None,
             rest_bridge_main_state: None,
             rest_bridge_extension_course: None,
             rest_bridge_withdrawal: None,
@@ -11252,6 +11300,7 @@ mod tests {
         ];
         let base = CanonicalFinalChordStructuralPlan {
             bridge_voice_guard: None,
+            cursor_exchange: None,
             rest_bridge_main_state: None,
             rest_bridge_extension_course: None,
             rest_bridge_withdrawal: None,
@@ -11494,6 +11543,7 @@ mod tests {
         };
         let canonical = CanonicalFinalChordStructuralPlan {
             bridge_voice_guard: None,
+            cursor_exchange: None,
             rest_bridge_main_state: None,
             rest_bridge_extension_course: None,
             rest_bridge_withdrawal: None,
@@ -11708,6 +11758,7 @@ mod tests {
         };
         let canonical = CanonicalFinalChordStructuralPlan {
             bridge_voice_guard: None,
+            cursor_exchange: None,
             rest_bridge_main_state: None,
             rest_bridge_extension_course: None,
             rest_bridge_withdrawal: None,
@@ -11816,6 +11867,7 @@ mod tests {
         };
         let canonical = CanonicalFinalChordStructuralPlan {
             bridge_voice_guard: None,
+            cursor_exchange: None,
             rest_bridge_main_state: None,
             rest_bridge_extension_course: None,
             rest_bridge_withdrawal: None,
@@ -11921,6 +11973,7 @@ mod tests {
         };
         let canonical = CanonicalFinalChordStructuralPlan {
             bridge_voice_guard: None,
+            cursor_exchange: None,
             rest_bridge_main_state: None,
             rest_bridge_extension_course: None,
             rest_bridge_withdrawal: None,
@@ -12223,6 +12276,7 @@ mod tests {
         ];
         let canonical = CanonicalFinalChordStructuralPlan {
             bridge_voice_guard: None,
+            cursor_exchange: None,
             rest_bridge_main_state: None,
             rest_bridge_extension_course: None,
             rest_bridge_withdrawal: None,
@@ -12809,6 +12863,7 @@ mod tests {
         ];
         let canonical = CanonicalFinalChordStructuralPlan {
             bridge_voice_guard: None,
+            cursor_exchange: None,
             rest_bridge_main_state: None,
             rest_bridge_extension_course: None,
             rest_bridge_withdrawal: None,

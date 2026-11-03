@@ -553,6 +553,7 @@ fn final_artifact_state_on(state: &mut AttributionState, observed_path: &str, fi
 }
 
 pub(crate) fn observe_lineage_checkpoint(label: &str, xml: &str) {
+    super::rest_boundary_readback::observe("existing_lineage_checkpoint", label, None, Some(xml));
     super::voice_run_collision_origin::observe_reported_state(label, xml);
     let fingerprint = state_fingerprint(xml);
     with_ledgers(ObservationKind::StateOnly, |state| {

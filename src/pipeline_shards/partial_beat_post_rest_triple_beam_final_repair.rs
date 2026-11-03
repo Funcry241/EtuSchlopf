@@ -90,6 +90,7 @@ pub(crate) struct PartialBeatLaneTransferPreservingMint {
 
 fn human_bound_cursor_lane_owner_transfer_xml(
     xml: &str,
+    exchange_guard: Option<&structural_write_authority::CanonicalFinalChordStructuralPlan>,
 ) -> (String, PartialBeatLaneSerializationOwnerTransferStats) {
     let mut stats = PartialBeatLaneSerializationOwnerTransferStats {
         parse_after_ok: true,
@@ -97,6 +98,26 @@ fn human_bound_cursor_lane_owner_transfer_xml(
         verdict: "partial_beat_lane_serialization_owner_transfer_no_candidate".to_string(),
         ..PartialBeatLaneSerializationOwnerTransferStats::default()
     };
+    if let Some(guard) = exchange_guard {
+        let Ok((groups, edits)) = guard.cursor_exchange_edits(xml) else {
+            stats.verdict = "bound_cursor_exchange_invalid_no_legacy_fallback".into();
+            return (xml.to_owned(), stats);
+        };
+        stats.candidate_groups = groups;
+        if edits.is_empty() { return (xml.to_owned(), stats); }
+        let mut pieces = Vec::with_capacity(edits.len() * 2 + 1);
+        let mut end = 0;
+        for (start, stop, replacement) in &edits {
+            pieces.push(&xml[end..*start]);
+            pieces.push(replacement.as_str());
+            end = *stop;
+        }
+        pieces.push(&xml[end..]);
+        let post = pieces.concat();
+        stats.written = post != xml;
+        stats.verdict = "bound_cursor_exchange_candidate_pending_independent_transport_and_sink".into();
+        return (post, stats);
+    }
     let spans = partial_beat_measure_spans(xml);
     if spans.is_empty() {
         return (xml.to_string(), stats);
@@ -816,7 +837,7 @@ mod partial_beat_post_rest_triple_beam_final_repair_tests {
             partial_beat_post_rest_lane_split_regression_candidates(&xml),
             Some(1)
         );
-        let (after_owner, owner_stats) = human_bound_cursor_lane_owner_transfer_xml(&xml);
+        let (after_owner, owner_stats) = human_bound_cursor_lane_owner_transfer_xml(&xml, None);
         assert!(owner_stats.written);
         assert_eq!(owner_stats.candidate_groups, 1);
         assert_eq!(owner_stats.beam_plan_rows, 6);
@@ -830,7 +851,7 @@ mod partial_beat_post_rest_triple_beam_final_repair_tests {
     #[test]
     fn e057_owner_projection_accepts_lane_order_relocation() {
         let xml = split_target_xml("1", 24);
-        let (after, stats) = human_bound_cursor_lane_owner_transfer_xml(&xml);
+        let (after, stats) = human_bound_cursor_lane_owner_transfer_xml(&xml, None);
         assert!(stats.written);
         assert_eq!(stats.event_multiset_delta_rows, 0);
         assert!(stats.exact_readback);
@@ -855,7 +876,7 @@ mod partial_beat_post_rest_triple_beam_final_repair_tests {
     #[test]
     fn owner_transfer_preserves_cross_voice_rest_domain() {
         let xml = split_target_xml("1", 24);
-        let (after, stats) = human_bound_cursor_lane_owner_transfer_xml(&xml);
+        let (after, stats) = human_bound_cursor_lane_owner_transfer_xml(&xml, None);
         assert!(stats.written);
         assert!(stats.cross_voice_rest_owner);
         assert_eq!(stats.beam_plan_rows, 6);
@@ -894,7 +915,7 @@ mod partial_beat_post_rest_triple_beam_final_repair_tests {
             partial_beat_post_rest_lane_split_regression_candidates(&xml),
             Some(2)
         );
-        let (after, stats) = human_bound_cursor_lane_owner_transfer_xml(&xml);
+        let (after, stats) = human_bound_cursor_lane_owner_transfer_xml(&xml, None);
         assert!(stats.written);
         assert_eq!(stats.candidate_groups, 2);
         assert_eq!(stats.target_measures, "99,100");
@@ -911,7 +932,7 @@ mod partial_beat_post_rest_triple_beam_final_repair_tests {
     #[test]
     fn adding_independent_measure_candidate_preserves_first_measure_decision() {
         let single = split_target_xml("1", 24);
-        let (single_after, single_stats) = human_bound_cursor_lane_owner_transfer_xml(&single);
+        let (single_after, single_stats) = human_bound_cursor_lane_owner_transfer_xml(&single, None);
         assert!(single_stats.written);
 
         let measure_start = single.find("<measure").expect("first measure");
@@ -925,7 +946,7 @@ mod partial_beat_post_rest_triple_beam_final_repair_tests {
         );
         let duplicated = single.replace("</part>", &format!("{second_measure}</part>"));
         let (duplicated_after, duplicated_stats) =
-            human_bound_cursor_lane_owner_transfer_xml(&duplicated);
+            human_bound_cursor_lane_owner_transfer_xml(&duplicated, None);
         assert!(duplicated_stats.written);
 
         let first_single = partial_beat_measure_spans(&single_after)
@@ -947,7 +968,7 @@ mod partial_beat_post_rest_triple_beam_final_repair_tests {
             partial_beat_post_rest_lane_split_regression_candidates(&xml),
             Some(2)
         );
-        let (after, stats) = human_bound_cursor_lane_owner_transfer_xml(&xml);
+        let (after, stats) = human_bound_cursor_lane_owner_transfer_xml(&xml, None);
         assert!(!stats.written);
         assert_eq!(stats.candidate_groups, 2);
         assert_eq!(after, xml);
@@ -956,10 +977,27 @@ mod partial_beat_post_rest_triple_beam_final_repair_tests {
 }
 
 
-fn human_bound_cursor_lane_owner_transfer_xml_with_receipt(
-    xml: &str,
+// A typed call adapter keeps every existing XML-only caller byte-identical.
+// It forwards either the legacy input or the explicitly borrowed canonical guard;
+// it carries no callback, ambient mode or independent write authority.
+enum CursorLaneOwnerRequest<'a> {
+    Legacy(&'a str),
+    Bound(&'a str, &'a structural_write_authority::CanonicalFinalChordStructuralPlan),
+}
+impl<'a> From<&'a str> for CursorLaneOwnerRequest<'a> {
+    fn from(xml: &'a str) -> Self { Self::Legacy(xml) }
+}
+impl<'a> From<(&'a str, &'a structural_write_authority::CanonicalFinalChordStructuralPlan)> for CursorLaneOwnerRequest<'a> {
+    fn from((xml,guard): (&'a str, &'a structural_write_authority::CanonicalFinalChordStructuralPlan)) -> Self { Self::Bound(xml,guard) }
+}
+fn human_bound_cursor_lane_owner_transfer_xml_with_receipt<'a>(
+    request: impl Into<CursorLaneOwnerRequest<'a>>,
 ) -> ((String, PartialBeatLaneSerializationOwnerTransferStats), Option<crate::master_state_identity::PreservingTransformationReceipt>) {
-    let output = human_bound_cursor_lane_owner_transfer_xml(xml);
+    let (xml,exchange_guard)=match request.into() {
+        CursorLaneOwnerRequest::Legacy(xml) => (xml,None),
+        CursorLaneOwnerRequest::Bound(xml,guard) => (xml,Some(guard)),
+    };
+    let output = human_bound_cursor_lane_owner_transfer_xml(xml, exchange_guard);
     let receipt = crate::master_state_identity::PreservingTransformationReceipt::mint_preserving_receipt(PartialBeatLaneTransferPreservingMint { _sealed: () }, xml, &output.0);
     assert!(output.0 == xml || receipt.is_some(), "E057 changed bytes without own receipt");
     (output, receipt)

@@ -727,14 +727,14 @@ fn original_visibility_only_rest_emission_retains_complete_carry() {
                 let before=format!("<score-partwise><part id=\"P1\">{measures}</part></score-partwise>");
                 let mut after=before.clone();
                 let input=enforce_beat_scoped_beaming_and_rest_completion_in_xml(&mut after);
-                let expected=before.replace("<note><rest/>","<note print-object=\"no\" print-spacing=\"no\"><rest/>");
-                assert_eq!(after,expected,"only the original auxiliary-rest visibility write occurred");
+                assert_eq!(after,before,"unproven auxiliary-rest elision is an exact no-op");
                 assert_eq!(partial_beat_raw_notes(&before).len(),4*copies);
                 assert_eq!(partial_beat_raw_notes(&after).len(),4*copies);
                 let mut receipts=crate::master_state_identity::OwnerReceipts::default();
                 receipts.push_block(input);
-                let births=receipts.physical_birth_readback(&before,&after).expect("original visibility write carries every complete note");
-                assert_eq!(births.len(),1);
+                let births=receipts.physical_birth_readback(&before,&after).expect("unchanged original notes require no fabricated birth capture");
+                assert_eq!(receipts.len(),0);
+                assert!(births.is_empty());
                 assert!(receipts.physical_birth_readback(&(before.clone()+" "),&after).is_err());
             }
         }

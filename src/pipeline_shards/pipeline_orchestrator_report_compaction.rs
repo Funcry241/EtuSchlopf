@@ -392,6 +392,8 @@ fn real_main() -> anyhow::Result<i32> {
     runtime_observation.enter_project_stage(observation::ProjectStage::MasterNotationAndSalience);
     runtime_observation_transport.publish_current(&runtime_observation);
     etuschlopf::console_status_record::emit_project_stage(&runtime_observation);
+    let master_timing_context = crate::audit_only::performance_timings::enter_context(
+        &source.input_label, "MasterNotationAndSalience");
     let MasterNotationAndSalienceStageOutcome { best } =
         observed_project_try!(run_master_notation_and_salience_stage(
             MasterNotationAndSalienceStageInputs {
@@ -400,6 +402,7 @@ fn real_main() -> anyhow::Result<i32> {
                 options: &options,
             }
         ));
+    drop(master_timing_context);
     stage_clock = pipeline_stage_timing(&timing_label, "MasterNotationAndSalience", stage_clock);
 
     runtime_observation.enter_project_stage(observation::ProjectStage::InitialRenderTransaction);

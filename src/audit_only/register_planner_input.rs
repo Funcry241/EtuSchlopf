@@ -50,7 +50,7 @@ mod tests {
         let report = crate::report_sanitizer::sanitize_report_hygiene_polish(report);
         let report = crate::report_sanitizer::sanitize_behind_bars_active_authority_language_v1284(report);
         let hex = report.lines().filter_map(|line| line.strip_prefix("InputHex: ")).collect::<String>();
-        let decoded = hex.as_bytes().chunks_exact(2).map(|pair| {
+        let decoded = hex.as_bytes().as_chunks::<2>().0.iter().map(|pair| {
             u8::from_str_radix(std::str::from_utf8(pair).expect("ASCII hex"), 16).expect("hex byte")
         }).collect::<Vec<_>>();
         assert_eq!(decoded, xml.as_bytes());

@@ -720,6 +720,7 @@
     }
     fn collect_note_metas(measure_text: &str, raw_notes: &[RawNote]) -> Vec<NoteMeta> {
         let mut infos = Vec::new();
+        let metric = std::cell::OnceCell::new();
         let mut cursor = 0_i64;
         let mut last_non_chord_start = 0_i64;
         let mut note_pos = 0_usize;
@@ -772,7 +773,7 @@
                     let voice = extract_first_text(&raw.text, "voice").unwrap_or_else(|| staff.default_voice().to_string());
                     let midi = midi_from_note_text(&raw.text);
                     infos.push(NoteMeta {
-                        metric: RhythmContext::default().update_from_measure(measure_text),
+                        metric: *metric.get_or_init(|| RhythmContext::default().update_from_measure(measure_text)),
                         raw_idx,
                         start,
                         duration,

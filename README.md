@@ -102,10 +102,7 @@ du am eigenen Ergebnis.
 
 ## Quellstand und Beiträge
 
-Der Entwicklungsquellstand im Repository enthält inzwischen den nativ angenommenen
-Stand **r1577**. Die [Prüfbelege zu r1577](docs/evidence/r1577/README.md) dokumentieren
-Korpus, die Bytegleichheit aller zwanzig XML-Dateien gegenüber r1576 und die Grenzen
-der Laufzeitmessung. Die veröffentlichte Windows-Download-EXE enthält ebenfalls r1577.
+Der Entwicklungsquellstand ist **r1601**. Die [native Abnahme](docs/evidence/r1601/README.md) dokumentiert den Vergleich mit r1599 und die geprüften Balkenstellen. Die verfügbare Windows-Testversion und das oben gezeigte Notenbeispiel stammen aus **r1577**.
 
 Die Download-Engine wurde aus dem angenommenen nativen Stand **r1577** gebaut.
 Der [zum geprüften Build gehörende r1577-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1577-windows-preview/EtuSchlopf-r1577-source.zip)

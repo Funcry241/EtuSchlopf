@@ -446,6 +446,11 @@ fn list(values: &[String]) -> String {
 
 fn append_source(out: &mut String, label: &str, audit: &ProfileAudit) {
     let status = profile_status(audit);
+    if audit.source_read && audit.parse_green {
+        let _ = writeln!(out, "ImportChannelReservationCount: Source {label}; UnreservedReservations {}; Scope existing_partwide_consumer_profile; Unit channel_staff_reservation; MinimumRequiredChannels not_inferred; ReleaseVeto nein.", audit.unreserved.len());
+    } else {
+        let _ = writeln!(out, "ImportChannelReservationCount: Source {label}; Status unavailable; ReleaseVeto nein.");
+    }
     let _ = writeln!(
         out,
         "ImportChannelProfileReadback: Source {label}; Profile {PROFILE_NAME}; SourceRead {}; ParseGreen {}; Parts {}; Channels {}; SlotUse {}; OverlappingChannels {}; UnreservedChannels {}; LostHeadsAndRests {}; LostPitchedOccurrences {}; LostVisiblePitchedOccurrences {}; LostUnregisteredMembers {}; OutOfProfileStaffOccurrences {}; PeakConcurrentChannels {}; ProfileStatus {status}.",

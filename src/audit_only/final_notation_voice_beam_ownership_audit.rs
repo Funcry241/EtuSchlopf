@@ -332,6 +332,25 @@ pub(crate) fn voice_free_primary_beam_chain_evidence(
     Some(chains)
 }
 
+// Syntactic primary-beam balance by part, measure and technical voice.
+// Staff is absent because valid cross-staff beams share a voice. Rests do
+// not erase an open rest-bridged chain. These counts create no group identity.
+fn primary_beam_structure_counts(events: &[BeamOwnershipEvent]) -> [usize; 4] {
+    let mut open = BTreeMap::<(&str, &str, &str), bool>::new();
+    let mut counts = [0usize; 4];
+    for event in events.iter().filter(|event| !event.is_chord) {
+        let key = (event.part.as_str(), event.measure.as_str(), event.voice.as_str());
+        match event.beam1.as_deref() {
+            Some("begin") => { if open.insert(key, true) == Some(true) { counts[0] += 1; } }
+            Some("continue") => { if open.get(&key) != Some(&true) { counts[1] += 1; } }
+            Some("end") => { if open.insert(key, false) != Some(true) { counts[2] += 1; } }
+            _ => {}
+        }
+    }
+    counts[3] = open.values().filter(|&&value| value).count();
+    counts
+}
+
 fn build_audit(xml: &str) -> VoiceBeamOwnershipAudit {
     let Some(events) = collect_events(xml) else {
         return VoiceBeamOwnershipAudit::default();
@@ -655,6 +674,14 @@ pub(crate) fn append_final_notation_voice_beam_ownership_audit_section(
         "RenderCrossVoiceMetricRunsWithoutPrimaryChain: {}",
         render.same_staff_cross_voice_metric_runs_without_primary_chain
     );
+    for (label, xml) in [("Master", master_xml), ("Render", render_xml)] {
+        if let Some(events) = collect_events(xml) {
+            let [nested, continuation, end, unclosed] = primary_beam_structure_counts(&events);
+            let _ = writeln!(out, "PrimaryBeamStructureReadback: Source {label}; Scope part_measure_voice; NestedBegins {nested}; ContinueWithoutBegin {continuation}; EndWithoutBegin {end}; UnclosedBegins {unclosed}; ReleaseVeto nein; MusicalClassification none.");
+        } else {
+            let _ = writeln!(out, "PrimaryBeamStructureReadback: Source {label}; Status unavailable_parse_failure; ReleaseVeto nein.");
+        }
+    }
     let _ = writeln!(out, "Verdict: {verdict}");
     if render.rows.is_empty() {
         let _ = writeln!(out, "Rows: none");
@@ -724,6 +751,29 @@ mod tests {
         format!(
             "{gap}<note><pitch><step>C</step><octave>5</octave></pitch><duration>24</duration><voice>{voice}</voice><type>16th</type><staff>1</staff><beam number=\"1\">{beam}</beam></note>"
         )
+    }
+
+    #[test]
+    fn primary_structure_counts_split_voices_without_inventing_membership() {
+        let one = score(&(note(0, "alpha", "begin") + &note(0, "beta", "end")));
+        assert_eq!(primary_beam_structure_counts(&collect_events(&one).unwrap()), [0, 0, 1, 1]);
+        let renamed = one.replace("alpha", "omega").replace("beta", "delta");
+        assert_eq!(primary_beam_structure_counts(&collect_events(&renamed).unwrap()), [0, 0, 1, 1]);
+        let first_label = "1";
+        let second_label = "7";
+        let second = one[one.find("<measure").unwrap()..one.find("</part>").unwrap()]
+            .replace(&format!("<measure number=\"{first_label}\""), &format!("<measure number=\"{second_label}\""));
+        let twice = one.replace("</part>", &(second + "</part>"));
+        assert_eq!(primary_beam_structure_counts(&collect_events(&twice).unwrap()), [0, 0, 2, 2], "{twice}");
+    }
+
+    #[test]
+    fn primary_structure_keeps_cross_staff_and_rest_bridged_chains_balanced() {
+        let head = note(0, "shared", "begin");
+        let tail = note(0, "shared", "end").replace("<staff>1</staff>", "<staff>2</staff>");
+        let xml = score(&(head + "<note><rest/><duration>24</duration><voice>shared</voice><type>16th</type><staff>1</staff></note>" + &tail));
+        assert_eq!(primary_beam_structure_counts(&collect_events(&xml).unwrap()), [0; 4]);
+        assert_eq!(primary_beam_structure_counts(&collect_events(&score(&note(0, "one", "continue"))).unwrap()), [0, 1, 0, 0]);
     }
 
     #[test]

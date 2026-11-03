@@ -1018,6 +1018,22 @@ fn validate_bridge_voice_input_signature(row: &ExclusionRow, migrated: &str) -> 
     Ok(())
 }
 
+// Closed input admission for the existing E057 exchange owner. The runtime
+// guard, operation and original preserving receipt are not issued by this rule.
+const CURSOR_EXCHANGE_INPUT_OWNER: &str = "src/pipeline_shards/partial_beat_post_rest_triple_beam_final_repair.rs::human_bound_cursor_lane_owner_transfer_xml";
+const CURSOR_EXCHANGE_INPUT_FROZEN: &str = "fn human_bound_cursor_lane_owner_transfer_xml( xml: &str, ) -> (String, PartialBeatLaneSerializationOwnerTransferStats)";
+const CURSOR_EXCHANGE_INPUT_MIGRATED: &str = "fn human_bound_cursor_lane_owner_transfer_xml( xml: &str, exchange_guard: Option<&structural_write_authority::CanonicalFinalChordStructuralPlan>, ) -> (String, PartialBeatLaneSerializationOwnerTransferStats)";
+
+fn validate_cursor_exchange_input_signature(row: &ExclusionRow, migrated: &str) -> Result<(), String> {
+    if row.exclusion_id != "E057" || row.owner != CURSOR_EXCHANGE_INPUT_OWNER
+        || row.classification != "PRESERVING" || row.owner_signature != CURSOR_EXCHANGE_INPUT_FROZEN
+        || migrated != CURSOR_EXCHANGE_INPUT_MIGRATED
+    {
+        return Err("cursor exchange interface is restricted to exact E057, its original XML input and output, and one optional shared canonical-plan borrow".into());
+    }
+    Ok(())
+}
+
 fn validate_exclusion_owner_signature_if_present(
     manifest_dir: &Path,
     row: &ExclusionRow,
@@ -1058,6 +1074,12 @@ fn validate_exclusion_owner_signature_if_present(
     if signatures.is_empty() {
         return Ok(());
     }
+    if signatures.iter().any(|signature| validate_cursor_exchange_input_signature(row, signature).is_ok()) {
+        if signatures.len() == 1 && has_one_bridge_voice_input_definition(&source, function) {
+            return Ok(());
+        }
+        return Err("POPULATION FREEZE: E057 canonical exchange input requires exactly one owner definition".into());
+    }
     if signatures.iter().any(|signature| signature == &row.owner_signature) {
         return Ok(());
     }
@@ -1076,7 +1098,7 @@ fn validate_exclusion_owner_signature_if_present(
         return Ok(());
     }
     Err(format!(
-        "POPULATION FREEZE: exclusion owner {} signature drifted; expected {:?}, current {:?}. Receipt-only migrations retain name/generics/parameters and one classified receipt. Only exact E050 additionally admits its immutable canonical voice-plan input and optional typed extension companion, retaining one preserving receipt.",
+        "POPULATION FREEZE: exclusion owner {} signature drifted; expected {:?}, current {:?}. Receipt-only migrations retain name/generics/parameters and one classified receipt. Exact E050 has its closed canonical voice-plan input and extension companion. Exact E057 has its separate optional shared canonical exchange-plan input with unchanged original output.",
         row.owner, row.owner_signature, signatures
     ))
 }
@@ -1259,7 +1281,8 @@ fn validate_current_surfaces(
                         &row.owner_signature,
                         &signature,
                         &row.classification,
-                    ).is_ok() || validate_bridge_voice_input_signature(row, &signature).is_ok())
+                    ).is_ok() || validate_bridge_voice_input_signature(row, &signature).is_ok()
+                        || validate_cursor_exchange_input_signature(row, &signature).is_ok())
                     .then_some(row.owner_signature.as_str())
                 })
             })
@@ -2065,5 +2088,129 @@ mod bridge_voice_input_tests {
         assert!(check(&[file_write]).is_err());
         assert!(check(&[surface.clone(), surface]).is_err());
         fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod cursor_exchange_input_tests {
+    use super::*;
+
+    fn row() -> ExclusionRow {
+        ExclusionRow {
+            exclusion_id: "E057".into(), owner: CURSOR_EXCHANGE_INPUT_OWNER.into(),
+            owner_signature: CURSOR_EXCHANGE_INPUT_FROZEN.into(), classification: "PRESERVING".into(),
+        }
+    }
+
+    #[test]
+    fn cursor_exchange_admits_only_its_exact_optional_shared_input() {
+        assert!(validate_cursor_exchange_input_signature(&row(), CURSOR_EXCHANGE_INPUT_MIGRATED).is_ok());
+        assert!(validate_exclusion_receipt_only_signature_migration(
+            CURSOR_EXCHANGE_INPUT_FROZEN, CURSOR_EXCHANGE_INPUT_MIGRATED, "PRESERVING").is_err());
+        assert!(validate_cursor_exchange_input_signature(&row(), CURSOR_EXCHANGE_INPUT_FROZEN).is_err());
+    }
+
+    #[test]
+    fn cursor_exchange_rejects_foreign_owner_class_id_and_baseline() {
+        for field in ["owner", "class", "id", "baseline"] {
+            let mut altered = row();
+            match field {
+                "owner" => altered.owner = BRIDGE_VOICE_INPUT_OWNER.into(),
+                "class" => altered.classification = "EXACT".into(),
+                "id" => altered.exclusion_id = "E050".into(),
+                _ => altered.owner_signature = altered.owner_signature.replace("xml:", "source:"),
+            }
+            assert!(validate_cursor_exchange_input_signature(&altered, CURSOR_EXCHANGE_INPUT_MIGRATED).is_err());
+        }
+    }
+
+    #[test]
+    fn cursor_exchange_rejects_mutable_owned_erased_extra_or_nonoptional_context() {
+        for bad in [
+            CURSOR_EXCHANGE_INPUT_MIGRATED.replace("Option<&structural", "Option<&mut structural"),
+            CURSOR_EXCHANGE_INPUT_MIGRATED.replace("Option<&structural", "Option<structural"),
+            CURSOR_EXCHANGE_INPUT_MIGRATED.replace("Option<&structural_write_authority::CanonicalFinalChordStructuralPlan>", "Option<&str>"),
+            CURSOR_EXCHANGE_INPUT_MIGRATED.replace("Option<&structural_write_authority::CanonicalFinalChordStructuralPlan>", "&structural_write_authority::CanonicalFinalChordStructuralPlan"),
+            CURSOR_EXCHANGE_INPUT_MIGRATED.replace("exchange_guard:", "other_guard:"),
+            CURSOR_EXCHANGE_INPUT_MIGRATED.replace("exchange_guard:", "mode: bool, exchange_guard:"),
+            CURSOR_EXCHANGE_INPUT_MIGRATED.replace("exchange_guard:", "callback: fn(), exchange_guard:"),
+            CURSOR_EXCHANGE_INPUT_MIGRATED.replace("( xml:", "<T>( xml:"),
+            CURSOR_EXCHANGE_INPUT_MIGRATED.replace("xml: &str", "xml: &mut str"),
+        ] {
+            assert!(validate_cursor_exchange_input_signature(&row(), &bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn cursor_exchange_rejects_changed_output_and_additional_receipt_or_companion() {
+        for bad in [
+            CURSOR_EXCHANGE_INPUT_MIGRATED.replace("-> (String, PartialBeatLaneSerializationOwnerTransferStats)", "-> String"),
+            format!("{CURSOR_EXCHANGE_INPUT_MIGRATED}, Option<PreservingTransformationReceipt>"),
+            CURSOR_EXCHANGE_INPUT_MIGRATED.replace("-> (String, PartialBeatLaneSerializationOwnerTransferStats)", "-> ((String, PartialBeatLaneSerializationOwnerTransferStats), Option<PreservingTransformationReceipt>)"),
+            CURSOR_EXCHANGE_INPUT_MIGRATED.replace("-> (String, PartialBeatLaneSerializationOwnerTransferStats)", "-> ((String, PartialBeatLaneSerializationOwnerTransferStats), Option<String>)"),
+        ] {
+            assert!(validate_cursor_exchange_input_signature(&row(), &bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn cursor_exchange_checks_actual_owner_and_refuses_duplicate_or_mixed_definitions() {
+        let root = std::env::temp_dir().join(format!("cursor-exchange-owner-{}", std::process::id()));
+        let file = root.join(CURSOR_EXCHANGE_INPUT_OWNER.rsplit_once("::").unwrap().0);
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        for signature in [CURSOR_EXCHANGE_INPUT_FROZEN, CURSOR_EXCHANGE_INPUT_MIGRATED] {
+            fs::write(&file, format!("{signature} {{ unreachable!() }}")).unwrap();
+            assert!(validate_exclusion_owner_signature_if_present(&root, &row()).is_ok());
+        }
+        for source in [
+            format!("{0} {{ unreachable!() }}\n{0} {{ unreachable!() }}", CURSOR_EXCHANGE_INPUT_MIGRATED),
+            format!("{CURSOR_EXCHANGE_INPUT_FROZEN} {{ unreachable!() }}\n{CURSOR_EXCHANGE_INPUT_MIGRATED} {{ unreachable!() }}"),
+            format!("{} {{ unreachable!() }}", CURSOR_EXCHANGE_INPUT_MIGRATED.replace("Option<&structural", "Option<&mut structural")),
+        ] {
+            fs::write(&file, source).unwrap();
+            assert!(validate_exclusion_owner_signature_if_present(&root, &row()).is_err());
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn cursor_exchange_normalizes_only_the_original_physical_budget() {
+        let root = std::env::temp_dir().join(format!("cursor-exchange-budget-{}", std::process::id()));
+        let (path, function) = CURSOR_EXCHANGE_INPUT_OWNER.rsplit_once("::").unwrap();
+        let file = root.join(path); fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(&file, format!("{CURSOR_EXCHANGE_INPUT_MIGRATED} {{ unreachable!() }}")).unwrap();
+        let baseline = [SurfaceBaselineRow { path: path.into(), function: function.into(),
+            owner_signature: CURSOR_EXCHANGE_INPUT_FROZEN.into(), max_instances: 1,
+            max_xml_buffer_mutations: 1, max_xml_file_writes: 0, coverage: "exclusion:E057".into() }];
+        let surface = ProductiveWriteSurface { path: path.into(), function: function.into(), line: 1,
+            xml_buffer_mutations: 1, xml_file_writes: 0, direct_from_real_main: false,
+            authority_boundary: false, class: "synthetic".into(), evidence: "synthetic".into() };
+        let check = |surfaces: &[ProductiveWriteSurface]| validate_current_surfaces(
+            &root, surfaces, &baseline, &[], &[row()], &[]);
+        assert!(check(std::slice::from_ref(&surface)).is_ok());
+        let mut more = surface.clone(); more.xml_buffer_mutations += 1;
+        assert!(check(&[more]).is_err());
+        let mut file_write = surface.clone(); file_write.xml_file_writes = 1;
+        assert!(check(&[file_write]).is_err());
+        assert!(check(&[surface.clone(), surface.clone()]).is_err());
+        fs::write(&file, format!("{} {{ unreachable!() }}", CURSOR_EXCHANGE_INPUT_MIGRATED.replace("Option<&structural", "Option<&mut structural"))).unwrap();
+        assert!(check(&[surface]).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn cursor_exchange_retains_legacy_receipt_admission_and_separate_e050_rule() {
+        let legacy_receipt = CURSOR_EXCHANGE_INPUT_FROZEN.replace(
+            "-> (String, PartialBeatLaneSerializationOwnerTransferStats)",
+            "-> ((String, PartialBeatLaneSerializationOwnerTransferStats), Option<PreservingTransformationReceipt>)");
+        assert!(validate_exclusion_receipt_only_signature_migration(
+            CURSOR_EXCHANGE_INPUT_FROZEN, &legacy_receipt, "PRESERVING").is_ok());
+        assert!(validate_cursor_exchange_input_signature(&row(), &legacy_receipt).is_err());
+        let bridge = ExclusionRow { exclusion_id: "E050".into(), owner: BRIDGE_VOICE_INPUT_OWNER.into(),
+            owner_signature: BRIDGE_VOICE_INPUT_FROZEN.into(), classification: "PRESERVING".into() };
+        assert!(validate_bridge_voice_input_signature(&bridge, BRIDGE_VOICE_INPUT_MIGRATED).is_ok());
+        assert!(validate_bridge_voice_input_signature(&bridge, BRIDGE_EXTENSION_OUTPUT_MIGRATED).is_ok());
+        assert!(validate_bridge_voice_input_signature(&row(), CURSOR_EXCHANGE_INPUT_MIGRATED).is_err());
+        assert!(validate_cursor_exchange_input_signature(&bridge, BRIDGE_EXTENSION_OUTPUT_MIGRATED).is_err());
     }
 }

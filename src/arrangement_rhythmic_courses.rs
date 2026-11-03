@@ -121,6 +121,11 @@ impl ArrangementRhythmicCourses {
         let incoming = self.occurrences.iter().filter(|o| {
             o.interval.start >= offset && o.interval.start < offset + duration
         }).cloned().collect::<Vec<_>>();
+        self.measure_from_occurrences(text, offset, duration, incoming)
+    }
+
+    fn measure_from_occurrences(&self, text: &str, offset: i64, duration: i64,
+        incoming: Vec<CourseOccurrence>) -> Result<CourseMeasure> {
         let measure = CourseMeasure {
             coverage: self.coverage.clone(), history: BTreeMap::new(),
             incoming, outgoing: Vec::new(), offset, duration,
@@ -185,8 +190,14 @@ impl ArrangementRhythmicCourses {
                 else { extract_first_text(&occurrence.note, "pitch") == extract_first_text(&root.note, "pitch") },
                 "Unbound sounding disposition change");
         }
+        // Group once instead of scanning the complete score for every root.
+        // Retain physical order within each bucket, including coincident members.
+        let mut by_root = BTreeMap::<_, Vec<_>>::new();
+        for occurrence in &self.occurrences {
+            by_root.entry(occurrence.root).or_default().push(occurrence);
+        }
         for root in self.roots.values() {
-            let mut fragments = self.occurrences.iter().filter(|o| o.root == root.creation).collect::<Vec<_>>();
+            let mut fragments = by_root.get(&root.creation).cloned().unwrap_or_default();
             fragments.sort_by_key(|o| (o.interval.start, o.interval.end));
             let mut end = root.interval.start;
             for fragment in fragments {
@@ -197,10 +208,21 @@ impl ArrangementRhythmicCourses {
             }
             ensure!(end == root.interval.end, "Source-origin split does not cover its original interval");
         }
+        // Range lookup preserves the original half-open onset predicate. Restore
+        // physical order before the unchanged note and coverage validators.
+        let by_onset = self.occurrences.iter().enumerate()
+            .map(|(ordinal, occurrence)| ((occurrence.interval.start, ordinal), occurrence))
+            .collect::<BTreeMap<_, _>>();
         for span in find_measure_spans(xml) {
             let text = &xml[span.start..span.end];
             context = context.update_from_measure(text);
-            let measure = self.measure(text, offset, context.expected_duration())?;
+            let duration = context.expected_duration();
+            ensure!(duration > 0, "Unsupported course metric");
+            let mut incoming = by_onset.range((offset, 0)..(offset + duration, 0))
+                .map(|((_, ordinal), occurrence)| (*ordinal, *occurrence)).collect::<Vec<_>>();
+            incoming.sort_by_key(|(ordinal, _)| *ordinal);
+            let measure = self.measure_from_occurrences(text, offset, duration,
+                incoming.into_iter().map(|(_, occurrence)| occurrence.clone()).collect())?;
             count += measure.incoming.len();
             offset += context.expected_duration();
         }
@@ -406,3 +428,7 @@ impl ArrangementRhythmicCourses {
         self.occurrences.iter().filter_map(|o| o.source.map(|s| (s, o.root, o.course, o.interval.start, o.interval.end))).collect()
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/indexed_rhythmic_custody_validation.rs"]
+mod indexed_validation_tests;

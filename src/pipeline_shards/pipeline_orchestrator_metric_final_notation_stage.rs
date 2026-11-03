@@ -57,7 +57,7 @@ fn run_metric_beam_and_final_notation_stage(
         .final_chord_structural_plan
         .clone();
     // Cross-file interface closure: RestAndArticulationRenderStageInputs is physically owned by the dedicated private include.
-    let rest_and_articulation =
+    let mut rest_and_articulation =
         run_rest_and_articulation_render_stage(RestAndArticulationRenderStageInputs {
             render_state: &mut *render_state,
             final_render_source_available: initial_render.final_render_source_available,
@@ -1009,6 +1009,48 @@ None)?;
             let mut chain = crate::master_state_identity::RenderTransitionReceipts::new();
             chain.push_preserving(receipt, &post);
             chain.discard_unadopted(crate::master_state_identity::RenderDiscardReason::LosingCandidate);
+        }
+    }
+
+    // The same E050 owner receives only wholly unowned connections in the actual
+    // FinalChord output. Established/provisional early connections stay intact.
+    if render_xml_selected_for_pdf {
+        let course = render_pdf_source_occurrence_continuation.as_ref()
+            .context("Projected E050 source lost occurrence continuation")?;
+        let root = render_state.require_state_root("Projected E050 current State");
+        anyhow::ensure!(root.document() == course.xml(), "Projected E050 Main/source mismatch");
+        let mut guard = render_final_chord_structural_plan.bind_projected_bridge_voice_guard(
+            course, &render_pdf_source_voice_plan, primary_beam_voice_partition_plan.as_ref(),
+            &render_pruned_final_chord_omissions)?;
+        guard.bind_rest_bridge_main_state(render_state);
+        let ((post, mut audit), receipt, pending) = apply_structural_rest_bridge_beam_variant_a_render_write(
+            course.xml(), "actual FinalChord output before primary beam voice assignment",
+            &initial_render.render_xml_trial_path, &guard);
+        if audit.written {
+            anyhow::ensure!(receipt.is_some(), "Projected E050 lacks owner receipt");
+            let mut chain = crate::master_state_identity::RenderTransitionReceipts::new();
+            chain.push_preserving(receipt, &post);
+            render_state.adopt_transition(root, &post, chain,
+                structural_write_authority::RenderSinkKind::Checkpoint(structural_write_authority::RenderCheckpointSink::SisterFeedbackBeam),
+                |path, _pre, verified| structural_write_authority::write_sister_feedback_beam_checkpoint_authorized(path, verified))?;
+            let carried = render_final_chord_structural_plan.adopt_projected_rest_bridge_output(
+                course, pending, render_state, &render_pdf_source_voice_plan,
+                &render_pruned_final_chord_omissions)?;
+            render_pdf_source_occurrence_continuation = Some(carried);
+        } else {
+            let mut chain = crate::master_state_identity::RenderTransitionReceipts::new();
+            chain.push_preserving(receipt, &post);
+            chain.discard_unadopted(crate::master_state_identity::RenderDiscardReason::LosingCandidate);
+        }
+        if audit.written {
+            let early = &rest_and_articulation.external_notation_feedback_beam_variant_a_tiny_render_write_audit;
+            audit.target_rows += early.target_rows;
+            audit.written_rows += early.written_rows;
+            audit.beam_level1_rows += early.beam_level1_rows;
+            audit.beam_level2_rows += early.beam_level2_rows;
+            audit.done_fragment = format!("{}; PostProjectionE050: {}", early.done_fragment, audit.done_fragment);
+            audit.pipeline_line = format!("{} PostProjectionE050: {}", early.pipeline_line, audit.pipeline_line);
+            rest_and_articulation.external_notation_feedback_beam_variant_a_tiny_render_write_audit = audit;
         }
     }
 

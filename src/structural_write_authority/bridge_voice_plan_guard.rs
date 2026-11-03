@@ -7,7 +7,18 @@ use std::collections::{BTreeMap, BTreeSet};
 enum BridgeVoiceAdmission { SameLane, SplitLane, Unbound }
 
 #[derive(Debug, Clone)]
+struct BridgeHeadContext {
+    measure: usize,
+    start: i64,
+    end: i64,
+    staff: String,
+    resources: Vec<(i64, i64, String)>,
+}
+
+#[derive(Debug, Clone)]
 pub(super) struct BoundBridgeVoiceGuard {
+    context: BTreeMap<(usize, usize), BridgeHeadContext>,
+    post_projection: bool,
     input: String,
     // The keys locate ranges authenticated by the existing canonical bind.
     // They never create source identities or replace missing bindings.
@@ -51,6 +62,53 @@ impl CanonicalFinalChordStructuralPlan {
         Self { bridge_voice_guard: Some(BoundBridgeVoiceGuard::synthetic_same_lane(input)), ..Self::default() }
     }
 
+    pub(crate) fn bind_projected_bridge_voice_guard(
+        &self,
+        source: &FinalPdfSourceOccurrenceContinuation,
+        voices: &FrozenSerializedVoicePlan,
+        late_plan: Option<&PrimaryBeamVoicePartitionBoundPlan>,
+        omissions: &BTreeSet<RenderPrunedFinalChordOmissionKey>,
+    ) -> io::Result<Self> {
+        verify_final_pdf_source_occurrence_continuation(source.xml(), self, voices, Some(omissions), source)?;
+        let rebound = late_plan.map(|plan|
+            rebind_primary_beam_voice_partition_plan_to_current_xml(source.xml(), source, plan)).transpose()?;
+        let connection_voices = rebound.as_ref().map_or(voices, |plan| plan.repaired_voice_plan());
+        let measures = final_chord_parse_binding_measures(source.xml())?;
+        let mut by_identity = BTreeMap::<(usize, usize, usize), Vec<&FinalChordTransactionOutputOccurrenceWitness>>::new();
+        for row in &source.receipt.occurrences {
+            by_identity.entry((row.source_event_id, row.attack_id, row.fragment_id)).or_default().push(row);
+        }
+        let mut labels = BTreeMap::new();
+        let mut bindings = BTreeMap::new();
+        let protected = source.receipt.rest_bridge_extension_course.as_ref()
+            .map_or_else(BTreeSet::new, |course| course.protected_occurrences());
+        for (identity, rows) in by_identity {
+            if protected.contains(&identity) { continue; }
+            // A split/tied materialization is not silently collapsed into one
+            // old physical head. Refuse only groups containing such resources.
+            let [row] = rows.as_slice() else { continue; };
+            if row.materialization_kind != FinalChordProjectionMaterializationKind::SurvivingSourceNote
+                || row.fragment_ordinal != 0 { continue; }
+            let note = final_chord_transaction_output_occurrence_note(&measures, row)?;
+            let label = connection_voices.label_for_source(row.source_event_id).ok_or_else(||
+                io::Error::new(io::ErrorKind::InvalidData, "Projected bridge lost final bound source label"))?;
+            let key = (note.range.start, note.range.end);
+            if labels.insert(key, label.to_owned()).is_some() || bindings.insert(key, identity).is_some() {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "Projected bridge has duplicate physical custody"));
+            }
+        }
+        let mut guarded = self.clone();
+        let mut guard = BoundBridgeVoiceGuard::from_bound_labels(source.xml(), &labels)?;
+        guard.bindings = bindings;
+        guard.post_projection = true;
+        guarded.bridge_voice_guard = Some(guard);
+        Ok(guarded)
+    }
+
+    pub(crate) fn bridge_is_post_projection(&self) -> bool {
+        self.bridge_voice_guard.as_ref().is_some_and(|guard| guard.post_projection)
+    }
+
     pub(crate) fn bind_bridge_voice_guard(
         &self,
         input: &str,
@@ -89,18 +147,25 @@ impl BoundBridgeVoiceGuard {
     pub(super) fn occurrence_bindings(&self) -> &BTreeMap<(usize, usize), (usize, usize, usize)> { &self.bindings }
     fn from_bound_labels(input: &str, labels: &BTreeMap<(usize, usize), String>) -> io::Result<Self> {
         let mut heads = BTreeMap::new();
+        let mut context = BTreeMap::new();
         for measure in final_chord_parse_binding_measures(input)? {
             for (index, head) in measure.notes.iter().enumerate() {
                 if head.chord_member || head.rest_like || head.pitch_midi.is_none() { continue; }
                 let resources = measure.notes.iter().enumerate().filter(|(member_index, member)| {
                     *member_index == index || (member.chord_member && member.anchor_index == Some(index))
-                });
-                let relation = resources.map(|(_, note)| labels.get(&(note.range.start, note.range.end)).cloned())
+                }).map(|(_, note)| note).collect::<Vec<_>>();
+                let relation = resources.iter().map(|note| labels.get(&(note.range.start, note.range.end)).cloned())
                     .collect::<Option<BTreeSet<_>>>();
-                heads.insert((head.range.start, head.range.end), relation);
+                let key = (head.range.start, head.range.end);
+                context.insert(key, BridgeHeadContext {
+                    measure: measure.measure, start: head.onset,
+                    end: head.onset.saturating_add(head.duration), staff: head.staff.clone(),
+                    resources: resources.iter().map(|note| (note.onset, note.onset.saturating_add(note.duration), note.staff.clone())).collect(),
+                });
+                heads.insert(key, relation);
             }
         }
-        Ok(Self { input: input.to_owned(), heads, labels: labels.clone(), bindings: BTreeMap::new(), provisional: None })
+        Ok(Self { context, post_projection: false, input: input.to_owned(), heads, labels: labels.clone(), bindings: BTreeMap::new(), provisional: None })
     }
 
     fn admission(&self, input: &str, members: &[(usize, usize)]) -> BridgeVoiceAdmission {
@@ -110,7 +175,28 @@ impl BoundBridgeVoiceGuard {
         let mut labels = BTreeSet::new();
         for key in members {
             let Some(Some(resource_labels)) = self.heads.get(key) else { return BridgeVoiceAdmission::Unbound; };
-            labels.extend(resource_labels);
+            labels.extend(resource_labels.iter().cloned());
+        }
+        if self.post_projection && labels.len() == 1 {
+            let selected = members.iter().map(|key| self.context.get(key)).collect::<Option<Vec<_>>>();
+            let Some(selected) = selected else { return BridgeVoiceAdmission::Unbound; };
+            let Some(first) = selected.first() else { return BridgeVoiceAdmission::Unbound; };
+            if selected.iter().any(|head| head.measure != first.measure || head.staff != first.staff) {
+                return BridgeVoiceAdmission::Unbound;
+            }
+            let start = selected.iter().map(|head| head.start).min().expect("nonempty selected heads");
+            let end = selected.iter().map(|head| head.end).max().expect("nonempty selected heads");
+            for (key, context) in &self.context {
+                if members.contains(key) || context.measure != first.measure
+                    || !context.resources.iter().any(|(onset, stop, staff)| staff == &first.staff && *onset < end && start < *stop) {
+                    continue;
+                }
+                match self.heads.get(key) {
+                    Some(Some(other)) if other.is_disjoint(&labels) => {},
+                    Some(Some(_)) => return BridgeVoiceAdmission::SplitLane,
+                    _ => return BridgeVoiceAdmission::Unbound,
+                }
+            }
         }
         match labels.len() {
             1 => BridgeVoiceAdmission::SameLane,
@@ -131,7 +217,7 @@ impl BoundBridgeVoiceGuard {
                 let range = node.range();
                 ((range.start, range.end), Some(["fixture-lane".to_owned()].into_iter().collect()))
             }).collect();
-        Self { input: input.to_owned(), heads, labels: BTreeMap::new(), bindings: BTreeMap::new(), provisional: None }
+        Self { context: BTreeMap::new(), post_projection: false, input: input.to_owned(), heads, labels: BTreeMap::new(), bindings: BTreeMap::new(), provisional: None }
     }
 }
 
@@ -139,7 +225,7 @@ impl BoundBridgeVoiceGuard {
 impl CanonicalFinalChordStructuralPlan {
     /// Fixture producer: IDs and the sealed lane decision are explicitly authored
     /// by the test, then exercised through the production canonical binder.
-    pub(crate) fn synthetic_bridge_guard_with_labels(input: &str, labels: &[&str]) -> io::Result<Self> {
+    fn synthetic_bridge_fixture_parts(input: &str, labels: &[&str]) -> io::Result<(Self, FrozenSerializedVoicePlan)> {
         let mut canonical = Self { authority_bound: true, ..Self::default() };
         let mut voices = FrozenSerializedVoicePlan { authority_bound: true, ..FrozenSerializedVoicePlan::default() };
         let mut locators = Vec::new();
@@ -158,7 +244,30 @@ impl CanonicalFinalChordStructuralPlan {
             }
         }
         canonical.source_locators = std::sync::Arc::from(locators);
+        Ok((canonical, voices))
+    }
+
+    pub(crate) fn synthetic_bridge_guard_with_labels(input: &str, labels: &[&str]) -> io::Result<Self> {
+        let (canonical, voices) = Self::synthetic_bridge_fixture_parts(input, labels)?;
         canonical.bind_bridge_voice_guard(input, &voices, &BTreeSet::new())
+    }
+
+    pub(crate) fn synthetic_projected_bridge_fixture(input: &str, labels: &[&str])
+        -> io::Result<(Self, FrozenSerializedVoicePlan, FinalPdfSourceOccurrenceContinuation)> {
+        let (canonical, mut voices) = Self::synthetic_bridge_fixture_parts(input, labels)?;
+        // Explicit fixture presentation roles, authored before projection. This
+        // helper never derives productive roles from an exported label.
+        for locator in canonical.source_locators.iter() {
+            let role = if locator.staff == "1" { SerializedVoicePresentationRole::UpperPrimary }
+                else { SerializedVoicePresentationRole::LowerPrimary };
+            voices.source_to_role.insert(locator.source_event_id, role);
+            voices.label_to_role.insert(voices.source_to_label[&locator.source_event_id].clone(), role);
+        }
+        let projected = project_canonical_final_chord_render_occurrence_continuation(
+            input, &canonical, &voices, &BTreeSet::new())?;
+        let course = FinalPdfSourceOccurrenceContinuation::from_original_transport(
+            projected.projected.xml, projected.projected.receipt)?;
+        Ok((canonical, voices, course))
     }
 }
 
@@ -240,4 +349,43 @@ mod tests {
         assert!(CanonicalFinalChordStructuralPlan::default().bind_bridge_voice_guard(&xml,
             &FrozenSerializedVoicePlan::default(), &BTreeSet::new()).is_err());
     }
+    #[test]
+    fn projected_guard_uses_bound_final_assignment_without_rebinding_occurrence_identity() {
+        let ordinal=(usize::from(u8::MAX)%13).to_string();
+        let input=score(false,&ordinal);
+        let (canonical,voices,course)=CanonicalFinalChordStructuralPlan::synthetic_projected_bridge_fixture(&input,&["2","2"]).unwrap();
+        let mut final_voices=voices.clone();
+        let source=canonical.source_locators.last().unwrap().source_event_id;
+        final_voices.source_to_label.insert(source,"4".to_owned());
+        final_voices.label_to_role.insert("4".to_owned(),SerializedVoicePresentationRole::LowerSecondary);
+        // An explicitly supplied fixture assignment; no production allocator or
+        // role inference is replaced by this negative admission probe.
+        let plan=PrimaryBeamVoicePartitionBoundPlan {
+            source_fingerprint_fnv64:fingerprint(course.xml()), repaired_voice_plan:final_voices,
+            edits:Vec::new(),selected_members:Vec::new(),scope_candidates:1,
+            original_group_alignment:Vec::new(), bridge_alignment_proofs:Vec::new(),historical_phrase_decision_only:false,
+        };
+        let ordinary=canonical.bind_projected_bridge_voice_guard(&course,&voices,None,&BTreeSet::new()).unwrap();
+        let future=canonical.bind_projected_bridge_voice_guard(&course,&voices,Some(&plan),&BTreeSet::new()).unwrap();
+        assert_eq!(ordinary.bridge_voice_admission(course.xml(),&heads(course.xml())),Some(true));
+        assert_eq!(future.bridge_voice_admission(course.xml(),&heads(course.xml())),Some(false));
+        assert_eq!(ordinary.bridge_voice_guard.as_ref().unwrap().bindings,future.bridge_voice_guard.as_ref().unwrap().bindings);
+
+        let extra = "<backup><duration>96</duration></backup><forward><duration>48</duration></forward><note><pitch><step>D</step><octave>3</octave></pitch><duration>24</duration><voice>4</voice><type>16th</type><staff>2</staff></note><forward><duration>24</duration></forward>";
+        let input=input.replace("</measure>",&format!("{extra}</measure>"));
+        let (canonical,voices,course)=CanonicalFinalChordStructuralPlan::synthetic_projected_bridge_fixture(&input,&["2","2","4"]).unwrap();
+        let mut final_voices=voices.clone();
+        final_voices.source_to_label.insert(canonical.source_locators.last().unwrap().source_event_id,"2".to_owned());
+        let intrusion=PrimaryBeamVoicePartitionBoundPlan {
+            source_fingerprint_fnv64:fingerprint(course.xml()),repaired_voice_plan:final_voices,
+            edits:Vec::new(),selected_members:Vec::new(),scope_candidates:1,
+            original_group_alignment:Vec::new(), bridge_alignment_proofs:Vec::new(),historical_phrase_decision_only:false,
+        };
+        let members=heads(course.xml()).into_iter().take(2).collect::<Vec<_>>();
+        let ordinary=canonical.bind_projected_bridge_voice_guard(&course,&voices,None,&BTreeSet::new()).unwrap();
+        let future=canonical.bind_projected_bridge_voice_guard(&course,&voices,Some(&intrusion),&BTreeSet::new()).unwrap();
+        assert_eq!(ordinary.bridge_voice_admission(course.xml(),&members),Some(true));
+        assert_eq!(future.bridge_voice_admission(course.xml(),&members),Some(false));
+    }
+
 }

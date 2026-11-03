@@ -213,17 +213,11 @@ fn build_behind_bars_rule_check_rest_and_tie_audit(
         legacy_candidate_xml = beat_xml;
         actions.append(&mut beat_actions);
 
-        let ((rewrite_xml, mut rewrite_actions, rewrite_seen), rewrite_receipts) =
-            apply_beat_local_voice_rest_rewrite(&legacy_candidate_xml, 12);
-        accepted_receipts.append(rewrite_receipts);
-        audit.external_feedback_beat_rest_ledger_candidates_seen = audit
-            .external_feedback_beat_rest_ledger_candidates_seen
-            .saturating_add(rewrite_seen);
-        audit.external_feedback_beat_rest_ledger_attempted = audit
-            .external_feedback_beat_rest_ledger_attempted
-            .saturating_add(rewrite_actions.len());
-        legacy_candidate_xml = rewrite_xml;
-        actions.append(&mut rewrite_actions);
+        // Retire this optional legacy transaction as one unchanged writer root.
+        // It has no independently bound negative-rest context. A function value
+        // keeps its private implementation compiled without invoking its writes.
+        // Its internal budget and all later independent transactions stay intact.
+        let _ = apply_beat_local_voice_rest_rewrite;
 
         let ((suppressed_xml, mut suppress_actions, suppress_seen), suppress_receipts) =
             apply_behind_bars_rule_check_spurious_empty_voice_rest_suppression(

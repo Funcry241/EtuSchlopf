@@ -177,8 +177,56 @@ mod r1230_ra1_sovereign_tests {
         else if fail_write {assert!(result.expect("ordinary I/O result").is_err()); assert_eq!(state.document(),Some(post.as_str()));}
         else {assert!(result.expect("no panic").is_ok()); assert_eq!(state.document(),Some(lane_post.as_str())); assert_eq!(std::fs::read_to_string(&path).expect("artifact"),lane_post);}
         crate::master_state_identity::reset_render_lineage_measurement(); let _=std::fs::remove_file(path);
+
     }
-    #[test] fn r1230_ra1_two_real_adoptions() {second_adoption(false,false);}
+    #[test] fn r1230_ra1_two_real_adoptions() {
+        second_adoption(false,false);
+        for (fail_write,bad_readback) in [(false,false),(true,false),(false,true)] {
+        // Explicit synthetic adopted connection epochs exercise the real E057
+        // writer, original receipt, canonical transport and existing Main sink.
+        for (copies, chords, authored) in [(1usize,0usize,false),(2,0,false),(1,1,false),(1,2,false),(1,0,true),(2,1,true),(1,2,true)] {
+            let attached="<note><chord/><pitch><step>E</step><octave>3</octave></pitch><duration>24</duration><voice>lineA</voice><type>16th</type><staff>2</staff></note>".repeat(chords);
+            let measures=(0..copies).map(|i|format!("<measure number=\"{}\"><attributes><divisions>96</divisions><time><beats>4</beats><beat-type>4</beat-type></time><staves>2</staves></attributes><note><pitch><step>C</step><octave>3</octave></pitch><duration>24</duration><voice>lineA</voice><type>16th</type><staff>2</staff><beam number=\"1\">begin</beam><beam number=\"2\">begin</beam></note>{attached}<note><pitch><step>G</step><octave>5</octave></pitch><duration>24</duration><voice>upper</voice><type>16th</type><staff>1</staff></note><note><pitch><step>G</step><octave>3</octave></pitch><duration>24</duration><voice>lineA</voice><type>16th</type><staff>2</staff><beam number=\"1\">end</beam><beam number=\"2\">end</beam></note><note><pitch><step>A</step><octave>5</octave></pitch><duration>24</duration><voice>upper</voice><type>16th</type><staff>1</staff></note><forward><duration>288</duration></forward><backup><duration>384</duration></backup><forward><duration>24</duration><voice>lineA</voice><staff>2</staff></forward><note><rest/><duration>24</duration><voice>lineA</voice><type>16th</type><staff>2</staff></note><forward><duration>24</duration><voice>lineA</voice><staff>2</staff></forward><note><rest/><duration>24</duration><voice>lineA</voice><type>16th</type><staff>2</staff></note><note><rest/><duration>288</duration><voice>lineA</voice><type>half</type><dot/><staff>2</staff></note></measure>",73+i)).collect::<String>();
+            let input=format!("<score-partwise version=\"4.0\"><part-list><score-part id=\"P\"><part-name>Piano</part-name></score-part></part-list><part id=\"P\">{measures}</part></score-partwise>");
+            let stride=4+chords;
+            let groups=(0..copies).map(|i|vec![i*stride+1,i*stride+3+chords]).collect::<Vec<_>>();
+            let (canonical,voices,source)=crate::structural_write_authority::CanonicalFinalChordStructuralPlan::synthetic_cursor_exchange_fixture(&input,&groups).unwrap();
+            let source=if authored {source.synthetic_authored_cursor_connections()} else {source};
+            let guard=canonical.bind_rest_bridge_cursor_exchange(&source,&voices,&Default::default()).unwrap();
+            let ((exchanged,stats),receipt)=human_bound_cursor_lane_owner_transfer_xml_with_receipt((source.xml(),&guard));
+            assert!(stats.written);assert_eq!(stats.candidate_groups,copies);
+            let carried=guard.carry_rest_bridge_cursor_exchange(&source,&exchanged,receipt.as_ref(),&voices,&Default::default()).unwrap();
+            assert_eq!(carried.xml(),exchanged);
+            assert!(guard.carry_rest_bridge_cursor_exchange(&source,&exchanged,None,&voices,&Default::default()).is_err());
+            assert!(guard.carry_rest_bridge_cursor_exchange(&source,&format!("{exchanged} "),receipt.as_ref(),&voices,&Default::default()).is_err());
+            let mut before_ids=source.declassified_occurrence_identity_rows().iter().map(|r|(r.0,r.1,r.4,r.5)).collect::<Vec<_>>();before_ids.sort();
+            let mut after_ids=carried.declassified_occurrence_identity_rows().iter().map(|r|(r.0,r.1,r.4,r.5)).collect::<Vec<_>>();after_ids.sort();assert_eq!(before_ids,after_ids);
+            let next_guard=canonical.bind_rest_bridge_cursor_exchange(&carried,&voices,&Default::default()).unwrap();
+            let ((again,audit),again_receipt)=human_bound_cursor_lane_owner_transfer_xml_with_receipt((carried.xml(),&next_guard));
+            assert_eq!(again,exchanged);assert!(!audit.written);assert!(again_receipt.is_none());
+            let stale=format!("{} ",source.xml());
+            let ((unchanged,audit),stale_receipt)=human_bound_cursor_lane_owner_transfer_xml_with_receipt((stale.as_str(),&guard));
+            assert_eq!(unchanged,stale);assert!(!audit.written);assert!(stale_receipt.is_none());
+            let next_path=self::path();let mut next_state=self::state(source.xml(),&next_path);
+            let root=next_state.require_state_root("bound E057 test");
+            let mut chain=RenderTransitionReceipts::new();chain.push_preserving(receipt,&exchanged);
+            let committed=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||next_state.adopt_transition(root,&exchanged,chain,
+                RenderSinkKind::Checkpoint(RenderCheckpointSink::CursorLaneRepair),|path,_,candidate| {
+                    if fail_write {return (Err(std::io::Error::other("E057 exchange injected I/O failure")),None);}
+                    let result=crate::structural_write_authority::write_cursor_lane_repair_checkpoint_authorized(path,candidate);
+                    if bad_readback && result.0.is_ok() {std::fs::write(path,"wrong").unwrap();}result
+                })));
+            if bad_readback {assert!(committed.is_err());assert_eq!(next_state.document(),Some(source.xml()));}
+            else if fail_write {assert!(committed.unwrap().is_err());assert_eq!(next_state.document(),Some(source.xml()));}
+            else {committed.unwrap().unwrap();assert_eq!(next_state.document(),Some(carried.xml()));}
+            let _=std::fs::remove_file(next_path);
+        }
+        let absent=crate::structural_write_authority::CanonicalFinalChordStructuralPlan::default();
+        let ((unchanged,stats),receipt)=human_bound_cursor_lane_owner_transfer_xml_with_receipt((lane_at(283).as_str(),&absent));
+        assert_eq!(unchanged,lane_at(283));assert!(!stats.written);assert!(receipt.is_none());
+
+        }
+    }
     #[test] fn r1230_ra1_checkpoint_failure_preserves_first_commit() {second_adoption(true,false);}
     #[test] fn r1230_ra1_checkpoint_wrong_readback_preserves_first_commit() {second_adoption(false,true);}
     #[test]

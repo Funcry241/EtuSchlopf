@@ -400,6 +400,9 @@ pub(crate) fn append_final_chord_visible_rest_interval_epoch_witness_audit_secti
     final_master_xml: &str,
     final_render_xml: Option<&str>,
 ) {
+    super::rest_boundary_readback::observe("report_source_master", "PreFinalChordMasterSource", None, Some(pre_final_chord_xml));
+    super::rest_boundary_readback::observe("report_final_master", "PersistedFinalMaster", None, Some(final_master_xml));
+    super::rest_boundary_readback::observe("report_final_render", "PersistedFinalRender", None, final_render_xml);
     let source_sha256 = crate::sha256::hex(pre_final_chord_xml.as_bytes());
     let master_sha256 = crate::sha256::hex(final_master_xml.as_bytes());
     let render_sha256 = final_render_xml

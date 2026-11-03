@@ -2,7 +2,7 @@
 
 EtuSchlopf macht aus MIDI- und WAV-Aufnahmen von Klavieretüden Notensatz (MusicXML und PDF). Viele Teilaufgaben dabei sind Entscheidungen: In welchem System steht ein Ton? Welcher Schlüssel gilt? Wird ein Akkordton gezeigt oder verborgen? Diese Seite zeigt, wo wir dafür Mathematik einsetzen, woher sie stammt und wie belastbar sie heute ist.
 
-**Stand:** r1577, nativ angenommen (1. November 2026), inzwischen auch als Windows-Testversion veröffentlicht. Die [Prüfbelege](evidence/r1577/README.md) unterscheiden native Korpusabnahme und automatisierte Paketprüfung. Historische Korpuszahlen behalten ihre jeweilige Revision.
+**Entwicklungsstand r1601.** Die [native Abnahme](evidence/r1601/README.md) dokumentiert die Korpusprüfung. Die [Windows-Testversion r1577](evidence/r1577/README.md) hat eigene Paketbelege. Korpuszahlen gelten für die jeweils angegebene Revision.
 
 ## Ehrlichkeitsregel
 
@@ -67,6 +67,8 @@ Dabei ist $p$ die Zahl der erlaubenden Einstufungen dieses einen Belegs (keine W
 - Horizontal und vertikal sind getrennte Dimensionen.
 
 *Herkunft:* eigene Konstruktion. Verwandt mit dem Zeilenumbruch nach Knuth und Plass (1981) und mit Packungsproblemen (*bin packing*). *Status:* **Die vollständige Formel ist geplant.** Begrenzte Teilumsetzungen erproben bereits eine niedrigere Seitenzahl bei unverändertem Systemverlauf und einen Systemtransfer zur Balance bei gleicher Seitenzahl. Sie verlangen eine frische Bestätigung durch den bestehenden Renderer und sind kein globaler Formeloptimierer. Siehe die Verträge zur [Seitenverfeinerung](selector_derivation_contract_same_system_page_refinement.md) und [festen Seitenbalance](selector_derivation_contract_fixed_page_balance_implementation.md). Die vollständige Formel und ihre Mindestbreiten und -abstände sind dadurch nicht verifiziert.
+
+**Entwurf zur Seitenverdichtung bei festen Systemen.** Ein Kandidat mit weniger Seiten muss die obere und untere nutzbare Seitengrenze einhalten. Für benachbarte Systeme sollen typische Abstände mit typischen Abständen innerhalb der Klaviersysteme verglichen werden. Entsprechend werden die engsten Stellen miteinander verglichen. Die Messdefinition für Innenabstände, der Umgang mit verbindenden Zeichen und die PDF-Gegenproben stehen noch aus. Der eingefrorene Vertrag beschreibt die geerbte Systemobergrenze als Fehlerklasse und erlaubt die Untersuchung kleinerer Seitenzahlen. [Vertrag zur geerbten Seitengrenze](selector_derivation_contract_inherited_system_page_ceiling.md)
 
 ### Symbolische Spielformel: was eine Stelle von den Händen verlangt
 
@@ -140,6 +142,20 @@ Je System und Takt bilden Noten mit gleichem Einsatz und gleicher Dauer ein Erei
 
 Stand r1556, Master, alle Noten: $\omega = 1$ in 732 und $\omega = 2$ in 8 System-Takten. Benutzt werden aber in 325 System-Takten mehr Stimmenbezeichnungen als nötig (Render: 97). Das ist ein Hinweis auf Vereinfachungspotenzial, kein Fehler im strengen Sinn.
 *Herkunft:* bekannt (Intervallgraphen; Gilmore/Hoffman, Golumbic). *Status:* misst (Zeilen `VoiceDemand`).
+
+#### Technische Stimmen und Balken
+
+Sei $R$ die vollständig gebundene Menge der betroffenen Noten und $F$ die Menge der Noten aus anderen ursprünglichen Balkengruppen. Für eine vorgeschlagene Zielstimme $v$ sei $E_v = \{n \in R \mid \mathrm{Stimme}(n) \ne v\}$ die Menge der tatsächlichen Stimmenänderungen. Der Schutz aus r1599 verlangt
+
+```math
+E_v \cap F = \varnothing.
+```
+
+Eine gebundene Fortsetzung darf in $R$ liegen und ihre bisherige technische Stimme behalten. Belegungsprüfung, Importprofil und Prüfung gemeinsam beanspruchter Ressourcen gelten zusätzlich. Die Regel betrifft die technische Zuordnung in MusicXML. Die native PDF-Prüfung zeigt, wie der Renderer die betroffenen Balken zeichnet. [Vertrag zur Zielstimme](selector_derivation_contract_foreign_beam_target_preservation.md)
+
+Seit r1601 betrachtet die Balkenausrichtung für eine bestätigte Kanalzuordnung auch weitere bereits belegte Kanäle derselben Rolle. Jeder Kandidat muss die gleichen Schutzprüfungen bestehen.
+
+Seit r1598 zählt der Abschlussbericht zusätzlich unausgeglichene Balkenmarken pro Part, Takt und technischer Stimme sowie fehlgeschlagene Kanalreservierungen im bestehenden Importmodell. Die Zähler dienen der Diagnose. Der Stimmenbedarf $\omega$ gehört zum oben beschriebenen Intervallmodell, während der Reservierungszähler das konkrete Importmodell auswertet. [Beschreibung der Zähler](beam_structure_and_channel_counts_r1598.md)
 
 ### 4. Abdeckung der Spielbarkeitsmessung
 

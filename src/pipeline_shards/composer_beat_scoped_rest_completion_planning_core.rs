@@ -273,16 +273,42 @@ mod beat_scoped_rest_completion_planning_boundary_tests {
         let before_pitched = beat_scoped_rest_completion_pitched_timeline(measure);
         let (patched, stats) = patch_beat_scoped_rest_completion_in_measure(measure, 96);
         assert_eq!(stats.rest_notes_inserted, 0);
-        assert_eq!(stats.rest_only_aux_rests_hidden, 1);
+        assert_eq!(stats.rest_only_aux_rests_hidden, 0);
         assert_eq!(
             patched.matches("<note print-object=\"no\" print-spacing=\"no\"><rest/><duration>96</duration><voice>2</voice><type>quarter</type><staff>2</staff></note>").count(),
-            4
+            3
         );
+        assert_eq!(patched, measure, "unbound technical context cannot elide an existing visible rest");
         assert_eq!(
             before_pitched,
             beat_scoped_rest_completion_pitched_timeline(&patched)
         );
         assert!(beat_scoped_rest_completion_cursor_state(&patched, 384).is_green(384));
+
+        // The historical test name describes the retired behavior. Its actual
+        // writer input now preserves every visible carrier independently of
+        // labels, staff permutation and multiplicity. Existing hidden rests
+        // above remain hidden; this is preservation, never visibility creation.
+        let visible = measure.replace(" print-object=\"no\" print-spacing=\"no\"", "");
+        let renamed = visible.replace("<voice>1</voice>", "<voice>course-a</voice>")
+            .replace("<voice>2</voice>", "<voice>unbound-b</voice>")
+            .replace("<staff>1</staff>", "<staff>temporary</staff>")
+            .replace("<staff>2</staff>", "<staff>1</staff>")
+            .replace("<staff>temporary</staff>", "<staff>2</staff>");
+        for source in [visible, renamed] {
+            for label in ["37", "811"] {
+                let source = source.replacen("number=\"1\"", &format!("number=\"{label}\""), 1);
+                let (post, observed) = patch_beat_scoped_rest_completion_in_measure(&source, 96);
+                assert_eq!(post, source);
+                assert_eq!(observed.rest_only_aux_rests_hidden, 0);
+                assert_eq!(observed.rest_notes_inserted, 0);
+                assert!(observed.actual_note_map.0.iter().all(|(before, after)| before == after));
+                assert_eq!(observed.actual_note_map.0.len(), partial_beat_raw_notes(&source).len());
+                let (twice, observed_twice) = patch_beat_scoped_rest_completion_in_measure(&post, 96);
+                assert_eq!(twice, source);
+                assert_eq!(observed_twice.rest_only_aux_rests_hidden, 0);
+            }
+        }
     }
 
 }

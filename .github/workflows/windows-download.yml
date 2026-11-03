@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'docs/evidence/r1601/accepted_runtime_sha256.tsv'
       - '.gitattributes'
       - '.github/distribution/**'
       - '.github/workflows/windows-download.yml'
@@ -27,13 +28,18 @@ jobs:
       - name: Verify accepted runtime source
         run: |
           $ErrorActionPreference = 'Stop'
-          Get-Content docs/evidence/r1577/accepted_runtime_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
+          $acceptance = Get-Content docs/evidence/r1601/native_acceptance.txt
+          if ('take_revision=1601' -notin $acceptance -or
+              'accepted_zip_sha256=17f98efe4e6304bb385833c1088ee2b40afa41b64872c4e7b45d49d110b11726' -notin $acceptance) {
+            throw 'Native r1601 acceptance does not match the prepared take'
+          }
+          Get-Content docs/evidence/r1601/accepted_runtime_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
             $parts = $_ -split "`t"
             $nativePath = $parts[2]
-            if ((Get-FileHash -Algorithm SHA256 $nativePath).Hash.ToLowerInvariant() -ne $parts[1]) { throw "Source differs from accepted r1577: $($parts[0])" }
+            if ((Get-FileHash -Algorithm SHA256 $nativePath).Hash.ToLowerInvariant() -ne $parts[1]) { throw "Source differs from accepted r1601: $($parts[0])" }
           }
           # Public documentation has its own exact, still gate-checked declaration.
-          Get-Content docs/evidence/r1577/github_projection_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
+          Get-Content docs/evidence/r1601/github_projection_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
             $parts = $_ -split "`t"
             if ((Get-FileHash -Algorithm SHA256 $parts[0]).Hash.ToLowerInvariant() -ne $parts[1]) { throw "Git documentation projection differs: $($parts[0])" }
           }
@@ -79,15 +85,42 @@ jobs:
         run: |
           ./.github/distribution/smoke.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
       - name: Hash Windows download
-        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         run: |
-          $hash = (Get-FileHash -Algorithm SHA256 dist/EtuSchlopf-Windows-x64.exe).Hash.ToLowerInvariant()
-          "$hash  EtuSchlopf-Windows-x64.exe" | Set-Content -Encoding ascii dist/SHA256SUMS.txt
-      - name: Keep Windows build for review
-        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+          git archive --format=zip --output=dist/EtuSchlopf-r1601-source.zip $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'Source archive failed' }
+          $sums = foreach ($name in @('EtuSchlopf-Windows-x64.exe', 'EtuSchlopf-r1601-source.zip')) {
+            $hash = (Get-FileHash -Algorithm SHA256 "dist/$name").Hash.ToLowerInvariant()
+            "$hash  $name"
+          }
+          $sums | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+      - name: Keep checked Windows package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: EtuSchlopf-Windows-x64
           path: dist/*
           retention-days: 30
           if-no-files-found: error
+  publish:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Publish checked Windows preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=v0.10.1839-r1601-windows-preview
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists."
+            exit 0
+          fi
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name EtuSchlopf-Windows-x64 --dir dist
+          (cd dist && sha256sum --check SHA256SUMS.txt)
+          notes="Windows x64 test version from native revision r1601. Package checks and source commit: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          gh release create "$tag" dist/EtuSchlopf-Windows-x64.exe dist/EtuSchlopf-r1601-source.zip dist/SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "EtuSchlopf r1601 Windows x64" --notes "$notes"

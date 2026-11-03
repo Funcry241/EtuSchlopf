@@ -190,6 +190,8 @@ pub(crate) fn observe_final_chord_projection(before_xml: &str, after_xml: &str) 
 /// Exact input and continuation bytes bind the projector observation; checkpoint readback
 /// separately records whether each introduced collision survived later rest edits.
 pub(crate) fn observe_final_chord_adoption(boundary: &str, before_xml: &str, projected_xml: &str, checkpoint_xml: &str) {
+    super::rest_boundary_readback::observe("committed_final_chord_projection_operands", boundary, Some(before_xml), Some(projected_xml));
+    super::rest_boundary_readback::observe("committed_final_chord_continuation_operands", boundary, Some(projected_xml), Some(checkpoint_xml));
     let mut has_projection = false;
     with_ledger(true, |ledger| {
         has_projection = ledger.pending_projections.iter().any(|proof| proof.before_xml == before_xml && proof.after_xml == projected_xml);

@@ -113,6 +113,7 @@ fn run_certified_materializing_local_rewrite_portfolio(
     options: &CheckOptions,
     next_iteration: &mut usize,
 ) -> anyhow::Result<()> {
+    let _detail = crate::audit_only::performance_timings::ScopedCallTiming::current("CertifiedLocalRewritePortfolio", "");
     const MAX_MICRO_CANDIDATES: usize = 6;
     const MAX_ADOPTED_MICRO_DELTAS: usize = 2;
 

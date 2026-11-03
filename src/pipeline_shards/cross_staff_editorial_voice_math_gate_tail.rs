@@ -872,6 +872,7 @@ fn editorial_voice_preserves_bound_source_support(
 }
 
 fn run_editorial_voice_decision_pass(best: &mut SolverCandidate, options: &CheckOptions) -> anyhow::Result<EditorialVoiceDecisionStats> {
+    let _detail = crate::audit_only::performance_timings::ScopedCallTiming::current("EditorialVoiceDecision", "");
     let mut stats = EditorialVoiceDecisionStats {
         ..EditorialVoiceDecisionStats::default()
     };

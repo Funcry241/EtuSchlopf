@@ -113,6 +113,7 @@ impl Drop for WriterTraceSession {
         RENDER_EPOCH_CONTINUITY_STATE.with(|slot| {
             *slot.borrow_mut() = None;
         });
+        super::rest_boundary_readback::clear();
         crate::audit_only::destructive_edit_attribution::clear();
     }
 }
@@ -122,6 +123,7 @@ pub fn start(
     project: &str,
     final_render_path: Option<&Path>,
 ) -> Result<WriterTraceSession, String> {
+    super::rest_boundary_readback::start();
     crate::audit_only::destructive_edit_attribution::start(project, final_render_path);
     RENDER_EPOCH_CONTINUITY_STATE.with(|slot| {
         *slot.borrow_mut() = Some(RenderEpochContinuityState::default());
@@ -197,6 +199,9 @@ pub fn record_after(
     after: &str,
 ) {
     observe_render_epoch(writer, path, before, after);
+    if trace_accepts_path(path) {
+        super::rest_boundary_readback::observe("successful_render_sink", &format!("{writer}:stream={:016x}", continuity_fingerprint(&continuity_path_identity(path))), before, Some(after));
+    }
     if !trace_accepts_path(path) || before == Some(after) {
         return;
     }
@@ -1174,6 +1179,7 @@ pub fn render_epoch_continuity_report_body() -> String {
     crate::audit_only::destructive_edit_attribution::append_identity_coverage_and_thread_loss_report(&mut out);
     crate::master_state_identity::append_master_lineage_report(&mut out);
     crate::master_state_identity::append_render_lineage_report(&mut out);
+    super::rest_boundary_readback::append_report(&mut out);
     out
 }
 

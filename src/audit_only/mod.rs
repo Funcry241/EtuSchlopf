@@ -70,3 +70,6 @@ pub(crate) mod material_reference_coverage;
 pub(crate) mod material_coincidence;
 
 pub(crate) mod c3_diagnostics;
+pub(crate) mod performance_timings;
+
+pub(crate) mod rest_boundary_readback;

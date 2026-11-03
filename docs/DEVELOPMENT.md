@@ -1,10 +1,6 @@
 # Technische Referenz und Quellenarbeit
 
-Diese Seite enthält den technischen Einstieg des angenommenen r1577-Stands samt
-vollständiger Optionsreferenz. Für die veröffentlichte Windows-Testversion r1577 gilt die
-[Download-Anleitung](../README.md). Git-Dokumentation und Take-Identität sind
-unterschiedliche Ebenen; die Runtime-Dateien entsprechen dem angenommenen Take.
-Die [aktuellen Prüfbelege](evidence/r1577/README.md) dokumentieren die native Abnahme.
+Diese Seite beschreibt den Entwicklungsstand r1601. Die [nativen Prüfbelege](evidence/r1601/README.md) binden den Lauf an seinen Take. Die [Download-Anleitung](../README.md) gehört zur verfügbaren Windows-Testversion r1577.
 
 Das Projekt hat zwei eng verbundene Gegenstände:
 
@@ -25,7 +21,8 @@ Programme und bleiben Gegenstand von Gegenbeispielen und Prüfung.
 - [Aktueller fachlicher Überblick und Mathematik](MATHEMATIK.md)
 - [Historischer Architektur-Wegweiser auf Basis r1526](IMPLEMENTED_FOUNDATIONS.md)
 - [Forschungsbezüge und ihre genaue Rolle](../docs/RESEARCH_CONTEXT.md)
-- [Aktuelle dokumentierte Abnahme r1577](evidence/r1577/README.md)
+- [Native Abnahme r1601](evidence/r1601/README.md)
+- [Windows-Testversion und native Abnahme r1577](evidence/r1577/README.md)
 - [Historische Abnahme r1533](evidence/r1533/README.md)
 - [Kaltstart ohne Gesprächsgedächtnis](../docs/assistant_memory/000_start_here.md)
 

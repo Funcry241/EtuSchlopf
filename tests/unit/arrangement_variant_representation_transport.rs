@@ -174,7 +174,9 @@ fn adopted(rows: &[(usize, i64, u8, i32)], measures: usize) -> ArrangementVarian
     let score = parse_musicxml(&arrangement.xml).unwrap();
     let signature = build_reference_signature(&reference, &score);
     evaluate_arrangement_variant("SyntheticTransport", arrangement,
-        &reference, &signature, &CheckOptions { strict: true }, Some(2)).unwrap()
+        &reference, &signature, &CheckOptions { strict: true }, Some(2),
+        &crate::audit_only::performance_timings::BatchTimings::new(
+            "Synthetic", "DirectTestCall", 0, ["TestPhase"; 9])).unwrap()
 }
 
 #[test]

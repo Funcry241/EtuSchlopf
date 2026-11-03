@@ -344,10 +344,11 @@ impl OwnedRhythmicContinuation {
         self.encoded.iter().flat_map(|encoded| &encoded.fragments).filter(|fragment| !fragment.forward).count()
     }
 
-    pub(super) fn validate_encoded(&self, xml: &str, used: &mut BTreeSet<(usize, usize)>,
+    pub(super) fn validate_encoded(&self, xml: &str,
+        physical: &BTreeMap<(usize, usize), &PhysicalOccurrence>, used: &mut BTreeSet<(usize, usize)>,
         identities: &mut BTreeSet<RhythmicCreationIdentity>) -> Result<()> {
-        let physical = physical_inventory(xml)?.into_iter().map(|note|
-            ((note.bytes.start, note.bytes.end), note)).collect::<BTreeMap<_, _>>();
+        // Borrow the complete readback already made for this exact immutable
+        // document in validate_binding. All encoded and forward checks follow.
         let cursors = forwards(xml)?;
         let mut emission_identities = BTreeSet::new();
         for encoded in &self.encoded {
@@ -495,3 +496,7 @@ fn original_note_correspondence(origin: Range<i64>, note: &PhysicalOccurrence) -
         Ok(OriginImage::grace_point(origin.start, note.interval.start))
     } else { OriginImage::new(origin, note.interval.clone()) }
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/owned_rhythmic_readback_reuse.rs"]
+mod readback_reuse_tests;

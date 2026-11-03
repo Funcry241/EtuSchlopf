@@ -3,10 +3,7 @@
 EtuSchlopf ist ein experimentelles, privat gepflegtes Projekt. Beginne je nach
 Aufgabe mit einem der folgenden Einstiege:
 
-Die aktuellen Einstiegsseiten beziehen sich auf r1577. Historische Abnahmen,
-Forschungsnotizen und revisionsgebundene Fachverträge behalten ihren jeweiligen
-Stand; eine alte Revisionsnummer ist dort keine aktuelle Produktzusage. Für den
-bestätigten Lauf- und Paketstand gilt die [r1577-Abnahme](evidence/r1577/README.md).
+Die Einstiegsseiten beschreiben den Entwicklungsstand r1601. Die Windows-Testversion hat ihre eigene [Paketabnahme für r1577](evidence/r1577/README.md). Historische Abnahmen, Forschungsnotizen und Fachverträge behalten ihre jeweilige Revision.
 
 | Aufgabe | Einstieg |
 | --- | --- |
@@ -19,7 +16,8 @@ bestätigten Lauf- und Paketstand gilt die [r1577-Abnahme](evidence/r1577/README
 | Umgang miteinander und Moderation | [Verhaltenskodex](CODE_OF_CONDUCT.md) |
 | Bedienhürden und bekannte Grenzen | [Barrierefreiheit](ACCESSIBILITY.md) |
 | Welche Mathematik wo genutzt wird und was das Notenbild ändert | [Mathematik hinter EtuSchlopf](MATHEMATIK.md) |
-| Angenommenen Entwicklungsstand r1577 und Laufzeitmessung prüfen | [Native Prüfbelege r1577](evidence/r1577/README.md) |
+| Entwicklungsstand und Balkenvergleich prüfen | [Native Prüfbelege r1601](evidence/r1601/README.md) |
+| Windows-Testversion und frühere Laufzeitmessung prüfen | [Prüfbelege r1577](evidence/r1577/README.md) |
 | Architektur und zuständige Verträge finden | [Architektureinstieg](assistant_memory/000_start_here.md) |
 | Separate PDF-/Export-Diagnosen verwenden | [Diagnosewerkzeuge](../tools/assistant_diagnostics/README.md) |
 | Lizenzen und Fremdkomponenten | [Fremdlizenzhinweise](THIRD_PARTY_NOTICES.md) |

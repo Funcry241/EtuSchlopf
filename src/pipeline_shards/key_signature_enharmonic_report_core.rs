@@ -1222,52 +1222,10 @@ fn key_signature_measure_fifths(xml: &str, measure_number: usize) -> Option<i32>
 }
 
 fn rewrite_measure_key_signature(measure: &str, target_fifths: i32) -> String {
-    let new_key = format!("        <key><fifths>{target_fifths}</fifths></key>");
-    if let Some(attr_start_rel) = measure.find("<attributes") {
-        let attr_start = attr_start_rel;
-        if let Some(attr_end_rel) = measure[attr_start..].find("</attributes>") {
-            let attr_end = attr_start + attr_end_rel + "</attributes>".len();
-            let attr = &measure[attr_start..attr_end];
-            let new_attr = if let Some(key_start_rel) = attr.find("<key") {
-                if let Some(key_end_rel) = attr[key_start_rel..].find("</key>") {
-                    let key_end = key_start_rel + key_end_rel + "</key>".len();
-                    let mut rebuilt = String::with_capacity(attr.len() + 32);
-                    rebuilt.push_str(&attr[..key_start_rel]);
-                    rebuilt.push_str(&new_key);
-                    rebuilt.push_str(&attr[key_end..]);
-                    rebuilt
-                } else {
-                    attr.to_string()
-                }
-            } else if let Some(close_rel) = attr.find("</attributes>") {
-                let mut rebuilt = String::with_capacity(attr.len() + new_key.len() + 1);
-                rebuilt.push_str(&attr[..close_rel]);
-                rebuilt.push('\n');
-                rebuilt.push_str(&new_key);
-                rebuilt.push_str(&attr[close_rel..]);
-                rebuilt
-            } else {
-                attr.to_string()
-            };
-            let mut rebuilt_measure = String::with_capacity(measure.len() + 64);
-            rebuilt_measure.push_str(&measure[..attr_start]);
-            rebuilt_measure.push_str(&new_attr);
-            rebuilt_measure.push_str(&measure[attr_end..]);
-            return rebuilt_measure;
-        }
-    }
-
-    let Some(open_end_rel) = measure.find('>') else {
+    let Some((start, end, replacement)) = measure_key_signature_edit(measure, target_fifths) else {
         return measure.to_string();
     };
-    let insert_at = open_end_rel + 1;
-    let mut rebuilt = String::with_capacity(measure.len() + 96);
-    rebuilt.push_str(&measure[..insert_at]);
-    rebuilt.push_str("\n      <attributes>\n");
-    rebuilt.push_str(&new_key);
-    rebuilt.push_str("\n      </attributes>");
-    rebuilt.push_str(&measure[insert_at..]);
-    rebuilt
+    format!("{}{}{}", &measure[..start], replacement, &measure[end..])
 }
 
 // ---- merged from src/pipeline_shards/key_signature_enharmonic_audit_tail.rs ----
@@ -2340,10 +2298,17 @@ fn measure_key_signature_edit(measure: &str, target_fifths: i32) -> Option<(usiz
             let key_end = key_start_rel + key_end_rel + "</key>".len();
             return Some((attr_start + key_start_rel, attr_start + key_end, new_key));
         }
-        let close_rel = attr.find("</attributes>")?;
+        // MusicXML attributes: editorial, divisions, key, then time/staves/clef/etc.
+        // Bind to direct children so comments and nested editorial text cannot
+        // masquerade as an insertion boundary. Preserve every existing byte.
+        let document = roxmltree::Document::parse(attr).ok()?;
+        let insert_rel = document.root_element().children()
+            .filter(roxmltree::Node::is_element)
+            .find(|node| !matches!(node.tag_name().name(), "footnote" | "level" | "divisions"))
+            .map_or_else(|| attr.find("</attributes>"), |node| Some(node.range().start))?;
         return Some((
-            attr_start + close_rel,
-            attr_start + close_rel,
+            attr_start + insert_rel,
+            attr_start + insert_rel,
             format!("\n{new_key}"),
         ));
     }
@@ -2727,6 +2692,61 @@ mod functional_respelling_exact_receipt_tests {
         let edits = key_signature_for_measure_edits(&two_parts, 3, 2);
         assert_eq!(edits.len(), 2);
         assert!(edits[0].0 > edits[1].0);
+    }
+
+    #[test]
+    fn inserted_key_respects_bound_xsd_order_and_original_exact_receipt() {
+        let validator = schemaschlopf::compile_bound_instance_validator(
+            schemaschlopf::MUSICXML40_SCHEMA_DIR,
+        ).expect("bound MusicXML 4.0 schema");
+        let cases = [
+            "<clef><sign>F</sign><line>4</line></clef>",
+            "<time><beats>4</beats><beat-type>4</beat-type></time>",
+            "<staves>2</staves><clef number=\"2\"><sign>G</sign><line>2</line></clef>",
+            "<part-symbol>brace</part-symbol><instruments>2</instruments>",
+            "<staff-details><staff-lines>5</staff-lines></staff-details>",
+            "<transpose><diatonic>0</diatonic><chromatic>0</chromatic></transpose>",
+            "<measure-style><multiple-rest>2</multiple-rest></measure-style>",
+        ];
+        for tail in cases {
+            let prefix = "<footnote>Bound editorial text</footnote><level>proof</level><divisions>1</divisions><!-- <clef> is only a comment -->";
+            let attributes = format!("<attributes>{prefix}{tail}</attributes>");
+            let input = score(&[part("P1", &[format!("{attributes}{}", note("C", 0, 4))])]);
+            validator.validate_bytes(input.as_bytes()).expect("valid original");
+            let invalid = input.replace("</attributes>", "<key><fifths>2</fifths></key></attributes>");
+            assert!(validator.validate_bytes(invalid.as_bytes()).is_err(), "old append must fail: {tail}");
+            let edits = key_signature_for_measure_edits(&input, 1, 2);
+            let [(start, end, replacement)] = edits.as_slice() else { panic!("one local insertion") };
+            assert_eq!(start, end);
+            let output = format!("{}{}{}", &input[..*start], replacement, &input[*end..]);
+            validator.validate_bytes(output.as_bytes()).expect("schema-ordered key insertion");
+            assert!(output.contains(&format!("{prefix}\n        <key><fifths>2</fifths></key>{tail}")));
+            assert_eq!(output.replace(replacement, ""), input, "all original bytes preserved");
+            assert!(respelling_receipt(&input, &output,
+                crate::master_state_identity::exact_script_from_descending_application(edits)));
+        }
+    }
+
+    #[test]
+    fn key_insertion_is_local_under_relocation_and_independent_duplication() {
+        let body = format!("<attributes><clef><sign>F</sign><line>4</line></clef></attributes>{}", note("D", 0, 3));
+        for boundary in [7, 41] {
+            let measure = format!("<measure number=\"{boundary}\">{body}</measure>");
+            let (start, end, replacement) = measure_key_signature_edit(&measure, -3).expect("local edit");
+            assert_eq!(start, end);
+            let local = format!("{}{}{}", &measure[..start], replacement, &measure[end..]);
+            let input = format!("<score-partwise><part id=\"A\">{measure}</part><part id=\"B\">{measure}</part></score-partwise>");
+            let edits = key_signature_for_measure_edits(&input, boundary, -3);
+            assert_eq!(edits.len(), 2);
+            let mut output = input.clone();
+            for (start, end, replacement) in &edits {
+                output = format!("{}{}{}", &output[..*start], replacement, &output[*end..]);
+            }
+            assert_eq!(output, format!("<score-partwise><part id=\"A\">{local}</part><part id=\"B\">{local}</part></score-partwise>"));
+            assert!(respelling_receipt(&input, &output,
+                crate::master_state_identity::exact_script_from_descending_application(edits)));
+        }
+        assert!(measure_key_signature_edit("<measure><attributes><clef></attributes></measure>", 2).is_none());
     }
 
     #[test]

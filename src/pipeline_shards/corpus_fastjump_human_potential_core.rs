@@ -567,6 +567,18 @@ fn build_candidate_batch(
     if total == 0 {
         return Ok(Vec::new());
     }
+    let finalization_label = format!("{label}/SeedFinalization");
+    let finalization_timings = crate::audit_only::performance_timings::BatchTimings::new(
+        input_label, &finalization_label, start_iteration,
+        ["GenesisBindingAndStats", "ParseSeed", "CheckSeed", "ReferenceSignatureAndEarlyReturn",
+         "BaselineArrangement", "BaselineVariantEvaluation", "HumanPotentialTrials", "FinalizeCandidate"]);
+    let variant_label = format!("{label}/ArrangementVariants");
+    let variant_timings = crate::audit_only::performance_timings::BatchTimings::new(
+        input_label, &variant_label, start_iteration,
+        ["InitialCustodyAndGenesis", "Fidelity", "Polish", "Layout", "OwnedRhythmContinuation",
+         "ReceiptValidationAndAdoption", "ParseMusicXml", "RunChecks", "FinalizeHints"]);
+    let mut detail = crate::audit_only::performance_timings::SequentialTimings::new(input_label,
+        label, "PrepareSeeds");
     let worker_count = parallel.workers.min(total).max(1);
     let started = Instant::now();
     report_progress(label, 0, total, worker_count, started);
@@ -610,6 +622,7 @@ fn build_candidate_batch(
         );
     }
 
+    detail.enter("ExactSeedEquivalence");
     let mut representatives = Vec::with_capacity(total);
     let mut unique_indices = Vec::new();
     let mut fingerprint_buckets: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
@@ -648,6 +661,7 @@ fn build_candidate_batch(
         ));
     }
 
+    detail.enter("FinalizeUniqueSeeds");
     let unique_worker_count = parallel.workers.min(unique_total).max(1);
     let completed = AtomicUsize::new(0);
     let mut unique_results = parallel_indexed_results(
@@ -662,6 +676,7 @@ fn build_candidate_batch(
                 options,
                 layout_pages,
                 no_polish,
+                (&finalization_timings, &variant_timings),
             );
             let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
             if should_report_progress_tick(done, unique_total) {
@@ -685,6 +700,7 @@ fn build_candidate_batch(
         finished_by_seed.insert(seed_index, candidate);
     }
 
+    detail.enter("CloneAndRebindSeeds");
     let mut candidates = Vec::with_capacity(total);
     for index in 0..total {
         let representative = representatives[index];
@@ -758,7 +774,11 @@ fn finish_solver_candidate_from_seed(
     options: &CheckOptions,
     layout_pages: Option<usize>,
     no_polish: bool,
+    timings: (&crate::audit_only::performance_timings::BatchTimings<'_, 8>,
+        &crate::audit_only::performance_timings::BatchTimings<'_, 9>),
 ) -> anyhow::Result<SolverCandidate> {
+    let (finalization_timings, variant_timings) = timings;
+    let mut detail = finalization_timings.call();
     let iteration = seed.iteration;
     let profile = &seed.profile;
     let xml = &seed.xml;
@@ -770,9 +790,12 @@ fn finish_solver_candidate_from_seed(
             &midi_seed_genesis_input(&midi_seed_stats),
             xml,
         )?;
+    detail.enter(1);
     let score = parse_musicxml(xml)
         .with_context(|| format!("Interne MIDI-Notationsbasis Profil {} konnte nicht geprüft werden", profile.display_name()))?;
+    detail.enter(2);
     let first_result = run_checks(&score, options);
+    detail.enter(3);
     let reference_signature = build_reference_signature(reference, &score);
     if no_polish || has_non_repairable_preledger_blockers(&first_result) {
         let mut midi_seed_stats = midi_seed_stats;
@@ -808,12 +831,14 @@ fn finish_solver_candidate_from_seed(
             horizontal_layout_seed: HorizontalLayoutSeedPlan::default(),
         });
     }
+    detail.enter(4);
     let baseline_arrangement = arrange_piano_musicxml_with_profile(xml, ArrangementProfile {
         rhythmic_courses: Some(&midi_seed_stats.rhythmic_courses),
         preserve_reference: reference.guard_active(),
         human_potential_enabled: false,
         ..ArrangementProfile::default()
     });
+    detail.enter(5);
     let mut chosen_variant = evaluate_arrangement_variant(
         profile.display_name(),
         baseline_arrangement,
@@ -821,7 +846,9 @@ fn finish_solver_candidate_from_seed(
         &reference_signature,
         options,
         layout_pages,
+        variant_timings,
     )?;
+    detail.enter(6);
     if reference.guard_active() {
         // v0.1.116: CandidateAuditLocalHintRepair.
         // Erst wird HumanPotential breit und rein diagnostisch entdeckt. Alle
@@ -866,6 +893,7 @@ fn finish_solver_candidate_from_seed(
                 &reference_signature,
                 options,
                 layout_pages,
+                variant_timings,
             )?;
             diagnostic_stats.human_potential_global_candidates_checked = global_checked;
             let mut decision_variant = human_variant;
@@ -976,6 +1004,7 @@ fn finish_solver_candidate_from_seed(
             copy_rejected_human_potential_stats(&mut chosen_variant.arrangement_stats, &diagnostic_stats);
         }
     }
+    detail.enter(7);
     let mut midi_seed_stats = midi_seed_stats;
     midi_seed_stats.source_selection_candidate_evaluation = source_selection_candidate_evaluation(
         &chosen_variant.final_result,
@@ -1002,5 +1031,6 @@ fn finish_solver_candidate_from_seed(
         polish_stats: chosen_variant.polish_stats,
         horizontal_layout_seed: chosen_variant.horizontal_layout_seed,
     };
+    detail.reached_tail();
     Ok(candidate)
 }

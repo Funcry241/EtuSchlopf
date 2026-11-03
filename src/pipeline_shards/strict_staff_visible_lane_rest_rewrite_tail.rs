@@ -933,6 +933,28 @@ fn apply_behind_bars_rule_check_spurious_empty_voice_rest_suppression(
     (String, Vec<BehindBarsRuleCheckRestAndTieAction>, usize),
     crate::master_state_identity::RenderTransitionReceipts,
 ) {
+    let (selected_replacements, actions, candidates_seen) = empty_voice_rest_suppression_plan(xml, max_actions);
+    let (out, receipt) = crate::structural_write_authority::apply_empty_voice_rest_suppression_authorized(
+        xml,
+        selected_replacements,
+    );
+    let out = out.unwrap_or_else(|| xml.to_string());
+    let mut receipts = crate::master_state_identity::RenderTransitionReceipts::new();
+    receipts.push_exact(receipt);
+    ((out, actions, candidates_seen), receipts)
+}
+
+
+
+
+
+
+
+// Pure proposal construction owned by the existing suppression writer. No
+// receipt, materialization or adoption capability is exposed by this reader.
+fn empty_voice_rest_suppression_plan(xml: &str, max_actions: usize) -> (
+    Vec<(usize, usize, String)>, Vec<BehindBarsRuleCheckRestAndTieAction>, usize,
+) {
     let mut candidates_seen = 0_usize;
     let mut selected_replacements: Vec<(usize, usize, String)> = Vec::new();
     let mut actions = Vec::new();
@@ -961,12 +983,9 @@ fn apply_behind_bars_rule_check_spurious_empty_voice_rest_suppression(
             rest_by_staff_voice.entry((frag.staff.clone(), frag.voice.clone())).or_default().push(frag);
         }
 
-        // CrossStaffCoveredRestLaneSuppression v0.10.1458:
-        // Suppress only duration-identical technical rest lanes in a genuine
-        // cross-staff measure: (a) same-voice rests fully covered by pitches on
-        // the other staff, or (b) a full-measure rest-only auxiliary lane on a
-        // staff that already carries another visible voice.  The selector uses
-        // only staff/voice/onset/duration coverage, never project or measure IDs.
+        // Empty serialization plus activity elsewhere does not prove a
+        // dispensable technical rest role. Preserve visible empty-lane rests;
+        // independently authorized canonical rest owners remain unchanged.
         let measure_has_cross_staff_visible_voice = visible_staffs_by_voice.values().any(|staffs| {
             staffs.iter().any(|staff| staff.trim() == "1")
                 && staffs.iter().any(|staff| staff.trim() == "2")
@@ -976,7 +995,11 @@ fn apply_behind_bars_rule_check_spurious_empty_voice_rest_suppression(
                 if actions.len() >= max_actions {
                     break;
                 }
-                let mut selected_rests = rests
+                if visible_pitched_by_staff_voice.get(&(staff.clone(), voice.clone()))
+                    .copied().unwrap_or(0) == 0 {
+                    continue;
+                }
+                let selected_rests = rests
                     .iter()
                     .copied()
                     .filter(|rest| {
@@ -1005,38 +1028,8 @@ fn apply_behind_bars_rule_check_spurious_empty_voice_rest_suppression(
                         coverage >= duration
                     })
                     .collect::<Vec<_>>();
-                let mut action_kind = "cross_staff_same_voice_covered_rest_lane_to_forward";
+                let action_kind = "cross_staff_same_voice_covered_rest_lane_to_forward";
 
-                if selected_rests.is_empty()
-                    && visible_pitched_by_staff_voice
-                        .get(&(staff.to_string(), voice.to_string()))
-                        .copied()
-                        .unwrap_or(0)
-                        == 0
-                    && fragments.iter().any(|frag| {
-                        frag.is_visible_pitched
-                            && !frag.is_chord
-                            && !frag.is_hidden
-                            && frag.staff.trim() == staff.trim()
-                            && frag.voice != *voice
-                    })
-                {
-                    let mut ordered = rests.to_vec();
-                    ordered.sort_by_key(|rest| (rest.onset, rest.duration, rest.start));
-                    let mut covered_until = 0_i32;
-                    for rest in &ordered {
-                        let start = rest.onset.max(0);
-                        let end = rest.onset.saturating_add(rest.duration.max(0)).min(expected);
-                        if start > covered_until {
-                            break;
-                        }
-                        covered_until = covered_until.max(end);
-                    }
-                    if covered_until >= expected {
-                        selected_rests = ordered;
-                        action_kind = "cross_staff_measure_full_rest_only_aux_lane_to_forward";
-                    }
-                }
                 if selected_rests.is_empty()
                     || selected_rests.iter().any(|rest| {
                         occupied.iter().any(|(used_start, used_end)| {
@@ -1061,59 +1054,8 @@ fn apply_behind_bars_rule_check_spurious_empty_voice_rest_suppression(
             }
         }
 
-        for ((staff, voice), rests) in &rest_by_staff_voice {
-            if actions.len() >= max_actions {
-                break;
-            }
-            let staff_trimmed = staff.trim();
-            if !(staff_trimmed == "1" || staff_trimmed == "2") || rests.len() != 1 {
-                continue;
-            }
-            let rest = rests[0];
-            if rest.onset != 0 || rest.duration != expected {
-                continue;
-            }
-            if visible_pitched_by_staff_voice.get(&(staff.to_string(), voice.to_string())).copied().unwrap_or(0) > 0 {
-                continue;
-            }
-            let same_staff_other_voice_visible = visible_pitched_by_staff.get(staff).copied().unwrap_or(0) > 0;
-            let cross_staff_same_voice_visible = visible_staffs_by_voice
-                .get(voice)
-                .is_some_and(|staffs| staffs.iter().any(|visible_staff| visible_staff.trim() != staff.trim()));
-            if !same_staff_other_voice_visible && !cross_staff_same_voice_visible {
-                continue;
-            }
-            candidates_seen += 1;
-            if occupied.iter().any(|(used_start, used_end)| rest.start < *used_end && rest.end > *used_start) {
-                continue;
-            }
-            occupied.push((rest.start, rest.end));
-            selected_replacements.push((rest.start, rest.end, render_forward_fragment(rest.duration)));
-            let action_kind = if cross_staff_same_voice_visible {
-                if staff_trimmed == "1" { "upper_cross_staff_empty_rest_lane_to_forward" } else { "cross_staff_empty_rest_lane_to_forward" }
-            } else if staff_trimmed == "1" {
-                "upper_staff_spurious_empty_aux_voice_rest_to_forward"
-            } else {
-                "spurious_empty_aux_voice_rest_to_forward"
-            };
-            actions.push(BehindBarsRuleCheckRestAndTieAction {
-                action_kind: action_kind.to_string(),
-                old_rest_count: 1,
-                new_rest_count: 0,
-                verdict: "adopted_if_rest_delta_adoption_gate_holds".to_string(),
-            });
-        }
-
-        // UpperStaffRestLaneVisibleProof v0.10.263:
-        // Die bisherige EmptyRestLane-Regel erwischte nur einzelne volltaktige
-        // Reststimmen. Historische PDF-Evidenz zeigte aber eine obere
-        // Zusatzstimme mit sichtbaren Füllpausen innerhalb einer laufenden
-        // 8va-/Cross-Staff-Linie. Diese generische Erweiterung ersetzt solche
-        // oberen Füllpausen nur durch Forward-Zeit, wenn die betroffene
-        // Staff/Voice-Lane selbst keine klingenden Noten trägt und der Staff
-        // oder dieselbe Voice bereits sichtbar klingend geführt ist. Es werden
-        // keine Tonhöhen, Dauern, Onsets, Staff-/Voice-Zuordnungen klingender
-        // Events oder Master-XML-Inhalte geändert.
+        // Keep the remaining original sounding-lane rule. Empty upper lanes
+        // receive the same preservation regardless of partition or octave marks.
         for ((staff, voice), mut rests) in rest_by_staff_voice {
             if actions.len() >= max_actions {
                 break;
@@ -1124,6 +1066,7 @@ fn apply_behind_bars_rule_check_spurious_empty_voice_rest_suppression(
             }
             rests.sort_by_key(|frag| (frag.onset, frag.duration, frag.start));
             let same_lane_visible_pitched = visible_pitched_by_staff_voice.get(&(staff.clone(), voice.clone())).copied().unwrap_or(0);
+            if same_lane_visible_pitched == 0 { continue; }
             let same_staff_other_voice_visible = visible_pitched_by_staff
                 .get(&staff)
                 .copied()
@@ -1183,21 +1126,8 @@ fn apply_behind_bars_rule_check_spurious_empty_voice_rest_suppression(
     }
 
     selected_replacements.sort_by_key(|a| std::cmp::Reverse(a.0));
-    let (out, receipt) = crate::structural_write_authority::apply_empty_voice_rest_suppression_authorized(
-        xml,
-        selected_replacements,
-    );
-    let out = out.unwrap_or_else(|| xml.to_string());
-    let mut receipts = crate::master_state_identity::RenderTransitionReceipts::new();
-    receipts.push_exact(receipt);
-    ((out, actions, candidates_seen), receipts)
+    (selected_replacements, actions, candidates_seen)
 }
-
-
-
-
-
-
 
 
 fn build_cross_staff_hand_role_materialization_trial(
@@ -2044,3 +1974,6 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/structural_write_authority/re
 
 // Receipt-bearing mutation preparation belongs to the canonical structural owner.
 include!("../structural_write_authority/strict_staff_visible_lane_rest_rewrite_tail_receipt_ownership.rs");
+
+#[cfg(test)]
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/structural_write_authority/empty_rest_lane_preservation_tests.rs"));

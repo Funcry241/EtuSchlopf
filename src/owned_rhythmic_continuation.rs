@@ -240,7 +240,7 @@ impl OwnedRhythmicContinuation {
                 "Owner continuation changed licensed support or presentation without a transition");
             self.validate_received_origin_path(occurrence.creation)?;
         }
-        self.validate_encoded(xml, &mut ranges, &mut identities)?;
+        self.validate_encoded(xml, &by_range, &mut ranges, &mut identities)?;
         // The union, rather than an interval hull, must cover each received
         // obligation. A transfer explicitly represents both its rest and pitch.
         let support = self.support_by_root()?;

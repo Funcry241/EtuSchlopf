@@ -50,6 +50,7 @@ struct RegisternotationsRichtung {
 }
 
 fn apply_octave_notation_policy(xml: &mut String) -> OctaveNotationPolish {
+    let _detail = crate::audit_only::performance_timings::ScopedCallTiming::current("OctaveNotationPolicy", "");
     (|| -> anyhow::Result<OctaveNotationPolish> {
         if xml.contains("<octave-shift") {
             anyhow::bail!(
@@ -1532,6 +1533,7 @@ enum LowerStaffClefState {
     Treble,
 }
 fn apply_lower_staff_clef_readability_policy(xml: &mut String) -> LowerStaffClefPolish {
+    let _detail = crate::audit_only::performance_timings::ScopedCallTiming::current("LowerStaffClefReadability", "");
     use crate::arrangement::representation_transport::{RepresentationStep, RhythmicRepresentationTransport};
     let input = xml.clone();
     let mut steps = Vec::new();
@@ -2079,10 +2081,10 @@ fn patch_beat_scoped_rest_completion_in_measure(
                 info.index,
                 beat_scoped_mark_note_hidden(&raw_note_text(&raw_notes, info.index)).0,
             );
-            // This original visibility operation retains the same complete
-            // physical rest. It is not a metric split or a new occurrence.
+            // Preserve this candidate's original physical rest and footprint.
+            // The legacy elision owner now returns the same bytes, so no rest
+            // was hidden and the hidden-rest counter must stay unchanged.
             retained_replacements.insert(info.index);
-            stats.rest_only_aux_rests_hidden += 1;
         }
     }
     if replacements.is_empty() && inserts_before.is_empty() {
@@ -2689,21 +2691,13 @@ fn beat_scoped_rest_type_and_dots(duration: i64) -> (&'static str, usize) {
 fn beat_scoped_mark_note_hidden(note_text: &str) -> (String, Option<BlockTransformationReceipt>) {
     
     
-    let output = (|| {
-    if note_text.contains("print-object=\"no\"") {
-        return note_text.to_string();
-    }
-    if let Some(open_end) = note_text.find('>') {
-        let mut out = String::with_capacity(note_text.len() + 40);
-        out.push_str(&note_text[..open_end]);
-        out.push_str(" print-object=\"no\" print-spacing=\"no\"");
-        out.push_str(&note_text[open_end..]);
-        out
-    } else {
-        note_text.to_string()
-    }
-})();
-    
+    // A cross-staff gap refusal and an auxiliary XML label are not a bound
+    // proof that this existing visible rest interval is dispensable. Keep the
+    // actual physical carrier; do not reveal any already hidden carrier.
+    // Retain the original receipt comparison and mint surface below. An exact
+    // no-op returns no receipt and grants no new authority.
+    let output = note_text.to_string();
+
     let receipt = Some(output.as_str()).filter(|post| *post != note_text).map(|post| crate::master_state_identity::BlockTransformationReceipt::mint_block_receipt(RenderRow19BlockMint { _private: () }, note_text, post, Some((0, note_text.len()))).expect("frozen owner changed bytes without receipt"));
     (output, receipt)
 }
@@ -2917,6 +2911,13 @@ fn apply_structural_rest_bridge_beam_variant_a_render_write( xml: &str, source_l
         ) in candidate_groups
         {
             targets.sort_by_key(|info| (info.start, info.index));
+            // The post-projection scope may fill an entirely unowned connection
+            // only. Existing primary/secondary beam decisions are never revised.
+            if voice_guard.bridge_is_post_projection() && targets.iter().any(|info| {
+                raw_notes.iter().find(|raw| raw.start == info.index)
+                    .and_then(|raw| partial_beat_observed_beam_states(&raw.text))
+                    .is_none_or(|rows| rows.iter().any(|(level, _)| *level <= 2))
+            }) { continue; }
             let members = targets.iter().filter_map(|info| raw_notes.iter().find(|raw| raw.start == info.index)
                 .map(|raw| (span.start + raw.start, span.start + raw.end))).collect::<Vec<_>>();
             let admission = if members.len() == targets.len() {
@@ -2924,6 +2925,10 @@ fn apply_structural_rest_bridge_beam_variant_a_render_write( xml: &str, source_l
             } else { None };
             match admission {
                 Some(true) => provisional_flags.push(false),
+                Some(false) if voice_guard.bridge_is_post_projection() => {
+                    audit.frozen_voice_split_groups += 1;
+                    continue;
+                },
                 Some(false) if voice_guard.provisional_bridge_offered(&members) => provisional_flags.push(true),
                 Some(false) => {
                     let unchanged = structural_rest_bridge_beam_states(&targets).iter().all(|(idx, rows)| {
@@ -3088,6 +3093,108 @@ mod variant_a_decision_scope_write_footprint_tests {
 
     #[test]
     fn mixed_hierarchy_write_keeps_following_beat_byte_identical() {
+        // The original admitted E050 writer test owns these additional
+        // actual-owner subcases; no new legacy writer caller is introduced.
+        use super::projected_rest_bridge_owner_tests::{score, fixture, state_for};
+        use super::{partial_beat_note_infos, partial_beat_raw_notes, choose_structural_rest_bridge_candidate_groups};
+        use crate::master_state_identity::{RenderTransitionReceipts, RenderDiscardReason};
+        use crate::structural_write_authority::{RenderSinkKind, RenderCheckpointSink};
+        {
+
+        for (ordinal, unit, label, copies) in [(7,96,"2",1),(41,96,"13",1),(53,144,"13",1),(19,96,"7",2)] {
+            let input=score(ordinal,unit,label,copies);
+            let (mut canonical,voices,course)=fixture(&input,label,copies);
+            let projected=course.xml();
+            assert_ne!(input,projected);
+            let infos=partial_beat_note_infos(&input,&partial_beat_raw_notes(&input));
+            assert!(choose_structural_rest_bridge_candidate_groups(&infos,unit).is_empty());
+            let (mut state,path)=state_for(projected);
+            let mut guard=canonical.bind_projected_bridge_voice_guard(&course,&voices,None,&Default::default()).unwrap();
+            guard.bind_rest_bridge_main_state(&state);
+            let ((post,audit),receipt,pending)=apply_structural_rest_bridge_beam_variant_a_render_write(projected,"synthetic projected source",&path,&guard);
+            if unit != 96 {
+                // The unchanged partial-rest owner is deliberately defined only
+                // on the normalized basis. Scaling cannot invent its permit.
+                assert!(!audit.written);assert_eq!(post,projected);assert!(pending.is_none());
+                let mut discarded=RenderTransitionReceipts::new();discarded.push_preserving(receipt,&post);discarded.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
+                std::fs::remove_file(path).unwrap();
+                continue;
+            }
+            assert!(audit.written);assert_eq!(audit.written_rows,copies*2);
+            receipt.as_ref().unwrap().validate_preserving_transition::<StructuralRestBridgeVariantAPreservingMint>(projected,&post).unwrap();
+            let root=state.require_state_root("projected owner test");
+            let mut chain=RenderTransitionReceipts::new();chain.push_preserving(receipt,&post);
+            state.adopt_transition(root,&post,chain,RenderSinkKind::Checkpoint(RenderCheckpointSink::SisterFeedbackBeam),
+                |path,_pre,post| crate::structural_write_authority::write_sister_feedback_beam_checkpoint_authorized(path,post)).unwrap();
+            let carried=canonical.adopt_projected_rest_bridge_output(&course,pending,&state,&voices,&Default::default()).unwrap();
+            canonical.bind_projected_bridge_voice_guard(&carried,&voices,None,&Default::default()).unwrap();
+            assert_eq!(carried.xml(),state.document().unwrap());
+            assert_eq!(std::fs::read_to_string(&path).unwrap(),post);
+            // The new evidence must come from this actual E050 execution and
+            // its successful Main adoption, not from synthetic endpoint tags.
+            let exchange = canonical.bind_rest_bridge_cursor_exchange(&carried,&voices,&Default::default()).unwrap();
+            assert_eq!(exchange.cursor_exchange_edits(carried.xml()).unwrap().0,copies);
+
+            // A second application preserves every already-owned connection.
+            let guard=canonical.bind_projected_bridge_voice_guard(&carried,&voices,None,&Default::default()).unwrap();
+            let ((again,again_audit),again_receipt,_)=apply_structural_rest_bridge_beam_variant_a_render_write(&post,"synthetic repeated source",&path,&guard);
+            assert_eq!(again,post);assert!(!again_audit.written);
+            let mut discarded=RenderTransitionReceipts::new();discarded.push_preserving(again_receipt,&again);discarded.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
+            std::fs::remove_file(path).unwrap();
+        }
+    
+        }
+        {
+
+        let input=score(17,96,"2",1);let (mut canonical,voices,course)=fixture(&input,"2",1);
+        let (state,path)=state_for(course.xml());
+        let mut guard=canonical.bind_projected_bridge_voice_guard(&course,&voices,None,&Default::default()).unwrap();guard.bind_rest_bridge_main_state(&state);
+        let ((post,audit),receipt,pending)=apply_structural_rest_bridge_beam_variant_a_render_write(course.xml(),"synthetic pending source",&path,&guard);
+        assert!(audit.written);
+        assert!(canonical.adopt_projected_rest_bridge_output(&course,pending,&state,&voices,&Default::default()).is_err());
+        assert_eq!(state.document(),Some(course.xml()));
+        let mut discarded=RenderTransitionReceipts::new();discarded.push_preserving(receipt,&post);discarded.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
+        std::fs::remove_file(path).unwrap();
+    
+        }
+        {
+
+        let input=score(11,96,"2",1);let (canonical,voices,course)=fixture(&input,"2",1);
+        let guard=canonical.bind_projected_bridge_voice_guard(&course,&voices,None,&Default::default()).unwrap();
+        let foreign=course.xml().replace("<step>G</step>","<step>A</step>");
+        let ((post,audit),receipt,_)=apply_structural_rest_bridge_beam_variant_a_render_write(&foreign,"synthetic stale source",Path::new("unused"),&guard);
+        assert_eq!(post,foreign);assert!(!audit.written);assert!(audit.frozen_voice_unbound_groups>0);
+        let mut discarded=RenderTransitionReceipts::new();discarded.push_preserving(receipt,&post);discarded.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
+    
+        }
+        {
+
+        let original=score(23,96,"2",1);
+        let input=original.replacen("<staff>2</staff>","<staff>2</staff><beam number=\"1\">begin</beam>",1);
+        let (canonical,voices,course)=fixture(&input,"2",1);
+        let guard=canonical.bind_projected_bridge_voice_guard(&course,&voices,None,&Default::default()).unwrap();
+        let ((post,audit),receipt,_)=apply_structural_rest_bridge_beam_variant_a_render_write(course.xml(),"synthetic owned source",Path::new("unused"),&guard);
+        assert_eq!(post,course.xml());assert!(!audit.written);
+        let mut discarded=RenderTransitionReceipts::new();discarded.push_preserving(receipt,&post);discarded.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
+    
+        }
+        {
+
+        let original=score(31,96,"2",1);
+        let cases=[
+            original.replace("<note><rest/>","<note print-object=\"no\"><rest/>"),
+            original.replace("<rest/><duration>96</duration>","<rest/><duration>36</duration>"),
+            original.replace("<rest/><duration>96</duration><voice>2</voice>","<rest/><duration>96</duration><voice>9</voice>"),
+        ];
+        for input in cases {
+            let (canonical,voices,course)=fixture(&input,"2",1);
+            let guard=canonical.bind_projected_bridge_voice_guard(&course,&voices,None,&Default::default()).unwrap();
+            let ((post,audit),receipt,_)=apply_structural_rest_bridge_beam_variant_a_render_write(course.xml(),"synthetic incomplete coverage",Path::new("unused"),&guard);
+            assert_eq!(post,course.xml());assert!(!audit.written);
+            let mut discarded=RenderTransitionReceipts::new();discarded.push_preserving(receipt,&post);discarded.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
+        }
+    
+        }
         let following_beat = r#"<note><pitch><step>F</step><octave>4</octave></pitch><duration>24</duration><voice>2</voice><type>16th</type><staff>2</staff><beam number="1">begin</beam><beam number="2">begin</beam></note>
 <note><pitch><step>G</step><octave>4</octave></pitch><duration>24</duration><voice>2</voice><type>16th</type><staff>2</staff><beam number="1">continue</beam><beam number="2">continue</beam></note>
 <note><pitch><step>A</step><octave>4</octave></pitch><duration>24</duration><voice>2</voice><type>16th</type><staff>2</staff><beam number="1">continue</beam><beam number="2">continue</beam></note>
@@ -3384,6 +3491,7 @@ fn lower_staff_ledger_pressure(midi: i64, clef: &str) -> i64 {
 fn normalize_final_export_xml(
     xml: &mut String,
 ) -> (anyhow::Result<String>, Option<master_state_identity::PreservingTransformationReceipt>) {
+    let _detail = crate::audit_only::performance_timings::ScopedCallTiming::current("FinalExportNormalization", "");
     let (removed_words, receipt) = remove_generated_octave_word_labels(xml);
     let stats = match validate_octave_shift_direction_semantics(xml)
         .context("OctaveShiftExportGuard: finale Oktavlinien sind semantisch widersprüchlich")
@@ -4180,6 +4288,7 @@ fn insert_direction_into_measure(
 /// inner owners (#5 note visibility, #6 allowed range removal) in application
 /// order and mints none of its own.
 fn apply_final_notation_polish_guard(xml: &mut String) -> master_state_identity::OwnerReceipts {
+    let _detail = crate::audit_only::performance_timings::ScopedCallTiming::current("FinalNotationPolishGuard", "");
     let mut receipts = master_state_identity::OwnerReceipts::default();
     receipts.append(hide_exact_duplicate_visible_noteheads(xml).1);
     receipts.append(hide_redundant_visible_staff_rests(xml).1);
@@ -4710,3 +4819,6 @@ fn parent_preview(
         assert!(!gemeinsame_registerkurs_gegenrechnung(&fresh, &empty).unwrap().is_empty());
     }
 }
+
+#[cfg(test)]
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/structural_write_authority/projected_rest_bridge_owner_tests.rs"));

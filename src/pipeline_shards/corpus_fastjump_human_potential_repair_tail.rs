@@ -56,7 +56,9 @@ fn evaluate_arrangement_variant(
     reference_signature: &ReferenceSignature,
     options: &CheckOptions,
     layout_pages: Option<usize>,
+    detail_timings: &crate::audit_only::performance_timings::BatchTimings<'_, 9>,
 ) -> anyhow::Result<ArrangementVariant> {
+    let mut detail = detail_timings.call();
     if let Some(courses) = &arrangement.stats.rhythmic_courses {
         courses.validate_binding(&arrangement.xml)?;
     }
@@ -70,9 +72,12 @@ fn evaluate_arrangement_variant(
         arrangement.xml.clone(),
         crate::master_state_identity::MasterLineage::lineage_from_genesis(arrangement_source_genesis),
     );
+    detail.enter(1);
     let fidelity = check_reference_fidelity(reference, reference_signature, &arrangement.stats);
+    detail.enter(2);
     let polish = polish_musicxml(&arrangement.xml)
         .with_context(|| format!("NotationModel/PolishEngine konnte Profil {profile_name} nicht polieren"))?;
+    detail.enter(3);
     let layout_plan = layout_pages
         .map_or_else(
             || choose_auto_pianist_layout(AutoLayoutInput {
@@ -88,6 +93,7 @@ fn evaluate_arrangement_variant(
             LayoutPlan::manual,
         );
     let layout = apply_pianist_layout(&polish.xml, layout_plan.target_pages);
+    detail.enter(4);
     let _origin = crate::audit_only::panic_origin_observation::enter("ArrangementVariant/PolishAndLayout", &arrangement.xml, Some(&layout.xml));
     if let Some(courses) = &arrangement.stats.rhythmic_courses {
         let polished_courses = courses.continue_representation(&polish.xml, &polish.rhythmic_transport)?;
@@ -96,6 +102,7 @@ fn evaluate_arrangement_variant(
             crate::arrangement::OwnedRhythmicContinuation::receive(&layout_courses, &layout.xml)?));
         arrangement.stats.rhythmic_courses = Some(std::sync::Arc::new(layout_courses));
     }
+    detail.enter(5);
     // GENESIS #62 -> PRESERVING E051 (polish) -> PRESERVING E056 (layout);
     // a refused receipt is a fatal sovereignty violation at adoption.
     polish
@@ -141,9 +148,12 @@ fn evaluate_arrangement_variant(
         polish_and_layout_receipts,
         "ArrangementVariant/PolishAndLayout",
     );
+    detail.enter(6);
     let checked_score = parse_musicxml(master_state.document())
         .with_context(|| format!("Polierte/Layout-MusicXML Profil {profile_name} konnte nicht geprüft werden"))?;
+    detail.enter(7);
     let mut checked = run_checks(&checked_score, options);
+    detail.enter(8);
     // v0.1.116: CandidateAudit-Basis bleibt unverfälscht. Die globale
     // Notationspolitur wird hier nicht vorweggenommen, damit Baseline und
     // Kandidaten dieselbe Vergleichsbasis behalten. Clef-aware Hints werden nur
@@ -151,6 +161,7 @@ fn evaluate_arrangement_variant(
     // selbst vorhanden ist.
     let _clef_hint_repair =
         suppress_lower_staff_treble_clef_high_register_hints(&mut checked, master_state.document());
+    detail.reached_tail();
     Ok(ArrangementVariant {
         final_result: checked,
         master_state,
@@ -853,6 +864,13 @@ fn evaluate_patched_candidates_parallel(
         return Ok(Vec::new());
     }
 
+    let detail_timings = crate::audit_only::performance_timings::BatchTimings::new(
+        base.final_result.score_title.as_deref().unwrap_or("unknown"), label, *next_iteration,
+        ["NormalizeVisibleRhythm", "OriginalOwnerContinuation", "ReceiptValidationAndAudit",
+         "ParseMusicXml", "RunChecks", "CloneCandidate", "CompleteContextAndBirthTransport",
+         "AdoptionAndMaterialLineage", "FinalizeStats"]);
+    let mut batch_detail = crate::audit_only::performance_timings::SequentialTimings::new(
+        base.final_result.score_title.as_deref().unwrap_or("unknown"), label, "TransferPreflight");
     let original_total = inputs.len();
     let iteration_start = *next_iteration;
     *next_iteration += original_total;
@@ -891,6 +909,7 @@ fn evaluate_patched_candidates_parallel(
         return Ok(Vec::new());
     }
 
+    batch_detail.enter("WorkerEvaluation");
     let total = eligible_inputs.len();
     let worker_count = parallel.workers.min(total).max(1);
 
@@ -913,7 +932,7 @@ fn evaluate_patched_candidates_parallel(
                 material_declared_effects,
                 &material_transfer_carriers,
                 base,
-                options,
+                (options, &detail_timings),
             )?;
             let done = eligible_index + 1;
             if should_report_progress_tick(done, total) {
@@ -921,6 +940,7 @@ fn evaluate_patched_candidates_parallel(
             }
             out.push((source_index, candidate));
         }
+        batch_detail.enter("SortAndCollect");
         out.sort_by_key(|(source_index, _)| *source_index);
         return Ok(out.into_iter().map(|(_, candidate)| candidate).collect());
     }
@@ -947,6 +967,7 @@ fn evaluate_patched_candidates_parallel(
             let completed = &completed;
             let results = &results;
             let eligible_inputs = &eligible_inputs;
+            let detail_timings = &detail_timings;
             scope.spawn(move || {
                 loop {
                     let eligible_index = next.fetch_add(1, Ordering::Relaxed);
@@ -976,7 +997,7 @@ fn evaluate_patched_candidates_parallel(
                         material_declared_effects,
                         &material_transfer_carriers,
                         base,
-                        options,
+                        (options, detail_timings),
                     );
                     results
                         .lock()
@@ -991,6 +1012,7 @@ fn evaluate_patched_candidates_parallel(
         }
     });
 
+    batch_detail.enter("SortAndCollect");
     let mut results = results
         .into_inner()
         .expect("ParallelPatchEvaluator Mutex vergiftet");
@@ -1075,8 +1097,10 @@ fn build_atomic_candidate(
     material_declared_effects: Option<CandidateMaterialDeclaredEffects>,
     material_transfer_carriers: &[CandidateMaterialRepresentationTransferCarrier],
     base: &SolverCandidate,
-    options: &CheckOptions,
+    evaluation: (&CheckOptions, &crate::audit_only::performance_timings::BatchTimings<'_, 9>),
 ) -> anyhow::Result<SolverCandidate> {
+    let (options, detail_timings) = evaluation;
+    let mut detail = detail_timings.call();
     let AtomicPatchedDocument {
         xml,
         lineage_receipts,
@@ -1092,6 +1116,7 @@ fn build_atomic_candidate(
     // normalisierte XML. So beweist ein Move-/Transfer-Carrier ausschließlich
     // den AtomicPatch und wird nicht für zusätzliche Ledger-Deltas missbraucht.
     let mut normalized = normalize_visible_rhythm_musicxml(&xml);
+    detail.enter(1);
     // Original owner capture, independent of CandidateMaterial matching.
     // These identities supply no missing course, role or adoption authority.
     let patch_births = lineage_receipts.physical_birth_readback(base.layout_xml(), &xml);
@@ -1106,6 +1131,7 @@ fn build_atomic_candidate(
                 .map_err(|error| anyhow!("AtomicPatch/VisibleRhythm: {error}")),
             None => { state.validate_binding(&normalized.xml)?; Ok(state) },
         });
+    detail.enter(2);
     for births in &normalized.stats.physical_births { births.validate_binding(&xml, &normalized.xml)?; }
     // BLOCK #52 exists exactly when the normalizer changed the document.
     let visible_rhythm_receipt = normalized.visible_rhythm_block_identity.take();
@@ -1124,10 +1150,14 @@ fn build_atomic_candidate(
         &xml,
         &normalized.xml,
     );
+    detail.enter(3);
     let checked_score = parse_musicxml(&normalized.xml)
         .with_context(|| format!("SafeAtomicRepair-Patch {patch_name} konnte nicht geprüft werden"))?;
+    detail.enter(4);
     let checked = run_checks(&checked_score, options);
+    detail.enter(5);
     let mut candidate = base.clone();
+    detail.enter(6);
     match continued_rhythm {
         Ok(state) => {
             candidate.arrangement_stats.owned_rhythm_unknown = state.require_complete_course_context(&normalized.xml).err().map(|e| e.to_string());
@@ -1143,6 +1173,7 @@ fn build_atomic_candidate(
         Err(_) => candidate.arrangement_stats.physical_birth_capture_unknown += 1,
     }
     candidate.arrangement_stats.physical_births.extend(normalized.stats.physical_births.iter().cloned());
+    detail.enter(7);
     // Lineage: base state -> the patch owners' receipts -> BLOCK #52. Missing
     // coverage is a fatal sovereignty violation at adoption.
     let mut visible_rhythm_receipts = crate::master_state_identity::OwnerReceipts::default();
@@ -1252,11 +1283,13 @@ fn build_atomic_candidate(
             );
     }
 
+    detail.enter(8);
     candidate.arrangement_stats.visible_notes_normalized += normalized.stats.visible_notes_normalized;
     candidate.arrangement_stats.visible_rhythm_rests_inserted += normalized.stats.visible_rhythm_rests_inserted;
     candidate.arrangement_stats.visible_rhythm_values_split += normalized.stats.visible_rhythm_values_split;
     candidate.arrangement_stats.visible_rhythm_measures_completed += normalized.stats.visible_rhythm_measures_completed;
     candidate.midi_seed_stats.solver_profile = patch_name.to_string();
+    detail.reached_tail();
     Ok(candidate)
 }
 

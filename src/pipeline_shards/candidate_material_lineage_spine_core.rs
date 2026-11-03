@@ -1899,6 +1899,7 @@ fn reconcile_candidate_material_lineage(
     owner: &str,
     declared: CandidateMaterialDeclaredEffects,
 ) -> anyhow::Result<()> {
+    let _detail = crate::audit_only::performance_timings::ScopedCallTiming::current("MaterialReconcile", owner);
     reconcile_candidate_material_lineage_with_pairs(candidate, owner, declared, &[], true)
 }
 

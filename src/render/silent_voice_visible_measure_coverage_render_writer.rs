@@ -2093,6 +2093,34 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
         );
     }
 
+    // E057 receives only current, canonically bound encoding exchanges. Its
+    // original receipt remains in this trial until the existing source sink commits.
+    let before_exchange = match candidate_occurrence_continuation.as_ref() {
+        Ok(course) => course,
+        Err(_) => return rejected_pdf_preparation(receipts),
+    };
+    let exchange_guard = match final_chord_structural_plan.bind_rest_bridge_cursor_exchange(
+        before_exchange, &effective_voice_plan, render_pruned_final_chord_omissions) {
+        Ok(guard) => guard,
+        Err(_) => return rejected_pdf_preparation(receipts),
+    };
+    let ((exchange_post, exchange_stats), exchange_receipt) =
+        super::super::human_bound_cursor_lane_owner_transfer_xml_with_receipt(
+            (final_candidate.as_str(), &exchange_guard));
+    let exchanged = exchange_guard.carry_rest_bridge_cursor_exchange(
+        before_exchange, &exchange_post, exchange_receipt.as_ref(),
+        &effective_voice_plan, render_pruned_final_chord_omissions);
+    let mut exchange_trial = RenderTransitionReceipts::new();
+    exchange_trial.push_preserving(exchange_receipt, &exchange_post);
+    if exchanged.is_err() {
+        exchange_trial.discard_unadopted(RenderDiscardReason::LosingCandidate);
+        return rejected_pdf_preparation(receipts);
+    }
+    receipts.append(exchange_trial);
+    let cursor_exchange_written = exchange_stats.written;
+    final_candidate = exchange_post;
+    candidate_occurrence_continuation = exchanged;
+
     crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
         "FinalPdfPrecommit",
         &final_candidate,
@@ -2105,7 +2133,8 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
         || same_lane_strict_interior_split_accepted
         || ledger_bounded_clef_boundaries_accepted > 0
         || primary_clef_projection_changed
-        || primary_beam_voice_partition_changed_voice_elements > 0;
+        || primary_beam_voice_partition_changed_voice_elements > 0
+        || cursor_exchange_written;
     if candidate_occurrence_continuation.is_err() { return rejected_pdf_preparation(receipts); }
     let prepared_candidate = final_candidate.clone();
     let final_chord_structural_plan = final_chord_structural_plan.clone();
@@ -2392,13 +2421,15 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
         || ledger_bounded_clef_boundaries_accepted > 0
         || primary_clef_projection_changed
         || primary_beam_voice_partition_changed_voice_elements > 0
+        || cursor_exchange_written
     {
         silent_audit.candidate_accepted = true;
         silent_audit.candidate_music_mutation = silent_audit.candidate_music_mutation
             || chord_host_audit.candidate_music_mutation
             || rest_audit.candidate_music_mutation
             || primary_clef_projection_changed
-            || primary_beam_voice_partition_changed_voice_elements > 0;
+            || primary_beam_voice_partition_changed_voice_elements > 0
+        || cursor_exchange_written;
     }
     let beam_regression_line = final_beam_lost_begin_committed_regression_line(
         master_xml.is_some(),
