@@ -35,3 +35,5 @@ Die EXE hat SHA-256
 [Annahmebeleg](native_acceptance.txt) ·
 [Quellprüfsummen](accepted_runtime_sha256.tsv) ·
 [Prüfsummen der GitHub-Fassung](github_projection_sha256.tsv)
+
+[Notenbeispiel aus dem nativen Lauf](../../examples/etude-1-r1601.pdf) (Etüde Nr. 1).

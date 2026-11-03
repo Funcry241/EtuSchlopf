@@ -18,11 +18,9 @@ Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI u
 
 ## Ein Blick auf die Noten
 
-[![EtuSchlopf-Notenbeispiel: erstes Klaviersystem der Etüde Nr. 1, bestätigter Stand r1577](docs/images/etude-1-r1577-ausschnitt.png)](docs/examples/etude-1-r1577.pdf)
+[![Erstes Klaviersystem der Etüde Nr. 1 aus r1601](docs/images/etude-1-r1601-ausschnitt.png)](docs/examples/etude-1-r1601.pdf)
 
-*Etüde Nr. 1 aus dem eigenen Evaluationskorpus: unveränderter PDF-Ausschnitt,
-Bestätigter nativer Stand r1577. Bild anklicken für die vollständige PDF.
-Bild und Beispiel-PDF stammen aus r1577.*
+*Etüde Nr. 1 aus dem nativen r1601-Lauf. Bild anklicken für die vollständige PDF.*
 
 ## Für wen ist EtuSchlopf gedacht?
 
@@ -102,7 +100,7 @@ du am eigenen Ergebnis.
 
 ## Quellstand und Beiträge
 
-Der Entwicklungsquellstand ist **r1601**. Die [native Abnahme](docs/evidence/r1601/README.md) dokumentiert den Vergleich mit r1599 und die geprüften Balkenstellen. Die Windows-Testversion enthält r1601. Das oben gezeigte Notenbeispiel stammt aus r1577.
+Der Entwicklungsquellstand ist **r1601**. Die [native Abnahme](docs/evidence/r1601/README.md) dokumentiert den Vergleich mit r1599 und die geprüften Balkenstellen. Die Windows-Testversion enthält r1601. Das Notenbeispiel stammt aus dem nativen r1601-Lauf.
 
 Die Download-Engine wurde aus dem angenommenen nativen Stand **r1601** gebaut.
 Der [zum geprüften Build gehörende r1601-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1601-windows-preview/EtuSchlopf-r1601-source.zip)
