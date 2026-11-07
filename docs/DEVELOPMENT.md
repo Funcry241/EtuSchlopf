@@ -1,6 +1,6 @@
 # Technische Referenz und Quellenarbeit
 
-Der angenommene Entwicklungsquellstand ist r1657. Die [nativen Prüfbelege](evidence/r1657/README.md) binden den vollständigen Korpuslauf an seinen Take. r1658/r1659 sind Kandidaten ohne vorliegende native Abnahme. Historische Abschnitte und Belege behalten ihre jeweilige Revision. Die [Download-Anleitung](../README.md) gehört zur verfügbaren Windows-Testversion r1602.
+Der angenommene Entwicklungsquellstand ist r1659. Die [nativen Prüfbelege](evidence/r1659/README.md) binden den vollständigen Korpuslauf mit zehn Etüden an seinen Take. Die Optimierungen r1658/r1659 sind damit nativ abgenommen. Historische Abschnitte und Belege behalten ihre jeweilige Revision. Die [Download-Anleitung](../README.md) gehört zur verfügbaren Windows-Testversion r1602.
 
 Das Projekt hat zwei eng verbundene Gegenstände:
 

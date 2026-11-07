@@ -1,0 +1,52 @@
+v1	src/owned_rhythmic_continuation.rs	07681a55ff398368		clone,document,is_err,is_ok,received_notation_obligations,synthetic_received_for_test
+v1	src/owned_rhythmic_continuation.rs	0a70e9e908d0b13c		as_ref,carry_range,continue_final_chord,continue_operations,final_chord_capture,map_err,notation_endpoint_cleanup_within,operation_readback,post_document,ratio,staff,staff_transition,validate_exact_execution,validate_original_respelling_chains
+v1	src/owned_rhythmic_continuation.rs	14a9d6aacd1b8768		contains,is_some,sounding_midi,tie_marks
+v1	src/owned_rhythmic_continuation.rs	219366542bd1d87b		carry,clone,cloned,continue_operations,current_complete_ranges,get,into_iter,map,ok_or_else,ratio,validate_binding,zip
+v1	src/owned_rhythmic_continuation.rs	2dc6163a9f847095		contains_key,count,filter,is_some_and,iter
+v1	src/owned_rhythmic_continuation.rs	3154c9faa3ca7759		as_ref,validate_consolidated_origins
+v1	src/owned_rhythmic_continuation.rs	3169b7f349d15822		arrangement_fixture,let,receive,unwrap
+v1	src/owned_rhythmic_continuation.rs	33e8231909d2a010		attribute,collect,contains,descendants,filter,into,is_element,map,name,parse,tag_name
+v1	src/owned_rhythmic_continuation.rs	3591c69a3321cfb8		contains,extract_first_text,tie_marks
+v1	src/owned_rhythmic_continuation.rs	3bda8d3418a3abdc		count,filter,iter,len,staff
+v1	src/owned_rhythmic_continuation.rs	4be00c03abfea822		as_ref,continue_representation,current_complete_ranges,into_iter,len,let,single_step_documents,zip
+v1	src/owned_rhythmic_continuation.rs	4dbfdd4a0b027ab3	writer-call	checked_add,collect_note_metas,collect_raw_notes,contains,duration,expected_duration,extract_first_i64,find_measure_spans,into_iter,len,new,ok_or_else,push,ratio,staff,unwrap,update_from_measure,zip
+v1	src/owned_rhythmic_continuation.rs	51d0a05fe4814acc	writer-call	clone,get,insert,new
+v1	src/owned_rhythmic_continuation.rs	5c9421d54755f5c8		chain,eq,iter,map
+v1	src/owned_rhythmic_continuation.rs	6c17a7656c4153ca		clone,contains,is_empty,is_none,iter,map,obligation_span,ok_or_else,received_source_origins,require_complete_course_context,staff
+v1	src/owned_rhythmic_continuation.rs	725c8765d5ef315b	writer-call	all,and_then,as_ref,binds,carry,carry_encoded,clear,clone,contains,continue_consolidations,enumerate,extend,extract_first_text,filter,find,from,insert,into,is_empty,is_none,is_some,is_some_and,iter,len,map,map_or,new,notation_cleanup,note_ranges,ok_or_else,original_retained_chord_copy,physical_inventory,push,remove,retain,retain_original_visible_copy,same_enharmonic_disposition,same_pitch_and_disposition,same_sounding_disposition,sort,sort_by_key,sounding_midi,staff,tie_marks,unwrap,validate_ancestry_and_snapshot,validate_binding,validate_physical_inventory
+v1	src/owned_rhythmic_continuation.rs	776d09fd716de808	writer-call	clone,cloned,find,from,get,iter,len,map,new,ok_or_else,physical_inventory,staff,validate_ancestry_and_snapshot,validate_binding,validate_physical_inventory,zip
+v1	src/owned_rhythmic_continuation.rs	7a8f8c2b1b74d6ec		as_ref,binds_recorded_representation,continue_representation,let,recorded_documents
+v1	src/owned_rhythmic_continuation.rs	7c938fb8f5001244		chain,count,filter,is_none,iter,map
+v1	src/owned_rhythmic_continuation.rs	7dcbc9649e6ea6a8		debug_struct,field,finish
+v1	src/owned_rhythmic_continuation.rs	7ed7cb1f70a25014		as_ref,is_proved,physical_inventory,validate_ancestry_and_snapshot,validate_physical_inventory
+v1	src/owned_rhythmic_continuation.rs	97fd3befd1e745c7	writer-call	and_then,drain,entry,enumerate,get_mut,into_iter,iter,key,len,new,next,or_default,push,retain,rev,unwrap_or
+v1	src/owned_rhythmic_continuation.rs	99463e7cd1d772f1		chain,clone,cloned,complete_ranges,flat_map,iter,map
+v1	src/owned_rhythmic_continuation.rs	9e662004cb1a0db3		
+v1	src/owned_rhythmic_continuation.rs	a289ef55236472ae		arrangement_source_lengths_fixture,let,receive,unwrap
+v1	src/owned_rhythmic_continuation.rs	ae3e3dd288eac8c2		extract_first_text,map_or,ok,trim
+v1	src/owned_rhythmic_continuation.rs	c735ac05864da590	writer-call	cloned,encoded_note_count,filter,get,insert,is_none,iter,len,map,max,new,ok_or_else,record_proof,sort_by_key,staff,support_by_root,unwrap_or_default,validate_encoded,validate_received_origin_path
+v1	src/owned_rhythmic_continuation.rs	c971edc0be3da0b0		as_ref,chain,clone,count,filter,filter_map,is_some,iter,map,sort_by_key,values
+v1	src/owned_rhythmic_continuation.rs	ca8470b27b31fcd4	writer-call	as_str,census_disposition,census_pair,chain,entry,iter,len,new,or_insert_with,physical_inventory,remove,staff
+v1	src/owned_rhythmic_continuation.rs	d824a4bb663843c0		carried,clone,continue_operations,find,iter,map,ok_or_else,post_document,ratio,validate_binding
+v1	src/owned_rhythmic_continuation.rs	dbcc30f1117a4a15		as_ref,carry,continue_operations,documents,let,ratio
+v1	src/owned_rhythmic_continuation.rs	dd1d12dd404d3707	writer-call	additive_original_documents,as_ref,clone,cloned,continue_operations,descendants,elements,filter,get,insert,into_iter,is_element,len,let,map,name,new,ok_or_else,parse,range,ratio,tag_name,zip
+v1	src/owned_rhythmic_continuation.rs	e3b8cf0bb67e06fe	writer-call	any,append_evidence,contains,document,iter,len,new,physical_inventory,received_notation_obligations,synthetic_received_for_test,unwrap,zip
+v1	src/owned_rhythmic_continuation.rs	e7b8cf84d5782c40		marks_named
+v1	src/owned_rhythmic_continuation.rs	ed0f6bb3ed1c5a84		arrangement_pitched_fixture,let,receive,unwrap
+v1	src/owned_rhythmic_continuation.rs	fad57a8c05c22494		contains,extract_first_text,marks_named
+v1	src/owned_rhythmic_continuation.rs	fb88b6c80dbefb8e		relocation_vacancy_count,unbound_context_count,validate_binding
+v1	src/owned_rhythmic_continuation.rs	fdc2bbdcf3f026eb		contains,extract_first_text,tie_marks
+v1	tests/unit/custody_census.rs	1253e427f498fdfb		custody_census,is_err
+v1	tests/unit/custody_census.rs	3ee68bcdb3b8aafe		census,pitched,rest,staff
+v1	tests/unit/custody_census.rs	6d548abdcd716f6a		census,pitched,remove
+v1	tests/unit/custody_census.rs	7aca7eade57fb800		custody_census_line,document,replace,rest
+v1	tests/unit/custody_census.rs	7c5f84bdfbe29f10		census,pitched,rest
+v1	tests/unit/custody_census.rs	8f85d50b28acc9b8		census,pitched,replace,rest
+v1	tests/unit/custody_census.rs	91e447f97fba1e0b		census,pitched,rest
+v1	tests/unit/custody_census.rs	ac1d1310cbad1bf4		contains,custody_census_line,document,ends_with,pitched,starts_with,unwrap
+v1	tests/unit/custody_census.rs	b0c779f2c84e64bd		
+v1	tests/unit/custody_census.rs	b0c779f2c84e64bd		
+v1	tests/unit/custody_census.rs	b0c779f2c84e64bd		
+v1	tests/unit/custody_census.rs	dca63969198e66c2		custody_census,document,unwrap
+v1	tests/unit/custody_census.rs	e6c6c5147a4b40ea		census,pitched,repeat,replace,staff
+v1	tests/unit/custody_census.rs	ec6c0958fc9554d5		census,pitched,rest

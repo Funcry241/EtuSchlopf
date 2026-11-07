@@ -1,0 +1,8 @@
+schema_version=1
+change_class=MusicMutation
+from_version=0.10.1839
+to_version=0.10.1839
+reason=Reuse exact note observations and inventory in the read-only rhythmic custody census
+change=modified|ZIP_KIND.txt|fnv64:cb6acb9d20aa5dad
+change=modified|src/owned_rhythmic_continuation.rs|fnv64:640cfbd973a31146
+change=modified|tests/unit/custody_census.rs|fnv64:22959591a4b8516d

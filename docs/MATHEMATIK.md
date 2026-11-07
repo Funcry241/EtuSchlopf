@@ -2,7 +2,7 @@
 
 EtuSchlopf macht aus MIDI- und WAV-Aufnahmen von Klavieretüden Notensatz (MusicXML und PDF). Viele Teilaufgaben dabei sind Entscheidungen: In welchem System steht ein Ton? Welcher Schlüssel gilt? Wird ein Akkordton gezeigt oder verborgen? Diese Seite zeigt, wo wir dafür Mathematik einsetzen, woher sie stammt und wie belastbar sie heute ist.
 
-**Angenommener Entwicklungsquellstand r1657.** Die [native Abnahme](evidence/r1657/README.md) dokumentiert den vollständigen Korpuslauf mit zehn Etüden. Die Optimierungen r1658/r1659 sind lokal geprüfte Kandidaten ohne vorliegende native Abnahme. Die [Windows-Testversion r1602](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1602-windows-preview) hat eigene Paketbelege. Korpuszahlen gelten für die jeweils angegebene Revision.
+**Angenommener Entwicklungsquellstand r1659.** Die [native Abnahme](evidence/r1659/README.md) dokumentiert den vollständigen Korpuslauf mit zehn Etüden. Die Optimierungen r1658/r1659 sind nativ angenommen. Gegenüber r1657 bleiben alle 20 MusicXML-Dateien bytegleich und alle 39 PDF-Seiten bei 144 dpi pixelgleich. Die [Windows-Testversion r1602](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1602-windows-preview) hat eigene Paketbelege. Korpuszahlen gelten für die jeweils angegebene Revision.
 
 ## Ehrlichkeitsregel
 
@@ -330,13 +330,15 @@ r1656 hat verbliebene Reparaturpfade erfasst. r1657 führt die frühe Schlüssel
 | r1655 | 10 min 10 s | 173,4 s |
 | r1657 | 9 min 49 s | 167,1 s |
 
+Der native r1659-Lauf benötigte **10 min 19 s** bei drei parallelen Projekten. Die summierten Projektlaufzeiten stiegen von 28:17 auf 29:55 Minuten. Diese Beobachtung belegt keinen Gesamtgeschwindigkeitsgewinn durch r1658/r1659. Die Oktavierungsphase für r1659 wird hier nicht beziffert, da die obenstehende Vergleichsauswertung dafür nicht erweitert wurde.
+
 Das sind beobachtete Läufe mit paralleler Projektverarbeitung. Summierte Phasenzeiten sind weder die Gesamtlaufzeit noch CPU-Zeit. Einzelne Läufe erlauben keine isolierte kausale Zuordnung jeder Differenz. r1653 brachte in Teilphasen deutliche Einsparungen, aber gegenüber r1651 noch keine Verbesserung der Gesamtlaufzeit.
 
 r1653 → r1655 hielt alle 20 Master- und Render-MusicXML-Dateien bytegleich. r1657 änderte die Schlüsselbearbeitung bewusst. Gegenüber r1655 änderten sich alle zehn Render-Dateien und der Master von Etüde 10. Der Ereignisvergleich erhielt Tonhöhen, Einsätze, Dauern und klingende Haltebogenmarkierungen. Beim gerasterten PDF-Vergleich änderten sich 19 von 39 Seiten bei gleicher Seitenzahl. Diese Pixelprüfung ist kein Nachweis einer vollständig visuell abgenommenen Notation.
 
-### Kandidaten r1658 und r1659
+### Nativ abgenommene Optimierungen r1658 und r1659
 
-Auf dem [Kandidatenzweig](https://github.com/Funcry241/EtuSchlopf/tree/codex/r1658-r1659-rhythm-performance) vermeidet r1658 die erneute Erfassung eines bereits geprüften physischen Inventars beim nächsten Fortsetzungszustand. r1659 verwendet geliehene Schlüssel, eine Gleichheitsabkürzung bei identischen Bytes und einmalige Klassifikation identischer verbleibender Noten. Multiplizitäten bleiben erhalten. Die lokalen Prüfungen meldeten für r1658 2187 und für r1659 2188 bestandene Tests, jeweils drei ignorierte Tests, sowie erfolgreiche Take- und Clippy-Prüfungen. Eine native Korpusabnahme dieser beiden Kandidaten liegt noch nicht vor.
+Im angenommenen Quellstand vermeidet r1658 die erneute Erfassung eines bereits geprüften physischen Inventars beim nächsten Fortsetzungszustand. r1659 verwendet geliehene Schlüssel, eine Gleichheitsabkürzung bei identischen Bytes und einmalige Klassifikation identischer verbleibender Noten. Multiplizitäten bleiben erhalten. Die lokalen Prüfungen meldeten für r1658 2187 und für r1659 2188 bestandene Tests, jeweils drei ignorierte Tests, sowie erfolgreiche Take- und Clippy-Prüfungen. Die [native Abnahme r1659](evidence/r1659/README.md) bestätigt 2969 bestandene Tests, drei ignorierte Tests sowie erfolgreiche Build- und Clippy-Prüfungen. Der endgültige Lifecycle-Handover und sein hashgebundener Annahmebeleg bestätigen r1659 als angenommen. Der frühere Generierungs-Handoff beschreibt noch den laufenden Take und ist kein endgültiges Urteil.
 
 ## Mathematik im Launcher
 
