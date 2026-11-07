@@ -81,3 +81,14 @@ fn text_only_transition_without_receipts_is_not_written() {
     let after = document(&rest(8, 1).replace("<note>", "<note print-object=\"no\">"));
     assert_eq!(receipts.custody_census_line(&before, &after, "Probe"), None);
 }
+
+#[test]
+fn same_observation_is_counted_once_per_occurrence_across_pairing_passes() {
+    let before = pitched("C", 4, 1).repeat(4);
+    let same_staff = pitched("C", 4, 1).replace("<note>", "<note print-object=\"no\">");
+    let other_staff = pitched("C", 4, 2);
+    let after = same_staff.repeat(2) + &other_staff.repeat(2);
+    assert_eq!(census(&before, &after), CustodyCensusCounts {
+        text_only: 2, staff_moved: 2, ..Default::default()
+    });
+}

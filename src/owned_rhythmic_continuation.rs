@@ -592,7 +592,12 @@ impl OwnedRhythmicContinuation {
         }
         ensure!(output.is_empty(), "Output contains a note without actual birth/continuation evidence");
         next.occurrences.sort_by_key(|o| o.bytes.start);
-        next.snapshot = Arc::from(after); next.validate_binding(after)?; Ok(next)
+        next.snapshot = Arc::from(after);
+        next.validate_ancestry_and_snapshot(after)?;
+        // The successor checks the complete inventory read from these exact
+        // output bytes, including entries consumed by the transfer above.
+        next.validate_physical_inventory(after, &physical)?;
+        Ok(next)
     }
 
     #[cfg(test)]
@@ -630,8 +635,8 @@ fn census_disposition(text: &str) -> CensusDisposition {
 
 /// Pairs equal keys once, removes the paired entries from both sides and returns
 /// the number of pairs. Pairing order is stable and carries no meaning.
-fn census_pair<K: Ord>(before: &mut Vec<&PhysicalOccurrence>, after: &mut Vec<&PhysicalOccurrence>,
-    key: impl Fn(&PhysicalOccurrence) -> K) -> usize {
+fn census_pair<'a, K: Ord>(before: &mut Vec<&'a PhysicalOccurrence>, after: &mut Vec<&'a PhysicalOccurrence>,
+    key: impl Fn(&'a PhysicalOccurrence) -> K) -> usize {
     let mut pool: BTreeMap<K, Vec<usize>> = BTreeMap::new();
     for (index, item) in after.iter().enumerate().rev() {
         pool.entry(key(item)).or_default().push(index);
@@ -656,15 +661,24 @@ impl OwnedRhythmicContinuation {
     /// bytes, text-only, staff move, disposition change, then removed/added rest.
     pub(crate) fn custody_census(before: &str, after: &str) -> Result<CustodyCensusCounts> {
         let old = physical_inventory(before)?;
+        if before == after {
+            return Ok(CustodyCensusCounts { unchanged: old.len(), ..Default::default() });
+        }
         let new = physical_inventory(after)?;
         let mut left = old.iter().collect::<Vec<_>>();
         let mut right = new.iter().collect::<Vec<_>>();
         let unchanged = census_pair(&mut left, &mut right,
-            |p| (p.staff, p.interval.start, p.interval.end, p.text.clone()));
+            |p| (p.staff, p.interval.start, p.interval.end, p.text.as_str()));
+        // Exact note bytes identify the same disposition observation. Pairing
+        // still consumes each physical occurrence independently.
+        let mut dispositions = BTreeMap::new();
+        for note in left.iter().chain(&right) {
+            dispositions.entry(note.text.as_str()).or_insert_with(|| census_disposition(&note.text));
+        }
         let text_only = census_pair(&mut left, &mut right,
-            |p| (p.staff, p.interval.start, p.interval.end, census_disposition(&p.text)));
+            |p| (p.staff, p.interval.start, p.interval.end, &dispositions[p.text.as_str()]));
         let staff_moved = census_pair(&mut left, &mut right,
-            |p| (p.interval.start, p.interval.end, census_disposition(&p.text)));
+            |p| (p.interval.start, p.interval.end, &dispositions[p.text.as_str()]));
         let disposition_changed = census_pair(&mut left, &mut right,
             |p| (p.staff, p.interval.start, p.interval.end));
         Ok(CustodyCensusCounts { unchanged, text_only, staff_moved, disposition_changed,
