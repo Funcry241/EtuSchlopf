@@ -1673,52 +1673,10 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
             write_enabled,
         );
     receipts.append(chord_receipts);
-    // v0.10.1715: Der historische Ledger-Readback darf vor RestPlacement weiterhin
-    // Clef-Surfaces als Kandidaten erzeugen. Der committed finale F4/G2-Kurs wird
-    // jedoch erst in der bestehenden FinalNotation-Write-Authority durch den
-    // ClefReadability-Primary-Plan gebunden. RestPlacement sieht weiterhin einen
-    // gueltigen Clef-Kontext, besitzt aber keine Clef-Entscheidungsautoritaet.
     crate::audit_only::c3_diagnostics::guard_checkpoint("FinalPdfSource/AfterSilentCoverage",&silent_candidate);
-    let candidate_before_clef_readback = chord_host_candidate;
-    crate::audit_only::c3_diagnostics::guard_checkpoint("FinalPdfSource/AfterOrphanChordHost",&candidate_before_clef_readback);
-    crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
-        "FinalPdfBeforeClefReadback",
-        &candidate_before_clef_readback,
-    );
-    let (candidate_with_clef_readback, clef_receipt) =
-        super::super::notation::ledger_bounded_lower_staff_clef_readback(
-            &candidate_before_clef_readback,
-            super::super::notation::LowerStaffClefReadbackScope::FinalPdfSource,
-        );
-    let clef_marker = "etuschlopf-ledger-bound-clef-readback";
-    let clef_markers_before = candidate_before_clef_readback.matches(clef_marker).count();
-    let clef_markers_after = candidate_with_clef_readback.matches(clef_marker).count();
-    let mut ledger_bounded_clef_boundaries_accepted =
-        clef_markers_after.saturating_sub(clef_markers_before);
-    let clef_before_observation =
-        observe_final_notation_readback(&candidate_before_clef_readback);
-    let clef_after_observation = observe_final_notation_readback(&candidate_with_clef_readback);
-    let clef_readback_green = clef_after_observation.parse_ok
-        && clef_before_observation.pitched_timeline_signature
-            == clef_after_observation.pitched_timeline_signature
-        && clef_before_observation.raw_cursor_signature
-            == clef_after_observation.raw_cursor_signature
-        && clef_before_observation.note_count == clef_after_observation.note_count;
-    let mut clef_trial = RenderTransitionReceipts::new();
-    clef_trial.push_preserving(clef_receipt, &candidate_with_clef_readback);
-    let clef_bound_candidate = if clef_readback_green {
-        receipts.append(clef_trial);
-        candidate_with_clef_readback
-    } else {
-        clef_trial.discard_unadopted(RenderDiscardReason::LosingCandidate);
-        ledger_bounded_clef_boundaries_accepted = 0;
-        candidate_before_clef_readback.clone()
-    };
-
-    // Rest glyph placement consumes the final serialized voice relation below.
-    // It remains one invocation of the existing owner, before the same sink.
-    crate::audit_only::c3_diagnostics::guard_checkpoint("FinalPdfSource/AfterLedgerBoundedClefReadback",&clef_bound_candidate);
-    let final_candidate_before_same_lane_split = clef_bound_candidate;
+    crate::audit_only::c3_diagnostics::guard_checkpoint("FinalPdfSource/AfterOrphanChordHost",&chord_host_candidate);
+    // The canonical primary clef course below owns the clef context for
+    // final rest placement, after the final beam voice relation is bound.
 
     // r1027: r1024-r1026 proved that the unique strict-interior same-lane
     // Rest/Pitch obstruction must be closed inside the already-existing
@@ -1909,13 +1867,13 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
 
     let (same_lane_strict_interior_candidates, same_lane_strict_interior_edit) =
         plan_final_pdf_source_same_lane_strict_interior(
-            &final_candidate_before_same_lane_split,
+            &chord_host_candidate,
         );
     crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
         "FinalPdfBeforeSameLaneSplit",
-        &final_candidate_before_same_lane_split,
+        &chord_host_candidate,
     );
-    let mut final_candidate = final_candidate_before_same_lane_split;
+    let mut final_candidate = chord_host_candidate.clone();
     crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
         "FinalPdfSameLaneInput",
         &final_candidate,
@@ -1976,7 +1934,7 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
                 &effective_occurrence_continuation,
                 &source_xml,
                 &silent_candidate,
-                &candidate_before_clef_readback,
+                &chord_host_candidate,
                 crate::structural_write_authority::OrphanChordHostContinuationEvidence {
                     normalization_accepted: chord_host_audit.candidate_accepted,
                     accepted_chord_notes: chord_host_audit.chord_notes_accepted,
@@ -2131,7 +2089,6 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
         || chord_host_audit.candidate_accepted
         || rest_audit.candidate_accepted
         || same_lane_strict_interior_split_accepted
-        || ledger_bounded_clef_boundaries_accepted > 0
         || primary_clef_projection_changed
         || primary_beam_voice_partition_changed_voice_elements > 0
         || cursor_exchange_written;
@@ -2142,8 +2099,6 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
     let finish = Box::new(move |witnessed_post: &str| {
     let commit_outcome = if write_requested { FinalNotationCommitOutcome::Committed } else { FinalNotationCommitOutcome::NotRequested };
     let committed = commit_outcome == FinalNotationCommitOutcome::Committed;
-    silent_audit.ledger_bounded_clef_boundaries_accepted =
-        ledger_bounded_clef_boundaries_accepted;
 
     // v0.10.1772: final evidence is bound to the persisted artifact, not to an
     // in-memory pre-sink candidate. Re-open the selected Render-MusicXML and prove
@@ -2174,7 +2129,7 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
                 "FinalPdfCommittedReadback",
                 &committed_xml,
             );
-            committed_ledger_clef_markers = committed_xml.matches(clef_marker).count();
+            committed_ledger_clef_markers = committed_xml.matches("etuschlopf-ledger-bound-clef-readback").count();
             let committed_occurrence_transport = match candidate_occurrence_continuation.as_ref() {
                 Ok(candidate_continuation) => crate::structural_write_authority::
                     bind_final_pdf_source_occurrence_continuation_to_exact_persisted_readback(
@@ -2399,17 +2354,6 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
     } else {
         rest_audit.candidate_rows_after
     };
-    if ledger_bounded_clef_boundaries_accepted > 0 {
-        silent_audit.candidates = silent_audit
-            .candidates
-            .saturating_add(ledger_bounded_clef_boundaries_accepted);
-        silent_audit.exact_candidate_delta = true;
-        silent_audit.candidate_accepted = true;
-        silent_audit.verdict = format!(
-            "{}_plus_final_pdf_source_ledger_bounded_clef_readback",
-            silent_audit.verdict
-        );
-    }
     if chord_host_audit.anchor_promotions_accepted > 0 {
         silent_audit.verdict = format!(
             "{}_plus_orphan_chord_rest_host_anchor_promotion",
@@ -2418,7 +2362,6 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
     }
     if chord_host_audit.candidate_accepted
         || rest_audit.candidate_accepted
-        || ledger_bounded_clef_boundaries_accepted > 0
         || primary_clef_projection_changed
         || primary_beam_voice_partition_changed_voice_elements > 0
         || cursor_exchange_written

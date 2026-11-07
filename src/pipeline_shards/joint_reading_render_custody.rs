@@ -22,6 +22,17 @@ impl JointRestForwardNoteCapture {
 impl JointReadingOwnerInput {
     fn continue_bound_ranges(&self, after: &str,
         mut carry: impl FnMut(&JointReadingOwnerHead) -> anyhow::Result<Option<std::ops::Range<usize>>>) -> anyhow::Result<Self> {
+        let mut mapped = Vec::with_capacity(self.heads.len());
+        for head in &self.heads {
+            if let Some(range) = carry(head)? {
+                mapped.push((head, range));
+            }
+        }
+        self.continue_mapped_heads(after, mapped)
+    }
+
+    fn continue_mapped_heads(&self, after: &str,
+        mapped: Vec<(&JointReadingOwnerHead, std::ops::Range<usize>)>) -> anyhow::Result<Self> {
         let notes = parse_atomic_notes(after);
         let fragments = material_fragments_from_xml(after)?;
         anyhow::ensure!(notes.len() == fragments.len(), "Render material topology is incomplete");
@@ -45,9 +56,8 @@ impl JointReadingOwnerInput {
                 tonal.final_section.as_ref().map(|section| section.boundary_measure)))
             .unwrap_or_default();
         let spelling = spelling.iter().map(|plan| (plan.note_start, plan)).collect::<BTreeMap<_, _>>();
-        let mut heads = Vec::with_capacity(self.heads.len());
-        for head in &self.heads {
-            let Some(range) = carry(head)? else { continue; };
+        let mut heads = Vec::with_capacity(mapped.len());
+        for (head, range) in mapped {
             let (note, fragment) = by_range.remove(&(range.start, range.end))
                 .ok_or_else(|| anyhow!("Original Render head is not exactly one surviving pitched container"))?;
             let old = old_notes.get(&(head.source_span.start, head.source_span.end))
@@ -65,6 +75,27 @@ impl JointReadingOwnerInput {
         }
         anyhow::ensure!(by_range.is_empty(), "A Render pitched emission has no carried source identity");
         Ok(Self { source: std::sync::Arc::from(after), heads, groups: Vec::new(), tonal, unknown_groups: BTreeMap::new() })
+    }
+
+    pub(crate) fn continue_render_final_chord(&self,
+        receipt: &ExactTransformationReceipt, after: &str) -> anyhow::Result<Self> {
+        let capture = receipt.final_chord_capture()
+            .ok_or_else(|| anyhow!("Missing original Render FinalChord emissions"))?
+            .as_ref().map_err(|error| anyhow!("{error}"))?;
+        anyhow::ensure!(capture.validate_execution(receipt, &self.source)? == after,
+            "FinalChord emissions do not bind the adopted Render document");
+        let rows = capture.rows().iter().map(|row|
+            ((row.input().start, row.input().end), row.outputs())).collect::<BTreeMap<_, _>>();
+        let mut mapped = Vec::new();
+        for head in &self.heads {
+            let outputs = rows.get(&(head.source_span.start, head.source_span.end))
+                .ok_or_else(|| anyhow!("FinalChord pitched source has no original emission"))?;
+            for (range, forward) in *outputs {
+                anyhow::ensure!(!forward, "FinalChord pitched source continued as a forward");
+                mapped.push((head, range.clone()));
+            }
+        }
+        self.continue_mapped_heads(after, mapped)
     }
 
     pub(crate) fn continue_render_exact(&self, receipt: &ExactTransformationReceipt,
@@ -118,6 +149,54 @@ impl JointReadingOwnerInput {
         let ranges = transport.carry(&self.source, after, self.heads.iter().map(|head| head.source_span.clone()).collect())?;
         let mut ranges = ranges.into_iter();
         self.continue_bound_ranges(after, |_| Ok(Some(ranges.next().ok_or_else(|| anyhow!("Incomplete Render journal"))?)))
+    }
+
+    pub(crate) fn continue_render_respelling(&self,
+        transport: &crate::arrangement::representation_transport::RhythmicRepresentationTransport,
+        after: &str) -> anyhow::Result<Self> {
+        let next = self.continue_render_recorded(transport, after)?;
+        let old = parse_atomic_notes(&self.source);
+        let new = parse_atomic_notes(after);
+        anyhow::ensure!(old.len() == new.len(), "Render respelling changed note coverage");
+        let spelling = |pitch: &crate::model::Pitch| (pitch.step.clone(), pitch.alter, pitch.octave);
+        let mut post_spellings = BTreeMap::new();
+        let mut chord_spellings = BTreeMap::new();
+        let mut changed_chord = false;
+        let mut conflicting_chord = false;
+        for (old, new) in old.iter().zip(&new) {
+            if !new.is_chord {
+                anyhow::ensure!(!(changed_chord && conflicting_chord),
+                    "Render respelling introduced conflicting chord spellings");
+                chord_spellings.clear();
+                changed_chord = false;
+                conflicting_chord = false;
+            }
+            if let (Some(old), Some(pitch)) = (&old.pitch, &new.pitch) {
+                let post = spelling(pitch);
+                let changed = spelling(old) != post;
+                changed_chord |= changed;
+                conflicting_chord |= chord_spellings.insert(pitch.midi, post.clone())
+                    .is_some_and(|prior| prior != post);
+                post_spellings.insert(new.note_start, (post, changed));
+            }
+        }
+        anyhow::ensure!(!(changed_chord && conflicting_chord),
+            "Render respelling introduced conflicting chord spellings");
+
+        // Attack identity was carried by the original emitters. Check its
+        // observed spelling without deriving a tie from pitch or adjacency.
+        let mut attacks = BTreeMap::new();
+        for head in &next.heads {
+            let (post, changed) = post_spellings.get(&head.source_span.start)
+                .ok_or_else(|| anyhow!("Render respelling lost a carried attack spelling"))?;
+            let (first, any_changed, conflicting) =
+                attacks.entry(head.attack_id).or_insert((post, false, false));
+            *any_changed |= *changed;
+            *conflicting |= *first != post;
+        }
+        anyhow::ensure!(attacks.values().all(|(_, changed, conflict)| !(*changed && *conflict)),
+            "Render respelling changed the spelling of only part of an original attack");
+        Ok(next)
     }
 
     pub(crate) fn continue_render_rest_emission(&self, receipt: &BlockTransformationReceipt,
@@ -183,6 +262,30 @@ pub(crate) fn observe_committed_joint_render_custody(context: JointRenderCustody
     state.beams = beams;
 }
 impl JointReadingRenderCustody {
+    fn observe_handoff(&self, stage: &str, sovereign_source: Option<&str>) {
+        let Some(source) = sovereign_source else {
+            eprintln!("RenderBeamCustodyHandoff: stage={stage}; status=unavailable; reason=no_render_document");
+            return;
+        };
+        {
+            let state = self.0.lock().unwrap_or_else(|error| error.into_inner());
+            if let Some(Ok(beams)) = &state.beams {
+                beams.observe_original_bridge_edges(source, stage);
+            }
+        }
+        match self.input(source) {
+            Ok(input) => {
+                let groups = input.groups().iter()
+                    .filter(|group| group.kind == JointReadingGroupKind::PrimaryBeam)
+                    .count();
+                eprintln!("RenderBeamCustodyHandoff: stage={stage}; status=bound; primary_groups={groups}");
+            }
+            Err(error) => {
+                eprintln!("RenderBeamCustodyHandoff: stage={stage}; status=unavailable; reason={error:#}");
+            }
+        }
+    }
+
     fn input(&self, sovereign_source: &str) -> anyhow::Result<JointReadingOwnerInput> {
         let state = self.0.lock().unwrap_or_else(|error| error.into_inner());
         anyhow::ensure!(state.source == sovereign_source, "Render custody does not bind the actual sovereign root");

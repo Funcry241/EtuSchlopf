@@ -1,6 +1,6 @@
 # Technische Referenz und Quellenarbeit
 
-Diese Seite beschreibt den Entwicklungsstand r1602. Die [nativen Prüfbelege](evidence/r1602/README.md) binden den Lauf an seinen Take. Die [Download-Anleitung](../README.md) gehört zur verfügbaren Windows-Testversion r1602.
+Der angenommene Entwicklungsquellstand ist r1657. Die [nativen Prüfbelege](evidence/r1657/README.md) binden den vollständigen Korpuslauf an seinen Take. r1658/r1659 sind Kandidaten ohne vorliegende native Abnahme. Historische Abschnitte und Belege behalten ihre jeweilige Revision. Die [Download-Anleitung](../README.md) gehört zur verfügbaren Windows-Testversion r1602.
 
 Das Projekt hat zwei eng verbundene Gegenstände:
 
@@ -441,3 +441,4 @@ Der eigene EtuSchlopf-Code steht unter der [MIT-Lizenz](../docs/licenses/EtuSchl
 Fremdkomponenten behalten ihre jeweiligen Lizenzen. Die Zuordnung, mitgelieferte
 Lizenztexte und Grenzen der Prüfung stehen in
 [Fremdlizenzhinweise](../docs/THIRD_PARTY_NOTICES.md).
+

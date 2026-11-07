@@ -2,7 +2,7 @@
 //! A snapshot number, hash or XML range is a physical locator, never an identity,
 //! canonical role, owner receipt, silence obligation or permission to change music.
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 #[derive(Default)]
@@ -78,7 +78,7 @@ fn snapshot_label(index: Option<usize>) -> String {
     )
 }
 
-pub(super) fn append_report(out: &mut String) {
+pub(super) fn append_report(out: &mut String, trace_measures: Option<&Option<BTreeSet<String>>>) {
     out.push_str("\nRestBoundaryByteReadback: active.\n");
     out.push_str("Authority: none; MusicMutation: nein; RoleBinding: not_inferred; RestObligationBinding: not_inferred.\n");
     out.push_str("Scope: existing same-thread lineage checkpoints, actual successful Render sink operands and committed FinalChord adoption operands; candidate-only states, unobserved steps and foreign threads are not covered.\n");
@@ -90,11 +90,11 @@ pub(super) fn append_report(out: &mut String) {
             out.push_str("RestReadbackSession: UNAVAILABLE.\n");
             return;
         };
-        append_state(out, state);
+        append_state(out, state, trace_measures);
     });
 }
 
-fn append_state(out: &mut String, state: &Readback) {
+fn append_state(out: &mut String, state: &Readback, trace_measures: Option<&Option<BTreeSet<String>>>) {
     let _ = writeln!(
         out,
         "RestReadbackSummary: observations {}; distinct_documents {}.",
@@ -114,7 +114,7 @@ fn append_state(out: &mut String, state: &Readback) {
     }
     // Deduplicate only byte-identical measure text; every physical occurrence
     // keeps its own document/range reference, even for duplicated labels.
-    let mut measures = Vec::<String>::new();
+    let mut measures = Vec::<(&str, bool)>::new();
     let mut by_hash = BTreeMap::<String, Vec<usize>>::new();
     for (index, xml) in state.documents.iter().enumerate() {
         let hash = crate::sha256::hex(xml.as_bytes());
@@ -148,14 +148,19 @@ fn append_state(out: &mut String, state: &Readback) {
                     indices
                         .iter()
                         .copied()
-                        .find(|index| measures[*index] == raw)
+                        .find(|index| measures[*index].0 == raw)
                 });
                 let measure_id = existing.unwrap_or_else(|| {
                     let id = measures.len();
-                    measures.push(raw.to_string());
+                    measures.push((raw, false));
                     by_hash.entry(measure_hash).or_default().push(id);
                     id
                 });
+                if trace_measures.is_some_and(|selected| {
+                    super::writer_trace::measure_selected(selected, measure.attribute("number").unwrap_or_default())
+                }) {
+                    measures[measure_id].1 = true;
+                }
                 let _ = writeln!(
                     out,
                     "RestReadbackOccurrence: D{}; part_ordinal {}; part_label {:?}; measure_ordinal {}; measure_label {:?}; xml_range {}..{}; M{}.",
@@ -179,7 +184,13 @@ fn append_state(out: &mut String, state: &Readback) {
             count
         );
     }
-    for (index, xml) in measures.iter().enumerate() {
+    let payload = match trace_measures {
+        None => "omitted; enable --writer-trace for exact measure XML",
+        Some(None) => "all",
+        Some(Some(_)) => "selected_measures",
+    };
+    let _ = writeln!(out, "RestReadbackXmlPayload: {payload}.");
+    for (index, (xml, include_xml)) in measures.into_iter().enumerate() {
         let _ = writeln!(
             out,
             "RestReadbackMeasure: M{}; sha256 {}; bytes {}.",
@@ -187,6 +198,9 @@ fn append_state(out: &mut String, state: &Readback) {
             crate::sha256::hex(xml.as_bytes()),
             xml.len()
         );
+        if !include_xml {
+            continue;
+        }
         let _ = writeln!(out, "RestReadbackXmlBegin M{}", index + 1);
         // Prefix every physical line so captured XML cannot open report sections.
         // Removing the prefix and taking the declared byte count restores the
@@ -212,7 +226,7 @@ mod tests {
     }
     fn report(state: &Readback) -> String {
         let mut out = String::new();
-        append_state(&mut out, state);
+        append_state(&mut out, state, Some(&None));
         out
     }
     #[test]
@@ -281,7 +295,7 @@ mod tests {
         STATE.with(|slot| assert!(slot.borrow().as_ref().unwrap().observations.is_empty()));
         clear();
         let mut out = String::new();
-        append_report(&mut out);
+        append_report(&mut out, None);
         assert!(out.contains("RestReadbackSession: UNAVAILABLE"));
     }
     #[test]
@@ -305,10 +319,16 @@ mod tests {
         assert!(out.contains("existing_lineage_checkpoint"));
         assert!(out.contains("committed_final_chord_projection_operands"));
         assert!(out.contains("committed_final_chord_continuation_operands"));
+        assert!(out.contains("RestReadbackXmlPayload: omitted;"));
+        assert!(out.contains("RestReadbackOccurrence: D1;"));
+        assert!(out.contains("RestReadbackMeasure: M1;"));
+        assert!(!out.contains("RestReadbackXmlBegin"));
+        assert!(!out.contains("RestReadbackXmlLine:"));
+        assert!(!out.contains("RestReadbackXmlEnd"));
         assert!(crate::audit_only::writer_trace::report_body().is_none());
         drop(session);
         let mut ended = String::new();
-        append_report(&mut ended);
+        append_report(&mut ended, None);
         assert!(ended.contains("RestReadbackSession: UNAVAILABLE"));
     }
     #[test]
@@ -322,10 +342,35 @@ mod tests {
         assert!(!report(&state).contains("<staff>"));
     }
     #[test]
+    fn selected_writer_trace_only_emits_payload_for_requested_measures() {
+        for offset in [83, 1083] {
+            let path = std::path::Path::new("synthetic.render.musicxml");
+            let requested = offset + 1;
+            let request = format!("M{requested:05}");
+            let _session = crate::audit_only::writer_trace::start(
+                Some(&request), "synthetic", Some(path),
+            ).unwrap();
+            let xml = format!(r#"<score-partwise><part id="opaque">
+                <measure number="{offset}"><note><rest/></note></measure>
+                <measure number="{requested}"><forward><duration>2</duration></forward></measure>
+            </part></score-partwise>"#);
+            crate::audit_only::writer_trace::record_after("sink", path, None, &xml);
+            let out = crate::audit_only::writer_trace::render_epoch_continuity_report_body();
+            assert!(out.contains("RestReadbackXmlPayload: selected_measures."));
+            assert_eq!(out.matches("RestReadbackOccurrence:").count(), 2);
+            assert!(out.contains("RestReadbackMeasure: M1;"));
+            assert!(out.contains("RestReadbackMeasure: M2;"));
+            assert!(!out.contains("RestReadbackXmlBegin M1"));
+            assert!(out.contains("RestReadbackXmlBegin M2"));
+            assert!(out.contains(&format!("RestReadbackXmlLine: <measure number=\"{requested}\">")));
+        }
+    }
+
+    #[test]
     fn complete_epoch_body_passes_the_actual_owned_section_projection() {
         let path = std::path::Path::new("synthetic.render.musicxml");
         let _session =
-            crate::audit_only::writer_trace::start(None, "synthetic", Some(path)).unwrap();
+            crate::audit_only::writer_trace::start(Some("all"), "synthetic", Some(path)).unwrap();
         let xml = score("opaque", "<note><rest/><duration>4</duration></note>");
         crate::audit_only::writer_trace::record_after("sink", path, None, &xml);
         let body = crate::audit_only::writer_trace::render_epoch_continuity_report_body();
@@ -374,7 +419,7 @@ mod tests {
         );
         observe("checkpoint", "synthetic", None, Some(&xml));
         let mut body = String::new();
-        append_report(&mut body);
+        append_report(&mut body, Some(&None));
         let mut report =
             crate::final_report::DraftReport::new(String::new()).compact(ToOwned::to_owned);
         report
@@ -400,7 +445,7 @@ mod tests {
         assert_eq!(recovered.as_bytes(), original.as_bytes());
         clear();
         let mut unavailable = String::new();
-        append_report(&mut unavailable);
+        append_report(&mut unavailable, None);
         let mut report =
             crate::final_report::DraftReport::new(String::new()).compact(ToOwned::to_owned);
         report

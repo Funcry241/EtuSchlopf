@@ -26,7 +26,7 @@ pub(super) struct BoundBridgeVoiceGuard {
     labels: BTreeMap<(usize, usize), String>,
     bindings: BTreeMap<(usize, usize), (usize, usize, usize)>,
     // r1484: groups split in the sealed plan may be written provisionally only
-    // while E050 can bind their complete extension evidence. `None` offers every
+    // while the metric owner can bind their complete extension evidence. `None` offers every
     // such group once; `Some` keeps only groups whose evidence was bound.
     provisional: Option<BTreeSet<Vec<(usize, usize)>>>,
 }

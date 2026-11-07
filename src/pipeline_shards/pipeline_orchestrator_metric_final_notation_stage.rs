@@ -57,6 +57,7 @@ fn run_metric_beam_and_final_notation_stage(
         .final_chord_structural_plan
         .clone();
     // Cross-file interface closure: RestAndArticulationRenderStageInputs is physically owned by the dedicated private include.
+    initial_render.render_beam_custody.observe_handoff("before_rest_articulation", render_state.document());
     let mut rest_and_articulation =
         run_rest_and_articulation_render_stage(RestAndArticulationRenderStageInputs {
             render_state: &mut *render_state,
@@ -93,6 +94,7 @@ fn run_metric_beam_and_final_notation_stage(
             );
         }
     }
+    initial_render.render_beam_custody.observe_handoff("after_rest_articulation", render_state.document());
     let mut bridge_transition_pre = render_state.document().map(str::to_owned);
     let mut external_feedback_closure_render_write_audit = ExternalFeedbackClosureRenderWriteAudit::default();
     let key_signature_enharmonic_spelling_render_write_audit = if initial_render.final_render_source_available {
@@ -134,6 +136,7 @@ fn run_metric_beam_and_final_notation_stage(
         "MetricBeforeFinalRenderNotationAuthority",
         &receipt_checkpoint_before_final_notation,
     );
+    initial_render.render_beam_custody.observe_handoff("before_final_chord_projection", render_state.document());
     let final_notation_authority = run_final_render_notation_authority_stage(
         FinalRenderNotationAuthorityStageInputs {
             render_state: &mut *render_state,
@@ -155,6 +158,7 @@ fn run_metric_beam_and_final_notation_stage(
         "MetricAfterFinalRenderNotationAuthority",
         &receipt_checkpoint_after_final_notation,
     );
+    initial_render.render_beam_custody.observe_handoff("after_final_notation_authority", render_state.document());
     let mut render_pdf_source_occurrence_continuation = final_notation_authority
         .final_pdf_source_occurrence_continuation
         .clone();
@@ -436,6 +440,13 @@ fn run_metric_beam_and_final_notation_stage(
         &initial_render.final_export_xml, &final_chord_encoding_candidate,
         final_chord_encoding_receipt.as_ref(),
     );
+    let mut final_chord_obligation_evidence = String::new();
+    if let Err(error) = original_chains.append_final_chord_notation_obligations(
+        &final_chord_encoding_candidate, &mut final_chord_obligation_evidence,
+    ) {
+        final_chord_obligation_evidence.push_str(&format!(
+            "FinalChordNotationObligations: Unknown; {error}; canonical_role_authority=none\n"));
+    }
     let functional_master_respelling = functional_master_respelling.bind_original_chains(original_chains);
     let (master_written, master_export_fifths_receipt, functional_respelling_receipt) =
         structural_write_authority::write_master_musicxml_output_authorized(
@@ -971,9 +982,9 @@ None)?;
         }
     }
 
-    // Retract only the real E050 operation whose carried connection would be
+    // Retract only the real metric continuation operation whose carried connection would be
     // separated by this already-bound simultaneous assignment. The existing
-    // E050 owner and its typed sink still own every beam write.
+    // metric continuation owner and its typed sink still own every beam write.
     // r1484: provisional bridges are decided here even without a late plan; if
     // their custody never reached this continuation the run fails visibly.
     anyhow::ensure!(render_pdf_source_occurrence_continuation.is_some()
@@ -992,18 +1003,14 @@ None)?;
         };
         let root = render_state.require_state_root("Bound rest bridge withdrawal");
         anyhow::ensure!(root.document() == course.xml(), "Bridge withdrawal Main/source mismatch");
-        let ((post, audit), receipt, pending) = apply_structural_rest_bridge_beam_variant_a_render_write(
-            course.xml(), "carried E050 connection before bound final voice assignment",
+        let ((post, audit), receipt, pending) = realize_metric_rest_continuation(
+            course.xml(), "carried metric continuation connection before bound final voice assignment",
             &initial_render.render_xml_trial_path, &guard);
         anyhow::ensure!(pending.is_none(), "Bridge withdrawal may not mint replacement extension evidence");
         if audit.written {
             let carried = course.through_rest_bridge_withdrawal(&post, &guard,
                 receipt.as_ref().context("Bridge withdrawal lacks owner receipt")?)?;
-            let mut chain = crate::master_state_identity::RenderTransitionReceipts::new();
-            chain.push_preserving(receipt, &post);
-            render_state.adopt_transition(root, &post, chain,
-                structural_write_authority::RenderSinkKind::Checkpoint(structural_write_authority::RenderCheckpointSink::SisterFeedbackBeam),
-                |path, _pre, verified| structural_write_authority::write_sister_feedback_beam_checkpoint_authorized(path, verified))?;
+            render_state.adopt_metric_rest_continuation(root, &post, receipt.context("Metric rest continuation lacks its owner receipt")?)?;
             render_pdf_source_occurrence_continuation = Some(carried);
         } else {
             let mut chain = crate::master_state_identity::RenderTransitionReceipts::new();
@@ -1012,27 +1019,23 @@ None)?;
         }
     }
 
-    // The same E050 owner receives only wholly unowned connections in the actual
+    // The same metric continuation owner receives only wholly unowned connections in the actual
     // FinalChord output. Established/provisional early connections stay intact.
     if render_xml_selected_for_pdf {
         let course = render_pdf_source_occurrence_continuation.as_ref()
-            .context("Projected E050 source lost occurrence continuation")?;
-        let root = render_state.require_state_root("Projected E050 current State");
-        anyhow::ensure!(root.document() == course.xml(), "Projected E050 Main/source mismatch");
+            .context("Projected metric continuation source lost occurrence continuation")?;
+        let root = render_state.require_state_root("Projected metric continuation current State");
+        anyhow::ensure!(root.document() == course.xml(), "Projected metric continuation Main/source mismatch");
         let mut guard = render_final_chord_structural_plan.bind_projected_bridge_voice_guard(
             course, &render_pdf_source_voice_plan, primary_beam_voice_partition_plan.as_ref(),
             &render_pruned_final_chord_omissions)?;
         guard.bind_rest_bridge_main_state(render_state);
-        let ((post, mut audit), receipt, pending) = apply_structural_rest_bridge_beam_variant_a_render_write(
+        let ((post, mut audit), receipt, pending) = realize_metric_rest_continuation(
             course.xml(), "actual FinalChord output before primary beam voice assignment",
             &initial_render.render_xml_trial_path, &guard);
         if audit.written {
-            anyhow::ensure!(receipt.is_some(), "Projected E050 lacks owner receipt");
-            let mut chain = crate::master_state_identity::RenderTransitionReceipts::new();
-            chain.push_preserving(receipt, &post);
-            render_state.adopt_transition(root, &post, chain,
-                structural_write_authority::RenderSinkKind::Checkpoint(structural_write_authority::RenderCheckpointSink::SisterFeedbackBeam),
-                |path, _pre, verified| structural_write_authority::write_sister_feedback_beam_checkpoint_authorized(path, verified))?;
+            anyhow::ensure!(receipt.is_some(), "Projected metric continuation lacks owner receipt");
+            render_state.adopt_metric_rest_continuation(root, &post, receipt.context("Metric rest continuation lacks its owner receipt")?)?;
             let carried = render_final_chord_structural_plan.adopt_projected_rest_bridge_output(
                 course, pending, render_state, &render_pdf_source_voice_plan,
                 &render_pruned_final_chord_omissions)?;
@@ -1048,8 +1051,8 @@ None)?;
             audit.written_rows += early.written_rows;
             audit.beam_level1_rows += early.beam_level1_rows;
             audit.beam_level2_rows += early.beam_level2_rows;
-            audit.done_fragment = format!("{}; PostProjectionE050: {}", early.done_fragment, audit.done_fragment);
-            audit.pipeline_line = format!("{} PostProjectionE050: {}", early.pipeline_line, audit.pipeline_line);
+            audit.done_fragment = format!("{}; PostProjectionmetric continuation: {}", early.done_fragment, audit.done_fragment);
+            audit.pipeline_line = format!("{} PostProjectionmetric continuation: {}", early.pipeline_line, audit.pipeline_line);
             rest_and_articulation.external_notation_feedback_beam_variant_a_tiny_render_write_audit = audit;
         }
     }
@@ -1562,10 +1565,12 @@ primary_beam_voice_partition_plan.as_ref())?,
         external_feedback_closure_render_write_audit,
         key_signature_enharmonic_spelling_render_write_audit,
         lower_clef_surface_materialization_audit,
-        notation_voice_pre_serialization_constraint_audit: initial_render
-            .frozen_sounding_temporal_lane_plan
-            .notation_voice_pre_serialization_constraint_audit
-            .clone(),
+        notation_voice_pre_serialization_constraint_audit: {
+            let mut audit = initial_render.frozen_sounding_temporal_lane_plan
+                .notation_voice_pre_serialization_constraint_audit.clone();
+            audit.append_counterfactual_body(&final_chord_obligation_evidence);
+            audit
+        },
         notation_voice_causal_lane_pressure_audit,
     };
 

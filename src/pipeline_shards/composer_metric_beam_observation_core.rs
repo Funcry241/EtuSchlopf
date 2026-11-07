@@ -167,3 +167,57 @@ fn partial_beat_measure_number(measure_text: &str) -> Option<String> {
     let key_end = open[key_start..].find('\"')? + key_start;
     Some(open[key_start..key_end].to_string())
 }
+
+/// Observe clef positions in the same measure cursor used for the beam attacks.
+fn metric_beam_clef_boundaries(measure: &str) -> Option<BTreeMap<String, Vec<i64>>> {
+    let mut boundaries = BTreeMap::new();
+    if !measure.contains("<clef") {
+        return Some(boundaries);
+    }
+    let document = roxmltree::Document::parse(measure).ok()?;
+    let mut cursor = 0_i64;
+    let mut indications = BTreeMap::new();
+    for node in document.root_element().children().filter(roxmltree::Node::is_element) {
+        let duration = || {
+            node.children()
+                .find(|child| child.has_tag_name("duration"))
+                .and_then(|child| child.text())
+                .and_then(|text| text.trim().parse::<i64>().ok())
+                .unwrap_or(0)
+                .max(0)
+        };
+        match node.tag_name().name() {
+            "backup" => cursor = cursor.checked_sub(duration())?,
+            "forward" => cursor = cursor.checked_add(duration())?,
+            "note" if !node.children().any(|child| child.has_tag_name("chord")) => {
+                cursor = cursor.checked_add(duration())?;
+            }
+            "attributes" => {
+                for clef in node.children().filter(|child| child.has_tag_name("clef")) {
+                    let staff = clef.attribute("number").unwrap_or("1");
+                    let field = |name| {
+                        clef.children()
+                            .find(|child| child.has_tag_name(name))
+                            .and_then(|child| child.text())
+                            .map(str::trim)
+                    };
+                    indications.insert((staff, cursor), (
+                        field("sign")?,
+                        field("line").and_then(|text| text.parse::<i64>().ok()),
+                        field("clef-octave-change").and_then(|text| text.parse::<i64>().ok()).unwrap_or(0),
+                        clef.attribute("print-object") != Some("no"),
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut previous = BTreeMap::new();
+    for ((staff, at), (sign, line, octave, visible)) in indications {
+        let state = (sign, line, octave);
+        if previous.insert(staff, state) != Some(state) && visible && at > 0 {
+            boundaries.entry(staff.to_owned()).or_insert_with(Vec::new).push(at);
+        }
+    }
+    Some(boundaries)
+}

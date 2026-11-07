@@ -7,7 +7,7 @@ struct RestAndArticulationRenderStageOutcome {
     wav_truth_binding_clear_tiny_accent_render_write_audit:
         AssertiveVisibleArticulationRenderWriteAudit,
     external_notation_feedback_beam_variant_a_tiny_render_write_audit:
-        SisterFeedbackBeamVariantATinyRenderWriteAudit,
+        MetricRestContinuationAudit,
     repair_loop_invocation_evidence: RestArticulationRepairLoopInvocationEvidence,
 }
 
@@ -199,18 +199,15 @@ fn run_rest_and_articulation_render_stage(
                 &beam_variant_a_source_xml, frozen_serialized_voice_plan, render_pruned_final_chord_omissions,
             ).context("Bridge voice-plan binding to current Render input")?;
             voice_guard.bind_rest_bridge_main_state(render_state);
-            let ((beam_variant_a_after_xml, audit), receipt, extension) = apply_structural_rest_bridge_beam_variant_a_render_write(
+            let ((beam_variant_a_after_xml, audit), receipt, extension) = realize_metric_rest_continuation(
             &beam_variant_a_source_xml,
             "finale Render-MusicXML nach Artikulations-/Staccato-Readback vor ExternalNotationFeedbackBeamVariantA",
             render_xml_trial_path,
             &voice_guard,
         );
             if audit.written {
-                let mut receipts = RenderTransitionReceipts::new();
-                receipts.push_preserving(receipt, &beam_variant_a_after_xml);
-                render_state.adopt_transition(root, &beam_variant_a_after_xml, receipts,
-                    structural_write_authority::RenderSinkKind::Checkpoint(structural_write_authority::RenderCheckpointSink::SisterFeedbackBeam),
-                    |path, _pre, verified| structural_write_authority::write_sister_feedback_beam_checkpoint_authorized(path, verified))?;
+                render_state.adopt_metric_rest_continuation(root, &beam_variant_a_after_xml,
+                    receipt.context("Metric rest continuation lacks its owner receipt")?)?;
                 render_final_chord_structural_plan.adopt_rest_bridge_extension_output(extension, render_state)?;
             } else {
                 let mut receipts = RenderTransitionReceipts::new();
@@ -219,7 +216,7 @@ fn run_rest_and_articulation_render_stage(
             }
             audit
         } else {
-            SisterFeedbackBeamVariantATinyRenderWriteAudit {
+            MetricRestContinuationAudit {
             source_label: "keine finale Render-XML-Quelle".to_string(),
             output_path: render_xml_trial_path.display().to_string(),
             attempted: false,
@@ -227,7 +224,7 @@ fn run_rest_and_articulation_render_stage(
             verdict: "external_notation_feedback_beam_variant_a_skipped_no_render_source".to_string(),
             done_fragment: "ExternalNotationFeedbackBeamVariantATinyRenderWriteWithPdfReadback: uebersprungen; keine finale Render-XML-Quelle; RenderXmlWrite nein; MusicMutation nein".to_string(),
             pipeline_line: format!("ExternalNotationFeedbackBeamVariantATinyRenderWriteWithPdfReadback v{}: uebersprungen; keine finale Render-XML-Quelle; RenderXmlWrite nein; MusicMutation nein.", env!("CARGO_PKG_VERSION")),
-            ..SisterFeedbackBeamVariantATinyRenderWriteAudit::default()
+            ..MetricRestContinuationAudit::default()
         }
         };
 

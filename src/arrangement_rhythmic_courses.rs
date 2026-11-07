@@ -4,6 +4,7 @@ pub(crate) mod continuation;
 use crate::midi_seed::{MidiSeedRhythmicCourses, RhythmicCreationIdentity, SeedArrangementCourse, SeedCoursePresentation};
 use anyhow::{anyhow, ensure, Result};
 use std::ops::Range;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Debug, Clone)]
 pub(super) struct CourseOccurrence {
@@ -41,15 +42,49 @@ impl CourseOccurrence {
     }
 }
 
+/// The successful proof belongs to one immutable object. A clone is a
+/// possible successor, so it starts without that proof.
+#[derive(Default)]
+struct ValidatedMemo(AtomicBool);
+
+impl Clone for ValidatedMemo {
+    fn clone(&self) -> Self { Self::default() }
+}
+
+impl ValidatedMemo {
+    fn is_proved(&self) -> bool {
+        self.0.load(Ordering::Relaxed)
+    }
+
+    fn record_proof(&self) {
+        // This flag publishes no other writes. Concurrent misses on the same
+        // immutable object can independently prove the same proposition.
+        self.0.store(true, Ordering::Relaxed);
+    }
+}
+
 /// Exact custody at the initial arrangement boundary. It supplies no authority
 /// for a different later document and no canonical pitched-source role.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct ArrangementRhythmicCourses {
     coverage: Vec<SeedArrangementCourse>,
     roots: BTreeMap<RhythmicCreationIdentity, CourseOccurrence>,
     history: BTreeMap<RhythmicCreationIdentity, CreationEdge>,
     occurrences: Vec<CourseOccurrence>,
     snapshot: String,
+    validated: ValidatedMemo,
+}
+
+impl std::fmt::Debug for ArrangementRhythmicCourses {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ArrangementRhythmicCourses")
+            .field("coverage", &self.coverage)
+            .field("roots", &self.roots)
+            .field("history", &self.history)
+            .field("occurrences", &self.occurrences)
+            .field("snapshot", &self.snapshot)
+            .finish()
+    }
 }
 
 pub(super) struct CourseMeasure {
@@ -111,7 +146,10 @@ impl ArrangementRhythmicCourses {
         }
         let roots = occurrences.iter().map(|o| (o.creation, o.clone())).collect();
         let history = occurrences.iter().map(|o| (o.creation, o.edge())).collect();
-        let state = Self { coverage, roots, history, occurrences, snapshot: xml.to_owned() };
+        let state = Self {
+            coverage, roots, history, occurrences, snapshot: xml.to_owned(),
+            validated: ValidatedMemo::default(),
+        };
         state.validate_binding(xml)?;
         Ok(state)
     }
@@ -144,7 +182,7 @@ impl ArrangementRhythmicCourses {
         }
         let state = Self {
             coverage: self.coverage.clone(), roots: self.roots.clone(),
-            history, occurrences, snapshot: xml.to_owned(),
+            history, occurrences, snapshot: xml.to_owned(), validated: ValidatedMemo::default(),
         };
         state.validate_binding(xml)?;
         Ok(state)
@@ -152,6 +190,9 @@ impl ArrangementRhythmicCourses {
 
     pub(crate) fn validate_binding(&self, xml: &str) -> Result<()> {
         ensure!(self.snapshot == xml, "Course custody belongs to another document state");
+        if self.validated.is_proved() {
+            return Ok(());
+        }
         let mut offset = 0;
         let mut context = RhythmContext::default();
         let mut count = 0;
@@ -229,6 +270,7 @@ impl ArrangementRhythmicCourses {
         ensure!(count == self.occurrences.len(), "Unbound occurrence outside the metric domain");
         ensure!(self.coverage.iter().all(|c| c.coverage.start == 0 && c.coverage.end == offset),
             "Arrangement implicitly changed the declared lifetime");
+        self.validated.record_proof();
         Ok(())
     }
 }

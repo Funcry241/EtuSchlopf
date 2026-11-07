@@ -987,7 +987,7 @@ pub(super) fn validate_late_groups(
 // Original primary membership remains the sole musical grouping decision.
 // Later accepted owners may evolve secondary beams. Those current decisions are
 // carried unchanged, not inferred anew or reset to an obsolete early surface.
-fn actual_beam_levels(xml: &str, note: &FinalChordEncodingNote) -> Option<BTreeMap<u8, String>> {
+pub(super) fn actual_beam_levels(xml: &str, note: &FinalChordEncodingNote) -> Option<BTreeMap<u8, String>> {
     let doc = roxmltree::Document::parse(&xml[note.range.clone()]).ok()?;
     let mut levels = BTreeMap::new();
     for beam in doc.root_element().children().filter(|node| node.has_tag_name("beam")) {

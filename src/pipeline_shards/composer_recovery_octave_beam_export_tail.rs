@@ -1701,6 +1701,20 @@ struct PartialBeatPostRestBeamPatchStats {
 pub(crate) struct PartialBeatBeamPreservingMint {
     _sealed: (),
 }
+fn realize_metric_rest_bridge_receipt(
+    before: &str,
+    after: &str,
+    edits: Vec<(std::ops::Range<usize>, String)>,
+) -> PreservingTransformationReceipt {
+    use crate::arrangement::representation_transport::{RepresentationStep, RhythmicRepresentationTransport};
+    let owner = PartialBeatBeamPreservingMint { _sealed: () };
+    let journal = RhythmicRepresentationTransport::partial_beam(&owner, RepresentationStep::recorded(before, after, edits));
+    journal.recorded_documents().expect("Metric bridge journal must replay before minting");
+    PreservingTransformationReceipt::mint_preserving_receipt(PartialBeatBeamPreservingMint { _sealed: () }, before, after)
+        .expect("Metric bridge changes must preserve the non-beam document")
+        .with_metric_rest_bridge(journal, &owner)
+}
+
 fn enforce_partial_beat_post_rest_beams_in_xml(xml: &mut String) -> PartialBeatPostRestBeamPatchStats {
     let spans = partial_beat_measure_spans(xml);
     if spans.is_empty() {
@@ -1840,9 +1854,13 @@ fn patch_beat_scoped_beaming_in_measure(
     let mut states_by_note: BTreeMap<usize, Vec<(usize, &'static str)>> = BTreeMap::new();
     let mut explicit_negative_notes = BTreeSet::new();
     let mut stats = BeatScopedBeamPatchStats { actual_note_map: ActualBeamNoteMap::unchanged(&raw_notes), ..Default::default() };
+    let Some(clef_boundaries) = metric_beam_clef_boundaries(measure_text) else {
+        return (measure_text.to_owned(), stats);
+    };
     add_beat_scoped_beam_groups(
         &note_infos,
         beat_unit,
+        &clef_boundaries,
         &mut states_by_note,
         &mut explicit_negative_notes,
         &mut stats,
@@ -1941,6 +1959,37 @@ mod beat_scoped_beam_decision_scope_materialization_tests {
         let end_note = &after[end_start..end_end];
         assert!(end_note.contains(r#"<beam number="1">end</beam>"#));
         assert!(end_note.contains(r#"<beam number="2">end</beam>"#));
+    }
+
+    #[test]
+    fn metric_beam_stops_at_a_same_staff_clef_change() {
+        let notes = [
+            note("C", 24, "16th", ""),
+            note("D", 24, "16th", ""),
+            note("E", 24, "16th", ""),
+        ];
+        let initial = r#"<attributes><clef number="1"><sign>G</sign><line>2</line></clef></attributes>"#;
+        for label in ["synthetic-a", "synthetic-b"] {
+            for (staff, sign, line, expected) in [
+                (1, "F", 4, vec![Some("begin"), Some("end"), None]),
+                (2, "F", 4, vec![Some("begin"), Some("continue"), Some("end")]),
+                (1, "G", 2, vec![Some("begin"), Some("continue"), Some("end")]),
+            ] {
+                let measure = format!(
+                    r#"<measure number="{label}">{initial}{}{}<attributes><clef number="{staff}"><sign>{sign}</sign><line>{line}</line></clef></attributes>{}</measure>"#,
+                    notes[0], notes[1], notes[2],
+                );
+                let (after, _) = patch_beat_scoped_beaming_in_measure(&measure, 96);
+                let document = roxmltree::Document::parse(&after).unwrap();
+                let actual: Vec<_> = document.root_element().children()
+                    .filter(|node| node.has_tag_name("note"))
+                    .map(|node| node.children()
+                        .find(|beam| beam.has_tag_name("beam") && beam.attribute("number") == Some("1"))
+                        .and_then(|beam| beam.text()))
+                    .collect();
+                assert_eq!(actual, expected);
+            }
+        }
     }
 
     #[test]
@@ -2767,12 +2816,9 @@ fn patch_partial_beat_post_rest_beams_in_measure(measure_text: &str, divisions: 
 }
 // v0.10.1278: Behind-Bars authority is structural and scorewide.
 // No measure role or external-feedback locator is permitted in productive beaming.
-pub(crate) struct StructuralRestBridgeVariantAPreservingMint {
-    pub(crate) _sealed: (),
-}
 
-#[derive(Debug, Clone, Default)]
-struct SisterFeedbackBeamVariantATinyRenderWriteAudit {
+#[derive(Debug, Default)]
+struct MetricRestContinuationAudit {
     source_label: String,
     output_path: String,
     attempted: bool,
@@ -2800,27 +2846,20 @@ struct SisterFeedbackBeamVariantATinyRenderWriteAudit {
     frozen_voice_unchanged_split_groups: usize,
     frozen_voice_unbound_groups: usize,
 }
-fn apply_structural_rest_bridge_beam_variant_a_render_write( xml: &str, source_label: &str, output_path: &std::path::Path, voice_guard: &structural_write_authority::CanonicalFinalChordStructuralPlan, ) -> ((String, SisterFeedbackBeamVariantATinyRenderWriteAudit), Option<PreservingTransformationReceipt>, Option<structural_write_authority::RestBridgeExtensionOccurrenceEvidence>) {
+fn realize_metric_rest_continuation( xml: &str, source_label: &str, output_path: &std::path::Path, voice_guard: &structural_write_authority::CanonicalFinalChordStructuralPlan, ) -> ((String, MetricRestContinuationAudit), Option<PreservingTransformationReceipt>, Option<structural_write_authority::RestBridgeExtensionOccurrenceEvidence>) {
+    let mut edits = Vec::new();
     let mut authored_groups = Vec::<Vec<(usize,usize)>>::new();
     // r1484: parallel to authored_groups; true marks a group split in the sealed
     // plan that is written only provisionally, with its own bound evidence.
     let mut provisional_flags = Vec::<bool>::new();
     let withdrawal = voice_guard.rest_bridge_withdrawal_rows(xml).expect("authentic exact bridge withdrawal input");
-    let finish = |post: String, audit: SisterFeedbackBeamVariantATinyRenderWriteAudit, groups: &[Vec<(usize,usize)>], flags: &[bool]| {
-        let receipt = crate::master_state_identity::PreservingTransformationReceipt::mint_preserving_receipt(
-            StructuralRestBridgeVariantAPreservingMint { _sealed: () },
-            xml,
-            &post,
-        );
-        assert!(
-            post == xml || receipt.is_some(),
-            "E050 changed bytes require its PRESERVING receipt"
-        );
-        let (evidence, bound) = match (withdrawal.is_none(), receipt.as_ref()) {
-            (true, Some(receipt)) => voice_guard
-                .capture_rest_bridge_extension_output_offered(xml, &post, groups, flags, receipt)
-                .expect("E050 writer-authored extension binding"),
-            _ => (None, std::collections::BTreeSet::new()),
+    let finish = |post: String, audit: MetricRestContinuationAudit, groups: &[Vec<(usize,usize)>], flags: &[bool], edits: Vec<(std::ops::Range<usize>, String)>| {
+        let receipt = (post != xml).then(|| realize_metric_rest_bridge_receipt(xml, &post, edits));
+        let (evidence, bound) = if let (None, Some(receipt)) = (withdrawal.as_ref(), receipt.as_ref()) {
+            voice_guard.capture_rest_bridge_extension_output_offered(xml, &post, groups, flags, receipt)
+                .expect("Rest bridge extension binding to the actual metric operation")
+        } else {
+            (None, BTreeSet::new())
         };
         let offered = flags.iter().enumerate().filter(|(_, provisional)| **provisional)
             .map(|(index, _)| index).collect::<std::collections::BTreeSet<_>>();
@@ -2831,13 +2870,16 @@ fn apply_structural_rest_bridge_beam_variant_a_render_write( xml: &str, source_l
             chain.push_preserving(receipt, &post);
             chain.discard_unadopted(crate::master_state_identity::RenderDiscardReason::LosingCandidate);
             let kept = offered.intersection(&bound).map(|index| groups[*index].clone()).collect();
-            return apply_structural_rest_bridge_beam_variant_a_render_write(
+            return realize_metric_rest_continuation(
                 xml, &audit.source_label, output_path, &voice_guard.with_bound_provisional_bridges(kept));
+        }
+        if withdrawal.is_none() && !voice_guard.bridge_is_post_projection() {
+            observe_metric_rest_continuation(xml, voice_guard);
         }
         eprintln!("BridgeFrozenVoiceCompatibility: file={}; split_groups={}; unchanged_split_groups={}; unbound_groups={}; provisional_bound={}; phase=proposal_evaluated_not_adoption_evidence", audit.output_path, audit.frozen_voice_split_groups, audit.frozen_voice_unchanged_split_groups, audit.frozen_voice_unbound_groups, offered.len());
         ((post, audit), receipt, evidence)
     };
-    let mut audit = SisterFeedbackBeamVariantATinyRenderWriteAudit {
+    let mut audit = MetricRestContinuationAudit {
         source_label: source_label.to_string(),
         output_path: output_path.display().to_string(),
         attempted: true,
@@ -2849,7 +2891,7 @@ fn apply_structural_rest_bridge_beam_variant_a_render_write( xml: &str, source_l
         raw_cursor_after_ok: true,
         sounding_stable: true,
         verdict: "external_notation_feedback_beam_variant_a_no_matching_cell".to_string(),
-        ..SisterFeedbackBeamVariantATinyRenderWriteAudit::default()
+        ..MetricRestContinuationAudit::default()
     };
     // v0.10.442: Dieser Write materialisiert nur den freigegebenen Variante-A-Vertrag.
     // Er setzt ausschliesslich Beam-Tags auf vorhandene Nachbar-Noten in einer dynamisch
@@ -2868,7 +2910,7 @@ fn apply_structural_rest_bridge_beam_variant_a_render_write( xml: &str, source_l
             yes_no(audit.attempted),
             yes_no(audit.variant_b_blocked)
         );
-        return finish(xml.to_string(), audit, &authored_groups, &provisional_flags);
+        return finish(xml.to_string(), audit, &authored_groups, &provisional_flags, Vec::new());
     }
     let mut out = String::with_capacity(xml.len() + 256);
     let mut last = 0_usize;
@@ -2886,7 +2928,7 @@ fn apply_structural_rest_bridge_beam_variant_a_render_write( xml: &str, source_l
         let beat_unit = inherited_divisions.max(1);
         let restore_rows = withdrawal.into_iter().flat_map(|rows| rows.iter())
             .filter(|(begin,end,_)| *begin >= span.start && *end <= span.end).collect::<Vec<_>>();
-        let candidate_groups = if withdrawal.is_some() { Vec::new() } else { choose_structural_rest_bridge_candidate_groups(&infos, beat_unit) };
+        let candidate_groups = if withdrawal.is_some() { Vec::new() } else { choose_clef_bounded_rest_bridges(measure_text, &infos, beat_unit) };
         if candidate_groups.is_empty() && restore_rows.is_empty() {
             out.push_str(measure_text);
             last = span.end;
@@ -2974,6 +3016,9 @@ fn apply_structural_rest_bridge_beam_variant_a_render_write( xml: &str, source_l
             if let Some(state_rows) = states.get(&raw.start) {
                 let rewritten = partial_beat_rewrite_owned_beam_levels(&raw.text, state_rows, 2)
                     .unwrap_or_else(|| raw.text.clone());
+                if rewritten != raw.text {
+                    edits.push((span.start + raw.start..span.start + raw.end, rewritten.clone()));
+                }
                 rebuilt.push_str(&rewritten);
                 written_rows += 1;
                 if state_rows.iter().any(|(level, _)| *level == 1) { beam_level1_rows += 1; }
@@ -3038,7 +3083,7 @@ fn apply_structural_rest_bridge_beam_variant_a_render_write( xml: &str, source_l
             yes_no(audit.variant_b_blocked),
             audit.verdict
         );
-        return finish(xml.to_string(), audit, &authored_groups, &provisional_flags);
+        return finish(xml.to_string(), audit, &authored_groups, &provisional_flags, Vec::new());
     }
     if !audit.written {
         audit.done_fragment = "ExternalNotationFeedbackBeamVariantATinyRenderWriteWithPdfReadback: kein sicherer Variante-A-Schreibkandidat; RenderXmlWrite nein; MusicMutation nein".to_string();
@@ -3051,7 +3096,7 @@ fn apply_structural_rest_bridge_beam_variant_a_render_write( xml: &str, source_l
             yes_no(audit.variant_b_blocked),
             audit.verdict
         );
-        return finish(xml.to_string(), audit, &authored_groups, &provisional_flags);
+        return finish(xml.to_string(), audit, &authored_groups, &provisional_flags, Vec::new());
     }
     audit.done_fragment = format!(
         "ExternalNotationFeedbackBeamVariantATinyRenderWriteWithPdfReadback: Variante A geschrieben; Scope {} staff {} voice {}; rows {}; Beam1 {}; Beam2 {}; WriteFootprintOutsideDecisionScopeRows {}; DecisionScopeWriteFootprintGreen {}; VariantBBlocked ja; RenderXmlWrite ja; MusicMutation nein",
@@ -3079,14 +3124,60 @@ fn apply_structural_rest_bridge_beam_variant_a_render_write( xml: &str, source_l
         yes_no(audit.sounding_stable),
         audit.verdict
     );
-    finish(out, audit, &authored_groups, &provisional_flags)
+    finish(out, audit, &authored_groups, &provisional_flags, edits)
+}
+
+fn choose_clef_bounded_rest_bridges<'a>(
+    measure: &str,
+    infos: &'a [PartialBeatNoteInfo],
+    beat_unit: i64,
+) -> Vec<MetricRestContinuationGroup<'a>> {
+    let Some(boundaries) = metric_beam_clef_boundaries(measure) else {
+        return Vec::new();
+    };
+    choose_structural_rest_bridge_candidate_groups(infos, beat_unit)
+        .into_iter()
+        .filter(|(_, staff, _, targets, _, _)| {
+            let Some(boundaries) = boundaries.get(staff) else {
+                return true;
+            };
+            !targets.windows(2).any(|pair| {
+                crosses_metric_beam_clef_boundary(boundaries, pair[0].start, pair[1].start)
+            })
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod clef_bounded_rest_bridge_tests {
+    use super::*;
+
+    #[test]
+    fn same_staff_clef_change_excludes_only_the_crossing_bridge() {
+        let note = |kind, duration| format!(
+            "<note><pitch><step>D</step><octave>4</octave></pitch><duration>{duration}</duration><voice>2</voice><type>{kind}</type><staff>2</staff></note>"
+        );
+        let eighth = note("eighth", 48);
+        let short = note("16th", 24);
+        for label in ["alpha", "beta"] {
+            for (staff, expected) in [(2, vec![1]), (1, vec![0, 1])] {
+                let measure = format!(
+                    r#"<measure number="{label}">{eighth}{short}<attributes><clef number="{staff}"><sign>G</sign><line>2</line></clef></attributes>{short}{eighth}{short}{short}</measure>"#
+                );
+                let infos = partial_beat_note_infos(&measure, &partial_beat_raw_notes(&measure));
+                let actual: Vec<_> = choose_clef_bounded_rest_bridges(&measure, &infos, 96)
+                    .into_iter().map(|(beat, _, _, _, _, _)| beat).collect();
+                assert_eq!(actual, expected);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod variant_a_decision_scope_write_footprint_tests {
-    use super::StructuralRestBridgeVariantAPreservingMint;
     use super::{
-        apply_structural_rest_bridge_beam_variant_a_render_write,
+        PartialBeatBeamPreservingMint,
+        realize_metric_rest_continuation,
         close_committed_cross_staff_beam_gestures,
     };
     use std::path::Path;
@@ -3098,7 +3189,6 @@ mod variant_a_decision_scope_write_footprint_tests {
         use super::projected_rest_bridge_owner_tests::{score, fixture, state_for};
         use super::{partial_beat_note_infos, partial_beat_raw_notes, choose_structural_rest_bridge_candidate_groups};
         use crate::master_state_identity::{RenderTransitionReceipts, RenderDiscardReason};
-        use crate::structural_write_authority::{RenderSinkKind, RenderCheckpointSink};
         {
 
         for (ordinal, unit, label, copies) in [(7,96,"2",1),(41,96,"13",1),(53,144,"13",1),(19,96,"7",2)] {
@@ -3111,7 +3201,7 @@ mod variant_a_decision_scope_write_footprint_tests {
             let (mut state,path)=state_for(projected);
             let mut guard=canonical.bind_projected_bridge_voice_guard(&course,&voices,None,&Default::default()).unwrap();
             guard.bind_rest_bridge_main_state(&state);
-            let ((post,audit),receipt,pending)=apply_structural_rest_bridge_beam_variant_a_render_write(projected,"synthetic projected source",&path,&guard);
+            let ((post,audit),receipt,pending)=realize_metric_rest_continuation(projected,"synthetic projected source",&path,&guard);
             if unit != 96 {
                 // The unchanged partial-rest owner is deliberately defined only
                 // on the normalized basis. Scaling cannot invent its permit.
@@ -3121,11 +3211,10 @@ mod variant_a_decision_scope_write_footprint_tests {
                 continue;
             }
             assert!(audit.written);assert_eq!(audit.written_rows,copies*2);
-            receipt.as_ref().unwrap().validate_preserving_transition::<StructuralRestBridgeVariantAPreservingMint>(projected,&post).unwrap();
+            receipt.as_ref().unwrap().validate_preserving_transition::<PartialBeatBeamPreservingMint>(projected,&post).unwrap();
             let root=state.require_state_root("projected owner test");
-            let mut chain=RenderTransitionReceipts::new();chain.push_preserving(receipt,&post);
-            state.adopt_transition(root,&post,chain,RenderSinkKind::Checkpoint(RenderCheckpointSink::SisterFeedbackBeam),
-                |path,_pre,post| crate::structural_write_authority::write_sister_feedback_beam_checkpoint_authorized(path,post)).unwrap();
+            
+            state.adopt_metric_rest_continuation(root, &post, receipt.unwrap()).unwrap();
             let carried=canonical.adopt_projected_rest_bridge_output(&course,pending,&state,&voices,&Default::default()).unwrap();
             canonical.bind_projected_bridge_voice_guard(&carried,&voices,None,&Default::default()).unwrap();
             assert_eq!(carried.xml(),state.document().unwrap());
@@ -3137,7 +3226,7 @@ mod variant_a_decision_scope_write_footprint_tests {
 
             // A second application preserves every already-owned connection.
             let guard=canonical.bind_projected_bridge_voice_guard(&carried,&voices,None,&Default::default()).unwrap();
-            let ((again,again_audit),again_receipt,_)=apply_structural_rest_bridge_beam_variant_a_render_write(&post,"synthetic repeated source",&path,&guard);
+            let ((again,again_audit),again_receipt,_)=realize_metric_rest_continuation(&post,"synthetic repeated source",&path,&guard);
             assert_eq!(again,post);assert!(!again_audit.written);
             let mut discarded=RenderTransitionReceipts::new();discarded.push_preserving(again_receipt,&again);discarded.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
             std::fs::remove_file(path).unwrap();
@@ -3149,7 +3238,7 @@ mod variant_a_decision_scope_write_footprint_tests {
         let input=score(17,96,"2",1);let (mut canonical,voices,course)=fixture(&input,"2",1);
         let (state,path)=state_for(course.xml());
         let mut guard=canonical.bind_projected_bridge_voice_guard(&course,&voices,None,&Default::default()).unwrap();guard.bind_rest_bridge_main_state(&state);
-        let ((post,audit),receipt,pending)=apply_structural_rest_bridge_beam_variant_a_render_write(course.xml(),"synthetic pending source",&path,&guard);
+        let ((post,audit),receipt,pending)=realize_metric_rest_continuation(course.xml(),"synthetic pending source",&path,&guard);
         assert!(audit.written);
         assert!(canonical.adopt_projected_rest_bridge_output(&course,pending,&state,&voices,&Default::default()).is_err());
         assert_eq!(state.document(),Some(course.xml()));
@@ -3162,7 +3251,7 @@ mod variant_a_decision_scope_write_footprint_tests {
         let input=score(11,96,"2",1);let (canonical,voices,course)=fixture(&input,"2",1);
         let guard=canonical.bind_projected_bridge_voice_guard(&course,&voices,None,&Default::default()).unwrap();
         let foreign=course.xml().replace("<step>G</step>","<step>A</step>");
-        let ((post,audit),receipt,_)=apply_structural_rest_bridge_beam_variant_a_render_write(&foreign,"synthetic stale source",Path::new("unused"),&guard);
+        let ((post,audit),receipt,_)=realize_metric_rest_continuation(&foreign,"synthetic stale source",Path::new("unused"),&guard);
         assert_eq!(post,foreign);assert!(!audit.written);assert!(audit.frozen_voice_unbound_groups>0);
         let mut discarded=RenderTransitionReceipts::new();discarded.push_preserving(receipt,&post);discarded.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
     
@@ -3173,7 +3262,7 @@ mod variant_a_decision_scope_write_footprint_tests {
         let input=original.replacen("<staff>2</staff>","<staff>2</staff><beam number=\"1\">begin</beam>",1);
         let (canonical,voices,course)=fixture(&input,"2",1);
         let guard=canonical.bind_projected_bridge_voice_guard(&course,&voices,None,&Default::default()).unwrap();
-        let ((post,audit),receipt,_)=apply_structural_rest_bridge_beam_variant_a_render_write(course.xml(),"synthetic owned source",Path::new("unused"),&guard);
+        let ((post,audit),receipt,_)=realize_metric_rest_continuation(course.xml(),"synthetic owned source",Path::new("unused"),&guard);
         assert_eq!(post,course.xml());assert!(!audit.written);
         let mut discarded=RenderTransitionReceipts::new();discarded.push_preserving(receipt,&post);discarded.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
     
@@ -3189,7 +3278,7 @@ mod variant_a_decision_scope_write_footprint_tests {
         for input in cases {
             let (canonical,voices,course)=fixture(&input,"2",1);
             let guard=canonical.bind_projected_bridge_voice_guard(&course,&voices,None,&Default::default()).unwrap();
-            let ((post,audit),receipt,_)=apply_structural_rest_bridge_beam_variant_a_render_write(course.xml(),"synthetic incomplete coverage",Path::new("unused"),&guard);
+            let ((post,audit),receipt,_)=realize_metric_rest_continuation(course.xml(),"synthetic incomplete coverage",Path::new("unused"),&guard);
             assert_eq!(post,course.xml());assert!(!audit.written);
             let mut discarded=RenderTransitionReceipts::new();discarded.push_preserving(receipt,&post);discarded.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
         }
@@ -3206,7 +3295,7 @@ mod variant_a_decision_scope_write_footprint_tests {
 <note><pitch><step>E</step><octave>4</octave></pitch><duration>24</duration><voice>2</voice><type>16th</type><staff>2</staff></note>
 {following_beat}</measure></part></score-partwise>"#
         );
-        let ((after, audit), receipt, _pending_extension) = apply_structural_rest_bridge_beam_variant_a_render_write(
+        let ((after, audit), receipt, _pending_extension) = realize_metric_rest_continuation(
             &xml,
             "synthetic decision-scope proof",
             Path::new("test.render.musicxml"),
@@ -3217,7 +3306,7 @@ mod variant_a_decision_scope_write_footprint_tests {
         assert!(audit.written);
         let receipt = receipt.expect("E050 changed post must carry preserving receipt");
         assert!(receipt
-            .validate_preserving_transition::<StructuralRestBridgeVariantAPreservingMint>(&xml, &after)
+            .validate_preserving_transition::<PartialBeatBeamPreservingMint>(&xml, &after)
             .is_ok());
         assert_eq!(audit.write_footprint_outside_decision_scope_rows, 0);
         assert!(audit.write_footprint_within_decision_scope);
@@ -3238,7 +3327,7 @@ mod variant_a_decision_scope_write_footprint_tests {
 <note><rest/><duration>48</duration><voice>2</voice><type>eighth</type><staff>2</staff></note>
 <note><pitch><step>D</step><octave>4</octave></pitch><duration>24</duration><voice>2</voice><type>16th</type><staff>2</staff></note>
 </measure></part></score-partwise>"#;
-            let ((after_early, early_audit), early_receipt, _pending_extension) = apply_structural_rest_bridge_beam_variant_a_render_write(
+            let ((after_early, early_audit), early_receipt, _pending_extension) = realize_metric_rest_continuation(
                 xml,
                 "synthetic rest-carrier counterexample proof",
                 Path::new("test.render.musicxml"),
@@ -3248,7 +3337,7 @@ mod variant_a_decision_scope_write_footprint_tests {
             assert!(early_audit.written);
             let early_receipt = early_receipt.expect("E050 changed rest-carrier post must carry receipt");
             assert!(early_receipt
-                .validate_preserving_transition::<StructuralRestBridgeVariantAPreservingMint>(xml, &after_early)
+                .validate_preserving_transition::<PartialBeatBeamPreservingMint>(xml, &after_early)
                 .is_ok());
             let mut early_probe = crate::master_state_identity::RenderTransitionReceipts::new();
             early_probe.push_preserving(Some(early_receipt), &after_early);
@@ -3293,7 +3382,7 @@ mod variant_a_decision_scope_write_footprint_tests {
 <note><rest/><duration>96</duration><voice>2</voice><type>quarter</type><staff>2</staff></note>
 <note><rest/><duration>96</duration><voice>2</voice><type>quarter</type><staff>2</staff></note>
 </measure></part></score-partwise>"#;
-            let ((after_early, early_audit), early_receipt, _pending_extension) = apply_structural_rest_bridge_beam_variant_a_render_write(
+            let ((after_early, early_audit), early_receipt, _pending_extension) = realize_metric_rest_continuation(
                 xml,
                 "synthetic silent-voice coverage counterexample proof",
                 Path::new("test.render.musicxml"),
@@ -3319,7 +3408,7 @@ mod variant_a_decision_scope_write_footprint_tests {
 <note><rest/><duration>12</duration><voice>2</voice><type>32nd</type><staff>2</staff></note>
 <note><pitch><step>D</step><octave>4</octave></pitch><duration>12</duration><voice>2</voice><type>32nd</type><staff>2</staff><beam number="3">end</beam></note>
 </measure></part></score-partwise>"#;
-            let ((after, audit), receipt, _pending_extension) = apply_structural_rest_bridge_beam_variant_a_render_write(
+            let ((after, audit), receipt, _pending_extension) = realize_metric_rest_continuation(
                 xml,
                 "synthetic higher-level read-through proof",
                 Path::new("test.render.musicxml"),
@@ -3329,7 +3418,7 @@ mod variant_a_decision_scope_write_footprint_tests {
             assert!(audit.written);
             let receipt = receipt.expect("E050 higher-level changed post must carry receipt");
             assert!(receipt
-                .validate_preserving_transition::<StructuralRestBridgeVariantAPreservingMint>(xml, &after)
+                .validate_preserving_transition::<PartialBeatBeamPreservingMint>(xml, &after)
                 .is_ok());
             let mut probe = crate::master_state_identity::RenderTransitionReceipts::new();
             probe.push_preserving(Some(receipt), &after);
@@ -3463,6 +3552,7 @@ struct ExternalFeedbackClosureRenderWriteAudit {
 
 
 
+#[cfg(test)]
 fn lower_staff_ledger_pressure(midi: i64, clef: &str) -> i64 {
     match clef {
         "G" => {

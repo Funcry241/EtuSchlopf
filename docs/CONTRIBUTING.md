@@ -93,3 +93,4 @@ so tun, als sei er bereits ein angenommener Take.
 
 Die Veröffentlichung von GitHub-spezifischen Vorlagen ist im
 [Veröffentlichungsablauf](community/GITHUB_PUBLISHING.md) beschrieben.
+

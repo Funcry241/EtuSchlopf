@@ -47,10 +47,26 @@ pub(super) struct SharingBeamWitness<'a> {
     pub(super) kind: SharingBeamKind,
 }
 impl ActualSourceBeamBindingObservation {
+    pub(super) fn graph_received_occurrences(&self, canonical: &CanonicalFinalChordStructuralPlan)
+        -> Result<&[BoundOccurrence], &'static str> {
+        if !self.sharing_origin_matches(canonical) { return Err("foreign_or_missing_original_beam_capture"); }
+        self.bound.as_ref().map(Vec::as_slice).map_err(|_| "missing_original_owned_capture")
+    }
+
     pub(super) fn sharing_origin_matches(&self, canonical: &CanonicalFinalChordStructuralPlan) -> bool {
         self.bound.is_ok() && canonical.written_projection.as_ref().is_some_and(|written|
             self.original.as_deref()==Some(written.original_xml.as_ref())
                 && self.locators.as_ref()==canonical.source_locators.as_ref())
+    }
+
+    pub(super) fn original_chord_head(
+        &self, member: (usize, usize, usize),
+    ) -> Option<(usize, usize, usize)> {
+        let mut rows = self.chord_attachments.as_ref().ok()?.iter()
+            .filter(|row| row.member == member);
+        let row = rows.next()?;
+        if rows.next().is_some() || row.unknown.is_some() { return None; }
+        row.head
     }
 
     pub(super) fn sharing_witness(
@@ -119,6 +135,47 @@ impl ActualSourceBeamBindingObservation {
         }
         Ok(SharingBeamWitness {source:member.source_event_id,attack:member.attack_id,
             levels:&attached.head_levels,kind:SharingBeamKind::ChordContainer})
+    }
+
+    pub(super) fn append_channel_probe_group_coherence(
+        &self,
+        out: &mut String,
+        production: &FrozenSerializedVoicePlan,
+        probe: &FrozenSerializedVoicePlan,
+    ) {
+        let Ok(rows) = &self.bound else {
+            let _ = writeln!(out, "WrittenOnlyChannelProbeBeams: source capture unavailable");
+            return;
+        };
+        let mut groups = std::collections::BTreeMap::<_, std::collections::BTreeSet<_>>::new();
+        for row in rows {
+            for (level, group, _) in &row.levels {
+                if let Some(group) = group {
+                    groups.entry((*level, *group)).or_default().insert(row.source);
+                }
+            }
+        }
+        let mut compared = 0;
+        let mut unbound = 0;
+        let mut newly_split = 0;
+        for (group, sources) in groups.into_iter().filter(|(_, sources)| sources.len() > 1) {
+            let labels = |voices: &FrozenSerializedVoicePlan| {
+                sources.iter().map(|&source| voices.label_for_source(source).map(str::to_owned))
+                    .collect::<Option<std::collections::BTreeSet<_>>>()
+            };
+            let (Some(before), Some(after)) = (labels(production), labels(probe)) else {
+                unbound += 1;
+                continue;
+            };
+            compared += 1;
+            if before.len() == 1 && after.len() > 1 {
+                newly_split += 1;
+                let _ = writeln!(out,
+                    "WrittenOnlyChannelProbeSplitBeam: group={group:?} sources={sources:?} before={before:?} after={after:?}");
+            }
+        }
+        let _ = writeln!(out,
+            "WrittenOnlyChannelProbeBeams: compared={compared} unbound={unbound} newly_split={newly_split}");
     }
 
     pub(crate) fn append_report_body(&self, out: &mut String) {
@@ -549,7 +606,7 @@ mod tests {
         let eligible=context.eligible_classes(); assert_eq!(eligible.len(),order.len());
         let empty=std::collections::BTreeSet::new();
         let input=ChannelSearchInput{model:&model,class_order:&order,class_role:&class_role,
-            semantic_different:&empty,written_different:&empty};
+            sounding_different:&TimeConflictEdges::fixture(&empty),written_different:&TimeConflictEdges::fixture(&empty)};
         let missing_observation=ActualSourceBeamBindingObservation::default();
         let no_origin=cross_role_channel_sharing::SharingContext::new(&canonical,&missing_observation,&classes,&source_roles,&[]);
         assert!(no_origin.search(&input,&partition,&roles,&eligible).is_none());
@@ -557,7 +614,7 @@ mod tests {
         let conflicts=order.iter().enumerate().flat_map(|(i,a)|order[i+1..].iter()
             .map(move |b|((*a).min(*b),(*a).max(*b)))).collect::<std::collections::BTreeSet<_>>();
         let blocked=ChannelSearchInput{model:&model,class_order:&order,class_role:&class_role,
-            semantic_different:&conflicts,written_different:&empty};
+            sounding_different:&TimeConflictEdges::fixture(&conflicts),written_different:&TimeConflictEdges::fixture(&empty)};
         assert!(context.search(&blocked,&partition,&roles,&eligible).is_none());
         assert!(context.diagnostic_count("guest_host_semantic_or_written_conflict")>0);
         let mut foreign_classes=classes.clone();
@@ -608,7 +665,7 @@ mod tests {
         assert_eq!(canonical.actions.iter().filter(|a|a.representation_role==FinalChordRepresentationRole::RetainedChordMember).count(),4);
         let empty=std::collections::BTreeSet::new();
         let input=ChannelSearchInput{model:&model,class_order:&order,class_role:&class_role,
-            semantic_different:&empty,written_different:&empty};
+            sounding_different:&TimeConflictEdges::fixture(&empty),written_different:&TimeConflictEdges::fixture(&empty)};
         let (after,after_roles,_,_)=context.search(&input,&partition,&roles,&eligible).unwrap();
         assert!(channel_consumer_overflow(&model,&after,&after_roles).is_ok());
         assert_eq!(after[&upper],partition[&upper]);
@@ -742,7 +799,7 @@ mod tests {
             .map(move|b|((*a).min(*b),(*a).max(*b)))).collect::<std::collections::BTreeSet<_>>();
         let empty=std::collections::BTreeSet::new();
         let input=ChannelSearchInput{model:&model,class_order:&order,class_role:&class_role,
-            semantic_different:&conflicts,written_different:&empty};
+            sounding_different:&TimeConflictEdges::fixture(&conflicts),written_different:&TimeConflictEdges::fixture(&empty)};
         let result=context.search(&input,&partition,&roles,&eligible);
         if let Some((after,after_roles,_,_))=&result {
             assert_eq!(context.diagnostic_count("distributed_candidate_phase_started"),0);
@@ -837,7 +894,7 @@ mod tests {
         let model=channel_consumer_model(canonical.written_projection.as_ref().unwrap(),&classes).unwrap();
         assert!(channel_consumer_overflow(&model,&partition,&roles).is_err());
         let empty=std::collections::BTreeSet::new();
-        let input=ChannelSearchInput{model:&model,class_order:&order,class_role:&class_role,semantic_different:&conflicts,written_different:&empty};
+        let input=ChannelSearchInput{model:&model,class_order:&order,class_role:&class_role,sounding_different:&TimeConflictEdges::fixture(&conflicts),written_different:&TimeConflictEdges::fixture(&empty)};
         let legacy=classes.iter().map(|(source,class)|LegacyVoiceLabelPreferenceRow{source_event_id:*source,label:if guests.contains(class) {"9000".into()} else {format!("100{class}")}}).collect::<Vec<_>>();
         let context=cross_role_channel_sharing::SharingContext::new(&canonical,&observation,&classes,&source_roles,&legacy);
         let result=context.search(&input,&partition,&roles,&context.eligible_classes());

@@ -2,7 +2,7 @@
 
 EtuSchlopf macht aus MIDI- und WAV-Aufnahmen von Klavieretüden Notensatz (MusicXML und PDF). Viele Teilaufgaben dabei sind Entscheidungen: In welchem System steht ein Ton? Welcher Schlüssel gilt? Wird ein Akkordton gezeigt oder verborgen? Diese Seite zeigt, wo wir dafür Mathematik einsetzen, woher sie stammt und wie belastbar sie heute ist.
 
-**Entwicklungsstand r1602.** Die [native Abnahme](evidence/r1602/README.md) dokumentiert die Korpusprüfung. Die [Windows-Testversion r1602](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1602-windows-preview) hat eigene Paketbelege. Korpuszahlen gelten für die jeweils angegebene Revision.
+**Angenommener Entwicklungsquellstand r1657.** Die [native Abnahme](evidence/r1657/README.md) dokumentiert den vollständigen Korpuslauf mit zehn Etüden. Die Optimierungen r1658/r1659 sind lokal geprüfte Kandidaten ohne vorliegende native Abnahme. Die [Windows-Testversion r1602](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1602-windows-preview) hat eigene Paketbelege. Korpuszahlen gelten für die jeweils angegebene Revision.
 
 ## Ehrlichkeitsregel
 
@@ -138,7 +138,7 @@ Stand r1556: R1–R4 zusammen eine Meldung (R2 in Etüde 7), R5 keine.
 
 ### 3. Stimmenbedarf ω
 
-Je System und Takt bilden Noten mit gleichem Einsatz und gleicher Dauer ein Ereignis, also das Intervall $[\text{Einsatz}, \text{Einsatz} + \text{Dauer})$. Die Mindestzahl an Stimmen ist die größte Zahl gleichzeitig überlappender Ereignisse, die **Cliquenzahl ω** des Intervallgraphen. Intervallgraphen sind perfekt, deshalb gilt Cliquenzahl = chromatische Zahl. Eine gierige Färbung nach Beginn ist optimal.
+Je System und Takt bilden Noten mit gleichem Einsatz und gleicher Dauer ein Ereignis, also das Intervall $[\text{Einsatz}, \text{Einsatz} + \text{Dauer})$. Die Mindestzahl an Stimmen ist die größte Zahl gleichzeitig überlappender Ereignisse, die **Cliquenzahl ω** des Intervallgraphen. Intervallgraphen sind perfekt, deshalb gilt Cliquenzahl = chromatische Zahl. Eine gierige Färbung nach Beginn mit Wiederverwendung eines freien Kanals ist für diesen reinen Intervallgraphen optimal. Nach dem Zusammenfassen durch Gleichheitsbedingungen gilt diese Aussage nicht automatisch. Dann ist ω zunächst nur eine Untergrenze, kein Beweis einer optimalen Kanalzahl.
 
 Stand r1556, Master, alle Noten: $\omega = 1$ in 732 und $\omega = 2$ in 8 System-Takten. Benutzt werden aber in 325 System-Takten mehr Stimmenbezeichnungen als nötig (Render: 97). Das ist ein Hinweis auf Vereinfachungspotenzial, kein Fehler im strengen Sinn.
 *Herkunft:* bekannt (Intervallgraphen; Gilmore/Hoffman, Golumbic). *Status:* misst (Zeilen `VoiceDemand`).
@@ -290,6 +290,54 @@ $F$ ist die Zahl der aufbewahrten Kandidaten, $G$ die Zahl der neu erzeugten Mas
 - **Harmonik-Kandidaten:** Kostenvektoren und Pareto-Vergleich: Ein Kandidat schlägt einen anderen nur, wenn er in keiner Komponente schlechter und in mindestens einer besser ist. *Ort:* `src/pipeline_shards/sheaf_noether_projection_core.rs`. Dateinamen wie *sheaf* oder *noether* sind dabei **keine** Belege für einen bewiesenen Satz aus Garben- oder Symmetrietheorie. Belegbar sind nur die konkreten Operationen.
 - **Gemeinsame Spanne:** Ein neuer Registerplan ersetzt den alten nur innerhalb eines geschlossenen Konfliktbereichs, mit Pflichtabdeckung, echten Ankern und Prüfung der Haltebögen. *Ort:* `src/registernotation/gemeinsame_spanne.rs`. Mit r1512 wurden so in 7 Stücken 16 bessere Alternativen bestätigt. In Etüde 4 sank die höchste Hilfslinienzahl von 5 auf 3.
 
+## Umgesetzte Mathematik seit r1602
+
+Die folgenden Verfahren gehören zum angenommenen Quellstand r1657. Sie erweitern die bisherigen Modelle. Ein vollständiger gemeinsamer Solver und ein minimaler Unlösbarkeitskern werden damit nicht behauptet.
+
+### Getrennte Zeitachsen und überprüfbare Vergabe
+
+Geschriebene und klingende Intervalle werden an Entscheidungsgrenzen getrennt typisiert. Das entspricht der Dimensionsanalyse. Ein Klangüberhang ist dadurch als andere Evidenz erkennbar. Die Typisierung allein ändert die bestehende Vergaberegel nicht und beweist auch nicht, dass jede Entscheidung ausschließlich geschriebene Zeit verwendet.
+
+Für gebundene Notenereignisse bilden Akkord-, Haltebogen- und kanonische Balkenbeziehungen ein Bedingungsmodell. Die Herkunft der Balkenkanten stammt vom zuständigen ursprünglichen Schreiber. Bereits verteilte Voice-Labels können diese Herkunft nicht ersetzen. Rollen, technische Kanäle und Füllpausen sind keine eigenständigen Beweise musikalischer Trennung. Optionale Pausenbrücken müssen von harten Ursprungsbindungen unterschieden werden.
+
+Seit r1647 wird ein vorgeschlagener Vergabeübergang an der Kandidatenwahl gegen dieselben Erhaltungsbedingungen geprüft. Er erhält realisierte geschriebene Paare und geordnete kanonische Kanten. Neue Beziehungen und Änderungen ihrer Reihenfolge brauchen einen eigenen Nachweis. Die Prüfung gilt auch für Überlaufsuche und gemeinsame Kanalnutzung über Rollengrenzen. Seit r1650 liefern Ablehnungen typisierte Gegenbeispiele, etwa ein verlorenes Paar, fehlende Kantenabdeckung oder eine unbelegte neue Beziehung. Das erste Gegenbeispiel ist kein minimaler widersprüchlicher Teilgraph. Die Diagnostik besitzt keine Schreibautorität.
+
+Mathematisch ist das die Trennung zwischen dem Vorschlag einer Lösung und ihrer Prüfung als Zertifikat. Die vorhandenen Vergabewege bleiben bestehen. Ein austauschbarer exakter Gesamtlöser ist ein weiterer Schritt.
+
+### Exakte Wiederverwendung statt wiederholter Berechnung
+
+| Verfahren | Mathematischer Kern | Geltungsbereich und Grenze |
+|---|---|---|
+| Index der Balkennachweise, r1651 | Abbildung nach Takt und ursprünglichem Akkordkopf | Systemübergreifende Konflikte werden weiter geprüft. Ungültige taktübergreifende Akkorde werden nicht übergangen. |
+| Schlüsselbewertung, r1652 | Präfixsummen und binäre Suche | Halb offene Einsatzintervalle `[a,b)`, breite ganzzahlige Summen und dieselbe Intervallbewertung für mehrere DP-Zustände. |
+| Validierung unveränderlicher Zustände, r1653 | Memoisierung einer erfolgreich bewiesenen Aussage | Wiederverwendung nur am exakt gebundenen unveränderlichen Zustand. Ein geklonter neuer Zustand verliert den Validierungsstatus. |
+| Journalabbildung, r1654 | Präfix der Byteverschiebungen und binäre Suche | Vollständige Journalprüfung bei jedem Aufruf. Danach Bereichsabbildung in O(E + N log E) statt wiederholter O(NE)-Suche, mit E Operationen und N Bereichen. |
+| Zeit- und Bindungsindex, r1655 | Einmalige Faktorisierung identischer Teilberechnungen | Zeitdaten je exaktem Quelltext und Part, Haltebogen- und Balkenströme sowie sichtbare Notenköpfe werden innerhalb ihres gültigen Kontexts wiederverwendet. |
+
+Für Präfixsummen gilt `P[k+1] = P[k] + c[k]`. Nach Ermittlung der Grenzen liefert `P[j] - P[i]` genau die Kosten der Ereignisse mit Einsatz in `[a,b)`. Diese Umformung bewahrt die Zielgröße des bestehenden dynamischen Programms. Sie führt keine neue musikalische Heuristik ein.
+
+### Schlüsselentscheidungen am zuständigen Owner
+
+r1656 hat verbliebene Reparaturpfade erfasst. r1657 führt die frühe Schlüsselbearbeitung im Render zum bestehenden E024-Owner zurück. Die historische E052-Heuristik ist nur noch für historische Tests zugänglich. Damit entfallen im geprüften Lauf die zuvor beobachteten fehlenden Provenienznachweise am RenderBeamCustodyHandoff. Das Inventar behauptet ausdrücklich nicht, dass damit jede andere Reparaturschleife beseitigt sei.
+
+`sister_feedback_beam` ist als produktiver Reparaturpfad ausgebaut. Historische Dokumentation und Sperrprüfungen gegen seine Wiedereinführung enthalten den Namen weiterhin.
+
+### Messwerte und Grenzen der Abnahme
+
+| Revision | Nativer Korpuslauf | Summierte Oktavierungsphase |
+|---|---:|---:|
+| r1653 | 12 min 11 s | 445,8 s |
+| r1655 | 10 min 10 s | 173,4 s |
+| r1657 | 9 min 49 s | 167,1 s |
+
+Das sind beobachtete Läufe mit paralleler Projektverarbeitung. Summierte Phasenzeiten sind weder die Gesamtlaufzeit noch CPU-Zeit. Einzelne Läufe erlauben keine isolierte kausale Zuordnung jeder Differenz. r1653 brachte in Teilphasen deutliche Einsparungen, aber gegenüber r1651 noch keine Verbesserung der Gesamtlaufzeit.
+
+r1653 → r1655 hielt alle 20 Master- und Render-MusicXML-Dateien bytegleich. r1657 änderte die Schlüsselbearbeitung bewusst. Gegenüber r1655 änderten sich alle zehn Render-Dateien und der Master von Etüde 10. Der Ereignisvergleich erhielt Tonhöhen, Einsätze, Dauern und klingende Haltebogenmarkierungen. Beim gerasterten PDF-Vergleich änderten sich 19 von 39 Seiten bei gleicher Seitenzahl. Diese Pixelprüfung ist kein Nachweis einer vollständig visuell abgenommenen Notation.
+
+### Kandidaten r1658 und r1659
+
+Auf dem [Kandidatenzweig](https://github.com/Funcry241/EtuSchlopf/tree/codex/r1658-r1659-rhythm-performance) vermeidet r1658 die erneute Erfassung eines bereits geprüften physischen Inventars beim nächsten Fortsetzungszustand. r1659 verwendet geliehene Schlüssel, eine Gleichheitsabkürzung bei identischen Bytes und einmalige Klassifikation identischer verbleibender Noten. Multiplizitäten bleiben erhalten. Die lokalen Prüfungen meldeten für r1658 2187 und für r1659 2188 bestandene Tests, jeweils drei ignorierte Tests, sowie erfolgreiche Take- und Clippy-Prüfungen. Eine native Korpusabnahme dieser beiden Kandidaten liegt noch nicht vor.
+
 ## Mathematik im Launcher
 
 Die folgenden Regeln steuern Ressourcen, Wiederverwendung und Freigabe. Die
@@ -423,3 +471,4 @@ Ob davon etwas über EtuSchlopf hinaus trägt, ist nicht extern geprüft. Wir be
 - G. C. Necula, „Proof-Carrying Code“ (POPL 1997): Verwandtschaft der SchlopfFormel.
 - D. E. Knuth, M. F. Plass, „Breaking Paragraphs into Lines“ (1981): Verwandtschaft der Schlöpfchen-Formel.
 - Kontext zur Spielformel, nicht zur Kalibrierung: C. Turner et al., *Applied Ergonomics* 133 (2026), 104709; J.-Y. Chi et al., *Applied Ergonomics* 97 (2021), 103518.
+

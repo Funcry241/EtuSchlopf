@@ -183,9 +183,10 @@ fn apply_key_signature_enharmonic_spelling_render_write(
     source_label: &str,
     output_path: &Path,
 ) -> ((String, KeySignatureEnharmonicSpellingRenderWriteAudit), Option<BlockTransformationReceipt>) {
+    use crate::arrangement::representation_transport::RepresentationStep;
     
     
-    let output = {
+    let (output, steps) = {
     let (before_events, backup_forward_before_ok) = collect_render_xml_note_events(xml);
     let before_atomic = parse_atomic_notes(xml);
     let before_sounding = render_visible_sounding_signature(&before_events);
@@ -206,22 +207,30 @@ fn apply_key_signature_enharmonic_spelling_render_write(
     let structural_scope_bound = scorewide_scope_bound || final_section.is_some();
     let attempted = scorewide_attempted || final_section.is_some();
 
+    let mut key_edits = Vec::new();
     let key_candidate_xml = selected_measure
         .zip(target_fifths)
         .filter(|_| attempted)
+        .inspect(|&(measure, fifths)| {
+            key_edits = key_signature_for_measure_edits(xml, measure, fifths);
+        })
         .map_or_else(|| xml.to_string(), |(measure, fifths)| rewrite_key_signature_for_measure_plain(xml, measure, fifths));
+    let keyed_for_journal = key_candidate_xml.clone();
+    let mut note_edits = Vec::new();
+    let mut record_note = |range, text: &str| note_edits.push((range, text.to_owned()));
     let (candidate_xml, respelling_stats) = if let Some(profile) = selected_profile.filter(|_| attempted) {
         if let Some(section) = final_section.as_ref() {
-            functional_enharmonic_candidate_for_tonal_frame_from_measure(
+            functional_enharmonic_candidate_with_edits(
                 &key_candidate_xml,
                 profile.fifths,
                 profile.tonic,
                 profile.minor,
                 Some(section.boundary_measure),
                 None,
+                &mut record_note,
             )
         } else {
-            scorewide_functional_enharmonic_candidate(&key_candidate_xml, profile)
+            scorewide_functional_enharmonic_candidate(&key_candidate_xml, profile, &mut record_note)
         }
     } else {
         (key_candidate_xml, FunctionalRespellingStats::default())
@@ -338,13 +347,22 @@ fn apply_key_signature_enharmonic_spelling_render_write(
     };
 
     if written {
-        (candidate_xml, audit)
+        key_edits.reverse();
+        note_edits.reverse();
+        let steps = vec![
+            RepresentationStep::recorded(xml, &keyed_for_journal,
+                key_edits.into_iter().map(|(start, end, text)| (start..end, text)).collect()),
+            RepresentationStep::recorded(&keyed_for_journal, &candidate_xml, note_edits),
+        ];
+        ((candidate_xml, audit), steps)
     } else {
-        (xml.to_string(), audit)
+        ((xml.to_string(), audit), Vec::new())
     }
-};
-    
+    };
+
     let receipt = Some(output.0.as_str()).filter(|post| *post != xml).map(|post| crate::master_state_identity::BlockTransformationReceipt::mint_block_receipt(RenderRow66BlockMint { _private: () }, xml, post, Some((0, xml.len()))).expect("frozen owner changed bytes without receipt"));
+    let receipt = receipt.map(|receipt|
+        receipt.with_original_respelling(&RenderRow66BlockMint { _private: () }, steps));
     (output, receipt)
 }
 
@@ -498,15 +516,14 @@ enum FunctionalRespellingKind {
 fn scorewide_functional_enharmonic_candidate(
     xml: &str,
     profile: TonalEvidenceProfile,
+    record_note: &mut impl FnMut(std::ops::Range<usize>, &str),
 ) -> (String, FunctionalRespellingStats) {
-    functional_enharmonic_candidate_for_tonal_frame(
-        xml,
-        profile.fifths,
-        profile.tonic,
-        profile.minor,
+    functional_enharmonic_candidate_with_edits(
+        xml, profile.fifths, profile.tonic, profile.minor, None, None, record_note,
     )
 }
 
+#[cfg(test)]
 fn functional_enharmonic_candidate_for_tonal_frame(
     xml: &str,
     fifths: i32,
@@ -673,6 +690,18 @@ fn functional_enharmonic_candidate_for_tonal_frame_from_measure(
     start_measure: Option<usize>,
     bound_plans: Option<Vec<FunctionalRespellingPlan>>,
 ) -> (String, FunctionalRespellingStats) {
+    functional_enharmonic_candidate_with_edits(xml, fifths, tonic, minor, start_measure, bound_plans, &mut |_, _| {})
+}
+
+fn functional_enharmonic_candidate_with_edits(
+    xml: &str,
+    fifths: i32,
+    tonic: i32,
+    minor: bool,
+    start_measure: Option<usize>,
+    bound_plans: Option<Vec<FunctionalRespellingPlan>>,
+    record_note: &mut impl FnMut(std::ops::Range<usize>, &str),
+) -> (String, FunctionalRespellingStats) {
     let plans = bound_plans.unwrap_or_else(|| functional_respelling_plans_for_tonal_frame_from_measure(
         xml,
         fifths,
@@ -696,6 +725,7 @@ fn functional_enharmonic_candidate_for_tonal_frame_from_measure(
         if rewritten == block {
             continue;
         }
+        record_note(plan.note_start..plan.note_end, &rewritten);
         let mut next_output = String::with_capacity(
             output.len() + rewritten.len().saturating_sub(plan.note_end - plan.note_start),
         );
@@ -2799,6 +2829,52 @@ mod functional_respelling_exact_receipt_tests {
             )
             .expect("composable");
             assert!(respelling_receipt(&master, &legacy, composed));
+        }
+    }
+
+    #[test]
+    fn render_respelling_carries_original_beam_members_and_refuses_changed_support() {
+        use crate::arrangement::representation_transport::{RepresentationStep, RhythmicRepresentationTransport};
+
+        let input = actual_beam_owner_capture_tests::input().replace(
+            "<step>F</step><octave>5</octave>",
+            "<step>G</step><alter>-1</alter><octave>5</octave>",
+        );
+        let (before, _, capture) = actual_beam_owner_capture_tests::execute(&input);
+        let mut edits = Vec::new();
+        let (after, stats) = functional_enharmonic_candidate_with_edits(
+            &before, 2, 2, false, None, None, &mut |range, text| edits.push((range, text.to_owned())),
+        );
+        assert_eq!(stats.total, 1);
+        let transport = |after: &str, edits| {
+            let owner = RenderRow66BlockMint { _private: () };
+            let receipt = BlockTransformationReceipt::mint_block_receipt(
+                RenderRow66BlockMint { _private: () }, &before, after, Some((0, before.len())),
+            ).unwrap();
+            RhythmicRepresentationTransport::render_respelling(
+                &owner, &receipt, vec![
+                    RepresentationStep::recorded(&before, &before, Vec::new()),
+                    RepresentationStep::recorded(&before, after, edits),
+                ],
+            )
+        };
+        let journal = transport(&after, edits.clone()).unwrap();
+        let carried = capture.carry_respelling(&journal).unwrap();
+        let states = |rows: &[(std::ops::Range<usize>, ActualBeamLevels)]| {
+            rows.iter().map(|(_, levels)| levels.clone()).collect::<Vec<_>>()
+        };
+        assert_eq!(states(capture.occurrences(&before).unwrap()), states(carried.occurrences(&after).unwrap()));
+        assert!(capture.carry_recorded(&journal).is_err());
+
+        let (range, replacement) = edits.pop().unwrap();
+        for changed in [
+            replacement.replace("<alter>1</alter>", ""),
+            replacement.replace("<duration>24", "<duration>25"),
+            partial_beat_strip_beam_tags(&replacement),
+        ] {
+            assert_ne!(changed, replacement);
+            let invalid = [&before[..range.start], &changed, &before[range.end..]].concat();
+            assert!(transport(&invalid, vec![(range.clone(), changed)]).is_err());
         }
     }
 

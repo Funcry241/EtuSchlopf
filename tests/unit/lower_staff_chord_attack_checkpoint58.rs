@@ -190,7 +190,8 @@ fn chord_attack_projection_unknown_entries_neither_merge_count_nor_restore_conti
                 assert_eq!(notes[1].clef_transition_anchor, None);
                 assert_eq!(notes[2].clef_transition_anchor, None);
                 assert_eq!(
-                    passage_attack_count(std::slice::from_ref(&notes[1]), notes[1].at, notes[2].at),
+                    ReadabilityPassageIndex::new(std::slice::from_ref(&notes[1]))
+                        .passage(notes[1].at, notes[2].at).attacks,
                     0
                 );
                 assert_eq!(collect_lower_staff_attacks(&notes).len(), 3);

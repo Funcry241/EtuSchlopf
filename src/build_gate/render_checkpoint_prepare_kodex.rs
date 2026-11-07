@@ -89,7 +89,15 @@ fn required_product_state(root: &Path) -> Result<bool, String> {
         actual.as_deref()==Some(*expected) || (*path==REQUIRED_PRODUCT_IMAGES[1].0 && actual.is_some()));
     if !signalled { return Ok(false); }
     let refs=observed.iter().map(|(p,d)|(*p,d.as_deref())).collect::<Vec<_>>();
-    if !required_product_tuple_matches(&refs) {
+    let sister_feedback_retired = installed_sister_feedback_retirement(root)?;
+    let exact_retired_product = sister_feedback_retired.is_some()
+        && REQUIRED_PRODUCT_IMAGES.iter().all(|(path, digest)| {
+            observed.iter().any(|(actual_path, actual_digest)| path == actual_path
+                && actual_digest.as_deref().is_some_and(|actual| actual == *digest
+                    || (*path == REQUIRED_PRODUCT_IMAGES[0].0
+                        && sister_feedback_retirement_bound_image(path, actual, sister_feedback_retired))))
+        });
+    if !required_product_tuple_matches(&refs) && !exact_retired_product {
         return Err("RequiredRenderProduct requires its complete exact source-bound implementation; partial or drifted images are forbidden".into());
     }
     Ok(true)
@@ -115,6 +123,10 @@ fn required_product_transition(parent: &Path, child: &Path, class: &str) -> Resu
 pub(crate) fn validate_tree(root: &Path) -> Result<(), String> {
     if !installed(root) { return Ok(()); }
     let writer_retired = writer_retirement_state(root)?;
+    if metric_continuation_checkpoint_images_match(root, true)? {
+        validate_metric_continuation_retired_authorities(root)?;
+    }
+    let sister_feedback_retired = if writer_retired { installed_sister_feedback_retirement(root)? } else { None };
     let bridge_observed = BRIDGE_TRANSPORT_SUCCESSORS.iter().map(|(path,_)|
         Ok((*path, crate::sha256::hex(&read(root,path)?)))).collect::<Result<Vec<_>,String>>()?;
     let bridge_refs = bridge_observed.iter().map(|(path,digest)|(*path,digest.as_str())).collect::<Vec<_>>();
@@ -124,7 +136,9 @@ pub(crate) fn validate_tree(root: &Path) -> Result<(), String> {
         let bridge_bound = bridge_complete && BRIDGE_TRANSPORT_SUCCESSORS.iter()
             .any(|(bound_path,bound_digest)|path==bound_path && digest==*bound_digest);
         let writer_bound = writer_retired && WRITER_RETIREMENT_IMAGES.iter().any(|(p,_,after)|p==path && after.is_some_and(|sha|sha==digest));
-        if digest != *expected && !phrase_transport_successor(path, &digest) && !bridge_bound && !writer_bound && !required_product_bound_image(root, path, &digest)? {
+        if digest != *expected
+            && !sister_feedback_retirement_bound_image(path, &digest, sister_feedback_retired)
+            && !phrase_transport_successor(path, &digest) && !bridge_bound && !writer_bound && !required_product_bound_image(root, path, &digest)? {
             return Err(format!("Checkpoint58 exact prepared successor changed: {path}"));
         }
     }
@@ -136,6 +150,22 @@ pub(crate) fn applies(parent: &Path, child: &Path) -> bool {
 pub(crate) fn validate_transition(parent: &Path, child: &Path, class: &str) -> Result<(), String> {
     required_product_transition(parent,child,class)?;
     writer_retirement_transition(parent,child,class)?;
+    let sister_feedback_before = sister_feedback_retirement_images_match(parent)?;
+    let sister_feedback_after = sister_feedback_retirement_images_match(child)?;
+    if sister_feedback_before && !sister_feedback_after {
+        return Err("Checkpoint58 SisterFeedbackBeam retirement cannot revert".into());
+    }
+    if !sister_feedback_before && sister_feedback_after {
+        validate_sister_feedback_retirement_transition(parent, child, class)?;
+    }
+    let metric_before = metric_continuation_checkpoint_images_match(parent, true)?;
+    let metric_after = metric_continuation_checkpoint_images_match(child, true)?;
+    if metric_before && !metric_after {
+        return Err("Checkpoint58 metric continuation cutover cannot revert".into());
+    }
+    if !metric_before && metric_after {
+        validate_metric_continuation_checkpoint_transition(parent, child, class)?;
+    }
     let before=installed(parent);let after=installed(child);
     if before && !after { return Err("Checkpoint58 prepared event cannot disappear".into()); }
     if !before && after {
@@ -258,14 +288,77 @@ const WRITER_RETIREMENT_ABSENT: &[&str] = &[
 fn writer_retirement_exact_after_installation(path: &str) -> bool {
     path.starts_with("src/build_gate/") || SUCCESSORS.iter().any(|(p,_)|*p==path)
 }
+// This reviewed successor removes the SisterFeedbackBeam sink from production.
+const SISTER_FEEDBACK_RETIREMENT_IMAGES: &[(&str, &str)] = &[
+    ("src/structural_write_authority/master_adoption/render_adopted_state.rs", "b5500a96005251c266d89484e2aaacac1895cb8e7e0c6d0eaf39f64350e09747"),
+    ("src/structural_write_authority/mod.rs", "70d2b9588d16d56d21aefca321cba7609e8e1d56c8096033652e62e639429571"),
+    ("src/structural_write_authority/orchestrator_artifact_sink_authority.rs", "0b88aaaef7740312c1617797b80fc172b34adf5a20ce2eeec61599a2e9d2fc54"),
+];
+
+// The protected part of the r1642 cutover. Remaining runtime sources are
+// subject to the normal diff, owner, and selector gates.
+const METRIC_CONTINUATION_CHECKPOINT_IMAGES: &[(&str, &str, &str)] = &[
+    ("src/structural_write_authority/master_adoption/render_adopted_state.rs", "5c5906371898fbe88a380546345e3f1967ba37c9beaca2defc8485f5220a9b09", "26b7b3b5fbc42662053a071c2847e4020037d31dcb704103c3b449dd06c29267"),
+    ("src/structural_write_authority/mod.rs", "bd63d4abfc4821c026d075e5f3b35647a7ffb566f7c4a1650235bdd37631cb1d", "0c23dd43abc497bfe92e88a2a1faeaae14efbc742e5b9b6d0428b85136386016"),
+    ("src/structural_write_authority/orchestrator_artifact_sink_authority.rs", "6465337b6aa6f832f6f410ed6028550497c5837a06b874cb0ba2d468e5bca40b", "f726d2369c953c2b069ec05fcbe536e1fa6694771eecedd39d6008ab529adc77"),
+    ("src/build_gate/ssc_containment_envelopes_v1.tsv", "bf48f878e4aafb71f257bbe5b599e01b9110d26125604525e16973246dea9c4c", "c119d64268eedf92f9c982447b9fd936c2d97010600f00bc3c53733c1672a602"),
+];
+
+fn metric_continuation_checkpoint_images_match(root: &Path, successor: bool) -> Result<bool, String> {
+    for (path, before, after) in METRIC_CONTINUATION_CHECKPOINT_IMAGES {
+        let expected = if successor { after } else { before };
+        if writer_image(root, path)?.as_deref() != Some(*expected) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+#[derive(Clone, Copy)]
+enum SisterFeedbackRetirementImages {
+    Historical,
+    MetricContinuation,
+}
+
+fn installed_sister_feedback_retirement(root: &Path) -> Result<Option<SisterFeedbackRetirementImages>, String> {
+    if sister_feedback_retirement_images_match(root)? {
+        return Ok(Some(SisterFeedbackRetirementImages::Historical));
+    }
+    if metric_continuation_checkpoint_images_match(root, true)? {
+        return Ok(Some(SisterFeedbackRetirementImages::MetricContinuation));
+    }
+    Ok(None)
+}
+
+fn sister_feedback_retirement_images_match(root: &Path) -> Result<bool, String> {
+    for (path, expected) in SISTER_FEEDBACK_RETIREMENT_IMAGES {
+        if writer_image(root, path)?.as_deref() != Some(*expected) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn sister_feedback_retirement_bound_image(path: &str, digest: &str, installed: Option<SisterFeedbackRetirementImages>) -> bool {
+    match installed {
+        Some(SisterFeedbackRetirementImages::Historical) => SISTER_FEEDBACK_RETIREMENT_IMAGES.iter()
+            .any(|(bound_path, bound_digest)| *bound_path == path && *bound_digest == digest),
+        Some(SisterFeedbackRetirementImages::MetricContinuation) => METRIC_CONTINUATION_CHECKPOINT_IMAGES.iter()
+            .any(|(bound_path, _, after)| *bound_path == path && *after == digest),
+        None => false,
+    }
+}
+
 fn writer_installed_images_match(root: &Path) -> Result<bool, String> {
+    let sister_feedback_retired = installed_sister_feedback_retirement(root)?;
     for (path, _, after) in WRITER_RETIREMENT_IMAGES {
         if *path == "ZIP_KIND.txt" || path.starts_with("docs/") { continue; }
         let actual = writer_image(root,path)?;
         let bound = after.is_none() || writer_retirement_exact_after_installation(path);
         if bound && actual.as_deref() != *after {
             let product_bound = match actual.as_deref() {
-                Some(digest) => required_product_bound_image(root,path,digest)?,
+                Some(digest) => sister_feedback_retirement_bound_image(path, digest, sister_feedback_retired)
+                    || required_product_bound_image(root,path,digest)?,
                 None => false,
             };
             if !product_bound { return Ok(false); }
@@ -609,5 +702,95 @@ mod required_product_contract_tests {
         }
         let mut extra=tuple.clone();extra.push(tuple[0]);assert!(!required_product_tuple_matches(&extra));
         assert!(!required_product_tuple_matches(&[]));
+    }
+}
+
+// First transition scope; later changes to living files retain their ordinary gates.
+const SISTER_FEEDBACK_RETIREMENT_TRANSITION: &[(&str, &str, &str)] = &[
+    ("src/audit_only/notation_voice_pre_serialization_constraint_closure_audit.rs", "8412d3b0ffef283f446d67f22a5449a73d61da66c5b8284d5f2b7c2f00140710", "a73f896a852ca0006f7862029f12167461b5df4476ea792acdb7682d7ea187cc"),
+    ("src/pipeline_shards/composer_metric_beam_planning_core.rs", "149b65184d88f0512847fc31a9e72b5e2fdce3886f3adb1fd71c12585a87ecd0", "b40e4b8bb47bb60193543d9d481e868be47363fdb95471c0ab85395b0fb1e515"),
+    ("src/pipeline_shards/composer_recovery_hand_cause_core.rs", "c7b58cd9278354f125c86e247bf92214424f33a03cd2558f583f53dc6fd202a5", "f3fba7b4b708ba1ec4d2284b26bb8042edf38db28c74a7ccd09134e526c358de"),
+    ("src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs", "669808732f3c46e87ae29aefd681594f1fdadcf96e8b5bbd83af0c9c1ff4bab3", "2d0002a37020ab950c26dfb9b55eab8250c65f1f430fc8ab4918d836dbc4e0ee"),
+    ("src/pipeline_shards/pipeline_orchestrator_metric_final_notation_stage.rs", "38c6dffe95893ce47913799daed4cc7cecebe79a39d25a8ce1513d68b2a5852a", "0a07d65cdabbdffde5ca32906005ee34cc352164be4bc754666ec4b3a217fc8b"),
+    ("src/pipeline_shards/pipeline_orchestrator_rest_articulation_render_stage.rs", "4241b44bac7afc0e48024c445ee98d5747b2bd296fcf265cae1070d8d74c655a", "81801cc092cf7ea5be29aa06a8f01fdc071414edb0e6f02f1bb651a313d640bc"),
+    ("src/rhythmic_representation_transport.rs", "bddcaf804ba5daececc2a017a2e8cd54f7aa3e17cd5a5ef33820d487f6c01eee", "e6fbf94b9a7c2b848c067f24fc545388214132ea6e85590f5a41d45151e209b5"),
+    ("src/structural_write_authority/authored_rest_bridge_course.rs", "ab945895fed7e0ba57a2e8797dcb8bb63f1f99f585dfbc92f8ca4818b2dda3bb", "5205a3089ae0f329af84ac05c090d9a5e044eec9f36527f6d269358d5411c46b"),
+    ("src/structural_write_authority/master_adoption/render_adopted_state.rs", "5c5906371898fbe88a380546345e3f1967ba37c9beaca2defc8485f5220a9b09", "b5500a96005251c266d89484e2aaacac1895cb8e7e0c6d0eaf39f64350e09747"),
+    ("src/structural_write_authority/mod.rs", "bd63d4abfc4821c026d075e5f3b35647a7ffb566f7c4a1650235bdd37631cb1d", "70d2b9588d16d56d21aefca321cba7609e8e1d56c8096033652e62e639429571"),
+    ("src/structural_write_authority/orchestrator_artifact_sink_authority.rs", "6465337b6aa6f832f6f410ed6028550497c5837a06b874cb0ba2d468e5bca40b", "0b88aaaef7740312c1617797b80fc172b34adf5a20ce2eeec61599a2e9d2fc54"),
+    ("src/structural_write_authority/original_beam_voice_alignment.rs", "29a992ce0b6ec8c171e4d55872e5e5910e74e804ac2f821b50ea1a199c83d34e", "77396d9ac65982afb9bf3504ce8aea4a4364ecc796094b20dee4681277d211fa"),
+    ("src/structural_write_authority/rest_bridge_extension_course.rs", "b7be4ac1d1f09fc1622e500388ced9a4e258d31261972c4443dd89ae3332d30d", "4e70d9eb2dd6e5363940add12ac74e75e813232cf6d582ac419d9e2aad7c5216"),
+    ("src/structural_write_authority/serialization_plan.rs", "b4ba844a9cffc658d1a56738f1b891c8fc8b4e59b81a1a6f5c1e982a16437d63", "42a15f70fdef5b8b63d1022fac59d576ede5baa895d9b8169124144bdd9fd375"),
+];
+
+fn validate_sister_feedback_retirement_transition(
+    parent: &Path, child: &Path, class: &str,
+) -> Result<(), String> {
+    if class != "GovernedChange"
+        || !writer_identity(parent, "r1629", "r1626", "SscK2GovernanceRevisionKodex", "KodexOnly")?
+        || !writer_identity(child, "r1630", "r1629", "SisterFeedbackBeamRetirement", "GovernedChange")?
+    {
+        return Err("Checkpoint58 SisterFeedbackBeam retirement requires its reviewed parent and successor".into());
+    }
+    for (path, before, after) in SISTER_FEEDBACK_RETIREMENT_TRANSITION {
+        if writer_image(parent, path)?.as_deref() != Some(*before)
+            || writer_image(child, path)?.as_deref() != Some(*after)
+        {
+            return Err(format!("Checkpoint58 SisterFeedbackBeam retirement image differs: {path}"));
+        }
+    }
+    let manifest = String::from_utf8(read(child, "src/build_gate/take_change_class.txt")?)
+        .map_err(|error| error.to_string())?;
+    let expected: std::collections::BTreeSet<&str> = SISTER_FEEDBACK_RETIREMENT_TRANSITION
+        .iter().map(|(path, _, _)| *path)
+        .chain(["ZIP_KIND.txt", "docs/sister_feedback_beam_retirement_r1630.md"]).collect();
+    let declared: std::collections::BTreeSet<&str> = manifest.lines()
+        .filter_map(|line| line.strip_prefix("change="))
+        .filter_map(|row| row.split('|').nth(1)).collect();
+    if declared != expected {
+        return Err("Checkpoint58 SisterFeedbackBeam retirement changed-path set differs".into());
+    }
+    Ok(())
+}
+
+fn validate_metric_continuation_checkpoint_transition(
+    parent: &Path,
+    child: &Path,
+    class: &str,
+) -> Result<(), String> {
+    if class != "GovernedChange"
+        || !writer_identity(parent, "r1641", "r1640", "SscK2GovernanceRevisionKodex", "KodexOnly")?
+        || !writer_identity(child, "r1642", "r1641", "MetricRestContinuationCutover", "GovernedChange")?
+        || !metric_continuation_checkpoint_images_match(parent, false)?
+    {
+        return Err("Checkpoint58 metric continuation cutover requires its exact prerequisite parent and successor identity".into());
+    }
+    Ok(())
+}
+
+fn validate_metric_continuation_retired_authorities(root: &Path) -> Result<(), String> {
+    super::absent(&super::runtime_sources(root)?, &[
+        "SisterFeedbackBeam",
+        "SisterFeedbackBeamVariantATinyRenderWriteAudit",
+        "write_sister_feedback_beam_checkpoint_authorized",
+        "apply_structural_rest_bridge_beam_variant_a_render_write",
+        "StructuralRestBridgeVariantAPreservingMint",
+        "STRUCTURAL_REST_BRIDGE_VARIANT_A_PRESERVING",
+    ])
+}
+
+#[cfg(test)]
+#[test]
+fn retirement_images_cannot_borrow_a_pin_from_the_other_tuple() {
+    let historical = Some(SisterFeedbackRetirementImages::Historical);
+    let metric = Some(SisterFeedbackRetirementImages::MetricContinuation);
+    for (path, digest) in SISTER_FEEDBACK_RETIREMENT_IMAGES {
+        assert!(sister_feedback_retirement_bound_image(path, digest, historical));
+        assert!(!sister_feedback_retirement_bound_image(path, digest, metric));
+    }
+    for (path, _, digest) in METRIC_CONTINUATION_CHECKPOINT_IMAGES {
+        assert!(sister_feedback_retirement_bound_image(path, digest, metric));
+        assert!(!sister_feedback_retirement_bound_image(path, digest, historical));
+        assert!(!sister_feedback_retirement_bound_image(path, digest, None));
     }
 }

@@ -11,9 +11,9 @@ fn synthetic_bridge_measure(label: &str) -> String {
 fn score(measures: &str) -> String {
     format!("<score-partwise><part id=\"P1\">{measures}</part></score-partwise>")
 }
-fn apply(xml: &str, labels: &[&str]) -> (String, SisterFeedbackBeamVariantATinyRenderWriteAudit, Option<PreservingTransformationReceipt>) {
+fn apply(xml: &str, labels: &[&str]) -> (String, MetricRestContinuationAudit, Option<PreservingTransformationReceipt>) {
     let guard=CanonicalFinalChordStructuralPlan::synthetic_bridge_guard_with_labels(xml, labels).unwrap();
-    let ((after,audit), receipt, _pending_extension) = apply_structural_rest_bridge_beam_variant_a_render_write(xml,"independent synthetic proposal",std::path::Path::new("synthetic.render.musicxml"),&guard);
+    let ((after,audit), receipt, _pending_extension) = realize_metric_rest_continuation(xml,"independent synthetic proposal",std::path::Path::new("synthetic.render.musicxml"),&guard);
     (after,audit,receipt)
 }
 #[test]
@@ -25,7 +25,7 @@ fn split_sealed_lane_withholds_whole_bridge_without_receipt() {
 fn shared_sealed_lane_keeps_existing_hierarchy_and_preserving_receipt() {
     let xml=score(&synthetic_bridge_measure("7"));let (after,audit,receipt)=apply(&xml,&["shared","shared","shared"]);
     assert_ne!(after,xml);assert!(audit.written);assert_eq!(audit.frozen_voice_split_groups,0);
-    assert!(receipt.unwrap().validate_preserving_transition::<StructuralRestBridgeVariantAPreservingMint>(&xml,&after).is_ok());
+    assert!(receipt.unwrap().validate_preserving_transition::<PartialBeatBeamPreservingMint>(&xml,&after).is_ok());
     assert!(after.contains("<voice>2</voice>"));
     assert_eq!(after.matches("<note>").count(),xml.matches("<note>").count());
 }
@@ -53,14 +53,14 @@ fn relocation_renaming_and_label_permutation_preserve_decision() {
 #[test]
 fn default_guard_cannot_enable_existing_writer() {
     let xml=score(&synthetic_bridge_measure("1"));
-    let ((after,audit), receipt, _pending_extension) = apply_structural_rest_bridge_beam_variant_a_render_write(&xml,"missing sealed binding",std::path::Path::new("synthetic.render.musicxml"),&CanonicalFinalChordStructuralPlan::default());
+    let ((after,audit), receipt, _pending_extension) = realize_metric_rest_continuation(&xml,"missing sealed binding",std::path::Path::new("synthetic.render.musicxml"),&CanonicalFinalChordStructuralPlan::default());
     assert_eq!(after,xml);assert!(!audit.written);assert_eq!(audit.frozen_voice_unbound_groups,1);assert!(receipt.is_none());
 }
 #[test]
 fn guard_for_other_input_cannot_enable_writer() {
     let original=score(&synthetic_bridge_measure("1"));let xml=score(&synthetic_bridge_measure("2"));
     let guard=CanonicalFinalChordStructuralPlan::synthetic_bridge_guard_with_labels(&original,&["x","x","x"]).unwrap();
-    let ((after,audit), receipt, _pending_extension) = apply_structural_rest_bridge_beam_variant_a_render_write(&xml,"stale binding",std::path::Path::new("synthetic.render.musicxml"),&guard);
+    let ((after,audit), receipt, _pending_extension) = realize_metric_rest_continuation(&xml,"stale binding",std::path::Path::new("synthetic.render.musicxml"),&guard);
     assert_eq!(after,xml);assert_eq!(audit.frozen_voice_unbound_groups,1);assert!(receipt.is_none());
 }
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/support/synthetic_score.rs"));
@@ -122,19 +122,18 @@ fn adopted_extension(input: &str) -> (String,String,CanonicalFinalChordStructura
     let (pre,mut guard)=CanonicalFinalChordStructuralPlan::synthetic_adopted_extension_guard(input);
     let (mut state,path)=extension_state(&pre);
     guard.bind_rest_bridge_main_state(&state);
-    let ((post,audit),receipt,pending)=apply_structural_rest_bridge_beam_variant_a_render_write(&pre,"synthetic authored extension",&path,&guard);
+    let ((post,audit),receipt,pending)=realize_metric_rest_continuation(&pre,"synthetic authored extension",&path,&guard);
     assert!(audit.written);assert!(pending.is_some());
     let root=state.require_state_root("synthetic extension adoption");
-    let mut chain=crate::master_state_identity::RenderTransitionReceipts::new();chain.push_preserving(receipt,&post);
-    state.adopt_transition(root,&post,chain,crate::structural_write_authority::RenderSinkKind::Checkpoint(crate::structural_write_authority::RenderCheckpointSink::SisterFeedbackBeam),
-        |path,_pre,post|crate::structural_write_authority::write_sister_feedback_beam_checkpoint_authorized(path,post)).unwrap();
+    
+            state.adopt_metric_rest_continuation(root, &post, receipt.unwrap()).unwrap();
     guard.adopt_rest_bridge_extension_output(pending,&state).unwrap();
     std::fs::remove_file(path).unwrap();
     (pre,post,guard)
 }
 fn withdraw_extension(guard:&CanonicalFinalChordStructuralPlan,labels:&[&str])->String {
     let (bound,source)=guard.synthetic_extension_withdrawal(labels);
-    let ((post,_audit),receipt,pending)=apply_structural_rest_bridge_beam_variant_a_render_write(source.xml(),"synthetic carried withdrawal",std::path::Path::new("synthetic.xml"),&bound);
+    let ((post,_audit),receipt,pending)=realize_metric_rest_continuation(source.xml(),"synthetic carried withdrawal",std::path::Path::new("synthetic.xml"),&bound);
     assert!(pending.is_none());
     if post!=source.xml() { assert_eq!(source.through_rest_bridge_withdrawal(&post,&bound,receipt.as_ref().unwrap()).unwrap().xml(),post); }
     post
@@ -143,7 +142,7 @@ fn withdraw_extension(guard:&CanonicalFinalChordStructuralPlan,labels:&[&str])->
 fn extension_pending_proposal_cannot_be_adopted_before_main_write() {
     let (pre,mut guard)=CanonicalFinalChordStructuralPlan::synthetic_adopted_extension_guard(&score(&synthetic_bridge_measure("71")));
     let (state,path)=extension_state(&pre);guard.bind_rest_bridge_main_state(&state);
-    let ((_,audit),_,pending)=apply_structural_rest_bridge_beam_variant_a_render_write(&pre,"unadopted",&path,&guard);
+    let ((_,audit),_,pending)=realize_metric_rest_continuation(&pre,"unadopted",&path,&guard);
     assert!(audit.written);assert!(pending.is_some());assert!(guard.adopt_rest_bridge_extension_output(pending,&state).is_err());
     std::fs::remove_file(path).unwrap();
 }
@@ -191,13 +190,12 @@ fn extension_pending_evidence_rejects_foreign_main_and_source_instance() {
     for foreign_source in [false,true] {
         let (pre,mut guard)=CanonicalFinalChordStructuralPlan::synthetic_adopted_extension_guard(&input);
         let (mut state,path)=extension_state(&pre);guard.bind_rest_bridge_main_state(&state);
-        let ((post,audit),receipt,pending)=apply_structural_rest_bridge_beam_variant_a_render_write(&pre,"foreign custody",&path,&guard);
+        let ((post,audit),receipt,pending)=realize_metric_rest_continuation(&pre,"foreign custody",&path,&guard);
         assert!(audit.written);assert!(pending.is_some());
         if foreign_source {
             let root=state.require_state_root("authentic adoption before foreign receiver");
-            let mut chain=crate::master_state_identity::RenderTransitionReceipts::new();chain.push_preserving(receipt,&post);
-            state.adopt_transition(root,&post,chain,crate::structural_write_authority::RenderSinkKind::Checkpoint(crate::structural_write_authority::RenderCheckpointSink::SisterFeedbackBeam),
-                |path,_pre,post|crate::structural_write_authority::write_sister_feedback_beam_checkpoint_authorized(path,post)).unwrap();
+            
+            state.adopt_metric_rest_continuation(root, &post, receipt.unwrap()).unwrap();
             let (_,mut foreign)=CanonicalFinalChordStructuralPlan::synthetic_adopted_extension_guard(&input);
             assert!(foreign.adopt_rest_bridge_extension_output(pending,&state).is_err());
         } else {
@@ -242,17 +240,16 @@ fn apply_actual_alignment(source:&crate::structural_write_authority::FinalPdfSou
 fn merged_origin_real_chain(input:&str)->String {
     let (pre,mut guard)=CanonicalFinalChordStructuralPlan::synthetic_merged_origin_extension_guard(input);
     let (mut state,path)=extension_state(&pre);guard.bind_rest_bridge_main_state(&state);
-    let ((post,audit),receipt,pending)=apply_structural_rest_bridge_beam_variant_a_render_write(&pre,"merged origin real chain",&path,&guard);
+    let ((post,audit),receipt,pending)=realize_metric_rest_continuation(&pre,"merged origin real chain",&path,&guard);
     assert!(audit.written);assert!(pending.is_some(),"merged origin must be captured with complete resources");
     guard.synthetic_assert_capture_contract(&pre,&post,receipt.as_ref().unwrap(),pending.as_ref().unwrap());
-    let root=state.require_state_root("merged origin extension adoption");let mut chain=crate::master_state_identity::RenderTransitionReceipts::new();chain.push_preserving(receipt,&post);
-    state.adopt_transition(root,&post,chain,crate::structural_write_authority::RenderSinkKind::Checkpoint(crate::structural_write_authority::RenderCheckpointSink::SisterFeedbackBeam),
-        |path,_pre,post|crate::structural_write_authority::write_sister_feedback_beam_checkpoint_authorized(path,post)).unwrap();
+    let root=state.require_state_root("merged origin extension adoption");
+            state.adopt_metric_rest_continuation(root, &post, receipt.unwrap()).unwrap();
     guard.adopt_rest_bridge_extension_output(pending,&state).unwrap();
     let (source,plan)=guard.synthetic_project_extension_for_alignment(&post);
     let baseline=apply_actual_alignment(&source.with_rest_bridge_shadow_diagnostics(),&guard,&plan);
     let bound=guard.bind_rest_bridge_withdrawal(&source,&plan).unwrap();
-    let ((withdrawn,audit),receipt,pending)=apply_structural_rest_bridge_beam_variant_a_render_write(source.xml(),"merged origin late withdrawal",&path,&bound);
+    let ((withdrawn,audit),receipt,pending)=realize_metric_rest_continuation(source.xml(),"merged origin late withdrawal",&path,&bound);
     assert!(pending.is_none());assert!(audit.written,"actual late assignment must retract extension");
     let carried=source.through_rest_bridge_withdrawal(&withdrawn,&bound,receipt.as_ref().unwrap()).unwrap();
     let result=apply_actual_alignment(&carried,&guard,&plan);
@@ -289,15 +286,12 @@ fn adopted_provisional(input: &str, sealed: &[&str]) -> (String, String, Canonic
     let (pre, mut guard) = CanonicalFinalChordStructuralPlan::synthetic_adopted_extension_guard_with_sealed(input, sealed);
     let (mut state, path) = extension_state(&pre);
     guard.bind_rest_bridge_main_state(&state);
-    let ((post, audit), receipt, pending) = apply_structural_rest_bridge_beam_variant_a_render_write(&pre, "provisional extension", &path, &guard);
+    let ((post, audit), receipt, pending) = realize_metric_rest_continuation(&pre, "provisional extension", &path, &guard);
     assert!(audit.written);
     assert_eq!(audit.frozen_voice_split_groups, 0);
     assert!(pending.is_some(), "provisional bridge needs bound evidence");
     let root = state.require_state_root("provisional extension adoption");
-    let mut chain = crate::master_state_identity::RenderTransitionReceipts::new();
-    chain.push_preserving(receipt, &post);
-    state.adopt_transition(root, &post, chain, crate::structural_write_authority::RenderSinkKind::Checkpoint(crate::structural_write_authority::RenderCheckpointSink::SisterFeedbackBeam),
-        |path, _pre, post| crate::structural_write_authority::write_sister_feedback_beam_checkpoint_authorized(path, post)).unwrap();
+    state.adopt_metric_rest_continuation(root, &post, receipt.unwrap()).unwrap();
     guard.adopt_rest_bridge_extension_output(pending, &state).unwrap();
     assert!(guard.has_provisional_rest_bridges());
     std::fs::remove_file(path).unwrap();
@@ -329,7 +323,7 @@ fn provisional_bridge_without_bound_evidence_is_never_written() {
     let mut guard = guard.synthetic_without_original_groups();
     let (state, path) = extension_state(&pre);
     guard.bind_rest_bridge_main_state(&state);
-    let ((post, audit), receipt, pending) = apply_structural_rest_bridge_beam_variant_a_render_write(&pre, "unevidenced provisional", &path, &guard);
+    let ((post, audit), receipt, pending) = realize_metric_rest_continuation(&pre, "unevidenced provisional", &path, &guard);
     assert_eq!(post, pre);
     assert!(!audit.written);
     assert!(receipt.is_none());
@@ -349,7 +343,7 @@ fn provisional_custody_loss_before_the_decision_fails_visibly() {
 fn provisional_bridge_is_withdrawn_without_a_late_plan() {
     let (pre, _, guard) = adopted_provisional(&score(&synthetic_bridge_measure("71")), &["lane-a", "lane-a", "lane-b"]);
     let (bound, source) = guard.synthetic_provisional_fallback_after_sealed_projection();
-    let ((post, audit), receipt, pending) = apply_structural_rest_bridge_beam_variant_a_render_write(source.xml(), "provisional fallback", std::path::Path::new("synthetic.xml"), &bound);
+    let ((post, audit), receipt, pending) = realize_metric_rest_continuation(source.xml(), "provisional fallback", std::path::Path::new("synthetic.xml"), &bound);
     assert!(pending.is_none());
     assert!(audit.written);
     assert_eq!(beam_image(&post), beam_image(&pre));
@@ -389,7 +383,7 @@ fn adopted_bridge_alignment_chain_with_sealed(input: &str, sealed: &[&str]) -> S
     let (source, voices, plan) = guard.synthetic_adopted_bridge_alignment(&post, ["7", "11"]);
     assert!(plan.scope_candidates() > 0);
     let bound = guard.bind_rest_bridge_withdrawal(&source, &plan).unwrap();
-    let ((kept, audit), receipt, pending) = apply_structural_rest_bridge_beam_variant_a_render_write(
+    let ((kept, audit), receipt, pending) = realize_metric_rest_continuation(
         source.xml(), "synthetic bound bridge alignment", std::path::Path::new("synthetic.xml"), &bound);
     assert!(!audit.written, "the complete admitted connection must survive withdrawal");
     assert!(receipt.is_none() && pending.is_none());

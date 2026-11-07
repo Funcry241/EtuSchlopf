@@ -13,7 +13,10 @@ use midi_seed::{
 use layout::{apply_pianist_layout, choose_auto_pianist_layout, AutoLayoutInput, LayoutPlan, HorizontalLayoutSeedPlan, HorizontalLayoutSeedSlot};
 use model::{CheckReport, Issue, Pitch, ReportStatus, ReportSummary, Severity};
 use musicxml::parse_musicxml;
-use notation::{decompose_lower_staff_clef_islands, polish_musicxml, PolishStats};
+use notation::{polish_musicxml, PolishStats};
+// The installed checkpoint keeps its historical local name. E024 supplies
+// the decision and receipt through StructuralWriteAuthority.
+use crate::structural_write_authority::clef_surface_materialization::prepare_initial_render_clef_course as decompose_lower_staff_clef_islands;
 use reference::{build_reference_signature, check_reference_fidelity, inspect_reference_files, FidelityCheck, ReferenceReport, ReferenceSignature};
 use render::{count_pdf_pages, render_pdf_if_possible, RenderStatus};
 use report::{write_console_summary, write_text_report, PdfFileFingerprintReport, ReportOptions};

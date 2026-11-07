@@ -44,6 +44,12 @@ fn common_context<'a>(origins: impl IntoIterator<Item = &'a Origin>)
 }
 
 impl OwnedRhythmicContinuation {
+    pub(super) fn received_consolidation_parents(&self, creation: RhythmicCreationIdentity)
+        -> Option<Vec<RhythmicCreationIdentity>> {
+        self.consolidations.get(&creation).map(|merge|
+            merge.parents.iter().map(|parent| parent.creation).collect())
+    }
+
     pub(super) fn validate_received_origin_path(&self, creation: RhythmicCreationIdentity) -> Result<()> {
         let origin = self.history.get(&creation).ok_or_else(|| anyhow!("Missing received origin"))?;
             let mut id = creation; let mut visited = BTreeSet::new();

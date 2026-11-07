@@ -26,7 +26,9 @@ use super::audit_only::serialized_temporal_replay::{
 
 #[path = "notation.rs"]
 mod notation;
-pub(crate) use notation::{LedgerBoundedLowerStaffClefReadbackPreservingMint, NotationClefIslandPreservingMint, NotationPolishPreservingMint};
+pub(crate) use notation::{LedgerBoundedLowerStaffClefReadbackPreservingMint, NotationPolishPreservingMint};
+#[cfg(test)]
+pub(crate) use notation::NotationClefIslandPreservingMint;
 #[path = "render.rs"]
 mod render;
 pub(crate) use render::SameLaneRawSpliceExactMint;
@@ -173,6 +175,7 @@ include!("pipeline_shards/composer_recovery_hand_cause_core.rs");
 include!("pipeline_shards/composer_metric_beam_observation_core.rs");
 include!("pipeline_shards/composer_beat_scoped_rest_completion_planning_core.rs");
 include!("pipeline_shards/composer_metric_beam_planning_core.rs");
+include!("pipeline_shards/composer_metric_rest_continuation_plan.rs");
 include!("pipeline_shards/actual_beam_capture_core.rs");
 include!("pipeline_shards/composer_beam_candidate_materialization_core.rs");
 include!("pipeline_shards/composer_recovery_octave_beam_export_tail.rs");

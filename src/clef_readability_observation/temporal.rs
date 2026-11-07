@@ -24,6 +24,13 @@ pub(crate) struct TemporalPart {
     length: usize,
     diagnostic_unit: i128,
     ambiguous_voices: BTreeSet<String>,
+    streams: std::sync::OnceLock<TemporalStreams>,
+}
+
+struct TemporalStreams {
+    ties: Vec<Vec<usize>>,
+    beams: Vec<Vec<usize>>,
+    lower_heads: BTreeSet<usize>,
 }
 
 fn text<'a>(n: roxmltree::Node<'a, 'a>, name: &str) -> Option<&'a str> {
@@ -70,6 +77,7 @@ impl TemporalPart {
             length: xml.len(),
             diagnostic_unit: unit,
             ambiguous_voices: BTreeSet::new(),
+            streams: std::sync::OnceLock::new(),
         };
         let mut divisions = 1i128;
         let mut base = 0i128;
@@ -350,22 +358,38 @@ impl TemporalPart {
         )
     }
 
+    fn streams(&self) -> &TemporalStreams {
+        self.streams.get_or_init(|| {
+            let mut ties = BTreeMap::<&str, Vec<usize>>::new();
+            let mut beams = BTreeMap::<&str, Vec<usize>>::new();
+            let mut lower_heads = BTreeSet::new();
+            for (index, note) in self.notes.iter().enumerate() {
+                if note.lower && (note.tie_start || note.tie_stop) {
+                    ties.entry(&note.key).or_default().push(index);
+                }
+                if note.visible && note.start == note.head {
+                    beams.entry(&note.voice).or_default().push(index);
+                }
+                if note.visible && note.lower {
+                    lower_heads.insert(note.head);
+                }
+            }
+            let ordered = |groups: BTreeMap<&str, Vec<usize>>| groups.into_values().map(|mut indices| {
+                indices.sort_by_key(|&index| (self.notes[index].at, self.notes[index].start));
+                indices
+            }).collect();
+            TemporalStreams { ties: ordered(ties), beams: ordered(beams), lower_heads }
+        })
+    }
+
     pub(crate) fn tie_open(&self, position: usize) -> bool {
         let Some(at) = self.at(position) else {
             return true;
         };
-        let mut streams = BTreeMap::<&str, Vec<&Note>>::new();
-        for n in self
-            .notes
-            .iter()
-            .filter(|n| n.lower && (n.tie_start || n.tie_stop))
-        {
-            streams.entry(&n.key).or_default().push(n);
-        }
-        for notes in streams.values_mut() {
-            notes.sort_by_key(|n| (n.at, n.start));
+        for notes in &self.streams().ties {
             let mut open: Option<(i128, i128)> = None;
-            for n in notes.iter() {
+            for &index in notes {
+                let n = &self.notes[index];
                 if n.tie_stop {
                     if let Some((start, end)) = open {
                         if end != n.at {
@@ -404,18 +428,12 @@ impl TemporalPart {
         }) {
             return None;
         }
-        let mut streams = BTreeMap::<&str, Vec<&Note>>::new();
-        for n in self.notes.iter().filter(|n| n.visible && n.start == n.head) {
-            streams.entry(&n.voice).or_default().push(n);
-        }
-        for notes in streams.values_mut() {
-            notes.sort_by_key(|n| (n.at, n.start));
+        let streams = self.streams();
+        for notes in &streams.beams {
             let mut open: Option<(i128, bool)> = None;
-            for n in notes.iter() {
-                let lower = self
-                    .notes
-                    .iter()
-                    .any(|member| member.visible && member.head == n.start && member.lower);
+            for &index in notes {
+                let n = &self.notes[index];
+                let lower = streams.lower_heads.contains(&n.start);
                 match n.beam.as_deref() {
                     Some("begin") => {
                         if open.is_some_and(|(start, touches)| {

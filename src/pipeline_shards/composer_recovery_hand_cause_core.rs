@@ -2,7 +2,7 @@
 // PartialBeatMeasureSpan/PartialBeatRawNote/PartialBeatNoteInfo are now owned by
 // composer_metric_beam_observation_core; this consumer keeps identical semantics.
 
-type SisterFeedbackVariantACandidateGroup<'a> = (i64, String, String, Vec<&'a PartialBeatNoteInfo>, bool, bool);
+type MetricRestContinuationGroup<'a> = (i64, String, String, Vec<&'a PartialBeatNoteInfo>, bool, bool);
 
 
 

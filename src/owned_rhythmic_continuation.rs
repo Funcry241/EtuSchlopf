@@ -4,10 +4,12 @@ use super::*;
 use crate::arrangement::physical_births::{PhysicalBirthKind, PhysicalRhythmicBirths};
 use crate::master_state_identity::{ExactTransformationReceipt};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 #[path = "owned_rhythmic_consolidation.rs"]
 mod consolidation;
 use consolidation::ConsolidatedOrigin;
+#[path = "owned_rhythmic_source_origins.rs"]
+mod source_origins;
+use source_origins::ReceivedSourceOrigins;
 #[path = "owned_rhythmic_final_export.rs"]
 mod final_export;
 use final_export::EncodedOccurrence;
@@ -72,14 +74,41 @@ pub(crate) struct OwnedRhythmicContinuation {
     validated: ValidatedMemo,
 }
 
-/// Success belongs only to this immutable state, never to a cloned successor.
-/// Relaxed is sufficient: this flag publishes no other writes. All state is
-/// constructed before shared validation; simultaneous misses may both validate.
-#[derive(Default)]
-struct ValidatedMemo(AtomicBool);
+/// Immutable readback of received course obligations at the pre-FinalChord seam.
+/// The private constructor binds the complete current document and its carried
+/// creation identities. Course presentation remains distinct from canonical roles.
+pub(crate) struct ReceivedNotationObligations {
+    rows: Vec<ReceivedNotationObligation>,
+}
 
-impl Clone for ValidatedMemo {
-    fn clone(&self) -> Self { Self::default() }
+struct ReceivedNotationObligation {
+    source_origins: ReceivedSourceOrigins,
+    creation: RhythmicCreationIdentity,
+    root: RhythmicCreationIdentity,
+    course: RhythmicCreationIdentity,
+    source: Option<usize>,
+    presentation: SeedCoursePresentation,
+    staff: u8,
+    bytes: Range<usize>,
+    represented: Range<i64>,
+    obligation: Range<i64>,
+    rest: bool,
+}
+
+impl ReceivedNotationObligations {
+    pub(crate) fn append_evidence(&self, out: &mut String) {
+        use std::fmt::Write as _;
+        let rests = self.rows.iter().filter(|row| row.rest).count();
+        let _ = writeln!(out,
+            "ReceivedNotationObligations: bound; stage=before_final_chord; occurrences={}; rests={rests}; canonical_role_authority=none",
+            self.rows.len());
+        for row in &self.rows {
+            let _ = writeln!(out,
+                "ReceivedNotationObligation: creation={:?}; root={:?}; course={:?}; source={:?}; course_presentation={:?}; staff={}; bytes={:?}; represented={:?}; obligation={:?}; rest={}; authority=received_course_only; source_origins={}",
+                row.creation, row.root, row.course, row.source, row.presentation,
+                row.staff, row.bytes, row.represented, row.obligation, row.rest, row.source_origins);
+        }
+    }
 }
 
 // Preserve the previous diagnostic representation; memo state is not custody.
@@ -204,28 +233,60 @@ impl OwnedRhythmicContinuation {
                 course: Some(edge.course), source: edge.source, interval: edge.interval.clone(),
                 presentation: Some(course.presentation), birth: None, relocation: None }))
         }).collect::<Result<BTreeMap<_, _>>>()?;
-        let occurrences = courses.occurrences.iter().zip(physical).map(|(o, p)| {
+        let occurrences = courses.occurrences.iter().zip(&physical).map(|(o, p)| {
             ensure!(p.interval == o.interval && p.text == o.note, "Received physical custody drift");
             let origin = history.get(&o.creation).cloned().ok_or_else(|| anyhow!("Missing original occurrence ancestry"))?;
-            Ok(Occurrence { creation: o.creation, bytes: p.bytes, staff: p.staff, origin })
+            Ok(Occurrence { creation: o.creation, bytes: p.bytes.clone(), staff: p.staff, origin })
         }).collect::<Result<Vec<_>>>()?;
         let state = Self { snapshot: Arc::from(xml), initial_custody: Arc::new(courses.clone()), coverage: courses.coverage.clone(), history, occurrences, encoded: Vec::new(), final_chord_execution: None, consolidations: BTreeMap::new(), validated: ValidatedMemo::default() };
-        state.validate_binding(xml)?;
+        state.validate_ancestry_and_snapshot(xml)?;
+        state.validate_physical_inventory(xml, &physical)?;
         Ok(state)
+    }
+
+    pub(crate) fn received_notation_obligations(&self, xml: &str)
+        -> Result<ReceivedNotationObligations> {
+        self.require_complete_course_context(xml)?;
+        ensure!(self.final_chord_execution.is_none() && self.encoded.is_empty(),
+            "Received notation input has crossed the FinalChord epoch");
+        let rows = self.occurrences.iter().map(|occurrence| {
+            let origin = &occurrence.origin;
+            Ok(ReceivedNotationObligation {
+                source_origins: self.received_source_origins(occurrence.creation)?,
+                creation: occurrence.creation,
+                root: origin.root,
+                course: origin.course.ok_or_else(|| anyhow!("Missing received notation course"))?,
+                source: origin.source,
+                presentation: origin.presentation.ok_or_else(|| anyhow!("Missing received course presentation"))?,
+                staff: occurrence.staff,
+                bytes: occurrence.bytes.clone(),
+                represented: origin.interval.clone(),
+                obligation: self.obligation_span(occurrence.creation, &origin.interval),
+                rest: self.snapshot[occurrence.bytes.clone()].contains("<rest"),
+            })
+        }).collect::<Result<Vec<_>>>()?;
+        Ok(ReceivedNotationObligations { rows })
     }
 
     pub(crate) fn document(&self) -> &str { &self.snapshot }
 
     pub(crate) fn validate_binding(&self, xml: &str) -> Result<()> {
-        if self.validated.0.load(Ordering::Relaxed) {
+        if self.validated.is_proved() {
             ensure!(self.snapshot.as_ref() == xml, "Owned rhythm belongs to another document state");
             return Ok(());
         }
+        self.validate_ancestry_and_snapshot(xml)?;
+        let physical = physical_inventory(xml)?;
+        self.validate_physical_inventory(xml, &physical)
+    }
+
+    fn validate_ancestry_and_snapshot(&self, xml: &str) -> Result<()> {
         self.validate_consolidated_origins()?;
         ensure!(self.snapshot.as_ref() == xml, "Owned rhythm belongs to another document state");
-        // receive validates the original custody before storing this immutable Arc.
-        // Current ancestry, coverage and representation checks remain independent.
-        let physical = physical_inventory(xml)?;
+        Ok(())
+    }
+
+    fn validate_physical_inventory(&self, xml: &str, physical: &[PhysicalOccurrence]) -> Result<()> {
         ensure!(physical.len() == self.occurrences.len() + self.encoded_note_count(), "Owned rhythm has incomplete physical coverage");
         let by_range = physical.iter().map(|p| ((p.bytes.start, p.bytes.end), p)).collect::<BTreeMap<_, _>>();
         let mut identities = BTreeSet::new(); let mut ranges = BTreeSet::new();
@@ -254,7 +315,7 @@ impl OwnedRhythmicContinuation {
             }
             ensure!(cursor == root.interval.end, "Owner continuation lost a received obligation");
         }
-        self.validated.0.store(true, Ordering::Relaxed);
+        self.validated.record_proof();
         Ok(())
     }
 
@@ -634,3 +695,40 @@ mod preserving_layout_journal_custody_tests;
 #[cfg(test)]
 #[path = "../tests/unit/final_layout_complete_course_transport.rs"]
 mod final_layout_complete_course_transport_tests;
+
+
+#[cfg(test)]
+mod received_notation_obligations_tests {
+    use super::*;
+
+    #[test]
+    fn received_readback_covers_rest_and_pitch_without_creating_sources() {
+        let state = OwnedRhythmicContinuation::synthetic_received_for_test();
+        let bound = state.received_notation_obligations(state.document()).unwrap();
+        assert_eq!(bound.rows.len(), physical_inventory(state.document()).unwrap().len());
+        assert!(bound.rows.iter().any(|row| row.rest));
+        assert!(bound.rows.iter().any(|row| !row.rest));
+        for (row, original) in bound.rows.iter().zip(&state.occurrences) {
+            assert_eq!(row.creation, original.creation);
+            assert_eq!(row.root, original.origin.root);
+            assert_eq!(row.source, original.origin.source);
+            assert_eq!(row.course, original.origin.course.unwrap());
+            assert_eq!(row.presentation, original.origin.presentation.unwrap());
+            assert_eq!(row.bytes, original.bytes);
+        }
+        let mut out = String::new();
+        bound.append_evidence(&mut out);
+        assert!(out.contains("canonical_role_authority=none"));
+    }
+
+    #[test]
+    fn received_readback_refuses_foreign_bytes_and_missing_context() {
+        let state = OwnedRhythmicContinuation::synthetic_received_for_test();
+        let foreign = format!("{} ", state.document());
+        assert!(state.received_notation_obligations(&foreign).is_err());
+        let mut incomplete = state.clone();
+        incomplete.occurrences[0].origin.presentation = None;
+        assert!(incomplete.received_notation_obligations(incomplete.document()).is_err());
+        assert!(state.received_notation_obligations(state.document()).is_ok());
+    }
+}

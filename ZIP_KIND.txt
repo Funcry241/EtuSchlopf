@@ -1,6 +1,6 @@
 kind=EtuSchlopfTake
 version=0.10.1839
-revision=r1602
-name=CloseBeamStructureClippyWarning
-parent_revision=r1601
-change_class=RefactorOnly
+revision=r1657
+name=ReturnRenderClefCourseToE024
+parent_revision=r1656
+change_class=MusicMutation

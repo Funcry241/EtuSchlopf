@@ -74,7 +74,7 @@ pub(super) struct RestBridgeExtensionCourse {
     xml: String,
     source: std::sync::Arc<[FinalChordCanonicalSourceLocator]>,
     connections: Vec<Connection>,
-    // Independent E050 writes have no original extension seed.
+    // Independent metric continuation writes have no original extension seed.
     authored: Vec<AuthoredConnection>,
     // Origins of every provisional connection bound at capture; never narrowed.
     provisional_origins: BTreeSet<(usize, usize)>,
@@ -374,7 +374,7 @@ impl Connection {
     }
 }
 
-/// Actual adopted E050 custody, never reconstructed from current beam tags.
+/// Actual adopted metric continuation custody, never reconstructed from current beam tags.
 #[derive(Debug, Clone)]
 pub(super) struct BridgeAlignmentProof {
     source: std::sync::Arc<[FinalChordCanonicalSourceLocator]>,
@@ -682,9 +682,12 @@ impl CanonicalFinalChordStructuralPlan {
         offered: &[bool],
         receipt: &crate::master_state_identity::PreservingTransformationReceipt,
     ) -> io::Result<(Option<RestBridgeExtensionOccurrenceEvidence>, BTreeSet<usize>)> {
+        if !receipt.is_metric_rest_bridge() {
+            return Err(invalid("Bridge companion lacks the original metric operation journal"));
+        }
+        receipt.validate_preserving_transition::<crate::pipeline::PartialBeatBeamPreservingMint>(input, output)
+            .map_err(|_| invalid("Bridge companion lacks the actual metric pre/post receipt"))?;
         let mut bound_offers = BTreeSet::new();
-        receipt.validate_preserving_transition::<crate::pipeline::StructuralRestBridgeVariantAPreservingMint>(input, output)
-            .map_err(|_| invalid("Bridge companion lacks the actual E050 pre/post receipt"))?;
         let Some((state_address, project)) = &self.rest_bridge_main_state else {
             return Ok((None, bound_offers));
         };
@@ -1201,8 +1204,11 @@ impl FinalPdfSourceOccurrenceContinuation {
         guard: &CanonicalFinalChordStructuralPlan,
         receipt: &crate::master_state_identity::PreservingTransformationReceipt,
     ) -> io::Result<Self> {
-        receipt.validate_preserving_transition::<crate::pipeline::StructuralRestBridgeVariantAPreservingMint>(self.xml(),post)
-            .map_err(|_|invalid("Bridge withdrawal lacks E050 receipt"))?;
+        if !receipt.is_metric_rest_bridge() {
+            return Err(invalid("Bridge withdrawal lacks the original metric operation journal"));
+        }
+        receipt.validate_preserving_transition::<crate::pipeline::PartialBeatBeamPreservingMint>(self.xml(),post)
+            .map_err(|_|invalid("Bridge withdrawal lacks metric continuation receipt"))?;
         if guard.rest_bridge_withdrawal_rows(self.xml())?.is_none() {
             return Err(invalid("Bridge withdrawal has no bound operation"));
         }

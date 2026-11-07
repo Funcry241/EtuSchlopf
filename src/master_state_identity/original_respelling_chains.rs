@@ -35,6 +35,15 @@ impl OriginalFunctionalRespellingChains {
             .original_joint_source_occurrences(xml)
     }
 
+    pub(crate) fn append_received_notation_obligations(&self, xml: &str, out: &mut String)
+        -> anyhow::Result<()> {
+        ensure!(self.epoch == OriginalChainEpoch::Received,
+            "Received notation input has crossed its original course epoch");
+        let state = self.received.as_ref().map_err(|error| anyhow::anyhow!("{error}"))?;
+        state.received_notation_obligations(xml)?.append_evidence(out);
+        Ok(())
+    }
+
     pub(crate) fn after_original_final_chord(
         &self,
         _: &crate::structural_write_authority::FinalChordEncodingExactMint,
@@ -64,6 +73,15 @@ impl OriginalFunctionalRespellingChains {
             Ok(Arc::new(next))
         })().map_err(|error| error.to_string());
         Self { received, epoch: OriginalChainEpoch::FinalChord }
+    }
+
+    pub(crate) fn append_final_chord_notation_obligations(&self, xml: &str, out: &mut String)
+        -> anyhow::Result<()> {
+        ensure!(self.epoch == OriginalChainEpoch::FinalChord,
+            "FinalChord notation readback requires its exact completed epoch");
+        let state = self.received.as_ref().map_err(|error| anyhow::anyhow!("{error}"))?;
+        state.final_chord_notation_obligations(xml)?.append_evidence(out);
+        Ok(())
     }
 
     pub(crate) fn after_original_master_export(
@@ -118,3 +136,7 @@ impl OriginalFunctionalRespellingChains {
         }).collect()).collect()
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/final_chord_notation_obligation_epoch.rs"]
+mod final_chord_notation_readback_tests;

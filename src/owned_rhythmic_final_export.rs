@@ -52,6 +52,44 @@ impl EncodedOccurrence {
     }
 }
 
+/// Exact received ancestry together with each current physical emission.
+/// Emission paths are the actual owner captures, never rebuilt from XML.
+pub(crate) struct FinalChordNotationObligations<'a> {
+    rows: Vec<FinalChordNotationObligation<'a>>,
+}
+
+struct FinalChordNotationObligation<'a> {
+    source_origins: ReceivedSourceOrigins,
+    received: &'a Occurrence,
+    bytes: Range<usize>,
+    represented: Range<i64>,
+    origin_partition: Range<i64>,
+    original_emissions: &'a [OriginalEmission],
+    rest: bool,
+    forward: bool,
+    chord: bool,
+}
+
+impl FinalChordNotationObligations<'_> {
+    pub(crate) fn append_evidence(&self, out: &mut String) {
+        use std::fmt::Write as _;
+        let roots = self.rows.iter().map(|row| row.received.creation).collect::<BTreeSet<_>>();
+        let rests = self.rows.iter().filter(|row| row.rest && !row.forward).count();
+        let cursors = self.rows.iter().filter(|row| row.forward).count();
+        let _ = writeln!(out,
+            "FinalChordNotationObligations: bound; stage=after_final_chord; roots={}; occurrences={}; rests={rests}; rest_cursors={cursors}; canonical_role_authority=none",
+            roots.len(), self.rows.len());
+        for row in &self.rows {
+            let origin = &row.received.origin;
+            let _ = writeln!(out,
+                "FinalChordNotationObligation: creation={:?}; root={:?}; course={:?}; source={:?}; course_presentation={:?}; staff={}; bytes={:?}; represented={:?}; origin_partition={:?}; owner_emissions={:?}; rest={}; forward={}; chord={}; authority=received_course_only; source_origins={}",
+                row.received.creation, origin.root, origin.course, origin.source,
+                origin.presentation, row.received.staff, row.bytes, row.represented,
+                row.origin_partition, row.original_emissions, row.rest, row.forward, row.chord, row.source_origins);
+        }
+    }
+}
+
 type ForwardReadback = BTreeMap<(usize, usize), (Range<i64>, Option<u8>)>;
 
 fn forwards(xml: &str) -> Result<ForwardReadback> {
@@ -333,6 +371,45 @@ impl OwnedRhythmicContinuation {
         Ok(next)
     }
 
+    pub(crate) fn final_chord_notation_obligations(&self, xml: &str)
+        -> Result<FinalChordNotationObligations<'_>> {
+        self.require_complete_course_context(xml)?;
+        let mut rows = Vec::new();
+        // A genuine unchanged FinalChord has no emission receipt. Its exact
+        // received carriers continue directly under the wrapper's checked epoch.
+        for occurrence in &self.occurrences {
+            let raw = &self.snapshot[occurrence.bytes.clone()];
+            rows.push(FinalChordNotationObligation {
+                source_origins: self.received_source_origins(occurrence.creation)?,
+                received: occurrence,
+                bytes: occurrence.bytes.clone(),
+                represented: occurrence.origin.interval.clone(),
+                origin_partition: occurrence.origin.interval.clone(),
+                original_emissions: &[],
+                rest: raw.contains("<rest"),
+                forward: false,
+                chord: raw.contains("<chord"),
+            });
+        }
+        for encoded in &self.encoded {
+            let source_origins = self.received_source_origins(encoded.received.creation)?;
+            for fragment in &encoded.fragments {
+                rows.push(FinalChordNotationObligation {
+                    source_origins: source_origins.clone(),
+                    received: &encoded.received,
+                    bytes: fragment.bytes.clone(),
+                    represented: fragment.interval.clone(),
+                    origin_partition: fragment.correspondence.origin.clone(),
+                    original_emissions: &fragment.original_emissions,
+                    rest: fragment.rest,
+                    forward: fragment.forward,
+                    chord: fragment.chord,
+                });
+            }
+        }
+        Ok(FinalChordNotationObligations { rows })
+    }
+
     pub(crate) fn nonphysical_rest_obligation_count(&self) -> usize {
         self.encoded.iter().filter(|encoded| encoded.fragments.iter().any(|fragment| fragment.forward)).count()
     }
@@ -500,3 +577,8 @@ fn original_note_correspondence(origin: Range<i64>, note: &PhysicalOccurrence) -
 #[cfg(test)]
 #[path = "../tests/unit/owned_rhythmic_readback_reuse.rs"]
 mod readback_reuse_tests;
+
+
+#[cfg(test)]
+#[path = "../tests/unit/final_chord_notation_obligations.rs"]
+mod notation_obligation_tests;

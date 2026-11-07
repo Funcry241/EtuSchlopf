@@ -423,12 +423,6 @@ const COMMITTED_CROSS_STAFF_BEAM_PRESERVING: PreservingDescriptor = PreservingDe
     owner_signature: "fn close_committed_cross_staff_beam_gestures( xml: &mut String, ) -> ExternalFeedbackBeamClosureStats",
 };
 
-const STRUCTURAL_REST_BRIDGE_VARIANT_A_PRESERVING: PreservingDescriptor = PreservingDescriptor {
-    exclusion_id: "E050",
-    owner: "src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs::apply_structural_rest_bridge_beam_variant_a_render_write",
-    owner_signature: "fn apply_structural_rest_bridge_beam_variant_a_render_write( xml: &str, source_label: &str, output_path: &std::path::Path, ) -> (String, SisterFeedbackBeamVariantATinyRenderWriteAudit)",
-};
-
 const OCTAVE_WORD_LABEL_PRESERVING: PreservingDescriptor = PreservingDescriptor {
     exclusion_id: "E055",
     owner: "src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs::remove_generated_octave_word_labels",
@@ -476,7 +470,6 @@ pub(crate) fn ssc_preserving_descriptor_name(descriptor: &PreservingDescriptor) 
         (&PARTIAL_BEAT_BEAM_PRESERVING, "PARTIAL_BEAT_BEAM_PRESERVING"),
         (&PARTIAL_BEAT_LANE_TRANSFER_PRESERVING, "PARTIAL_BEAT_LANE_TRANSFER_PRESERVING"),
         (&COMMITTED_CROSS_STAFF_BEAM_PRESERVING, "COMMITTED_CROSS_STAFF_BEAM_PRESERVING"),
-        (&STRUCTURAL_REST_BRIDGE_VARIANT_A_PRESERVING, "STRUCTURAL_REST_BRIDGE_VARIANT_A_PRESERVING"),
         (&OCTAVE_WORD_LABEL_PRESERVING, "OCTAVE_WORD_LABEL_PRESERVING"),
         (&VISUAL_LAYOUT_DEFAULTS_PRESERVING, "VISUAL_LAYOUT_DEFAULTS_PRESERVING"),
         (&LOCAL_STAFF_DISTANCE_PRESERVING, "LOCAL_STAFF_DISTANCE_PRESERVING"),
@@ -832,6 +825,7 @@ bind_mint_owner!(ExactMintOwner, crate::pipeline::FunctionalRespellingExactMint,
 bind_mint_owner!(ExactMintOwner, crate::structural_write_authority::FinalChordEncodingExactMint, TransformationDescriptor, FINAL_CHORD_ENCODING_EXACT);
 bind_mint_owner!(PreservingMintOwner, crate::pipeline::LedgerBoundedLowerStaffClefReadbackPreservingMint, PreservingDescriptor, LEDGER_BOUNDED_LOWER_STAFF_CLEF_PRESERVING);
 bind_mint_owner!(PreservingMintOwner, crate::pipeline::NotationPolishPreservingMint, PreservingDescriptor, NOTATION_POLISH_PRESERVING);
+#[cfg(test)]
 bind_mint_owner!(PreservingMintOwner, crate::pipeline::NotationClefIslandPreservingMint, PreservingDescriptor, NOTATION_CLEF_ISLAND_PRESERVING);
 bind_mint_owner!(PreservingMintOwner, crate::layout::PianistLayoutPreservingMint, PreservingDescriptor, PIANIST_LAYOUT_PRESERVING);
 bind_mint_owner!(PreservingMintOwner, crate::pipeline::PartialBeatBeamPreservingMint, PreservingDescriptor, PARTIAL_BEAT_BEAM_PRESERVING);
@@ -845,7 +839,6 @@ impl PreservingMintOwner for crate::pipeline::PartialBeatLaneTransferPreservingM
 }
 
 bind_mint_owner!(PreservingMintOwner, crate::pipeline::CommittedCrossStaffBeamPreservingMint, PreservingDescriptor, COMMITTED_CROSS_STAFF_BEAM_PRESERVING);
-bind_mint_owner!(PreservingMintOwner, crate::pipeline::StructuralRestBridgeVariantAPreservingMint, PreservingDescriptor, STRUCTURAL_REST_BRIDGE_VARIANT_A_PRESERVING);
 bind_mint_owner!(PreservingMintOwner, crate::pipeline::OctaveWordLabelPreservingMint, PreservingDescriptor, OCTAVE_WORD_LABEL_PRESERVING);
 bind_mint_owner!(PreservingMintOwner, crate::structural_write_authority::VisualLayoutDefaultsPreservingMint, PreservingDescriptor, VISUAL_LAYOUT_DEFAULTS_PRESERVING);
 bind_mint_owner!(PreservingMintOwner, crate::structural_write_authority::LocalStaffDistancePreservingMint, PreservingDescriptor, LOCAL_STAFF_DISTANCE_PRESERVING);
@@ -1623,6 +1616,7 @@ pub(crate) fn compose_exact_edit_scripts(
 #[derive(Debug)]
 enum RecordedPreservingCourseTransport {
     Representation(crate::arrangement::representation_transport::RhythmicRepresentationTransport),
+    MetricRestBridge(crate::arrangement::representation_transport::RhythmicRepresentationTransport),
     FinalLayout(Result<crate::structural_write_authority::FinalLayoutCourseTransport, String>),
 }
 
@@ -1691,7 +1685,8 @@ impl PreservingTransformationReceipt {
 
     fn recorded_representation(&self) -> Option<&crate::arrangement::representation_transport::RhythmicRepresentationTransport> {
         match self.recorded_representation.as_deref() {
-            Some(RecordedPreservingCourseTransport::Representation(transport)) => Some(transport),
+            Some(RecordedPreservingCourseTransport::Representation(transport)
+                | RecordedPreservingCourseTransport::MetricRestBridge(transport)) => Some(transport),
             _ => None,
         }
     }
@@ -1727,6 +1722,20 @@ impl PreservingTransformationReceipt {
         transport: crate::arrangement::representation_transport::RhythmicRepresentationTransport) -> Self {
         self.recorded_representation = Some(Box::new(RecordedPreservingCourseTransport::Representation(transport)));
         self
+    }
+
+    pub(crate) fn with_metric_rest_bridge(
+        mut self,
+        transport: crate::arrangement::representation_transport::RhythmicRepresentationTransport,
+        _: &crate::pipeline::PartialBeatBeamPreservingMint,
+    ) -> Self {
+        assert_eq!(self.descriptor, &PARTIAL_BEAT_BEAM_PRESERVING);
+        self.recorded_representation = Some(Box::new(RecordedPreservingCourseTransport::MetricRestBridge(transport)));
+        self
+    }
+
+    pub(crate) fn is_metric_rest_bridge(&self) -> bool {
+        matches!(self.recorded_representation.as_deref(), Some(RecordedPreservingCourseTransport::MetricRestBridge(_)))
     }
 
     pub(crate) fn binds_recorded_representation(&self, before: &str, after: &str) -> anyhow::Result<()> {
@@ -2806,7 +2815,6 @@ fn ssc_preserving_origin<O: PreservingMintOwner>() -> crate::ssc_evidence_proof:
     use crate::ssc_evidence_proof::SscPreservingNecessity;
     let beam_owners = [
         &COMMITTED_CROSS_STAFF_BEAM_PRESERVING,
-        &STRUCTURAL_REST_BRIDGE_VARIANT_A_PRESERVING,
         &NOTATION_POLISH_PRESERVING,
         &PARTIAL_BEAT_BEAM_PRESERVING,
     ];

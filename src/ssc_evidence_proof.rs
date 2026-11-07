@@ -2597,7 +2597,7 @@ mod containment_v4_tests {
         }
         assert!(envelope_descriptor(SscOriginScope::Unproved).is_none());
         let preserving = include_str!("build_gate/ssc_containment_envelopes_v1.tsv").lines().filter(|line| line.contains("|Preserving|Projection|")).count();
-        assert_eq!(preserving, 13);
+        assert_eq!(preserving, 12);
         assert!(envelope_row("UNKNOWN_DESCRIPTOR").is_none());
     }
     #[test]

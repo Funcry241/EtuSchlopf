@@ -39,6 +39,7 @@
     }
 
     /// Sealed mint capability of `decompose_lower_staff_clef_islands` (PRESERVING E052).
+    #[cfg(test)]
     pub(crate) struct NotationClefIslandPreservingMint {
         _sealed: (),
     }
@@ -1226,15 +1227,8 @@
     }
     
     
-    /// Render-only Normalisierung unterer-System-Schlüsseloberflächen.
-    ///
-    /// Lokale Same-Measure- und Cross-Measure-Clef-Island-Umschreibungen sind
-    /// pensioniert. Der zentrale `ClefReadability`-Kurs besitzt die finale
-    /// F4/G2-Entscheidung. Dieser historische Einstieg darf nur noch die bereits
-    /// bestehende, scoreweit eindeutige Registerdruck-Eintrittsfläche ergänzen.
-    /// Pitch, Onset, Dauer, Voice, Staff, Tie/Notations und Beam-Zugehoerigkeit
-    /// der vorhandenen Noten bleiben unverändert.
-    pub fn decompose_lower_staff_clef_islands(xml: &str) -> (anyhow::Result<String>, Option<PreservingTransformationReceipt>) {
+    #[cfg(test)]
+    fn historical_e052_clef_island(xml: &str) -> (anyhow::Result<String>, Option<PreservingTransformationReceipt>) {
         let (out, _) = complete_unique_register_pressure_clef_island(xml);
         let receipt =
             crate::master_state_identity::PreservingTransformationReceipt::mint_preserving_receipt(
@@ -1245,6 +1239,7 @@
         (Ok(out), receipt)
     }
     
+    #[cfg(test)]
     const REGISTER_PRESSURE_TREBLE_CLEF_BLOCK: &str = r#"
       <attributes>
         <!-- etuschlopf-register-pressure-gould-write -->
@@ -1252,6 +1247,7 @@
       </attributes>"#;
 
     #[derive(Debug, Clone)]
+    #[cfg(test)]
     struct RegisterPressureMeasureSummary {
         start: usize,
         end: usize,
@@ -1261,6 +1257,7 @@
     }
 
     #[derive(Debug, Clone)]
+    #[cfg(test)]
     struct RegisterPressureClefEvent {
         start: usize,
         end: usize,
@@ -1269,10 +1266,12 @@
     }
 
     #[derive(Debug, Clone)]
+    #[cfg(test)]
     struct RegisterPressureCompletionCandidate {
         insertion_byte: usize,
     }
 
+    #[cfg(test)]
     fn complete_unique_register_pressure_clef_island(xml: &str) -> (String, usize) {
         let candidates = detect_register_pressure_clef_island_completion_candidates(xml);
         if candidates.len() != 1 {
@@ -1311,6 +1310,7 @@
         (out, 1)
     }
 
+    #[cfg(test)]
     fn detect_register_pressure_clef_island_completion_candidates(
         xml: &str,
     ) -> Vec<RegisterPressureCompletionCandidate> {
@@ -1388,6 +1388,7 @@
         candidates
     }
 
+    #[cfg(test)]
     fn collect_register_pressure_measure_summaries(
         xml: &str,
     ) -> Vec<RegisterPressureMeasureSummary> {
@@ -1417,6 +1418,7 @@
         measures
     }
 
+    #[cfg(test)]
     fn collect_register_pressure_lower_staff_clef_events(
         xml: &str,
     ) -> Vec<RegisterPressureClefEvent> {
@@ -1447,6 +1449,7 @@
         events
     }
 
+    #[cfg(test)]
     fn register_pressure_sum(midis: &[i64], clef: &str) -> i64 {
         midis
             .iter()
@@ -1459,7 +1462,7 @@
     mod register_pressure_clef_island_completion_tests {
         use super::{
             complete_unique_register_pressure_clef_island,
-            decompose_lower_staff_clef_islands, NotationClefIslandPreservingMint,
+            historical_e052_clef_island, NotationClefIslandPreservingMint,
         };
 
         fn note(step: &str, octave: i64) -> String {
@@ -1483,7 +1486,7 @@
                 note("E", 5),
                 note("D", 5),
             );
-            let (result, receipt) = decompose_lower_staff_clef_islands(&xml);
+            let (result, receipt) = historical_e052_clef_island(&xml);
             let result = result.unwrap();
             let receipt = receipt.expect("E052 changed post requires its own preserving receipt");
             assert!(receipt
@@ -1515,14 +1518,14 @@
 
     #[cfg(test)]
     mod clef_island_staff_projection_retirement_tests {
-        use super::decompose_lower_staff_clef_islands;
+        use super::historical_e052_clef_island;
 
         #[test]
         fn same_measure_lower_staff_island_preserves_staff_and_beam_membership() {
             let xml = "<score-partwise><part id=\"P1\"><measure number=\"\
 1\">\n<attributes><divisions>96</divisions><clef number=\"2\"><sign>F</sign><line>4</line></clef></attributes>\n<attributes><clef number=\"2\"><sign>G</sign><line>2</line></clef></attributes>\n<note><pitch><step>A</step><octave>4</octave></pitch><duration>24</duration><voice>2</voice><type>16th</type><stem>down</stem><staff>2</staff><beam number=\"1\">continue</beam><beam number=\"2\">continue</beam></note>\n<attributes><clef number=\"2\"><sign>F</sign><line>4</line></clef></attributes>\n</measure></part></score-partwise>";
 
-            let (result, receipt) = decompose_lower_staff_clef_islands(xml);
+            let (result, receipt) = historical_e052_clef_island(xml);
             let result = result.unwrap();
             assert!(receipt.is_none());
 
@@ -1550,7 +1553,7 @@
 1\">\n<attributes><divisions>96</divisions><clef number=\"2\"><sign>F</sign><line>4</line></clef></attributes>\n<attributes><clef number=\"2\"><sign>G</sign><line>2</line></clef></attributes>\n<note><pitch><step>A</step><octave>4</octave></pitch><duration>24</duration><voice>2</voice><type>16th</type><staff>2</staff></note>\n</measure><measure number=\"\
 2\">\n<attributes><clef number=\"2\"><sign>F</sign><line>4</line></clef></attributes>\n</measure></part></score-partwise>";
 
-            let (result, receipt) = decompose_lower_staff_clef_islands(xml);
+            let (result, receipt) = historical_e052_clef_island(xml);
             let result = result.unwrap();
             assert!(receipt.is_none());
 
@@ -1561,6 +1564,7 @@
         }
     }
 
+    #[cfg(test)]
     fn note_text_midi(note_text: &str) -> Option<i64> {
         let step = extract_first_text(note_text, "step")?;
         let octave = extract_first_i64(note_text, "octave")?;

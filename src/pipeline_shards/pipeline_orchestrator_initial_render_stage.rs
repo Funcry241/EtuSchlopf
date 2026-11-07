@@ -135,6 +135,7 @@ struct InitialRenderTransaction {
     lower_staff_visible_rhythm_rest_lane_trial: UpperStaffLocalVisualRestLedgerProofTrial,
     final_render_source_available: bool,
     pre_preview_render_xml_for_gap: String,
+    render_beam_custody: JointReadingRenderCustody,
     final_export_xml: String,
     frozen_sounding_temporal_lane_plan: FrozenSoundingTemporalLanePlan,
     frozen_sounding_material_attacks: std::sync::Arc<[CandidateMaterialAttackState]>,
@@ -621,7 +622,7 @@ fn run_initial_render_transaction_stage(
         receipts.push_block(receipt, &candidate);
         render_state.adopt_final_notation_checkpoint(root, &candidate, receipts).with_context(|| "Fruehe Rustig-FinalNotation konnte nicht adoptiert werden")?;
     }
-    apply_joint_reading_course(&mut best, &mut render_state, joint_reading_custody)?;
+    apply_joint_reading_course(&mut best, &mut render_state, joint_reading_custody.clone())?;
     let pre_preview_render_xml_for_gap = render_state.observed_document_or(best.layout_xml()).to_owned();
     if final_render_source_available {
         let render_preview_source = render_state.require_document("Condensation preview").to_owned();
@@ -881,6 +882,7 @@ fn run_initial_render_transaction_stage(
             lower_staff_visible_rhythm_rest_lane_trial,
             final_render_source_available,
             pre_preview_render_xml_for_gap,
+            render_beam_custody: joint_reading_custody,
             final_export_xml,
             frozen_sounding_temporal_lane_plan: FrozenSoundingTemporalLanePlan::default(),
             frozen_sounding_material_attacks: std::sync::Arc::from(

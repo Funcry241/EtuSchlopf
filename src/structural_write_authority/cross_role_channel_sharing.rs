@@ -3,6 +3,7 @@
 use super::*;
 use std::collections::{BTreeMap, BTreeSet};
 use std::cell::RefCell;
+use super::ordered_received_beam_readback::{self, OwnerEdge, OwnerEdgeReadback};
 
 type Partition = BTreeMap<usize, usize>;
 type Roles = BTreeMap<usize, SerializedVoicePresentationRole>;
@@ -14,6 +15,7 @@ type SeenPartitions = BTreeSet<(Partition, Roles)>;
 pub(super) struct SharingContext<'a> {
     canonical: &'a CanonicalFinalChordStructuralPlan,
     observation: &'a ActualSourceBeamBindingObservation,
+    ordered_edges: Result<Vec<OwnerEdge<'a>>, &'static str>,
     classes: &'a Partition,
     source_roles: &'a Roles,
     legacy: &'a [LegacyVoiceLabelPreferenceRow],
@@ -34,6 +36,7 @@ struct SharingNote {
     measure: usize,
     staff: String,
     onset: i64,
+    duration: i64,
     ordinal: usize,
     beat_unit: i64,
     beam_levels: u8,
@@ -66,6 +69,7 @@ struct SharingProjection {
     non_pitched_shadow_roles: Vec<Option<bool>>,
     non_pitched_note_positions: Vec<(usize,i64,i64,String)>,
     edges: BTreeSet<BeamEdge>,
+    owner_edges: Vec<OwnerEdgeReadback>,
 }
 
 impl<'a> SharingContext<'a> {
@@ -79,6 +83,7 @@ impl<'a> SharingContext<'a> {
         Self {
             canonical,
             observation,
+            ordered_edges: ordered_received_beam_readback::owner_edges(canonical, observation),
             classes,
             source_roles,
             legacy,
@@ -257,22 +262,38 @@ impl<'a> SharingContext<'a> {
     fn projection(&self, by_class: &Partition, roles: &Roles,
         continuation: Option<&FrozenSerializedVoicePlan>) -> io::Result<SharingProjection> {
         let voices = self.bound_voices(by_class, roles, continuation)?;
-        let source = &self
-            .canonical
+        let edges = self.ordered_edges.as_deref().map_err(|reason| sharing_error(reason))?;
+        Self::project_voices(self.canonical, voices, Some(edges))
+    }
+
+    #[cfg(test)]
+    fn projection_for_voices(
+        canonical: &CanonicalFinalChordStructuralPlan,
+        voices: FrozenSerializedVoicePlan,
+    ) -> io::Result<SharingProjection> {
+        Self::project_voices(canonical, voices, None)
+    }
+
+    fn project_voices(
+        canonical: &CanonicalFinalChordStructuralPlan,
+        voices: FrozenSerializedVoicePlan,
+        owner_edges: Option<&[OwnerEdge<'_>]>,
+    ) -> io::Result<SharingProjection> {
+        let source = &canonical
             .written_projection
             .as_ref()
             .ok_or_else(|| sharing_error("Missing source producer"))?
             .original_xml;
         let bound = bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound(
             source,
-            self.canonical,
+            canonical,
             &voices,
             None,
         )?;
         let projected =
             project_canonical_bound_final_chord_encoding_plan_for_transaction_output_alpha(
                 source,
-                self.canonical,
+                canonical,
                 &bound,
             )?;
         let measures = final_chord_parse_binding_measures(&projected.xml)?;
@@ -354,6 +375,7 @@ impl<'a> SharingContext<'a> {
                             measure: witness.measure,
                             staff: note.staff.clone(),
                             onset: note.onset,
+                            duration: note.duration,
                             ordinal: witness.pitched_ordinal,
                             beat_unit: beat_units[&witness.measure],
                             beam_levels,
@@ -443,6 +465,10 @@ impl<'a> SharingContext<'a> {
             }
         }
         let edges = written_connections(&notes);
+        let owner_edges = owner_edges.map_or_else(Vec::new, |edges|
+            ordered_received_beam_readback::read_projected_owner_edges(
+                &projected.xml, &measures, &projected.receipt.occurrences, edges));
+
         Ok(SharingProjection {
             voices,
             notes,
@@ -452,6 +478,7 @@ impl<'a> SharingContext<'a> {
             non_pitched_shadow_roles,
             non_pitched_note_positions,
             edges,
+            owner_edges,
         })
     }
 
@@ -653,7 +680,7 @@ impl<'a> SharingContext<'a> {
         if unchanged_edges(baseline) != unchanged_edges(&after) {
             return self.refuse("unmoved_beam_connections_changed");
         }
-        for (level, left, right) in after.edges.difference(&baseline.edges) {
+        let prove_pair = |(level, left, right): &BeamEdge| {
             let (Some(a), Some(b)) = (self.row(left.0), self.row(right.0)) else {
                 return self.refuse("missing_new_beam_edge_witness");
             };
@@ -666,8 +693,33 @@ impl<'a> SharingContext<'a> {
             if cohort(a).is_none() || cohort(a) != cohort(b) {
                 return self.refuse_detail("new_beam_edge_cohort_mismatch",format!("left={left:?}; right={right:?}; level={level}; original_left={:?}; original_right={:?}",cohort(a),cohort(b)));
             }
+            true
+        };
+        // The paired readbacks use the same source-owned ordered edge list.
+        // An after-state of Present proves its exact two endpoints and strand.
+        match check_beam_transition(baseline, &after, prove_pair, |_, old, new|
+            old == OwnerEdgeReadback::SplitVoice && new == OwnerEdgeReadback::Present)
+        {
+            Ok(()) => true,
+            Err(failure) => self.refuse(failure.reason()),
         }
-        true
+    }
+
+    pub(super) fn check_overflow_recolouring(
+        &self,
+        input: &ChannelSearchInput<'_>,
+        baseline: &Partition,
+        baseline_roles: &Roles,
+        candidate: &Partition,
+        candidate_roles: &Roles,
+    ) -> io::Result<()> {
+        let before = self.bound_voices(baseline, baseline_roles, None)?;
+        let after = self.bound_voices(candidate, candidate_roles, None)?;
+        input.check_partition(candidate, candidate_roles, Some(&after))
+            .map_err(|_| sharing_error("bound overflow candidate is incompatible or unreserved"))?;
+        check_written_only_projection(
+            None, self.canonical, &before, &after, self.observation,
+        )
     }
 
     pub(super) fn search(
@@ -803,7 +855,7 @@ impl<'a> SharingContext<'a> {
             Ok(voices) => voices,
             Err(error) => { self.refuse_detail("proposed_label_continuation_failed", error.to_string()); return None; }
         };
-        let failing = match channel_consumer_overflow_with_labels(input.model, current, roles, Some(&voices)) {
+        let failing = match input.check_partition(current, roles, Some(&voices)) {
             Ok(()) if { self.observe("consumer_admissible_partition_checked"); self.compatible(baseline, initial, current, roles) } => {
                 let moved = input
                     .class_order
@@ -814,7 +866,14 @@ impl<'a> SharingContext<'a> {
                 return Some((current.clone(), roles.clone(), moved, baseline.voices.clone()));
             }
             Ok(()) => { self.observe("consumer_admissible_partition_refused"); roles.values().copied().map(channel_role_staff).collect() },
-            Err(failing) => { self.observe("consumer_overflow_partition"); failing },
+            Err(ChannelPartitionRefusal::Capacity(failing)) => {
+                self.observe("consumer_overflow_partition");
+                failing
+            }
+            Err(ChannelPartitionRefusal::Conflict) => {
+                self.observe("consumer_partition_merges_incompatible_classes");
+                return None;
+            }
         };
         let mut members = BTreeMap::<usize, Vec<usize>>::new();
         for class in input.class_order {
@@ -918,6 +977,358 @@ impl<'a> SharingContext<'a> {
     }
 }
 
+/// Read back both canonical byte projections using the same occurrence receipt
+/// and written beam parser that the channel search consumes.
+pub(super) fn check_written_only_projection(
+    mut report: Option<&mut String>,
+    canonical: &CanonicalFinalChordStructuralPlan,
+    production: &FrozenSerializedVoicePlan,
+    probe: &FrozenSerializedVoicePlan,
+    original_beams: &ActualSourceBeamBindingObservation,
+) -> io::Result<()> {
+    let edges = ordered_received_beam_readback::owner_edges(canonical, original_beams);
+    let before = SharingContext::project_voices(canonical, production.clone(), edges.as_deref().ok())?;
+    let after = SharingContext::project_voices(canonical, probe.clone(), edges.as_deref().ok())?;
+    if let Some(out) = report.as_deref_mut() {
+        append_voice_probe_comparison(out, canonical.semantic_fingerprint_fnv64, &before, &after);
+    }
+    let edges = match edges {
+        Ok(edges) => edges,
+        Err(reason) => {
+            if let Some(out) = report {
+                let _ = writeln!(out, "WrittenOnlyOwnerBeamEdges: result=Unknown; reason={reason}; authority=none");
+            }
+            return Err(sharing_error(reason));
+        }
+    };
+    if let Some(out) = report.as_deref_mut() {
+        ordered_received_beam_readback::append_owner_edge_comparison(out, &edges, &before.owner_edges, &after.owner_edges);
+    }
+    let closure = certify_closed_owner_beats(&before, &after, &edges, original_beams);
+    validate_written_only_projections(&before, &after, &closure, report.as_deref_mut(), |fragment, note| {
+        original_beams.sharing_witness(canonical, fragment).is_some_and(|witness|
+            witness.source == note.source && witness.attack == note.attack
+                && witness.kind == actual_source_beam_binding::SharingBeamKind::NonBeamable)
+    })?;
+    if let Some(out) = report && !closure.added_pairs.is_empty() {
+        let _ = writeln!(out, "WrittenOnlyOwnerBeatClosure: certified_pairs={}; certified_moves={}; scope=complete_written_beat",
+            closure.added_pairs.len(), closure.moved.len());
+    }
+    Ok(())
+}
+
+#[derive(Default)]
+struct OwnerBeatClosure {
+    added_pairs: BTreeSet<BeamEdge>,
+    moved: BTreeSet<OccurrenceKey>,
+    improved_edges: BTreeSet<usize>,
+}
+
+type KeyedNote<'a> = (&'a OccurrenceKey, &'a SharingNote);
+
+#[derive(Default)]
+struct BeatClosureIndex<'a> {
+    measure_context: BTreeMap<usize, Vec<KeyedNote<'a>>>,
+    chord_members: BTreeMap<OccurrenceKey, Vec<KeyedNote<'a>>>,
+}
+
+impl<'a> BeatClosureIndex<'a> {
+    fn new(before: &'a SharingProjection, after: &'a SharingProjection) -> Self {
+        let mut index = Self::default();
+        for (key, note) in before.notes.iter().chain(&after.notes) {
+            index.measure_context.entry(note.measure).or_default().push((key, note));
+        }
+        for (key, note) in &after.notes {
+            if let Some(head) = note.chord_head {
+                index.chord_members.entry(head).or_default().push((key, note));
+            }
+        }
+        index
+    }
+}
+
+fn certify_closed_owner_beats(
+    before: &SharingProjection, after: &SharingProjection,
+    edges: &[OwnerEdge<'_>], original: &ActualSourceBeamBindingObservation,
+) -> OwnerBeatClosure {
+    let mut groups = BTreeMap::<_, Vec<_>>::new();
+    for (index, edge) in edges.iter().enumerate() {
+        groups.entry((edge.level, edge.group)).or_default().push((index, edge));
+    }
+    let mut emissions = BTreeMap::<_, Vec<_>>::new();
+    for (key, note) in &after.notes {
+        emissions.entry((note.source, note.attack, key.0)).or_default().push(*key);
+    }
+    let key_for = |row: &actual_source_beam_binding::BoundOccurrence| {
+        let [key] = emissions.get(&(row.source, row.attack, row.fragment))?.as_slice() else { return None; };
+        Some(*key)
+    };
+    let mut complete_by_measure = BTreeMap::<_, Vec<_>>::new();
+    for ((level, _), group) in groups {
+        let Some((_, first)) = group.first() else { continue; };
+        if group.len() + 1 != first.group_size || group.iter().any(|(index, _)|
+            after.owner_edges.get(*index) != Some(&OwnerEdgeReadback::Present))
+        {
+            continue;
+        }
+        let Some(heads) = std::iter::once(first.left)
+            .chain(group.iter().map(|(_, edge)| edge.right)).map(key_for).collect::<Option<Vec<_>>>()
+        else { continue; };
+        if heads.iter().enumerate().any(|(position, key)| {
+            let expected = if position == 0 { "begin" }
+                else if position + 1 == heads.len() { "end" } else { "continue" };
+            after.notes[key].states.get(&level).map(String::as_str) != Some(expected)
+        }) { continue; }
+        // A compatible subgroup must start at a head of the primary group.
+        let measure = after.notes[&heads[0]].measure;
+        complete_by_measure.entry(measure).or_default().push(
+            (level, heads, group.into_iter().map(|(index, _)| index).collect::<Vec<_>>()));
+    }
+    let mut proof = OwnerBeatClosure::default();
+    let index = std::cell::OnceCell::new();
+    for complete in complete_by_measure.values() {
+        for (_, heads, _) in complete.iter().filter(|(level, _, indices)| *level == 1
+            && indices.iter().any(|&i| before.owner_edges.get(i) == Some(&OwnerEdgeReadback::SplitVoice)))
+        {
+            let index = index.get_or_init(|| BeatClosureIndex::new(before, after));
+            let Some(members) = complete_owner_beat_members(before, after, heads, original, index) else { continue; };
+            let mut primary_certified = false;
+            for (level, level_heads, indices) in complete {
+                if !level_heads.iter().all(|key| heads.contains(key)) { continue; }
+                let notes = members.iter().filter(|key| {
+                    after.notes.get(*key).is_some_and(|note| level_heads.contains(&note.chord_head.unwrap_or(**key)))
+                }).copied().collect::<Vec<_>>();
+                let pairs = notes.iter().enumerate().flat_map(|(index, &left)|
+                    notes[index + 1..].iter().map(move |&right| (*level, left, right))).collect::<BTreeSet<_>>();
+                if !pairs.is_subset(&after.edges) { continue; }
+                primary_certified |= *level == 1 && level_heads == heads;
+                proof.added_pairs.extend(pairs.difference(&before.edges).copied());
+                proof.improved_edges.extend(indices.iter().copied().filter(|&i|
+                    before.owner_edges.get(i) == Some(&OwnerEdgeReadback::SplitVoice)));
+            }
+            if primary_certified {
+                proof.moved.extend(members.into_iter().filter(|key| before.notes.get(key)
+                    .is_some_and(|note| note.label != after.notes[key].label)));
+            }
+        }
+    }
+    proof
+}
+
+fn complete_owner_beat_members(
+    before: &SharingProjection, after: &SharingProjection,
+    heads: &[OccurrenceKey], original: &ActualSourceBeamBindingObservation,
+    index: &BeatClosureIndex<'_>,
+) -> Option<BTreeSet<OccurrenceKey>> {
+    let first = after.notes.get(heads.first()?)?;
+    if first.beat_unit <= 0 || first.onset.rem_euclid(first.beat_unit) != 0 { return None; }
+    let end = first.onset.checked_add(first.beat_unit)?;
+    let mut cursor = first.onset;
+    let mut labels = BTreeSet::new();
+    let mut next_onset = BTreeMap::new();
+    labels.insert(first.label.as_str());
+    for key in heads {
+        let new = after.notes.get(key)?;
+        let old = before.notes.get(key)?;
+        if new.measure != first.measure || new.staff != first.staff || new.label != first.label
+            || new.beat_unit != first.beat_unit || new.onset != cursor || new.duration <= 0
+            || new.duration >= first.beat_unit / 2 || !(2..=4).contains(&new.beam_levels)
+            || new.chord_head.is_some() || new.non_pitched_chord_head.is_some()
+            || next_onset.get(old.label.as_str()).is_some_and(|&next| next != new.onset)
+        {
+            return None;
+        }
+        cursor = cursor.checked_add(new.duration)?;
+        next_onset.insert(old.label.as_str(), cursor);
+        labels.insert(old.label.as_str());
+    }
+    if cursor != end { return None; }
+    let mut members = heads.iter().copied().collect::<BTreeSet<_>>();
+    for (&head_key, &(key, note)) in heads.iter().flat_map(|head|
+        index.chord_members.get(head).into_iter().flatten().map(move |member| (head, member)))
+    {
+        let head = &after.notes[&head_key];
+        let old = before.notes.get(key)?;
+        if original.original_chord_head((note.source, note.attack, key.0)) != Some((head.source, head.attack, head_key.0))
+            || note.measure != head.measure || note.staff != head.staff || note.onset != head.onset
+            || note.duration != head.duration || !note.states.is_empty()
+            || note.label != head.label || old.label != before.notes.get(&head_key)?.label
+        {
+            return None;
+        }
+        members.insert(*key);
+    }
+    // Both affected label strands must contain only the authenticated beat
+    // material, including cross-staff conflicts and events entering the beat.
+    for &(key, note) in &index.measure_context[&first.measure] {
+        if labels.contains(note.label.as_str())
+            && note.onset < end
+            && (note.onset >= first.onset || note.onset.checked_add(note.duration)? > first.onset)
+            && !members.contains(key)
+        {
+            return None;
+        }
+    }
+    Some(members)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum BeamTransitionFailure {
+    LostWrittenPair(BeamEdge),
+    OrderedCoverage { before: usize, after: usize },
+    LostOrderedEdge { index: usize, after: OwnerEdgeReadback },
+    UnprovedOrderedChange { index: usize, before: OwnerEdgeReadback, after: OwnerEdgeReadback },
+    UnprovedWrittenPair(BeamEdge),
+}
+
+impl BeamTransitionFailure {
+    fn reason(&self) -> &'static str {
+        match self {
+            Self::LostWrittenPair(_) => "existing_written_beam_edge_lost",
+            Self::OrderedCoverage { .. } => "ordered_owner_edge_coverage_changed",
+            Self::LostOrderedEdge { .. } => "existing_ordered_owner_beam_edge_lost",
+            Self::UnprovedOrderedChange { .. } => "ordered_owner_beam_change_unproved",
+            Self::UnprovedWrittenPair(_) => "new_written_beam_edge_unproved",
+        }
+    }
+}
+
+fn check_beam_transition(
+    before: &SharingProjection,
+    after: &SharingProjection,
+    prove_added_pair: impl Fn(&BeamEdge) -> bool,
+    prove_ordered_change: impl Fn(usize, OwnerEdgeReadback, OwnerEdgeReadback) -> bool,
+) -> Result<(), BeamTransitionFailure> {
+    if let Some(&pair) = before.edges.difference(&after.edges).next() {
+        return Err(BeamTransitionFailure::LostWrittenPair(pair));
+    }
+    if before.owner_edges.len() != after.owner_edges.len() {
+        return Err(BeamTransitionFailure::OrderedCoverage {
+            before: before.owner_edges.len(), after: after.owner_edges.len(),
+        });
+    }
+    for (index, (&old, &new)) in before.owner_edges.iter().zip(&after.owner_edges).enumerate() {
+        if old == new { continue; }
+        if old == OwnerEdgeReadback::Present {
+            return Err(BeamTransitionFailure::LostOrderedEdge { index, after: new });
+        }
+        if !prove_ordered_change(index, old, new) {
+            return Err(BeamTransitionFailure::UnprovedOrderedChange { index, before: old, after: new });
+        }
+    }
+    if let Some(&pair) = after.edges.difference(&before.edges).find(|edge| !prove_added_pair(edge)) {
+        return Err(BeamTransitionFailure::UnprovedWrittenPair(pair));
+    }
+    Ok(())
+}
+
+fn validate_written_only_projections(
+    before: &SharingProjection, after: &SharingProjection, closure: &OwnerBeatClosure,
+    report: Option<&mut String>,
+    original_non_beamable: impl Fn(usize, &SharingNote) -> bool,
+) -> io::Result<()> {
+    if before.voices.source_to_role != after.voices.source_to_role
+        || before.non_pitched != after.non_pitched
+        || before.non_pitched_note_positions != after.non_pitched_note_positions
+        || before.non_pitched_shadow_roles != after.non_pitched_shadow_roles
+        || before.notes.keys().ne(after.notes.keys())
+    {
+        return Err(sharing_error("written_identity_role_or_rest_resources_changed"));
+    }
+    let beam_transition = check_beam_transition(before, after, |edge| closure.added_pairs.contains(edge),
+        |index, _, _| closure.improved_edges.contains(&index));
+    if let Some(out) = report {
+        let added = after.edges.difference(&before.edges);
+        let (proved_pairs, unproved_pairs) = added.fold((0, 0), |(proved, unproved), pair|
+            if closure.added_pairs.contains(pair) { (proved + 1, unproved) } else { (proved, unproved + 1) });
+        let result = beam_transition.as_ref().err().map_or("preserved", BeamTransitionFailure::reason);
+        let _ = writeln!(out,
+            "WrittenOnlyBeamTransition: result={result}; lost_pairs={}; proved_added_pairs={proved_pairs}; unproved_added_pairs={unproved_pairs}; first_failure={:?}; scope=canonical_voice_encoding; authority=none",
+            before.edges.difference(&after.edges).count(), beam_transition.as_ref().err());
+    }
+    beam_transition.map_err(|_| sharing_error("written_beam_connections_changed"))?;
+
+    let mut changed_lanes = BTreeSet::new();
+    for (key, old) in &before.notes {
+        let new = &after.notes[key];
+        let role = before.voices.role_for_label(&old.label);
+        if old.source != new.source || old.attack != new.attack
+            || old.measure != new.measure || old.staff != new.staff || old.onset != new.onset
+            || old.beat_unit != new.beat_unit || old.duration != new.duration || old.chord_head != new.chord_head
+            || old.non_pitched_chord_head != new.non_pitched_chord_head
+            || old.non_voice_bytes != new.non_voice_bytes
+            || role.is_none() || role != after.voices.role_for_label(&new.label)
+        {
+            return Err(sharing_error("written_occurrence_or_role_changed"));
+        }
+        if old.label != new.label {
+            let note = roxmltree::Document::parse(&old.non_voice_bytes)
+                .map_err(|_| sharing_error("unreadable_changed_written_occurrence"))?;
+            if (old.chord_head.is_some() && !closure.moved.contains(key)) || old.non_pitched_chord_head.is_some()
+                || note.descendants().any(|node| node.has_tag_name("tie") || node.has_tag_name("tied") || node.has_tag_name("grace"))
+            {
+                return Err(sharing_error("changed_chord_member_tie_or_grace_label"));
+            }
+            if !closure.moved.contains(key) {
+                changed_lanes.insert((old.measure, old.label.as_str()));
+                changed_lanes.insert((new.measure, new.label.as_str()));
+            }
+        }
+    }
+    // Optional metric bridges have no final lifecycle at this boundary.
+    // Keep their entire potential lane input fixed, on both ends of every move.
+    if before.notes.iter().chain(&after.notes).any(|(key, note)|
+        changed_lanes.contains(&(note.measure, note.label.as_str()))
+            && (note.beam_levels > 0 || !note.states.is_empty() || !original_non_beamable(key.0, note)))
+    {
+        return Err(sharing_error("changed_lane_has_beam_or_optional_bridge_input"));
+    }
+    for (key, old) in &before.notes {
+        if let Some(head) = old.chord_head
+            && before.notes[&head].label != after.notes[&head].label
+            && !closure.moved.contains(key)
+        {
+            return Err(sharing_error("changed_chord_head_label"));
+        }
+    }
+    Ok(())
+}
+
+fn append_voice_probe_comparison(
+    out: &mut String,
+    scope: u64,
+    before: &SharingProjection,
+    after: &SharingProjection,
+) {
+    let missing = before.notes.keys().filter(|key| !after.notes.contains_key(key)).count();
+    let extra = after.notes.keys().filter(|key| !before.notes.contains_key(key)).count();
+    let changed_non_voice = before.notes.iter().filter(|(key, note)|
+        after.notes.get(key).is_some_and(|other|
+            note.source != other.source || note.attack != other.attack
+                || note.measure != other.measure || note.staff != other.staff
+                || note.onset != other.onset || note.beat_unit != other.beat_unit
+                || note.non_voice_bytes != other.non_voice_bytes
+                || note.chord_head != other.chord_head
+                || note.non_pitched_chord_head != other.non_pitched_chord_head)).count();
+    let lost = before.edges.difference(&after.edges).count();
+    let added = after.edges.difference(&before.edges).count();
+    let _ = writeln!(out,
+        "WrittenOnlyChannelProbeProjection: scope={scope:016x}; stage=canonical_voice_encoding; occurrences_before={} occurrences_after={} missing={missing} extra={extra} changed_non_voice={changed_non_voice}; non_pitched_equal={} non_pitched_positions_equal={} shadow_roles_equal={}; beam_edges_before={} beam_edges_after={} lost={lost} added={added}; downstream_render=unmeasured; authority=none",
+        before.notes.len(), after.notes.len(), before.non_pitched == after.non_pitched,
+        before.non_pitched_note_positions == after.non_pitched_note_positions,
+        before.non_pitched_shadow_roles == after.non_pitched_shadow_roles,
+        before.edges.len(), after.edges.len());
+    for edge in before.edges.difference(&after.edges) {
+        let left = &before.notes[&edge.1];
+        let right = &before.notes[&edge.2];
+        let row = format!(
+            "WrittenOnlyChannelProbeLostEdge: scope={scope:016x}; level={} left={:?} right={:?} measure={} staff={} sources={:?}; authority=none",
+            edge.0, edge.1, edge.2, left.measure, left.staff, (left.source, right.source));
+        let _ = writeln!(out, "{row}");
+        eprintln!("{row}");
+    }
+}
+
 fn generated_alignment_staff(staff: Option<&str>, original: &BTreeSet<String>) -> bool {
     staff.map(str::trim).is_some_and(|staff| matches!(staff,"1"|"2") && !original.contains(staff))
 }
@@ -1000,6 +1411,73 @@ fn written_connections(notes: &BTreeMap<OccurrenceKey, SharingNote>) -> BTreeSet
 mod tests {
     use super::*;
     #[test]
+    fn shared_transition_preserves_ordered_edges_even_without_pair_delta() {
+        let mut before = marked_fixture(&["begin", "continue", "end"], 17, 1);
+        let mut after = marked_fixture(&["begin", "continue", "end"], 17, 1);
+        before.owner_edges = vec![OwnerEdgeReadback::Present, OwnerEdgeReadback::SplitVoice];
+        after.owner_edges = vec![OwnerEdgeReadback::Present, OwnerEdgeReadback::Present];
+        let prove_ordered = |index, old, new| index == 1
+            && old == OwnerEdgeReadback::SplitVoice && new == OwnerEdgeReadback::Present;
+        assert!(check_beam_transition(&before, &after, |_| false, prove_ordered).is_ok());
+        assert_eq!(check_beam_transition(&before, &after, |_| false, |_, _, _| false),
+            Err(BeamTransitionFailure::UnprovedOrderedChange { index: 1, before: OwnerEdgeReadback::SplitVoice, after: OwnerEdgeReadback::Present }));
+        after.owner_edges[0] = OwnerEdgeReadback::Interrupted { pitched_ordinal: 1 };
+        assert_eq!(check_beam_transition(&before, &after, |_| true, |_, _, _| true),
+            Err(BeamTransitionFailure::LostOrderedEdge { index: 0, after: OwnerEdgeReadback::Interrupted { pitched_ordinal: 1 } }));
+    }
+
+    #[test]
+    fn beam_transition_reports_lost_and_unproved_pairs_without_changing_refusal() {
+        let mut before = measure_context_fixture(&[]);
+        let mut after = measure_context_fixture(&[]);
+        let lost = (1, (17, 0, 0), (23, 0, 0));
+        let proved = (1, (29, 0, 0), (31, 0, 0));
+        let unproved = (2, (37, 0, 0), (41, 0, 0));
+        before.edges.insert(lost);
+        after.edges.extend([proved, unproved]);
+        let closure = OwnerBeatClosure { added_pairs: BTreeSet::from([proved]), ..Default::default() };
+        let mut report = String::new();
+        let error = validate_written_only_projections(&before, &after, &closure, Some(&mut report), |_, _| true)
+            .unwrap_err();
+        assert_eq!(error.to_string(), "written_beam_connections_changed");
+        assert!(report.contains("result=existing_written_beam_edge_lost; lost_pairs=1; proved_added_pairs=1; unproved_added_pairs=1"));
+        assert!(report.contains(&format!("first_failure=Some(LostWrittenPair({lost:?}))")));
+
+        after.edges.insert(lost);
+        let mut report = String::new();
+        let error = validate_written_only_projections(&before, &after, &closure, Some(&mut report), |_, _| true)
+            .unwrap_err();
+        assert_eq!(error.to_string(), "written_beam_connections_changed");
+        assert!(report.contains("result=new_written_beam_edge_unproved; lost_pairs=0; proved_added_pairs=1; unproved_added_pairs=1"));
+        assert!(report.contains(&format!("first_failure=Some(UnprovedWrittenPair({unproved:?}))")));
+    }
+
+    #[test]
+    fn voice_probe_readback_detects_lost_edges_without_note_loss() {
+        for offset in [17, 1017] {
+            for copies in [1, 2] {
+                let mut before = marked_fixture(&["begin", "continue", "end"], offset, copies);
+                before.edges = written_connections(&before.notes);
+                assert_eq!(before.edges.len(), 12 * copies);
+                let mut after = marked_fixture(&["begin", "continue", "end"], offset, copies);
+                for (key, note) in &mut after.notes {
+                    note.label = format!("separate-{}", key.0);
+                }
+                after.edges = written_connections(&after.notes);
+                let mut out = String::new();
+                append_voice_probe_comparison(&mut out, 0, &before, &after);
+                assert!(out.contains("missing=0 extra=0 changed_non_voice=0"));
+                assert!(out.contains(&format!("lost={} added=0", before.edges.len())));
+                assert_eq!(out.lines().filter(|line| line.starts_with("WrittenOnlyChannelProbeLostEdge:")).count(),
+                    before.edges.len());
+                out.clear();
+                append_voice_probe_comparison(&mut out, 0, &before, &before);
+                assert!(out.contains("lost=0 added=0"));
+            }
+        }
+    }
+
+    #[test]
     fn original_cursor_protection_is_scoped_to_its_known_staff_resource() {
         let source="<score><forward><duration>24</duration><voice>opaque</voice><staff>2</staff></forward></score>";
         let staffs=original_cursor_staffs(source).unwrap();
@@ -1040,12 +1518,35 @@ mod tests {
     fn measure_context_fixture(rows: &[(usize,usize,&str,i64,&str)]) -> SharingProjection {
         let notes=rows.iter().enumerate().map(|(ordinal,(id,measure,staff,onset,label))|
             ((*id,0,0),SharingNote{source:*id,attack:*id+17,measure:*measure,staff:staff.to_string(),
-                onset:*onset,ordinal,beat_unit:96,beam_levels:2,label:label.to_string(),
+                onset:*onset,duration:24,ordinal,beat_unit:96,beam_levels:2,label:label.to_string(),
                 non_voice_bytes:"identical-note-bytes".into(),states:BTreeMap::new(),chord_head:None,non_pitched_chord_head:None})).collect();
         SharingProjection{voices:FrozenSerializedVoicePlan::default(),notes,non_pitched:Vec::new(),
             protected_channels:BTreeSet::new(),protected_resources:BTreeMap::new(),
-            non_pitched_shadow_roles:Vec::new(),non_pitched_note_positions:Vec::new(),edges:BTreeSet::new()}
+            non_pitched_shadow_roles:Vec::new(),non_pitched_note_positions:Vec::new(),edges:BTreeSet::new(),owner_edges:Vec::new()}
     }
+    #[test]
+    fn written_only_refuses_new_neighbour_in_beam_context_even_if_endpoints_stay() {
+        let before_rows = [(17, 43, "1", 0, "a"), (29, 43, "1", 24, "b"), (41, 43, "1", 48, "a")];
+        let after_rows = [(17, 43, "1", 0, "a"), (29, 43, "1", 24, "a"), (41, 43, "1", 48, "a")];
+        let mut before = measure_context_fixture(&before_rows);
+        let mut after = measure_context_fixture(&after_rows);
+        for projection in [&mut before, &mut after] {
+            projection.voices.label_to_role = ["a", "b"].into_iter()
+                .map(|label| (label.to_owned(), SerializedVoicePresentationRole::UpperPrimary)).collect();
+            for note in projection.notes.values_mut() {
+                note.non_voice_bytes = "<note><duration>24</duration></note>".to_owned();
+                note.beam_levels = 0;
+            }
+        }
+        assert!(validate_written_only_projections(&before, &after, &OwnerBeatClosure::default(), None, |_, _| true).is_ok());
+        for projection in [&mut before, &mut after] {
+            projection.notes.get_mut(&(17, 0, 0)).unwrap().beam_levels = 1;
+            projection.notes.get_mut(&(41, 0, 0)).unwrap().beam_levels = 1;
+        }
+        let error = validate_written_only_projections(&before, &after, &OwnerBeatClosure::default(), None, |_, _| true).unwrap_err();
+        assert_eq!(error.to_string(), "changed_lane_has_beam_or_optional_bridge_input");
+    }
+
     #[test]
     fn preservation_uses_complete_cross_staff_measure_input_and_ignores_independent_other_measures() {
         let before=measure_context_fixture(&[(17,3,"1",0,"a"),(29,3,"2",24,"a"),(41,8,"1",0,"b")]);
@@ -1339,6 +1840,114 @@ mod tests {
     }
 
     #[test]
+    fn indexed_beat_context_keeps_cross_staff_and_cross_measure_custody_checks() {
+        let (_, original) = producer_group_fixture(false, 83);
+        let heads = [(17, 0, 0), (29, 0, 0), (41, 0, 0), (53, 0, 0)];
+        let rows = [(17, 83, "1", 0, "a"), (29, 83, "1", 24, "a"),
+            (41, 83, "1", 48, "a"), (53, 83, "1", 72, "a"), (67, 84, "2", 0, "a")];
+        let before = measure_context_fixture(&rows);
+        let mut after = measure_context_fixture(&rows);
+        let certify = |after: &SharingProjection| {
+            let index = BeatClosureIndex::new(&before, after);
+            complete_owner_beat_members(&before, after, &heads, &original, &index)
+        };
+        assert_eq!(certify(&after), Some(BTreeSet::from(heads)));
+
+        let unrelated = (67, 0, 0);
+        after.notes.get_mut(&unrelated).unwrap().measure = 83;
+        assert_eq!(certify(&after), None);
+
+        let member = after.notes.get_mut(&unrelated).unwrap();
+        member.measure = 84;
+        member.chord_head = Some(heads[0]);
+        assert_eq!(certify(&after), None);
+    }
+
+    #[test]
+    fn allocation_closes_the_original_full_beat_and_carries_its_chord() {
+        for offset in [83, 1083] {
+            let (canonical, observation) = producer_group_fixture(false, offset);
+            let start = canonical.source_locators.iter().map(|row| row.onset).min().unwrap();
+            let end = canonical.source_locators.iter().map(|row| row.onset + row.duration).max().unwrap();
+            let attacks = canonical.source_locators.iter().map(|row| FrozenVoiceAttackEvidenceRow {
+                source_event_id: row.source_event_id, attack_id: row.attack_id,
+                absolute_start: row.onset,
+                absolute_end: if row.onset == start { end } else { row.onset + row.duration },
+                staff: row.staff.parse().unwrap(), technical_lane: 1,
+            }).collect::<Vec<_>>();
+            let baseline = build_frozen_serialization_voice_channels_with_original_beams(
+                &canonical, &attacks, Some(&observation), &[],
+            ).unwrap();
+            let voices = bind_musicxml_voice_labels(&baseline, &[]).unwrap();
+            assert_eq!(baseline.channel_count(), 2);
+            let mut report = String::new();
+            let (replacement, labels) = baseline.checked_written_only_replacement(
+                &mut report, &canonical, &attacks, &observation, &[], &voices,
+            ).unwrap_or_else(|| panic!("{report}"));
+            assert_eq!(replacement.channel_count(), 1);
+            assert!(report.contains("WrittenOnlyOwnerBeatClosure: certified_pairs=20;"));
+            replacement.require_consumer_admission(&canonical, &labels).unwrap();
+        }
+    }
+
+    #[test]
+    fn checked_written_allocation_adopts_a_producer_bound_sounding_overhang() {
+        for first_measure in [17, 1017] {
+            let next_measure = first_measure + 1;
+            let base = crate::pipeline::actual_beam_owner_capture_tests::input().replace("probe", &first_measure.to_string());
+            let next = format!(r#"<measure number="{next_measure}"><note><pitch><step>C</step><octave>4</octave></pitch><duration>96</duration><voice>3</voice><type>quarter</type><staff>1</staff></note><note><pitch><step>D</step><octave>4</octave></pitch><duration>96</duration><voice>3</voice><type>quarter</type><staff>1</staff></note><note><rest/><duration>192</duration><voice>3</voice><type>half</type><staff>1</staff></note></measure>"#);
+            let input = base.replace("</part></score-partwise>", &format!("{next}</part></score-partwise>"));
+            let (xml, _, capture) = crate::pipeline::actual_beam_owner_capture_tests::execute(&input);
+            let evidence = final_chord_declassified_evidence_from_xml(&xml).unwrap();
+            let (canonical, _) = plan_canonical_final_chord_structure_once(&xml, &evidence).unwrap();
+            let original = actual_source_beam_binding::observe_actual_source_beam_binding(&canonical, &xml, Some(&Ok(capture)));
+            let attacks = canonical.source_locators.iter().map(|row| {
+                let start = row.onset + if row.measure == next_measure { 384 } else { 0 };
+                let overhang = if row.measure == next_measure && row.onset == 0 { 12 } else { 0 };
+                FrozenVoiceAttackEvidenceRow {
+                    source_event_id: row.source_event_id, attack_id: row.attack_id,
+                    absolute_start: start, absolute_end: start + row.duration + overhang,
+                    staff: row.staff.parse().unwrap(), technical_lane: 1,
+                }
+            }).collect::<Vec<_>>();
+            let baseline = build_frozen_serialization_voice_channels_with_original_beams(
+                &canonical, &attacks, Some(&original), &[],
+            ).unwrap();
+            let voices = bind_musicxml_voice_labels(&baseline, &[]).unwrap();
+            assert_eq!(baseline.channel_count(), 2);
+            let mut report = String::new();
+            let (replacement, labels) = baseline.checked_written_only_replacement(
+                &mut report, &canonical, &attacks, &original, &[], &voices,
+            ).unwrap_or_else(|| panic!("{report}"));
+            assert_eq!(replacement.channel_count(), 1);
+            replacement.require_consumer_admission(&canonical, &labels).unwrap();
+        }
+    }
+
+    #[test]
+    fn voice_probe_uses_the_existing_canonical_projector_and_receipt() {
+        for offset in [83, 1083] {
+            let (canonical, _) = producer_group_fixture(false, offset);
+            let attacks = canonical.source_locators.iter().map(|row| FrozenVoiceAttackEvidenceRow {
+                source_event_id: row.source_event_id,
+                attack_id: row.attack_id,
+                absolute_start: row.onset,
+                absolute_end: row.onset + row.duration,
+                staff: row.staff.parse().unwrap(),
+                technical_lane: 1,
+            }).collect::<Vec<_>>();
+            let channels = build_frozen_serialization_voice_channels_for_canonical(&canonical, &attacks).unwrap();
+            let voices = bind_musicxml_voice_labels(&channels, &[]).unwrap();
+            let mut out = String::new();
+            let projection = SharingContext::projection_for_voices(&canonical, voices.clone()).unwrap();
+            append_voice_probe_comparison(&mut out, canonical.semantic_fingerprint_fnv64, &projection, &projection);
+            assert!(out.contains("missing=0 extra=0 changed_non_voice=0"));
+            assert!(out.contains("lost=0 added=0"));
+            assert!(out.contains("non_pitched_equal=true"));
+        }
+    }
+
+    #[test]
     fn producer_bound_sharing_preserves_a_closed_host_group_through_a_retained_chord() {
         for offset in [83, 1083] {
             let (canonical, observation) = producer_group_fixture(false, offset);
@@ -1489,7 +2098,7 @@ mod tests {
             let model = channel_consumer_model(canonical.written_projection.as_ref().unwrap(), &classes).unwrap();
             let empty = BTreeSet::new();
             let input = ChannelSearchInput { model: &model, class_order: &class_order,
-                class_role: &class_role, semantic_different: &conflicts, written_different: &empty };
+                class_role: &class_role, sounding_different: &TimeConflictEdges::fixture(&conflicts), written_different: &TimeConflictEdges::fixture(&empty) };
             let context = SharingContext::new(&canonical, &observation, &classes, &source_roles, &legacy);
             let baseline = context.projection(&initial, &roles, None).unwrap();
             let groups = SharingContext::evacuation_groups(&baseline, &[class_order[7], tail], &classes);

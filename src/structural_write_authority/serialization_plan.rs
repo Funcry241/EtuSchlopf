@@ -1,3 +1,9 @@
+#[path = "ordered_received_beam_readback.rs"]
+mod ordered_received_beam_readback;
+#[path = "written_assignment_graph.rs"]
+mod written_assignment_graph;
+#[path = "written_assignment_graph_probe.rs"]
+mod written_assignment_graph_probe;
 #[path = "bridge_voice_plan_guard.rs"]
 mod bridge_voice_plan_guard;
 use bridge_voice_plan_guard::BoundBridgeVoiceGuard;
@@ -1569,6 +1575,7 @@ struct FinalChordCanonicalMeasureInfo {
 // ids establish provenance; they never determine overlap or presentation roles.
 #[derive(Debug, Clone)]
 struct FinalChordWrittenOccurrence {
+    emission_ordinal: usize,
     is_grace: bool,
     source_event_id: usize,
     fragment_id: usize,
@@ -1585,6 +1592,37 @@ struct FinalChordWrittenOccurrence {
     // Exact projected byte start of this occurrence's own note element. It is
     // carried from the projector provenance row; it is never matched by value.
     projected_note_start: usize,
+}
+
+#[derive(Clone, Copy)]
+struct WrittenInterval {
+    measure: usize,
+    start: i64,
+    end: i64,
+}
+
+impl WrittenInterval {
+    fn overlaps(self, other: Self) -> bool {
+        self.measure == other.measure && self.start < other.end && other.start < self.end
+    }
+}
+
+impl FinalChordWrittenOccurrence {
+    fn written_interval(&self) -> WrittenInterval {
+        WrittenInterval { measure: self.measure, start: self.onset, end: self.end }
+    }
+
+    // The byte-bound projected head is the owner of these written resources.
+    // The caller must also prove the canonical assignment relation.
+    fn shares_projected_chord(&self, other: &Self) -> bool {
+        self.measure == other.measure
+            && self.has_pitched_chord_anchor && other.has_pitched_chord_anchor
+            && self.chord_anchor_start == other.chord_anchor_start
+            && self.chord_anchor_onset == other.chord_anchor_onset
+            && self.chord_anchor_end == other.chord_anchor_end
+            && self.onset == self.chord_anchor_onset && other.onset == other.chord_anchor_onset
+            && self.end <= self.chord_anchor_end && other.end <= other.chord_anchor_end
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1769,6 +1807,25 @@ pub(crate) struct FrozenVoiceAttackEvidenceRow {
     pub(crate) technical_lane: usize,
 }
 
+#[derive(Clone, Copy)]
+struct SoundingInterval {
+    staff: u8,
+    start: i64,
+    end: i64,
+}
+
+impl SoundingInterval {
+    fn overlaps(self, other: Self) -> bool {
+        self.staff == other.staff && self.start < other.end && other.start < self.end
+    }
+}
+
+impl FrozenVoiceAttackEvidenceRow {
+    fn sounding_interval(&self) -> SoundingInterval {
+        SoundingInterval { staff: self.staff, start: self.absolute_start, end: self.absolute_end }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LegacyVoiceLabelPreferenceRow {
     pub(crate) source_event_id: usize,
@@ -1789,6 +1846,123 @@ pub(crate) struct FrozenSerializationVoiceChannelPlan {
 }
 
 impl FrozenSerializationVoiceChannelPlan {
+    /// Return an admitted replacement only after checking the original projections.
+    pub(crate) fn checked_written_only_replacement(
+        &self,
+        out: &mut String,
+        canonical: &CanonicalFinalChordStructuralPlan,
+        attacks: &[FrozenVoiceAttackEvidenceRow],
+        original_beams: &ActualSourceBeamBindingObservation,
+        legacy_preferences: &[LegacyVoiceLabelPreferenceRow],
+        production: &FrozenSerializedVoicePlan,
+    ) -> Option<(Self, FrozenSerializedVoicePlan)> {
+        written_assignment_graph_probe::append(out, self, canonical, original_beams, production);
+        // Both runs use the same allocator, original beam observation and label
+        // preferences. Only the sounding conflict edges differ.
+        let probe = build_frozen_serialization_voice_channels(
+            canonical, attacks, Some(original_beams), legacy_preferences, false,
+        )
+            .and_then(|channels| {
+                let voices = bind_musicxml_voice_labels(&channels, legacy_preferences)?;
+                channels.require_consumer_admission(canonical, &voices)?;
+                let _ = writeln!(out, "WrittenOnlyChannelProbeAllocation: {:?}", channels.consumer_allocation());
+                Ok((channels, voices))
+            });
+        let Ok((channels, probe)) = probe else {
+            let _ = writeln!(out, "WrittenOnlyChannelProbe: unavailable; {probe:?}");
+            let _ = writeln!(out, "WrittenOnlyChannelDecision: retained_baseline; reason=candidate_unavailable");
+            return None;
+        };
+
+        let mut changed_sources = std::collections::BTreeSet::new();
+        for locator in canonical.source_locators.iter() {
+            let source = locator.source_event_id;
+            let before = production.label_for_source(source);
+            let after = probe.label_for_source(source);
+            if before != after {
+                changed_sources.insert(source);
+                let row = format!(
+                    "WrittenOnlyChannelProbeLabel: scope={:016x}; measure={} staff={} onset={} source={} fragment={} before={before:?} after={after:?}",
+                    canonical.semantic_fingerprint_fnv64, locator.measure, locator.staff,
+                    locator.onset, source, locator.fragment_id);
+                let _ = writeln!(out, "{row}");
+                // The console is the existing diagnostic location channel. The
+                // result document retains its normal locator masking policy.
+                eprintln!("{row}");
+            }
+        }
+        let _ = writeln!(out,
+            "WrittenOnlyChannelProbe: admitted; channels_before={} channels_after={} changed_sources={}; beam check=original source group label coherence",
+            self.channel_count(), probe.channel_to_role.len(), changed_sources.len());
+        original_beams.append_channel_probe_group_coherence(out, production, &probe);
+        let preservation = cross_role_channel_sharing::check_written_only_projection(
+            Some(out), canonical, production, &probe, original_beams,
+        );
+        let refusal = match preservation {
+            Ok(()) if channels.channel_count() < self.channel_count() => {
+                let _ = writeln!(out, "WrittenOnlyChannelDecision: adopted; channels_before={}; channels_after={}", self.channel_count(), channels.channel_count());
+                return Some((channels, probe));
+            }
+            Ok(()) => "no_channel_reduction".to_owned(),
+            Err(error) => error.to_string(),
+        };
+        let _ = writeln!(out, "WrittenOnlyFullCandidate: refused; reason={refusal}");
+        if let Some(pair) = self.checked_written_only_channel_merge(
+            canonical, original_beams, legacy_preferences, production, &channels,
+        ) {
+            let _ = writeln!(out, "WrittenOnlyChannelDecision: adopted_channel_merge; channels_before={}; channels_after={}",
+                self.channel_count(), pair.0.channel_count());
+            return Some(pair);
+        }
+        let _ = writeln!(out, "WrittenOnlyChannelDecision: retained_baseline; reason=no_verified_channel_merge");
+        None
+    }
+
+    fn checked_written_only_channel_merge(
+        &self,
+        canonical: &CanonicalFinalChordStructuralPlan,
+        original_beams: &ActualSourceBeamBindingObservation,
+        legacy_preferences: &[LegacyVoiceLabelPreferenceRow],
+        production: &FrozenSerializedVoicePlan,
+        alternative: &Self,
+    ) -> Option<(Self, FrozenSerializedVoicePlan)> {
+        // A whole baseline channel is eligible only when every source in it
+        // maps to one admitted written-only channel. Two such groups with the
+        // same target have no written conflict across the complete merge.
+        let mut destinations = std::collections::BTreeMap::<usize, std::collections::BTreeSet<usize>>::new();
+        for (&source, &channel) in &self.source_to_channel {
+            destinations.entry(channel).or_default().insert(*alternative.source_to_channel.get(&source)?);
+        }
+        for (&guest, targets) in &destinations {
+            if targets.len() != 1 { continue; }
+            for (&host, host_targets) in &destinations {
+                if guest == host || targets != host_targets || self.channel_to_role[&guest] != self.channel_to_role[&host] {
+                    continue;
+                }
+                let mut merged = self.clone();
+                for channel in merged.source_to_channel.values_mut().filter(|channel| **channel == guest) {
+                    *channel = host;
+                }
+                merged.channel_to_role.remove(&guest);
+                merged.channel_count = merged.channel_to_role.len();
+                merged.semantic_fingerprint_fnv64 = fingerprint(&format!(
+                    "ETUSCHLOPF_WRITTEN_CHANNEL_MERGE_V1|{:016x}|{:016x}|{guest}|{host}",
+                    self.semantic_fingerprint_fnv64, alternative.semantic_fingerprint_fnv64));
+                merged.consumer_allocation = ChannelConsumerAllocation::AdmittedAfterWrittenOnlyMerge;
+                merged.label_continuation = Some(production.clone());
+                let Ok(voices) = bind_musicxml_voice_labels(&merged, legacy_preferences) else { continue; };
+                if merged.require_consumer_admission(canonical, &voices).is_ok()
+                    && cross_role_channel_sharing::check_written_only_projection(
+                        None, canonical, production, &voices, original_beams,
+                    ).is_ok()
+                {
+                    return Some((merged, voices));
+                }
+            }
+        }
+        None
+    }
+
     pub(crate) fn require_consumer_admission(
         &self,
         canonical: &CanonicalFinalChordStructuralPlan,
@@ -1802,6 +1976,7 @@ impl FrozenSerializationVoiceChannelPlan {
             return Err(io::Error::new(io::ErrorKind::InvalidData,
                 "Serialization consumer admission has missing or foreign bound inputs"));
         }
+        voices.check_canonical_channel_bindings(canonical)?;
         let model = canonical.written_projection.as_ref()
             .and_then(|written| channel_consumer_model(written, &self.source_to_channel))
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData,
@@ -2271,6 +2446,28 @@ pub(crate) fn frozen_serialized_voice_plan_for_rest_role_replay_test(
 }
 
 impl FrozenSerializedVoicePlan {
+    fn check_canonical_channel_bindings(
+        &self, canonical: &CanonicalFinalChordStructuralPlan,
+    ) -> io::Result<()> {
+        let mut sources = std::collections::BTreeMap::new();
+        for row in canonical.source_locators.iter() {
+            if sources.insert(row.fragment_id, row.source_event_id).is_some() {
+                return Err(io::Error::new(io::ErrorKind::InvalidData,
+                    "ambiguous fragment in canonical channel bindings"));
+            }
+        }
+        let channel = |fragment| sources.get(&fragment)
+            .and_then(|source| self.source_to_channel.get(source));
+        for edge in canonical.hard_same_edges.iter() {
+            let left = channel(edge.left_fragment_id);
+            if left.is_none() || left != channel(edge.right_fragment_id) {
+                return Err(io::Error::new(io::ErrorKind::InvalidData,
+                    "canonical HARD SAME binding split or unrepresented"));
+            }
+        }
+        Ok(())
+    }
+
     fn has_canonical_role_allocation(&self) -> bool {
         self.canonical_role_allocation.as_ref().is_some_and(|original|
             original.source_roles == self.source_to_role && original.channel_roles == self.channel_to_role)
@@ -4200,6 +4397,7 @@ fn final_chord_bind_written_projection(
         }
         represented_fragments.insert(locator.fragment_id);
         occurrences.push(FinalChordWrittenOccurrence {
+            emission_ordinal: row.fragment_ordinal,
             is_grace,
             source_event_id: locator.source_event_id,
             fragment_id: locator.fragment_id,
@@ -4592,6 +4790,18 @@ pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
     original_beams: Option<&ActualSourceBeamBindingObservation>,
     legacy_preferences: &[LegacyVoiceLabelPreferenceRow],
 ) -> io::Result<FrozenSerializationVoiceChannelPlan> {
+    build_frozen_serialization_voice_channels(
+        canonical, attacks, original_beams, legacy_preferences, true,
+    )
+}
+
+fn build_frozen_serialization_voice_channels(
+    canonical: &CanonicalFinalChordStructuralPlan,
+    attacks: &[FrozenVoiceAttackEvidenceRow],
+    original_beams: Option<&ActualSourceBeamBindingObservation>,
+    legacy_preferences: &[LegacyVoiceLabelPreferenceRow],
+    use_sounding_conflicts: bool,
+) -> io::Result<FrozenSerializationVoiceChannelPlan> {
     if !canonical.voice_free_evidence_sufficiency_green() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -4865,25 +5075,18 @@ pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
     for row in written.occurrences.iter() {
         written_by_measure.entry(row.measure).or_default().push(row);
     }
-    let mut written_different = std::collections::BTreeSet::<(usize, usize)>::new();
+    let mut written_different = TimeConflictEdges::<WrittenInterval>::new();
     for occurrences in written_by_measure.values() {
         for (index, left) in occurrences.iter().enumerate() {
             for right in occurrences.iter().skip(index + 1) {
-                if left.measure != right.measure || left.onset >= right.end || right.onset >= left.end {
+                if !left.written_interval().overlaps(right.written_interval()) {
                     continue;
                 }
                 let left_class = class_by_source[&left.source_event_id];
                 let right_class = class_by_source[&right.source_event_id];
                 // Geometry alone never grants joint chord authority. Require both
                 // the exact projected chord cohort and the canonical HARD SAME class.
-                let authorized_chord = left_class == right_class
-                    && left.has_pitched_chord_anchor && right.has_pitched_chord_anchor
-                    && left.chord_anchor_start == right.chord_anchor_start
-                    && left.chord_anchor_onset == right.chord_anchor_onset
-                    && left.chord_anchor_end == right.chord_anchor_end
-                    && left.onset == left.chord_anchor_onset
-                    && right.onset == right.chord_anchor_onset
-                    && left.end <= left.chord_anchor_end && right.end <= right.chord_anchor_end;
+                let authorized_chord = left_class == right_class && left.shares_projected_chord(right);
                 if authorized_chord {
                     continue;
                 }
@@ -4897,12 +5100,12 @@ pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
                             right.chord_anchor_start, right.chord_anchor_onset, right.chord_anchor_end,
                             right.has_pitched_chord_anchor)));
                 }
-                written_different.insert((left_class.min(right_class), left_class.max(right_class)));
+                written_different.pairs.insert((left_class.min(right_class), left_class.max(right_class)));
             }
         }
     }
     let classes = members_by_class.keys().copied().collect::<Vec<_>>();
-    let mut semantic_different = std::collections::BTreeSet::<(usize, usize)>::new();
+    let mut sounding_different = TimeConflictEdges::<SoundingInterval>::new();
     for left_index in 0..classes.len() {
         for right_index in left_index + 1..classes.len() {
             let left_class = classes[left_index];
@@ -4911,13 +5114,11 @@ pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
                 let left = attack_by_source[left_source];
                 members_by_class[&right_class].iter().any(|right_source| {
                     let right = attack_by_source[right_source];
-                    left.staff == right.staff
-                        && left.absolute_start < right.absolute_end
-                        && right.absolute_start < left.absolute_end
+                    left.sounding_interval().overlaps(right.sounding_interval())
                 })
             });
             if overlaps {
-                semantic_different.insert((left_class.min(right_class), left_class.max(right_class)));
+                sounding_different.pairs.insert((left_class.min(right_class), left_class.max(right_class)));
             }
         }
     }
@@ -4933,7 +5134,7 @@ pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
         }
     }
 
-    for &(left, right) in &semantic_different {
+    for &(left, right) in &sounding_different.pairs {
         if left == right {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -5001,6 +5202,13 @@ pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
     });
 
     let class_order_for_search = class_order.clone();
+    let no_sounding_conflicts = TimeConflictEdges::<SoundingInterval>::new();
+    let allocation_sounding = if use_sounding_conflicts {
+        &sounding_different
+    } else {
+        &no_sounding_conflicts
+    };
+
     let mut channel_by_class = std::collections::BTreeMap::<usize, usize>::new();
     let mut channel_role = std::collections::BTreeMap::<usize, SerializedVoicePresentationRole>::new();
     let mut next_channel = 1usize;
@@ -5013,8 +5221,8 @@ pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
             .unwrap_or(usize::MAX);
         let conflicts_with = |other_class: usize| {
             let pair = (class.min(other_class), class.max(other_class));
-            semantic_different.contains(&pair) || channel_incompatible.contains(&pair)
-                || written_different.contains(&pair)
+            channel_time_conflict(pair, allocation_sounding, &written_different)
+                || channel_incompatible.contains(&pair)
         };
         let blocked_channels = channel_by_class.iter()
             .filter_map(|(&member, &channel)| conflicts_with(member).then_some(channel))
@@ -5057,20 +5265,45 @@ pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
                     "written projection is not readable as complete consumer input",
                 ),
             ),
-            Some(model) => match channel_consumer_overflow(&model, &channel_by_class, &channel_role) {
-                Ok(()) => (channel_by_class, channel_role, ChannelConsumerAllocation::AdmittedFirstCandidate),
-                Err(failing_staves) => channel_search_after_consumer_overflow(
-                    &ChannelSearchInput {
-                        model: &model,
-                        class_order: &class_order_for_search,
-                        class_role: &class_role,
-                        semantic_different: &semantic_different,
-                        written_different: &written_different,
+            Some(model) => {
+                let input = ChannelSearchInput {
+                    model: &model,
+                    class_order: &class_order_for_search,
+                    class_role: &class_role,
+                    sounding_different: allocation_sounding,
+                    written_different: &written_different,
+                };
+                match input.check_partition(&channel_by_class, &channel_role, None) {
+                    Ok(()) => (channel_by_class, channel_role, ChannelConsumerAllocation::AdmittedFirstCandidate),
+                    Err(ChannelPartitionRefusal::Capacity(failing_staves)) => {
+                        let candidate = channel_search_after_consumer_overflow(
+                            &input, &failing_staves, channel_by_class.clone(), channel_role.clone(),
+                        );
+                        if let (Some(observation), ChannelConsumerAllocation::AdmittedAfterSearch { .. }) =
+                            (original_beams, &candidate.2)
+                        {
+                            let context = cross_role_channel_sharing::SharingContext::new(
+                                canonical, observation, &class_by_source, &source_to_role, legacy_preferences,
+                            );
+                            match context.check_overflow_recolouring(
+                                &input, &channel_by_class, &channel_role, &candidate.0, &candidate.1,
+                            ) {
+                                Ok(()) => candidate,
+                                Err(error) => {
+                                    eprintln!("FrozenChannelOverflowRecolouring: refused; reason={error}");
+                                    (channel_by_class, channel_role, ChannelConsumerAllocation::Undetermined(
+                                        "overflow recolouring lacks written preservation proof",
+                                    ))
+                                }
+                            }
+                        } else {
+                            candidate
+                        }
                     },
-                    &failing_staves,
-                    channel_by_class,
-                    channel_role,
-                ),
+                    Err(ChannelPartitionRefusal::Conflict) => return Err(io::Error::new(
+                        io::ErrorKind::InvalidData, "first channel partition merges incompatible classes",
+                    )),
+                }
             },
         };
     let mut label_continuation = None;
@@ -5078,7 +5311,7 @@ pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
         && channel_consumer_overflow(&model, &channel_by_class, &channel_role).is_err()
     {
         let input = ChannelSearchInput { model: &model, class_order: &class_order_for_search,
-            class_role: &class_role, semantic_different: &semantic_different,
+            class_role: &class_role, sounding_different: allocation_sounding,
             written_different: &written_different };
         let context = cross_role_channel_sharing::SharingContext::new(
             canonical, observation, &class_by_source, &source_to_role, legacy_preferences,
@@ -5106,7 +5339,9 @@ pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
     }
 
     for (&measure, occurrences) in &written_by_measure {
-        if !crate::audit_only::original_beam_diagnostics::detail_requested_for_measure(measure) {
+        if !use_sounding_conflicts
+            || !crate::audit_only::original_beam_diagnostics::detail_requested_for_measure(measure)
+        {
             continue;
         }
         for (index, left) in occurrences.iter().enumerate() {
@@ -5117,7 +5352,7 @@ pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
                 let left_class = class_by_source[&left.source_event_id];
                 let right_class = class_by_source[&right.source_event_id];
                 let pair = (left_class.min(right_class), left_class.max(right_class));
-                if !semantic_different.contains(&pair) {
+                if !sounding_different.pairs.contains(&pair) {
                     continue;
                 }
                 let a = attack_by_source[&left.source_event_id];
@@ -5128,8 +5363,8 @@ pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
                     ((left.onset, left.end), (right.onset, right.end)),
                     ((a.absolute_start, a.absolute_end), (b.absolute_start, b.absolute_end)),
                     (channel_by_class[&left_class], channel_by_class[&right_class]),
-                    a.staff == b.staff && a.absolute_start < b.absolute_end && b.absolute_start < a.absolute_end,
-                    written_different.contains(&pair), channel_incompatible.contains(&pair));
+                    a.sounding_interval().overlaps(b.sounding_interval()),
+                    written_different.pairs.contains(&pair), channel_incompatible.contains(&pair));
             }
         }
 
@@ -5147,9 +5382,9 @@ pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
     let semantic_names = sorted_classes.into_iter().enumerate()
         .map(|(index, row)| (row, index)).collect::<std::collections::BTreeMap<_, _>>();
     for (kind, edges) in [
-        ("SoundingDifferent", &semantic_different),
+        ("SoundingDifferent", &sounding_different.pairs),
         ("RoleIncompatible", &channel_incompatible),
-        ("WrittenDifferent", &written_different),
+        ("WrittenDifferent", &written_different.pairs),
     ] {
         let mut rows = edges.iter().map(|(left, right)| {
             let left = semantic_names[&class_signatures[left]];
@@ -5216,6 +5451,7 @@ const CONSUMER_VOICES_PER_STAFF: usize = 4;
 /// role, a staff, a label or a writer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ChannelConsumerAllocation {
+    AdmittedAfterWrittenOnlyMerge,
     AdmittedAfterCrossRoleSharing { channels_before: usize, channels_after: usize, shared_classes: Vec<usize> },
     NoAdmittedCrossRolePartition { eligible_classes: usize, classes: usize },
     /// The first search candidate (the accepted greedy order) is admitted.
@@ -5242,6 +5478,7 @@ impl ChannelConsumerAllocation {
     pub(crate) const fn label(&self) -> &'static str {
         match self {
             Self::AdmittedFirstCandidate => "admitted_first_candidate",
+            Self::AdmittedAfterWrittenOnlyMerge => "admitted_after_written_only_merge",
             Self::AdmittedAfterCrossRoleSharing { .. } => "admitted_after_cross_role_sharing",
             Self::NoAdmittedCrossRolePartition { .. } => "no_admitted_cross_role_partition",
             Self::AdmittedAfterSearch { .. } => "admitted_after_search",
@@ -5428,18 +5665,63 @@ fn channel_consumer_overflow_with_labels(
     if failing.is_empty() { Ok(()) } else { Err(failing) }
 }
 
+// Keep the two edge sets distinct through every consumer of the channel policy.
+struct TimeConflictEdges<Interval> {
+    pairs: std::collections::BTreeSet<(usize, usize)>,
+    domain: std::marker::PhantomData<Interval>,
+}
+
+impl<Interval> TimeConflictEdges<Interval> {
+    fn new() -> Self {
+        Self { pairs: std::collections::BTreeSet::new(), domain: std::marker::PhantomData }
+    }
+
+    #[cfg(test)]
+    fn fixture(pairs: &std::collections::BTreeSet<(usize, usize)>) -> Self {
+        Self { pairs: pairs.clone(), domain: std::marker::PhantomData }
+    }
+}
+
+fn channel_time_conflict(
+    pair: (usize, usize),
+    sounding: &TimeConflictEdges<SoundingInterval>,
+    written: &TimeConflictEdges<WrittenInterval>,
+) -> bool {
+    sounding.pairs.contains(&pair) || written.pairs.contains(&pair)
+}
+
 struct ChannelSearchInput<'a> {
     model: &'a ChannelConsumerModel,
     class_order: &'a [usize],
     class_role: &'a std::collections::BTreeMap<usize, SerializedVoicePresentationRole>,
-    semantic_different: &'a std::collections::BTreeSet<(usize, usize)>,
-    written_different: &'a std::collections::BTreeSet<(usize, usize)>,
+    sounding_different: &'a TimeConflictEdges<SoundingInterval>,
+    written_different: &'a TimeConflictEdges<WrittenInterval>,
+}
+
+enum ChannelPartitionRefusal {
+    Conflict,
+    Capacity(std::collections::BTreeSet<u8>),
 }
 
 impl ChannelSearchInput<'_> {
+    fn check_partition(
+        &self,
+        channels: &std::collections::BTreeMap<usize, usize>,
+        roles: &std::collections::BTreeMap<usize, SerializedVoicePresentationRole>,
+        voices: Option<&FrozenSerializedVoicePlan>,
+    ) -> Result<(), ChannelPartitionRefusal> {
+        if self.written_different.pairs.iter().chain(&self.sounding_different.pairs)
+            .any(|(left, right)| channels.get(left) == channels.get(right))
+        {
+            return Err(ChannelPartitionRefusal::Conflict);
+        }
+        channel_consumer_overflow_with_labels(self.model, channels, roles, voices)
+            .map_err(ChannelPartitionRefusal::Capacity)
+    }
+
     fn conflicts(&self, left: usize, right: usize) -> bool {
         let pair = (left.min(right), left.max(right));
-        self.semantic_different.contains(&pair) || self.written_different.contains(&pair)
+        channel_time_conflict(pair, self.sounding_different, self.written_different)
     }
 }
 
@@ -5624,7 +5906,7 @@ fn channel_search_after_consumer_overflow(
         channel_role.insert(channel, role);
         channel_by_class.insert(class, channel);
     }
-    if channel_consumer_overflow(input.model, &channel_by_class, &channel_role).is_ok() {
+    if input.check_partition(&channel_by_class, &channel_role, None).is_ok() {
         return (
             channel_by_class,
             channel_role.clone(),
@@ -7577,10 +7859,12 @@ pub(crate) fn project_final_chord_encoding_plan_with_provenance_with_receipts(
     } else {
         Vec::new()
     };
-    let (result, receipt) = project_final_chord_encoding_plan(candidate_xml, plan);
+    let (result, mut receipt) = project_final_chord_encoding_plan(candidate_xml, plan);
+    let projection = result.and_then(|out|
+        final_chord_collect_original_projection(candidate_xml, plan, &visible_rest_interval_edits, out));
+    course_capture::record_render_projection(&mut receipt, candidate_xml, &projection);
     receipts.push_exact(receipt);
-    let out = result?;
-    final_chord_collect_original_projection(candidate_xml, plan, &visible_rest_interval_edits, out)
+    projection
 }
 
 fn final_chord_collect_original_projection(
@@ -10309,6 +10593,7 @@ mod tests {
         }).collect::<Vec<_>>();
         let occurrences = locators.iter().enumerate().map(|(index, locator)| {
             FinalChordWrittenOccurrence {
+                emission_ordinal: 0,
                 source_event_id: locator.source_event_id,
                 fragment_id: locator.fragment_id,
                 attack_id: locator.attack_id,
@@ -10372,6 +10657,24 @@ mod tests {
             83, &[103, 209], &[(0, 4), (4, 8)], &[(0, 1), (1, 2)], 1);
         let channels = build_frozen_serialization_voice_channels_for_canonical(&canonical, &attacks).unwrap();
         assert_eq!(channels.channel_count, 1);
+    }
+
+    #[test]
+    fn sounding_overlap_without_written_overlap_still_separates_channels() {
+        let ids = [103, 209];
+        let (canonical, attacks) = synthetic_written_channel_case(
+            83, &ids, &[(0, 4), (4, 8)], &[(0, 5), (4, 8)], 1);
+        let written = &canonical.written_projection.as_ref().unwrap().occurrences;
+        assert!(!written[0].written_interval().overlaps(written[1].written_interval()));
+        assert!(attacks[0].sounding_interval().overlaps(attacks[1].sounding_interval()));
+
+        let channels = build_frozen_serialization_voice_channels_for_canonical(&canonical, &attacks).unwrap();
+        assert_eq!(channels.channel_count(), 2);
+        assert_ne!(channels.channel_for_source(ids[0]), channels.channel_for_source(ids[1]));
+
+        let written_only = build_frozen_serialization_voice_channels(&canonical, &attacks, None, &[], false).unwrap();
+        assert_eq!(written_only.channel_count(), 1);
+        assert_eq!(written_only.channel_for_source(ids[0]), written_only.channel_for_source(ids[1]));
     }
 
     #[test]
@@ -12657,6 +12960,13 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(tied_rows.len(), 2);
         assert_eq!(tied_rows[0].source_note_start, tied_rows[1].source_note_start);
+        let evidence = final_chord_declassified_evidence_from_xml(&xml).unwrap();
+        let (canonical, _) = plan_canonical_final_chord_structure_once(&xml, &evidence).unwrap();
+        let mut emitted = std::collections::BTreeMap::<usize, std::collections::BTreeSet<usize>>::new();
+        for row in canonical.written_projection.as_ref().unwrap().occurrences.iter() {
+            emitted.entry(row.fragment_id).or_default().insert(row.emission_ordinal);
+        }
+        assert!(emitted.values().any(|ordinals| *ordinals == [0, 1].into_iter().collect()));
         assert_eq!(
             tied_rows
                 .iter()

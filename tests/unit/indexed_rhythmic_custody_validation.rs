@@ -124,3 +124,23 @@ fn indexed_custody_keeps_actual_split_and_hidden_chord_support() {
         compare(&missing, &result.xml);
     }
 }
+
+#[test]
+fn successful_proof_belongs_to_one_exact_custody_state() {
+    let (xml, seed) = arrangement_pitched_fixture(&[(11, 0, 1, 60), (13, 96, 2, 48)], 1);
+    let state = ArrangementRhythmicCourses::receive(&seed, &xml).unwrap();
+    assert!(state.validated.is_proved());
+    state.validate_binding(&xml).unwrap();
+    assert!(state.validate_binding(&(xml.clone() + " ")).is_err());
+
+    let mut successor = state.clone();
+    assert!(!successor.validated.is_proved());
+    successor.history.remove(&successor.occurrences[0].creation);
+    assert!(successor.validate_binding(&xml).is_err());
+    assert!(!successor.validated.is_proved());
+
+    let identical_clone = state.clone();
+    assert!(!identical_clone.validated.is_proved());
+    identical_clone.validate_binding(&xml).unwrap();
+    assert!(identical_clone.validated.is_proved());
+}

@@ -410,7 +410,7 @@ fn fnv1a64(bytes: &[u8]) -> u64 {
 }
 
 const CANONICAL_PRIMARY_BEAM_OWNER_KIND: &str = "structural_metric_beam_hierarchy_plan";
-const CANONICAL_PRIMARY_BEAM_OWNER_SOURCE_FNV64_CURRENT: u64 = 0x5fdeb910c8bffee5;
+const CANONICAL_PRIMARY_BEAM_OWNER_SOURCE_FNV64_CURRENT: u64 = 0xfaece63645162bb6;
 const CANONICAL_PRIMARY_BEAM_OWNER_SOURCE: &str =
     include_str!("../pipeline_shards/composer_metric_beam_planning_core.rs");
 

@@ -115,3 +115,30 @@ pub(super) fn capture_original_execution(
     }
     FinalChordCourseCapture::recorded(owner, receipt, before, after, rows.into_values().collect())
 }
+
+/// Render's projection already carries the writer's original note geometry.
+pub(super) fn record_render_projection(
+    receipt: &mut Option<ExactTransformationReceipt>,
+    before: &str,
+    projection: &io::Result<FinalChordProjectionResult>,
+) {
+    let (Some(receipt), Ok(projection)) = (receipt.as_mut(), projection) else { return; };
+    if receipt.final_chord_capture().is_some() { return; }
+    let mut rows = BTreeMap::<(usize, usize), FinalChordCourseRow>::new();
+    for emitted in &projection.provenance {
+        let input = emitted.source_note_start..emitted.source_note_end;
+        let row = rows.entry((input.start, input.end)).or_insert_with(|| FinalChordCourseRow {
+            input, outputs: Vec::new(), ordinals: Vec::new(), source: None,
+            tied_chain: emitted.kind == FinalChordProjectionMaterializationKind::TiedAnchorChain,
+            auxiliary: emitted.kind == FinalChordProjectionMaterializationKind::AuxiliaryLane,
+            original_offset: 0,
+        });
+        row.outputs.push((emitted.projected_note_start..emitted.projected_note_end, false));
+        row.ordinals.push(emitted.fragment_ordinal);
+    }
+    let capture = FinalChordCourseCapture::recorded(
+        &FinalChordEncodingExactMint { _sealed: () }, receipt, before, &projection.xml,
+        rows.into_values().collect(),
+    );
+    receipt.record_final_chord_capture(capture);
+}

@@ -365,7 +365,7 @@ descriptor_probe!(ProbeDirectionInsertion, AdditiveMintOwner, AdditiveDescriptor
 
 /// Number of production bindings exercised by the matrix (all bindings except
 /// the two GENESIS owners, which are covered by the GENESIS tests).
-const MATRIX_PROBES: usize = 69;
+const MATRIX_PROBES: usize = 68;
 
 fn block_owner_matrix<O: BlockMintOwner + Copy>(owner: O) {
     assert!(O::DESCRIPTOR.identity.is_block());
@@ -465,7 +465,6 @@ descriptor_probe!(ProbeDirectionRelocation, ExactMintOwner, TransformationDescri
 descriptor_probe!(ProbeLedgerBoundedLowerStaffClefReadbackPreservingMint, PreservingMintOwner, PreservingDescriptor, crate::pipeline::LedgerBoundedLowerStaffClefReadbackPreservingMint);
 descriptor_probe!(ProbeNotationClefIslandPreservingMint, PreservingMintOwner, PreservingDescriptor, crate::pipeline::NotationClefIslandPreservingMint);
 descriptor_probe!(ProbeCommittedCrossStaffBeamPreservingMint, PreservingMintOwner, PreservingDescriptor, crate::pipeline::CommittedCrossStaffBeamPreservingMint);
-descriptor_probe!(ProbeStructuralRestBridgeVariantAPreservingMint, PreservingMintOwner, PreservingDescriptor, crate::pipeline::StructuralRestBridgeVariantAPreservingMint);
 
 #[test]
 fn every_production_owner_binding_is_in_the_receipt_matrix() {
@@ -542,7 +541,6 @@ fn preserving_owner_matrix_covers_every_preserving_binding() {
     preserving_owner_matrix(ProbeLedgerBoundedLowerStaffClefReadbackPreservingMint);
     preserving_owner_matrix(ProbeNotationClefIslandPreservingMint);
     preserving_owner_matrix(ProbeCommittedCrossStaffBeamPreservingMint);
-    preserving_owner_matrix(ProbeStructuralRestBridgeVariantAPreservingMint);
 }
 
 #[test]

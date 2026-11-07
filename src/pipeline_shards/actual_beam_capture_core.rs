@@ -80,9 +80,27 @@ pub(crate) type ActualBeamLevels = Vec<(u8, Option<(usize, usize)>, Option<Strin
 // Compare the actual XML tree while retaining meaningful leaf text (including
 // whitespace in lyrics). Formatting between elements is not musical content.
 fn actual_beam_note_signature(text: &str, omit_beams: bool) -> anyhow::Result<Vec<String>> {
-    fn visit(node: roxmltree::Node<'_, '_>, omit: bool, out: &mut Vec<String>) {
+    actual_beam_note_signature_with_spelling(text, omit_beams, false)
+}
+
+fn actual_beam_note_signature_with_spelling(
+    text: &str,
+    omit_beams: bool,
+    allow_respelling: bool,
+) -> anyhow::Result<Vec<String>> {
+    fn visit<'a, 'input>(
+        node: roxmltree::Node<'a, 'input>,
+        omit_beams: bool,
+        pitch: Option<roxmltree::Node<'a, 'input>>,
+        out: &mut Vec<String>,
+    ) {
         if node.is_element() {
-            if omit && node.has_tag_name("beam") {
+            if omit_beams && node.has_tag_name("beam") {
+                return;
+            }
+            if pitch.is_some_and(|pitch| node == pitch
+                || (node.has_tag_name("accidental") && node.parent() == pitch.parent()))
+            {
                 return;
             }
             out.push(format!(
@@ -97,7 +115,7 @@ fn actual_beam_note_signature(text: &str, omit_beams: bool) -> anyhow::Result<Ve
             attrs.sort_unstable();
             out.push(format!("attrs:{attrs:?}"));
             for child in node.children() {
-                visit(child, omit, out);
+                visit(child, omit_beams, pitch, out);
             }
             out.push("close".into());
         } else if node.is_text() {
@@ -117,8 +135,32 @@ fn actual_beam_note_signature(text: &str, omit_beams: bool) -> anyhow::Result<Ve
         "Not a complete note carrier"
     );
     let mut output = Vec::new();
-    visit(doc.root_element(), omit_beams, &mut output);
+    let note = doc.root_element();
+    let pitch = allow_respelling.then(|| note.children().find(|node| node.has_tag_name("pitch"))).flatten();
+    visit(note, omit_beams, pitch, &mut output);
+    if let Some(pitch) = pitch {
+        let field = |name| pitch.children().find(|node| node.has_tag_name(name)).and_then(|node| node.text()).map(str::trim);
+        let step = match field("step") {
+            Some("C") => 0, Some("D") => 2, Some("E") => 4, Some("F") => 5,
+            Some("G") => 7, Some("A") => 9, Some("B") => 11,
+            _ => anyhow::bail!("Invalid pitch step in Render respelling"),
+        };
+        let octave = field("octave").ok_or_else(|| anyhow::anyhow!("Missing pitch octave"))?.parse::<i64>()?;
+        let alter = field("alter").unwrap_or("0").parse::<i32>()?;
+        let semitone = octave.checked_mul(12).and_then(|value| value.checked_add(step + i64::from(alter)))
+            .ok_or_else(|| anyhow::anyhow!("Pitch overflow in Render respelling"))?;
+        output.push(format!("sounding-pitch:{semitone}"));
+    }
     Ok(output)
+}
+
+pub(crate) fn verify_render_respelling_note(before: &str, after: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        actual_beam_note_signature_with_spelling(before, false, true)?
+            == actual_beam_note_signature_with_spelling(after, false, true)?,
+        "Render respelling changed sounding pitch or other note content"
+    );
+    Ok(())
 }
 
 fn actual_beam_written_states(
@@ -136,6 +178,94 @@ fn actual_beam_written_states(
     }
     Ok(result)
 }
+fn beam_note_field<'a>(note: roxmltree::Node<'a, '_>, name: &str) -> Option<&'a str> {
+    note.children().find(|child| child.has_tag_name(name))?.text()
+}
+
+fn beam_written_strand<'a>(note: roxmltree::Node<'a, '_>) -> (&'a str, Option<&'a str>) {
+    (beam_note_field(note, "staff").unwrap_or("1"), beam_note_field(note, "voice"))
+}
+
+/// Read one already owned edge in a forward written strand. A backup,
+/// a competing event, or a beamed rest needs a stronger order proof.
+fn e050_written_edge(
+    left: roxmltree::Node<'_, '_>,
+    right: roxmltree::Node<'_, '_>,
+    level: u8,
+) -> Option<bool> {
+    if left.parent() != right.parent() || left.range().start >= right.range().start
+        || beam_written_strand(left) != beam_written_strand(right) || beam_written_strand(left).1.is_none_or(str::is_empty)
+    {
+        return None;
+    }
+    for note in [left, right] {
+        if beam_note_field(note, "duration")?.parse::<u64>().ok()? == 0
+            || note.children().any(|child| child.has_tag_name("chord") || child.has_tag_name("grace"))
+            || !note.children().any(|child| child.has_tag_name("pitch"))
+        {
+            return None;
+        }
+    }
+    for sibling in left.next_siblings().skip(1).take_while(|node| *node != right) {
+        if sibling.has_tag_name("backup") {
+            return None;
+        }
+        if sibling.has_tag_name("note") && beam_written_strand(sibling) == beam_written_strand(left)
+            && (!sibling.children().any(|child| child.has_tag_name("rest"))
+                || actual_beam_written_states(sibling).ok()?.contains_key(&level))
+        {
+            return None;
+        }
+    }
+    let outgoing = actual_beam_written_states(left).ok()?;
+    let incoming = actual_beam_written_states(right).ok()?;
+    let outgoing = match outgoing.get(&level).map(String::as_str) {
+        Some("begin" | "continue") => true,
+        Some("end") | None => false,
+        _ => return None,
+    };
+    let incoming = match incoming.get(&level).map(String::as_str) {
+        Some("continue" | "end") => true,
+        Some("begin") | None => false,
+        _ => return None,
+    };
+    Some(outgoing && incoming)
+}
+
+/// Locate the next written endpoint only when a visible rest of the same
+/// strand intervenes. The edge readback independently verifies its markers.
+fn e050_next_note_over_visible_rest<'a, 'input>(
+    left: roxmltree::Node<'a, 'input>,
+) -> Option<roxmltree::Node<'a, 'input>> {
+    let strand = beam_written_strand(left);
+    let mut visible_rest = false;
+    for note in left.next_siblings().skip(1) {
+        if note.has_tag_name("backup") {
+            return None;
+        }
+        if !note.has_tag_name("note") || beam_written_strand(note) != strand {
+            continue;
+        }
+        if !note.children().any(|child| child.has_tag_name("rest")) {
+            return visible_rest.then_some(note);
+        }
+        visible_rest |= note.attribute("print-object") != Some("no")
+            && beam_note_field(note, "duration").and_then(|text| text.parse::<u64>().ok())
+                .is_some_and(|duration| duration > 0);
+    }
+    None
+}
+
+#[derive(Debug, Clone)]
+struct OriginalBridgeBeamEdge {
+    level: u8,
+    group: (usize, usize),
+    original_left: std::ops::Range<usize>,
+    original_right: std::ops::Range<usize>,
+    left: std::ops::Range<usize>,
+    right: std::ops::Range<usize>,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ActualCanonicalBeamCapture {
     execution: crate::master_state_identity::MintedIdentity,
@@ -144,6 +274,7 @@ pub(crate) struct ActualCanonicalBeamCapture {
     current: std::sync::Arc<str>,
     occurrences: Vec<(std::ops::Range<usize>, ActualBeamLevels)>,
     chord_attachments: Result<Vec<ActualBeamChordAttachment>, String>,
+    bridge_edges: Vec<OriginalBridgeBeamEdge>,
     // E053 emitter journal: every complete note, beam stage then rest stage.
     course_carry: std::sync::Arc<Vec<(std::ops::Range<usize>, std::ops::Range<usize>)>>,
 }
@@ -278,6 +409,7 @@ impl ActualCanonicalBeamCapture {
             current: std::sync::Arc::from(after),
             occurrences,
             chord_attachments,
+            bridge_edges: Vec::new(),
             course_carry: std::sync::Arc::new(beam_map.then(rest_map).0),
         })
     }
@@ -330,11 +462,27 @@ impl ActualCanonicalBeamCapture {
                     })
                     .collect::<Result<Vec<_>, String>>()
             });
-        self.carried(readback.post_document(), ranges, attachments)
+        self.carried(readback.post_document(), ranges, attachments, false,
+            |range| readback.carry_range(range.clone()).ok())
     }
     pub(crate) fn carry_recorded(
         &self,
         transport: &crate::arrangement::representation_transport::RhythmicRepresentationTransport,
+    ) -> anyhow::Result<Self> {
+        self.carry_recorded_with_spelling(transport, false)
+    }
+
+    pub(crate) fn carry_respelling(
+        &self,
+        transport: &crate::arrangement::representation_transport::RhythmicRepresentationTransport,
+    ) -> anyhow::Result<Self> {
+        self.carry_recorded_with_spelling(transport, true)
+    }
+
+    fn carry_recorded_with_spelling(
+        &self,
+        transport: &crate::arrangement::representation_transport::RhythmicRepresentationTransport,
+        allow_respelling: bool,
     ) -> anyhow::Result<Self> {
         let (before, after) = transport.recorded_documents()?;
         anyhow::ensure!(
@@ -387,31 +535,320 @@ impl ActualCanonicalBeamCapture {
                     })
                     .collect())
             });
-        self.carried(after, ranges, attachments)
+        let endpoints = self.bridge_edges.iter().flat_map(|edge| [&edge.left, &edge.right])
+            .map(|range| (range.start, range.end)).collect::<std::collections::BTreeSet<_>>();
+        let mapped = if endpoints.is_empty() {
+            Vec::new()
+        } else {
+            transport.carry_observed_ranges(
+                before, after, endpoints.iter().map(|&(start, end)| start..end).collect(),
+            )?
+        };
+        let mapped = endpoints.into_iter().zip(mapped)
+            .collect::<std::collections::BTreeMap<_, _>>();
+        self.carried(after, ranges, attachments, allow_respelling,
+            |range| mapped.get(&(range.start, range.end)).cloned().flatten())
     }
+    /// Continue unaffected E053 evidence through the original E050 journal.
+    /// An edit retires the entire emitter batch that owns its note, including
+    /// every beam level. E050 cannot grant a new E053 group.
+    pub(crate) fn carry_rest_bridge(
+        &self,
+        receipt: &crate::master_state_identity::PreservingTransformationReceipt,
+        transport: &crate::arrangement::representation_transport::RhythmicRepresentationTransport,
+    ) -> anyhow::Result<Self> {
+        let step = transport.rest_bridge_step(receipt)?;
+        anyhow::ensure!(
+            step.original_documents().0 == self.current.as_ref(),
+            "Foreign rest bridge continuation document"
+        );
+        let touches = |range: &std::ops::Range<usize>| {
+            step.original_operations().iter().any(|(edit, _)| {
+                edit.start < range.end && range.start < edit.end
+            })
+        };
+        let retained = self.retain_unaffected(touches);
+        let mut carried = retained.carry_recorded(transport)?;
+        let seam = "E053MetricRestBridgeReplay";
+        match self.rest_bridge_readback(&retained, step, transport, seam) {
+            Ok((report, edges)) => {
+                carried.bridge_edges.extend(edges);
+                eprint!("{report}");
+            }
+            Err(error) => eprintln!("OriginalBeamBridgeReadback: seam={seam}; result=Unknown; reason={error}; authority=none"),
+        }
+        Ok(carried)
+    }
+
+    fn rest_bridge_readback(
+        &self,
+        retained: &Self,
+        step: &crate::arrangement::representation_transport::RepresentationStep,
+        transport: &crate::arrangement::representation_transport::RhythmicRepresentationTransport,
+        seam: &str,
+    ) -> anyhow::Result<(String, Vec<OriginalBridgeBeamEdge>)> {
+        use std::collections::{BTreeMap, BTreeSet};
+        use std::fmt::Write as _;
+
+        let (before, after) = step.original_documents();
+        let original = roxmltree::Document::parse(before)?;
+        let projected = roxmltree::Document::parse(after)?;
+        let by_range = |range: &std::ops::Range<usize>| (range.start, range.end);
+        let source_notes = original.descendants().filter(|node| node.has_tag_name("note"))
+            .map(|node| (by_range(&node.range()), node)).collect::<BTreeMap<_, _>>();
+        let output_notes = projected.descendants().filter(|node| node.has_tag_name("note"))
+            .map(|node| (by_range(&node.range()), node)).collect::<BTreeMap<_, _>>();
+        let edited = step.original_operations().iter().map(|(range, _)| by_range(range))
+            .collect::<BTreeSet<_>>();
+        let edited_measures = edited.iter().filter_map(|key| source_notes.get(key))
+            .filter_map(|note| note.parent().filter(|parent| parent.has_tag_name("measure")))
+            .map(|measure| measure.range().start).collect::<BTreeSet<_>>();
+        let surviving = retained.occurrences.iter().map(|(range, _)| by_range(range))
+            .collect::<BTreeSet<_>>();
+        let owned = self.occurrences.iter().map(|(range, levels)| (by_range(range), levels))
+            .collect::<BTreeMap<_, _>>();
+
+        // Include actual operations, every retired capture row, and retained
+        // owner rows in the edited measures. The last group gives neighboring
+        // source boundaries without treating them as bridge grants.
+        let mut observed = edited.clone();
+        for &key in owned.keys() {
+            let in_edited_measure = source_notes.get(&key).and_then(|note| note.parent())
+                .is_some_and(|measure| edited_measures.contains(&measure.range().start));
+            if !surviving.contains(&key) || in_edited_measure {
+                observed.insert(key);
+            }
+        }
+        let mut compare = observed.clone();
+        compare.extend(source_notes.iter().filter_map(|(&key, note)| {
+            note.parent().filter(|measure| edited_measures.contains(&measure.range().start))
+                .map(|_| key)
+        }));
+        let carried = transport.carry_observed_ranges(
+            before, after, compare.iter().map(|&(start, end)| start..end).collect(),
+        )?;
+
+        let mut report = String::new();
+        let mut unknown = 0;
+        let mut mapped_notes = BTreeMap::new();
+        for (key, post_range) in compare.into_iter().zip(carried) {
+            let is_edited = edited.contains(&key);
+            let owner_levels = owned.get(&key);
+            let custody = match (owner_levels.is_some(), surviving.contains(&key)) {
+                (true, true) => "retained",
+                (true, false) => "retired",
+                (false, _) => "no_capture",
+            };
+            let projected_note = post_range.as_ref().and_then(|range| output_notes.get(&by_range(range)));
+            let (Some(&left), Some(&right)) = (source_notes.get(&key), projected_note) else {
+                if !observed.contains(&key) { continue; }
+                unknown += 1;
+                let _ = writeln!(report, "OriginalBeamBridgeReadbackNote: before_range={key:?}; edited={is_edited}; capture={custody}; result=Unknown; authority=none");
+                continue;
+            };
+            if actual_beam_note_signature(&before[left.range()], true)?
+                != actual_beam_note_signature(&after[right.range()], true)?
+            {
+                if !observed.contains(&key) { continue; }
+                unknown += 1;
+                let _ = writeln!(report, "OriginalBeamBridgeReadbackNote: before_range={key:?}; edited={is_edited}; capture={custody}; result=Unknown; reason=non_beam_content_changed; authority=none");
+                continue;
+            }
+            mapped_notes.insert(key, (left, right));
+            if !observed.contains(&key) { continue; }
+            let field = |tag| beam_note_field(left, tag);
+            let measure = left.parent().and_then(|node| node.attribute("number"));
+            let ordinal = left.prev_siblings().skip(1).filter(|node| node.has_tag_name("note")).count();
+            let pitch = left.children().find(|node| node.has_tag_name("pitch")).map(|node| {
+                let value = |name| node.children().find(|child| child.has_tag_name(name)).and_then(|child| child.text());
+                (value("step"), value("alter"), value("octave"))
+            });
+            let ties = left.children().filter(|node| node.has_tag_name("tie"))
+                .filter_map(|node| node.attribute("type")).collect::<Vec<_>>();
+            let before_levels = actual_beam_written_states(left)?;
+            let after_levels = actual_beam_written_states(right)?;
+            let _ = writeln!(report,
+                "OriginalBeamBridgeReadbackNote: measure={measure:?}; ordinal={ordinal}; staff={:?}; voice={:?}; pitch={pitch:?}; ties={ties:?}; before_range={key:?}; edited={is_edited}; capture={custody}; owner_levels={owner_levels:?}; before={before_levels:?}; after={after_levels:?}; authority=none",
+                field("staff"), field("voice"));
+        }
+        let _ = writeln!(report,
+            "OriginalBeamBridgeReadback: seam={seam}; operations={}; retired_occurrences={}; unknown={unknown}; authority=none",
+            edited.len(), self.occurrences.len() - retained.occurrences.len());
+
+        // Enumerate only original owner edges. The post-state can attest to
+        // those edges, while additions have no original owner identity here.
+        let mut groups = BTreeMap::<_, Vec<_>>::new();
+        for (&key, levels) in &owned {
+            for (level, group, marker) in *levels {
+                if let Some(group) = group {
+                    groups.entry((*level, *group)).or_default().push((key, marker.as_deref()));
+                }
+            }
+        }
+        let mut edges = Vec::new();
+        let mut planned_edges = BTreeSet::new();
+        let (mut present, mut missing, mut unknown) = (0, 0, 0);
+        for ((level, group), members) in groups {
+            if members.iter().all(|(key, _)| surviving.contains(key)) {
+                continue;
+            }
+            if members.len() < 2 || members[0].1 != Some("begin")
+                || members[members.len() - 1].1 != Some("end")
+                || members[1..members.len() - 1].iter().any(|row| row.1 != Some("continue"))
+            {
+                let _ = writeln!(report, "OriginalBeamBridgeEdgeGroup: level={level}; group={group:?}; result=Unknown; reason=unclosed_capture; authority=none");
+                continue;
+            }
+            for pair in members.windows(2) {
+                let (left, right) = (pair[0].0, pair[1].0);
+                planned_edges.insert((level, left, right));
+                let mapped = mapped_notes.get(&left).zip(mapped_notes.get(&right));
+                let outcome = mapped.and_then(|(&(before_left, after_left), &(before_right, after_right))| {
+                    (e050_written_edge(before_left, before_right, level) == Some(true))
+                        .then(|| e050_written_edge(after_left, after_right, level)).flatten()
+                });
+                let result = match (outcome, mapped) {
+                    (Some(true), Some(((_, after_left), (_, after_right)))) => {
+                        present += 1;
+                        edges.push(OriginalBridgeBeamEdge {
+                            level,
+                            group,
+                            original_left: left.0..left.1,
+                            original_right: right.0..right.1,
+                            left: after_left.range(),
+                            right: after_right.range(),
+                        });
+                        "Present"
+                    }
+                    (Some(false), _) => { missing += 1; "Missing" }
+                    _ => { unknown += 1; "Unknown" }
+                };
+                let measure = source_notes.get(&left).and_then(|note| note.parent())
+                    .and_then(|node| node.attribute("number"));
+                let _ = writeln!(report, "OriginalBeamBridgeEdge: measure={measure:?}; level={level}; group={group:?}; left_range={left:?}; right_range={right:?}; result={result}; authority=none");
+            }
+        }
+        let _ = writeln!(report, "OriginalBeamBridgeEdgeReadback: seam={seam}; scope=affected_original_groups; present={present}; missing={missing}; unknown={unknown}; authority=none");
+        // Compare the actual E050 post-state with edges from the already
+        // executed metric BeamPlan. A missing level capture stays Unknown.
+        let post_to_pre = mapped_notes.iter().map(|(&key, &(_, note))|
+            (by_range(&note.range()), key)).collect::<BTreeMap<_, _>>();
+        let level_was_captured = |key, level| owned.get(&key)
+            .is_some_and(|rows| rows.iter().any(|(owned_level, _, _)| *owned_level == level));
+        let (mut captured, mut outside, mut unbound) = (0, 0, 0);
+        for (&left_key, &(before_left, after_left)) in &mapped_notes {
+            let Some(after_right) = e050_next_note_over_visible_rest(after_left) else { continue; };
+            let Some(&right_key) = post_to_pre.get(&by_range(&after_right.range())) else { continue; };
+            if !edited.contains(&left_key) && !edited.contains(&right_key) { continue; }
+            let (before_right, _) = mapped_notes[&right_key];
+            for level in [1, 2] {
+                if e050_written_edge(after_left, after_right, level) != Some(true) { continue; }
+                let before_edge = match e050_written_edge(before_left, before_right, level) {
+                    Some(true) => "Present",
+                    Some(false) => "Missing",
+                    None => "Unknown",
+                };
+                let plan = if planned_edges.contains(&(level, left_key, right_key)) {
+                    captured += 1;
+                    "Captured"
+                } else if level_was_captured(left_key, level) && level_was_captured(right_key, level) {
+                    outside += 1;
+                    "OutsideCapturedPlan"
+                } else {
+                    unbound += 1;
+                    "Unknown"
+                };
+                let measure = before_left.parent().and_then(|node| node.attribute("number"));
+                let _ = writeln!(report, "MetricBeamRestEdge: measure={measure:?}; level={level}; left_range={left_key:?}; right_range={right_key:?}; before_e050={before_edge}; metric_plan={plan}; authority=none");
+            }
+        }
+        let _ = writeln!(report, "MetricBeamRestEdgeReadback: seam={seam}; scope=confirmed_rest_edges_with_edited_endpoint; captured={captured}; outside_captured_plan={outside}; unknown={unbound}; authority=none");
+        Ok((report, edges))
+    }
+
+    fn retain_unaffected(&self, touches: impl Fn(&std::ops::Range<usize>) -> bool) -> Self {
+        let batches = self.occurrences.iter()
+            .filter(|(range, _)| touches(range))
+            .flat_map(|(_, levels)| levels.iter().filter_map(|(_, group, _)| group.map(|(batch, _)| batch)))
+            .collect::<std::collections::BTreeSet<_>>();
+        let mut retained = self.clone();
+        retained.occurrences.clear();
+        let mut indices = Vec::with_capacity(self.occurrences.len());
+        for (range, levels) in &self.occurrences {
+            let removed = touches(range) || levels.iter()
+                .any(|(_, group, _)| group.is_some_and(|(batch, _)| batches.contains(&batch)));
+            indices.push((!removed).then_some(retained.occurrences.len()));
+            if !removed {
+                retained.occurrences.push((range.clone(), levels.clone()));
+            }
+        }
+        retained.chord_attachments = self.chord_attachments.as_ref().map_err(Clone::clone)
+            .map(|rows| rows.iter().filter_map(|row| {
+                if touches(&row.member) || row.original_head.as_ref().is_some_and(&touches) {
+                    return None;
+                }
+                let mut row = row.clone();
+                if let Some(head) = row.head {
+                    row.head = Some(indices.get(head).copied().flatten()?);
+                }
+                Some(row)
+            }).collect());
+        retained
+    }
+
+    pub(crate) fn current_document(&self) -> &str {
+        &self.current
+    }
+
+    pub(crate) fn carry_final_chord<'a>(&self,
+        after: &str,
+        single_emissions: impl Iterator<Item = (&'a std::ops::Range<usize>, &'a std::ops::Range<usize>)>,
+    ) -> anyhow::Result<Self> {
+        let unchanged = single_emissions.filter_map(|(input, range)| {
+            let old = self.current.get(input.clone())?;
+            let new = after.get(range.clone())?;
+            (actual_beam_note_signature(old, false).ok()? == actual_beam_note_signature(new, false).ok()?)
+                .then_some(((input.start, input.end), range))
+        }).collect::<std::collections::BTreeMap<_, _>>();
+        let locate = |range: &std::ops::Range<usize>| unchanged.get(&(range.start, range.end)).map(|range| (*range).clone());
+        let retained = self.retain_unaffected(|range| locate(range).is_none());
+        let ranges = retained.occurrences.iter().map(|(range, _)| locate(range)
+            .ok_or_else(|| anyhow::anyhow!("FinalChord retained note has no unique unchanged emission")))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        let attachments = retained.chord_attachments.as_ref().map_err(Clone::clone).and_then(|rows|
+            rows.iter().cloned().map(|mut row| {
+                row.member = locate(&row.member).ok_or("Missing FinalChord chord member emission")?;
+                row.original_head = row.original_head.as_ref().map(|range|
+                    locate(range).ok_or("Missing FinalChord chord head emission")).transpose()?;
+                Ok(row)
+            }).collect());
+        retained.carried(after, ranges, attachments, false, locate)
+    }
+
     fn carried(
         &self,
         after: &str,
         ranges: Vec<std::ops::Range<usize>>,
         attachments: Result<Vec<ActualBeamChordAttachment>, String>,
+        allow_respelling: bool,
+        locate: impl Fn(&std::ops::Range<usize>) -> Option<std::ops::Range<usize>>,
     ) -> anyhow::Result<Self> {
         anyhow::ensure!(
             ranges.len() == self.occurrences.len(),
             "Incomplete beam continuation"
         );
+        let signature = |note: &str| actual_beam_note_signature_with_spelling(note, false, allow_respelling);
         let mut output = self.clone();
         for ((old, _), range) in self.occurrences.iter().zip(&ranges) {
             anyhow::ensure!(
-                actual_beam_note_signature(
+                signature(
                     self.current
                         .get(old.clone())
                         .ok_or_else(|| anyhow::anyhow!("Invalid carried pre-note"))?,
-                    false
-                )? == actual_beam_note_signature(
+                )? == signature(
                     after
                         .get(range.clone())
                         .ok_or_else(|| anyhow::anyhow!("Invalid carried post-note"))?,
-                    false
                 )?,
                 "Original note or beam decision changed at a following owner"
             );
@@ -429,8 +866,8 @@ impl ActualCanonicalBeamCapture {
                     (Some(old), Some(new)) => {
                         let old = self.current.get(old.clone()).ok_or("Invalid original physical chord head")?;
                         let new = after.get(new.clone()).ok_or("Invalid continued physical chord head")?;
-                        if actual_beam_note_signature(old, false).map_err(|error| error.to_string())?
-                            != actual_beam_note_signature(new, false).map_err(|error| error.to_string())?
+                        if signature(old).map_err(|error| error.to_string())?
+                            != signature(new).map_err(|error| error.to_string())?
                         {
                             return Err("Original physical chord-head content changed at a following owner".into());
                         }
@@ -445,17 +882,64 @@ impl ActualCanonicalBeamCapture {
                 let new = after
                     .get(next.member.clone())
                     .ok_or("Invalid continued chord member")?;
-                if actual_beam_note_signature(old, false).map_err(|e| e.to_string())?
-                    != actual_beam_note_signature(new, false).map_err(|e| e.to_string())?
+                if signature(old).map_err(|e| e.to_string())?
+                    != signature(new).map_err(|e| e.to_string())?
                 {
                     return Err("Original chord-member content changed at a following owner".into());
                 }
             }
             Ok(rows)
         });
+        output.bridge_edges = self.carry_bridge_edges(after, allow_respelling, locate);
         output.current = std::sync::Arc::from(after);
         Ok(output)
     }
+    fn carry_bridge_edges(
+        &self,
+        after: &str,
+        allow_respelling: bool,
+        locate: impl Fn(&std::ops::Range<usize>) -> Option<std::ops::Range<usize>>,
+    ) -> Vec<OriginalBridgeBeamEdge> {
+        if self.bridge_edges.is_empty() {
+            return Vec::new();
+        }
+        let Ok(document) = roxmltree::Document::parse(after) else {
+            return Vec::new();
+        };
+        let notes = document.descendants().filter(|node| node.has_tag_name("note"))
+            .map(|node| ((node.range().start, node.range().end), node))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let signature = |text| actual_beam_note_signature_with_spelling(text, true, allow_respelling).ok();
+        let endpoint = |range: &std::ops::Range<usize>| {
+            let next = locate(range)?;
+            let note = *notes.get(&(next.start, next.end))?;
+            let original = signature(self.current.get(range.clone())?)?;
+            (signature(after.get(next)?)? == original).then_some(note)
+        };
+        self.bridge_edges.iter().filter_map(|edge| {
+            let left = endpoint(&edge.left)?;
+            let right = endpoint(&edge.right)?;
+            (e050_written_edge(left, right, edge.level) == Some(true)).then(|| OriginalBridgeBeamEdge {
+                left: left.range(),
+                right: right.range(),
+                ..edge.clone()
+            })
+        }).collect()
+    }
+
+    fn observe_original_bridge_edges(&self, document: &str, stage: &str) {
+        if document != self.current.as_ref() || self.bridge_edges.is_empty() {
+            return;
+        }
+        for edge in &self.bridge_edges {
+            eprintln!(
+                "RenderOriginalBridgeBeamEdge: stage={stage}; level={}; group={:?}; original_left={:?}; original_right={:?}; current_left={:?}; current_right={:?}; authority=none",
+                edge.level, edge.group, edge.original_left, edge.original_right, edge.left, edge.right,
+            );
+        }
+        eprintln!("RenderOriginalBridgeBeamEdges: stage={stage}; present={}; authority=none", self.bridge_edges.len());
+    }
+
     pub(crate) fn chord_attachments(
         &self,
         document: &str,

@@ -55,7 +55,7 @@ pub(crate) enum RenderCheckpointSink {
     VisibleRestRole,
     FinalPianoRestGlyph,
 
-    SisterFeedbackBeam,
+    MetricRestContinuation,
     ExternalFeedbackClosure,
     KeySignatureSpelling,
     DirectionRelocation,
@@ -645,6 +645,33 @@ impl RenderSovereignState {
         let verified = verified.extend_with_sink_owner(&COMMIT_BOUNDARY, sink_receipt, &label);
         self.witness(Some(verified.candidate()), &label);
         self.commit(verified, sink, &label);
+        Ok(())
+    }
+
+    /// Persists only a replayable, owner-authored metric rest continuation.
+    pub(crate) fn adopt_metric_rest_continuation(
+        &mut self,
+        root: RenderTrialRoot,
+        candidate: &str,
+        receipt: crate::master_state_identity::PreservingTransformationReceipt,
+    ) -> anyhow::Result<()> {
+        let mut receipts = RenderTransitionReceipts::new();
+        let is_metric = receipt.is_metric_rest_bridge()
+            && receipt.binds_recorded_representation(root.document(), candidate).is_ok();
+        receipts.push_preserving(Some(receipt), candidate);
+        if !is_metric {
+            receipts.discard_unadopted(crate::master_state_identity::RenderDiscardReason::LosingCandidate);
+            anyhow::bail!("Metric rest continuation requires its original recorded metric receipt");
+        }
+        self.adopt_transition(
+            root, candidate, receipts,
+            RenderSinkKind::Checkpoint(RenderCheckpointSink::MetricRestContinuation),
+            |path, _pre, verified| {
+                super::super::orchestrator_artifact_sink_authority::write_metric_rest_continuation_checkpoint(
+                    &COMMIT_BOUNDARY, path, verified,
+                )
+            },
+        )?;
         Ok(())
     }
 

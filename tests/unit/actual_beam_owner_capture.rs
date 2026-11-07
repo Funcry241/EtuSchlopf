@@ -766,3 +766,102 @@ pub(crate) fn notation_voice_bindings(
 ) -> OriginalNotationVoiceBindings {
     OriginalNotationVoiceBindings { original: std::sync::Arc::from(original), voices: rows.into_iter().collect() }
 }
+
+#[test]
+fn rest_bridge_carry_preserves_independent_complete_beam_groups() {
+    use crate::arrangement::representation_transport::{RepresentationStep, RhythmicRepresentationTransport};
+
+    let (before, _, capture) = execute(&beam_only_input());
+    let old_rows = capture.occurrences(&before).unwrap();
+    let range = old_rows[0].0.clone();
+    let replacement = partial_beat_strip_beam_tags(&before[range.clone()]);
+    let after = [&before[..range.start], &replacement, &before[range.end..]].concat();
+    let edits = vec![(range, replacement)];
+    let owner = PartialBeatBeamPreservingMint { _sealed: () };
+    let transport = RhythmicRepresentationTransport::partial_beam(
+        &owner, RepresentationStep::recorded(&before, &after, edits.clone()),
+    );
+    let receipt = realize_metric_rest_bridge_receipt(&before, &after, edits);
+
+    assert!(capture.carry_recorded(&transport).is_err());
+    let step = transport.rest_bridge_step(&receipt).unwrap();
+    let edited = &step.original_operations()[0].0;
+    let retained = capture.retain_unaffected(|range| edited.start < range.end && range.start < edited.end);
+    let (readback, _) = capture.rest_bridge_readback(&retained, step, &transport, "E053MetricRestBridgeReplay").unwrap();
+    assert!(readback.lines().any(|line| line.contains("edited=true; capture=retired;")
+        && line.contains("before={1: \"begin\"") && line.contains("after={};")), "{readback}");
+    assert!(readback.contains("operations=1; retired_occurrences=4; unknown=0"), "{readback}");
+    assert!(readback.contains("present=4; missing=2; unknown=0"), "{readback}");
+    let carried = capture.carry_rest_bridge(&receipt, &transport).unwrap();
+    assert_eq!(carried.bridge_edges.len(), 4);
+    for edge in &carried.bridge_edges {
+        assert_ne!(edge.original_left, old_rows[0].0);
+        assert_ne!(edge.original_right, old_rows[0].0);
+        assert_eq!(&before[edge.original_left.clone()], &after[edge.left.clone()]);
+        assert_eq!(&before[edge.original_right.clone()], &after[edge.right.clone()]);
+    }
+
+    let document = roxmltree::Document::parse(&after).unwrap();
+    let ranges = document.descendants().filter(|node| node.has_tag_name("note"))
+        .map(|node| node.range()).collect::<Vec<_>>();
+    let missing = carried.bridge_edges[0].left.clone();
+    let projected = carried.carry_final_chord(&after,
+        ranges.iter().filter(|range| **range != missing).map(|range| (range, range))).unwrap();
+    assert_eq!(projected.bridge_edges.len(), 2);
+    assert!(projected.bridge_edges.iter().all(|edge| edge.left != missing && edge.right != missing));
+
+    let remaining = carried.occurrences(&after).unwrap();
+    assert_eq!(remaining.len(), 12);
+    for ((old_range, old_levels), (new_range, new_levels)) in old_rows[4..].iter().zip(remaining) {
+        assert_eq!(old_levels, new_levels);
+        assert_eq!(&before[old_range.clone()], &after[new_range.clone()]);
+    }
+}
+
+#[test]
+fn final_chord_carry_retires_only_batches_with_unproved_emissions() {
+    let (before, _, capture) = execute(&beam_only_input());
+    let rows = capture.occurrences(&before).unwrap();
+    let first = rows[0].0.clone();
+    let changed = before[first.clone()].replace("<step>C</step>", "<step>D</step>");
+    assert_ne!(changed, before[first.clone()]);
+    let after = [&before[..first.start], &changed, &before[first.end..]].concat();
+
+    let changed_note = capture.carry_final_chord(&after, rows.iter().map(|(range, _)| (range, range))).unwrap();
+    let split_note = capture.carry_final_chord(&before, rows[1..].iter().map(|(range, _)| (range, range))).unwrap();
+    assert_eq!(changed_note.occurrences(&after).unwrap(), &rows[4..]);
+    assert_eq!(split_note.occurrences(&before).unwrap(), &rows[4..]);
+}
+
+#[test]
+fn rest_edge_readback_separates_written_extension_from_metric_owner_plan() {
+    use crate::arrangement::representation_transport::{RepresentationStep, RhythmicRepresentationTransport};
+
+    let input = beam_only_input();
+    let third = partial_beat_raw_notes(&input)[2].clone();
+    let rest = "<note><rest/><duration>24</duration><voice>1</voice><type>16th</type><staff>1</staff></note>";
+    let input = [&input[..third.start], rest, &input[third.end..]].concat();
+    let (before, _, capture) = execute(&input);
+    let notes = partial_beat_raw_notes(&before);
+    let left = &notes[1];
+    let right = &notes[3];
+    let left_after = partial_beat_rewrite_owned_beam_levels(&left.text,
+        &[(1, "continue"), (2, "continue")], 2).unwrap();
+    let right_after = partial_beat_rewrite_owned_beam_levels(&right.text,
+        &[(1, "end"), (2, "end")], 2).unwrap();
+    let after = [&before[..left.start], &left_after, &before[left.end..right.start],
+        &right_after, &before[right.end..]].concat();
+    let edits = vec![(left.start..left.end, left_after), (right.start..right.end, right_after)];
+    let owner = PartialBeatBeamPreservingMint { _sealed: () };
+    let transport = RhythmicRepresentationTransport::partial_beam(
+        &owner, RepresentationStep::recorded(&before, &after, edits.clone()),
+    );
+    let receipt = realize_metric_rest_bridge_receipt(&before, &after, edits);
+    let step = transport.rest_bridge_step(&receipt).unwrap();
+    let retained = capture.retain_unaffected(|range|
+        step.original_operations().iter().any(|(edit, _)| edit == range));
+    let (report, _) = capture.rest_bridge_readback(&retained, step, &transport, "E053MetricRestBridgeReplay").unwrap();
+    let bridges = report.lines().filter(|line| line.starts_with("MetricBeamRestEdge:")).collect::<Vec<_>>();
+    assert_eq!(bridges.len(), 2, "{report}");
+    assert!(bridges.iter().all(|line| line.contains("before_e050=Missing; metric_plan=OutsideCapturedPlan")), "{report}");
+}

@@ -1360,6 +1360,20 @@ pub(crate) struct VerifiedRenderTransition {
     candidate: String,
 }
 
+impl BlockTransformationReceipt {
+    pub(crate) fn with_original_respelling(
+        mut self,
+        owner: &crate::pipeline::RenderRow66BlockMint,
+        steps: Vec<crate::arrangement::representation_transport::RepresentationStep>,
+    ) -> Self {
+        self.original_render_notes = Some(Box::new(
+            crate::arrangement::representation_transport::RhythmicRepresentationTransport::render_respelling(owner, &self, steps)
+                .map_err(|error| error.to_string()),
+        ));
+        self
+    }
+}
+
 impl VerifiedRenderTransition {
     /// Read-only custody continuation evaluated on the verified owner chain.
     /// A missing operation map is UNKNOWN; only a newly executed E053 emitter
@@ -1372,10 +1386,36 @@ impl VerifiedRenderTransition {
             if let Some(capture) = &step.original_beam { observed = Some(capture.clone()); continue; }
             let Some(Ok(capture)) = observed.as_ref() else { continue; };
             let next = match (&step.placement, &step.receipt) {
+                (StepPlacement::Document, TransformationReceipt::Exact(receipt))
+                    if receipt.descriptor == &FINAL_CHORD_ENCODING_EXACT => (|| {
+                        let emitted = receipt.final_chord_capture()
+                            .ok_or_else(|| anyhow::anyhow!("Missing original Render FinalChord emissions"))?
+                            .as_ref().map_err(|error| anyhow::anyhow!("{error}"))?;
+                        let after = emitted.validate_execution(receipt, capture.current_document())?;
+                        let single_emissions = emitted.rows().iter().filter_map(|row| {
+                            let [(range, false)] = row.outputs() else { return None; };
+                            Some((row.input(), range))
+                        });
+                        capture.carry_final_chord(after, single_emissions)
+                    })(),
                 (StepPlacement::Document, TransformationReceipt::Exact(receipt)) => capture.carry_exact(receipt),
                 (StepPlacement::Document, TransformationReceipt::Preserving(receipt)) =>
                     receipt.recorded_representation().ok_or_else(|| anyhow::anyhow!("Missing original Render preserving journal"))
-                        .and_then(|transport| capture.carry_recorded(transport)),
+                        .and_then(|transport| {
+                            if receipt.is_metric_rest_bridge() {
+                                capture.carry_rest_bridge(receipt, transport)
+                            } else {
+                                capture.carry_recorded(transport)
+                            }
+                        }),
+                (StepPlacement::Document, TransformationReceipt::Block(receipt))
+                    if receipt.descriptor == &RENDER_ROW_66_BLOCK =>
+                {
+                    receipt.original_render_notes()
+                        .ok_or_else(|| anyhow::anyhow!("Missing original Render respelling journal"))
+                        .and_then(|transport| transport.as_ref().map_err(|error| anyhow::anyhow!("{error}")))
+                        .and_then(|transport| capture.carry_respelling(transport))
+                }
                 (StepPlacement::Document, TransformationReceipt::Block(_)) => step.original_transport.as_ref()
                     .ok_or_else(||anyhow::anyhow!("Missing original Render block transport"))
                     .and_then(|transport|capture.carry_recorded(transport)),
@@ -1400,6 +1440,8 @@ impl VerifiedRenderTransition {
             let continued = (|| {
                 anyhow::ensure!(input.binds(before), "Render identity capture does not bind the actual root");
                 match (&step.placement, &step.receipt) {
+                    (StepPlacement::Document, TransformationReceipt::Exact(receipt))
+                        if receipt.descriptor == &FINAL_CHORD_ENCODING_EXACT => input.continue_render_final_chord(receipt, after),
                     (StepPlacement::Document, TransformationReceipt::Exact(receipt)) => input.continue_render_exact(receipt, None, after),
                     (StepPlacement::Fragment { start, end }, TransformationReceipt::Exact(receipt)) => input.continue_render_exact(receipt, Some((*start,*end)), after),
                     (StepPlacement::Fragment { start, end }, TransformationReceipt::Block(_)) => input.continue_render_fragment_exterior(*start, *end,
@@ -1415,7 +1457,12 @@ impl VerifiedRenderTransition {
                         } else if let Some(capture) = &step.original_notes {
                             input.continue_render_rest_emission(receipt, capture, after)
                         } else if let Some(transport) = receipt.original_render_notes() {
-                            input.continue_render_recorded(transport.as_ref().map_err(|error| anyhow::anyhow!("{error}"))?, after)
+                            let transport = transport.as_ref().map_err(|error| anyhow::anyhow!("{error}"))?;
+                            if receipt.descriptor == &RENDER_ROW_66_BLOCK {
+                                input.continue_render_respelling(transport, after)
+                            } else {
+                                input.continue_render_recorded(transport, after)
+                            }
                         } else { Err(anyhow::anyhow!("Missing original Render block note-emission map")) }
                     }
                     _ => Err(anyhow::anyhow!("Render placement has no original material continuation")),

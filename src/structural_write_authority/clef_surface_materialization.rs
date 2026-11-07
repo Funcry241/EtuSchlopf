@@ -376,3 +376,6 @@ mod tests {
         assert!(inspection(&xml).hide_visible_lower_staff_g_preserve_f_context(&xml).is_none());
     }
 }
+
+// The initial Render checkpoint consumes the primary course through this existing surface.
+pub(crate) use super::rustig_clef_planning::prepare_initial_render_clef_course;

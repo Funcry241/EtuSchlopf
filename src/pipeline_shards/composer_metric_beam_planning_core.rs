@@ -3,6 +3,7 @@
 fn add_beat_scoped_beam_groups(
     note_infos: &[PartialBeatNoteInfo],
     beat_unit: i64,
+    clef_boundaries: &BTreeMap<String, Vec<i64>>,
     states_by_note: &mut BTreeMap<usize, Vec<(usize, &'static str)>>,
     explicit_negative_notes: &mut BTreeSet<usize>,
     stats: &mut BeatScopedBeamPatchStats,
@@ -17,13 +18,17 @@ fn add_beat_scoped_beam_groups(
         }
     }
     let mut used_notes: BTreeSet<usize> = BTreeSet::new();
-    for (_key, mut candidates) in groups {
+    for ((staff, _, _), mut candidates) in groups {
+        let boundaries = clef_boundaries.get(&staff).map_or(&[][..], Vec::as_slice);
         candidates.sort_by_key(|info| (info.start, info.index));
         let mut runs: Vec<Vec<&PartialBeatNoteInfo>> = Vec::new();
         let mut current: Vec<&PartialBeatNoteInfo> = Vec::new();
         let mut previous_end: Option<i64> = None;
         for info in &candidates {
-            if current.is_empty() || previous_end == Some(info.start) {
+            if current.last().is_none_or(|left: &&PartialBeatNoteInfo| {
+                previous_end == Some(info.start)
+                    && !crosses_metric_beam_clef_boundary(boundaries, left.start, info.start)
+            }) {
                 current.push(*info);
             } else {
                 runs.push(current);
@@ -55,6 +60,7 @@ fn add_beat_scoped_beam_groups(
             let left = candidates[0];
             let right = candidates[1];
             if beat_group_stays_inside_one_beat(&candidates, beat_unit)
+                && !crosses_metric_beam_clef_boundary(boundaries, left.start, right.start)
                 && left.start + left.duration < right.start
                 && visible_rests_cover_gap(note_infos, left, right)
             {
@@ -87,6 +93,10 @@ fn add_beat_scoped_beam_groups(
             }
         }
     }
+}
+
+fn crosses_metric_beam_clef_boundary(boundaries: &[i64], left: i64, right: i64) -> bool {
+    boundaries.iter().any(|&boundary| left < boundary && boundary <= right)
 }
 
 fn beat_group_stays_inside_one_beat(group: &[&PartialBeatNoteInfo], beat_unit: i64) -> bool {
@@ -456,7 +466,7 @@ fn extend_beam_states_from_plan(
 fn choose_structural_rest_bridge_candidate_groups(
     infos: &[PartialBeatNoteInfo],
     beat_unit: i64,
-) -> Vec<SisterFeedbackVariantACandidateGroup<'_>> {
+) -> Vec<MetricRestContinuationGroup<'_>> {
     let mut groups: BTreeMap<(String, String, i64), Vec<&PartialBeatNoteInfo>> = BTreeMap::new();
     for info in infos {
         if info.staff != "2" || !partial_beat_is_beam_candidate(info) {

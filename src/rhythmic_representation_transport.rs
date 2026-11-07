@@ -164,6 +164,33 @@ impl RepresentationStep {
         }
         Ok(range.start - removed + inserted..range.end - removed + inserted)
     }
+
+    // The caller has replayed the original journal. Its ordered, disjoint
+    // edit ends let us find the exact prefix preceding an occurrence.
+    fn operation_prefixes(&self) -> Vec<(usize, usize)> {
+        let mut prefix = Vec::with_capacity(self.edits.len() + 1);
+        let (mut removed, mut inserted) = (0, 0);
+        prefix.push((removed, inserted));
+        for (range, replacement) in &self.edits {
+            removed += range.end - range.start;
+            inserted += replacement.len();
+            prefix.push((removed, inserted));
+        }
+        prefix
+    }
+
+    fn carry_indexed(&self, range: Range<usize>, prefix: &[(usize, usize)]) -> Result<Range<usize>> {
+        let index = self.edits.partition_point(|(edit, _)| edit.end <= range.start);
+        let (removed, inserted) = prefix[index];
+        let start = range.start - removed + inserted;
+        if let Some((edit, replacement)) = self.edits.get(index)
+            && edit.start < range.end
+        {
+            ensure!(*edit == range, "Representation operation crosses an occurrence boundary");
+            return Ok(start..start + replacement.len());
+        }
+        Ok(start..range.end - removed + inserted)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -190,6 +217,24 @@ impl RhythmicRepresentationTransport {
         }
         Ok(transport)
     }
+    /// Original key and full-note respelling operations of Render #66.
+    pub(crate) fn render_respelling(
+        _: &crate::pipeline::RenderRow66BlockMint,
+        receipt: &crate::master_state_identity::BlockTransformationReceipt,
+        steps: Vec<RepresentationStep>,
+    ) -> Result<Self> {
+        let transport = Self { steps };
+        let (before, after) = transport.recorded_documents()?;
+        receipt.validate_block_transition::<crate::pipeline::RenderRow66BlockMint>(before, after)?;
+        let [_, notes] = transport.steps.as_slice() else {
+            anyhow::bail!("Render respelling requires its original key and note journals");
+        };
+        for (range, replacement) in &notes.edits {
+            crate::pipeline::verify_render_respelling_note(&notes.before[range.clone()], replacement)?;
+        }
+        Ok(transport)
+    }
+
     pub(crate) fn octave_notation(step: RepresentationStep,
         receipt: &crate::master_state_identity::BlockTransformationReceipt) -> Result<Self> {
         step.validate()?;
@@ -258,6 +303,17 @@ impl RhythmicRepresentationTransport {
         Ok((&first.before, previous))
     }
 
+    pub(crate) fn rest_bridge_step(
+        &self,
+        receipt: &crate::master_state_identity::PreservingTransformationReceipt,
+    ) -> Result<&RepresentationStep> {
+        let (before, after) = self.single_step_documents()?;
+        ensure!(receipt.is_metric_rest_bridge(), "Missing original metric rest continuation receipt");
+        receipt.validate_preserving_transition::<crate::pipeline::PartialBeatBeamPreservingMint>(before, after)?;
+        self.recorded_documents()?;
+        Ok(&self.steps[0])
+    }
+
     pub(crate) fn partial_beam(_: &crate::pipeline::PartialBeatBeamPreservingMint,
         step: RepresentationStep) -> Self { Self { steps: vec![step] } }
 
@@ -310,6 +366,19 @@ impl RhythmicRepresentationTransport {
         Self { steps }
     }
 
+    /// Preserve each independently mapped observation after validating the
+    /// journal. A crossing edit invalidates its own range only.
+    pub(crate) fn carry_observed_ranges(&self, before: &str, after: &str,
+        ranges: Vec<Range<usize>>) -> Result<Vec<Option<Range<usize>>>> {
+        ensure!(self.recorded_documents()? == (before, after),
+            "Foreign representation observation documents");
+        let steps = self.steps.iter().map(|step| (step, step.operation_prefixes()))
+            .collect::<Vec<_>>();
+        Ok(ranges.into_iter().map(|range| {
+            steps.iter().try_fold(range, |range, (step, prefix)| step.carry_indexed(range, prefix)).ok()
+        }).collect())
+    }
+
     pub(crate) fn carry(&self, before: &str, after: &str,
         ranges: Vec<Range<usize>>) -> Result<Vec<Range<usize>>> {
         let mut state = before;
@@ -318,7 +387,8 @@ impl RhythmicRepresentationTransport {
         for step in &self.steps {
             ensure!(state == step.before, "Foreign representation pre-state");
             step.validate()?;
-            carried = carried.into_iter().map(|range| step.carry(range)).collect::<Result<_>>()?;
+            let prefix = step.operation_prefixes();
+            carried = carried.into_iter().map(|range| step.carry_indexed(range, &prefix)).collect::<Result<_>>()?;
             state = &step.after;
         }
         ensure!(state == after, "Foreign representation post-state; {}",

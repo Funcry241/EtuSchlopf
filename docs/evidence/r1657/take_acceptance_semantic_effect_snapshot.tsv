@@ -1,0 +1,552 @@
+v1	src/master_state_identity.rs	018ea14f2a343f4b		get,len,push_str,with_capacity
+v1	src/master_state_identity.rs	03c1393114c3bdf6	writer-call	count,new
+v1	src/master_state_identity.rs	04ba7baab0dfbb69		
+v1	src/master_state_identity.rs	05cab9a02ad35c90		all,any,attributes,children,ends_with,is_element,is_empty,is_none,is_some,is_some_and,is_text,len,name,namespace,next,parse,range,root_element,tag_name,text,trim
+v1	src/master_state_identity.rs	065ef82c9e0fb77d		extend,map
+v1	src/master_state_identity.rs	06fffb1ab7db3542		
+v1	src/master_state_identity.rs	09ade4007fd4d610		as_ref,staff
+v1	src/master_state_identity.rs	0a79c22ad44c36f8		beam
+v1	src/master_state_identity.rs	0b40864988244307		
+v1	src/master_state_identity.rs	0e91a068fa5d1775		
+v1	src/master_state_identity.rs	102150753e41ec00		and_then,map_err,octave_notation,push,push_block,to_string
+v1	src/master_state_identity.rs	11026c0ecc2bbe80		fingerprint,len,ok_or_else,ratio,realize_edit_script,verify_unchanged_span
+v1	src/master_state_identity.rs	1230ca725f3138e6		all,filter,get,is_empty,is_some,is_some_and,iter,peek,peekable
+v1	src/master_state_identity.rs	13476aba9f517d69		is_none,map,map_err,to_string
+v1	src/master_state_identity.rs	149d79f6d89d785e		capture,fingerprint,register_additive_origin
+v1	src/master_state_identity.rs	17164a0cd827f662		
+v1	src/master_state_identity.rs	1893713545d107d1		into_inner,lock,reset_origin_measurement,store,unwrap_or_else
+v1	src/master_state_identity.rs	1b2b93f201a0b5b9		map,ok,operation_readback,ratio
+v1	src/master_state_identity.rs	1cd3ee4208b5d91d		
+v1	src/master_state_identity.rs	1e3b67072f071198		fingerprint,is_block,same_contract
+v1	src/master_state_identity.rs	201f9ec92771a69e		into,map_err,push_clef_blocks_with_transport,unwrap_or_else
+v1	src/master_state_identity.rs	22be5c385e24a55a		
+v1	src/master_state_identity.rs	28c8a0f8c7b81dfa		conserved_projection,fingerprint,map,semantic_anchor
+v1	src/master_state_identity.rs	294ffa5af6beae15		Additive,Block,Exact,Preserving
+v1	src/master_state_identity.rs	2a84f3ce434acf16		Additive,Block,Exact,Preserving
+v1	src/master_state_identity.rs	2ebd45e1b371659d	writer-call	any,clone,derive,enumerate,filter,get,iter,last_mut,len,map,map_or,max,mid_to_pre,min,new,ok,push,realize_edit_script,sort_by_key,to_string,try_from,windows,with_capacity
+v1	src/master_state_identity.rs	33ce72c0a69b0ee6		clear,into_inner,lock,unwrap_or_else
+v1	src/master_state_identity.rs	33e8b6f0f1b8957a		extend,map
+v1	src/master_state_identity.rs	3486e3a6e5176915	writer-call	fingerprint,insert,new,opaque_value
+v1	src/master_state_identity.rs	3666636a57e16b20		
+v1	src/master_state_identity.rs	387d6273357bc46e		clone
+v1	src/master_state_identity.rs	38b88b281dae82a9		fingerprint,same_contract
+v1	src/master_state_identity.rs	38fadf28b01c02c1		fingerprint,same_contract
+v1	src/master_state_identity.rs	3bdb1de25babe00c		Additive,Block,Exact,Preserving,enumerate,fingerprint,is_none,iter,last,len,map,post_fingerprint,pre_fingerprint
+v1	src/master_state_identity.rs	3dfb5ffaa54a3bee		clone,get,is_some,len,remove
+v1	src/master_state_identity.rs	3ebb1fe3b3ddd7fa		all,any,by_ref,conserved_content_projection,let,lines
+v1	src/master_state_identity.rs	3f157d47a4613737		push_block
+v1	src/master_state_identity.rs	43c15a7e92a75e55		contract_label
+v1	src/master_state_identity.rs	43d4f6f1d45352fc		
+v1	src/master_state_identity.rs	46f5c9a7262bc353		take
+v1	src/master_state_identity.rs	48962e3f39695675		final_chord_row_seal,ssc_bound_origin,to_owned,validate_execution
+v1	src/master_state_identity.rs	48ce70ed87ffc86b	writer-call	FinalLayout,map_err,new,to_string
+v1	src/master_state_identity.rs	4bfef1841987431d		
+v1	src/master_state_identity.rs	4d38d539866d7c4e	writer-call	and_then,any,attribute,child_text,children,descendants,filter,find,has_child,has_tag_name,join,map,map_or_else,name,new,ok,parse,push_str,sort,tag_name,text,to_string,trim,unwrap_or
+v1	src/master_state_identity.rs	4da8f8d9eb7a8866		as_str,collect,iter,map
+v1	src/master_state_identity.rs	4ec87c6eed879ea1		as_deref,render
+v1	src/master_state_identity.rs	507937401988123d		e057_existing_event_multiset_projection
+v1	src/master_state_identity.rs	5096fc9003af33d3		Additive,Block,Exact,Preserving,any,census_kind_is_carried,custody_census,is_some,iter,len,let,map,remove,staff,then,to_string
+v1	src/master_state_identity.rs	5323968d0f8d73a5		beam,contains,fingerprint,staff
+v1	src/master_state_identity.rs	548fe177ea25f77f		find,into_iter,map,render,same_contract,staff,voice
+v1	src/master_state_identity.rs	59d99bf46420c223		is_none,validate_exact_execution
+v1	src/master_state_identity.rs	5bb0eb46594c973b		
+v1	src/master_state_identity.rs	5bb8ec2931476a9c		InputDocumentFingerprint,fingerprint
+v1	src/master_state_identity.rs	5c375979ff182f5e		count,fingerprint,mint_fresh
+v1	src/master_state_identity.rs	5d80d80e8eeaf8d8		fingerprint,head_fingerprint
+v1	src/master_state_identity.rs	5ee98d4d748ac8c0		len
+v1	src/master_state_identity.rs	5f2204e46c0572ef		render,same_contract,staff,voice
+v1	src/master_state_identity.rs	5f2c87ab044514bd		
+v1	src/master_state_identity.rs	600c1fb2f08a341c		append,into
+v1	src/master_state_identity.rs	63b23c7703f2f33f		as_str,get,is_empty,is_none,is_some,len
+v1	src/master_state_identity.rs	642c1417d4d1e740		is_some,recorded_representation
+v1	src/master_state_identity.rs	65f23a0b19a98bc4		
+v1	src/master_state_identity.rs	696b147d430e5a85		into_inner,lock,unwrap_or_else
+v1	src/master_state_identity.rs	6b135bc2c18c2c39		is_none,staff,validate_exact_execution
+v1	src/master_state_identity.rs	6b6594b8b062ce6f		Additive,Block,Exact,Preserving,any,documents,final_layout_course_transport,identity,into_inner,is_some,iter,len,let,lock,post_fingerprint,pre_fingerprint,push,record_additive_commit,record_block_commit,record_exact_commit,record_preserving_commit,to_owned,unwrap_or_else
+v1	src/master_state_identity.rs	745cc82f2fb44f5f		append,beam
+v1	src/master_state_identity.rs	7d06a0598dd37c1d		release_unadopted_additive_origin
+v1	src/master_state_identity.rs	7dda4ec2a056ab77		
+v1	src/master_state_identity.rs	80021b907d61e8c4		
+v1	src/master_state_identity.rs	811964597f3a9f17		
+v1	src/master_state_identity.rs	84ef95467159780d		Self,fetch_add
+v1	src/master_state_identity.rs	84f8c83879b37013		fingerprint,is_none,staff
+v1	src/master_state_identity.rs	87e4f8dfdf9c2796	writer-call	Block,Exact,block_post_document,clone,find,iter,map,new,ok_or_else,operation_readback,post_document,push,ratio,to_owned,validate_binding
+v1	src/master_state_identity.rs	88d9af2f2147f00e		and_then,clef_receipt_steps,into_iter,push,push_block,to_string,zip
+v1	src/master_state_identity.rs	8976fc1516e4af44		beam,find,into_iter,map,staff
+v1	src/master_state_identity.rs	8b1f3aa9480437b4		
+v1	src/master_state_identity.rs	8b1f3aa9480437b4		
+v1	src/master_state_identity.rs	8b1f3aa9480437b4		
+v1	src/master_state_identity.rs	8da2b0c51080bbfc		Block,and_then,as_ref,beam,course_carry_births,into,map_err,push
+v1	src/master_state_identity.rs	934b39cdf22bc0b2		
+v1	src/master_state_identity.rs	959d00843d728643		
+v1	src/master_state_identity.rs	98f4022444450340	writer-call	capture,count,count_owner_receipt_refusal,exact_edits_reproduce,fingerprint,iter,len,lock,map,mint_fresh,new,sort_by_key,ssc_exact_scope,staff,stderr,take,write_fmt
+v1	src/master_state_identity.rs	9949d9701fde2bb3		semantic_anchor
+v1	src/master_state_identity.rs	9ab20bf1be5e711b		Additive,Block,Exact,Preserving
+v1	src/master_state_identity.rs	9d2b2b8f5c01227b		mint_block_receipt
+v1	src/master_state_identity.rs	9e63c841074529e4		as_bytes,from,wrapping_mul
+v1	src/master_state_identity.rs	9f119eadfbbb2b6b		
+v1	src/master_state_identity.rs	9fb79d10eaa59df6		into_inner,iter,lock,map,retain,retain_released_master_evidence,summary,unwrap_or_else
+v1	src/master_state_identity.rs	9ff948d41c9b96bf	writer-call	Representation,new
+v1	src/master_state_identity.rs	a0c33452b1f955d7		beam
+v1	src/master_state_identity.rs	a0d89ce8bd7b1239		any,beam,bind,iter,staff
+v1	src/master_state_identity.rs	a431d1b42bd65f71		Additive,Block,Exact,Preserving
+v1	src/master_state_identity.rs	a4c4a548d0f0adfb		Additive,Block,Exact,Preserving,and_then,as_ref,beam,carry_exact,carry_recorded,clone,cloned,find,identity,iter,map,map_err,ok_or_else,recorded_representation,to_string
+v1	src/master_state_identity.rs	a6104969cd9be978		get,last_mut,len,push,reverse,saturating_sub,with_capacity
+v1	src/master_state_identity.rs	aa8dd3e345d887f8		beam,find,into_iter,map,render,same_contract
+v1	src/master_state_identity.rs	abe81495da0fd103		Additive,Block,Exact,Preserving,any,contains,iter
+v1	src/master_state_identity.rs	ad5f3863f3248aef		filter,fingerprint,take
+v1	src/master_state_identity.rs	ad5f3863f3248aef		filter,fingerprint,take
+v1	src/master_state_identity.rs	adf5e0314d53455a		as_deref,count,count_owner_receipt_refusal,exact_edits_reproduce,fingerprint,fragment_edits_match,len,mint_fresh,realize_bound_additive_fragment_receipt,sort_by_key,ssc_capture_fragment_origin
+v1	src/master_state_identity.rs	afec0e015b698f95		carry_range,clone,get,is_empty,post_document
+v1	src/master_state_identity.rs	affef5b28dff383b	writer-call	capture,count,count_owner_receipt_refusal,fingerprint,is_block,mint_fresh,new,render
+v1	src/master_state_identity.rs	b0975b32f57e2068		last,map_or
+v1	src/master_state_identity.rs	b0c779f2c84e64bd		
+v1	src/master_state_identity.rs	b1cb8ecd72174086		Preserving,map_err,preserving_layout,push,take,to_string
+v1	src/master_state_identity.rs	b3ee7ab76911b0d7		MetricRestBridge,Representation,as_deref
+v1	src/master_state_identity.rs	b53fee01b14a68bc		as_ref,capture,filter,fingerprint,register_additive_origin
+v1	src/master_state_identity.rs	b57a85d623c25345		
+v1	src/master_state_identity.rs	b7d1a51765947c90		fingerprint,fragment_edits_match,len,realize_edit_script,then_some
+v1	src/master_state_identity.rs	bb1cb3dfa66c7273		entry,from,lineage_continuity_holds,or_default
+v1	src/master_state_identity.rs	c35c009314cb9426		fingerprint,let,ok_or_else,read_additive_origin
+v1	src/master_state_identity.rs	c6a6e65407cf352f		mint_preserving_receipt
+v1	src/master_state_identity.rs	c72fdae9c57fd867		is_empty,iter,join,map,to_string
+v1	src/master_state_identity.rs	c72fdae9c57fd867		is_empty,iter,join,map,to_string
+v1	src/master_state_identity.rs	c85691f4e6614ee1		conserved_content_projection
+v1	src/master_state_identity.rs	ca887351dd932fdf		staff,take
+v1	src/master_state_identity.rs	ca916dcf70db82ff		map
+v1	src/master_state_identity.rs	cc134d6b54f7e8b7		additive_fragment_matches_class,all,conserved_projection_is_subsequence,count,count_owner_receipt_refusal,exact_edits_reproduce,fingerprint,iter,len,mint_fresh,sort_by_key
+v1	src/master_state_identity.rs	cc5dbbe970fb0bf9	writer-call	finish,hash,new
+v1	src/master_state_identity.rs	cdc44e43626076ce		any,bound_tie_fragment_insertions,into_iter,iter
+v1	src/master_state_identity.rs	ce1ffe26529a57d6		block_post_document,ok_or_else,push,push_block
+v1	src/master_state_identity.rs	cfc7e0cd48fcf61a		count
+v1	src/master_state_identity.rs	cfeb500f2e7c1f1a		fingerprint
+v1	src/master_state_identity.rs	cfeb500f2e7c1f1a		fingerprint
+v1	src/master_state_identity.rs	cfeb500f2e7c1f1a		fingerprint
+v1	src/master_state_identity.rs	cfeb500f2e7c1f1a		fingerprint
+v1	src/master_state_identity.rs	d4345058f149bc80	writer-call	map_err,new,render,render_cleanup,to_string
+v1	src/master_state_identity.rs	d68f68e01c5ed58e		
+v1	src/master_state_identity.rs	d75c20f4e4c3c87d		
+v1	src/master_state_identity.rs	d78b0f761b2ec282		count
+v1	src/master_state_identity.rs	d78cccbc32acab9b		fetch_add
+v1	src/master_state_identity.rs	d8b164ae7fd9f013		Additive,Block,Exact,Preserving,as_ref,block_post_document,clone,continue_additive,continue_exact,continue_final_layout,continue_preserving_representation,continue_recorded_block,continue_visible,document,enumerate,final_layout_course_transport,find,is_some,iter,let,map,map_err,map_or_else,ok_or_else,recorded_representation,validate_binding
+v1	src/master_state_identity.rs	d93047638f5dd30c		MetricRestBridge,as_deref
+v1	src/master_state_identity.rs	dba5c52392f83c9d		
+v1	src/master_state_identity.rs	dcd3203563dce06c		as_ref
+v1	src/master_state_identity.rs	dded794324749a22		same_contract
+v1	src/master_state_identity.rs	dfccb5e785ada2f6		cloned,find,into_inner,iter,lock,rev,unwrap_or_else
+v1	src/master_state_identity.rs	e3dbb522d3c16550		
+v1	src/master_state_identity.rs	e8662156dd07dabf		children,element_name,is_comment,is_element,is_empty,is_text,name,parse,root_element,tag_name,text,trim,unwrap_or
+v1	src/master_state_identity.rs	ea9035e925bb8b4f		clone,to_string
+v1	src/master_state_identity.rs	f0ca54c02fee1744	writer-call	adoption_view,any,commit,contains,count,fingerprint,head_fingerprint,identity,iter,master_sovereignty_violation,new,post_fingerprint,pre_fingerprint,push,ssc_adoption_verdict
+v1	src/master_state_identity.rs	f1d7732544efd97f		FinalLayout,as_deref,as_ref,documents,let,map_err
+v1	src/master_state_identity.rs	f40e6c145ae8796b		write_str
+v1	src/master_state_identity.rs	f6c51a5dc1ad7b64	writer-call	Preserving,capture,conserved_projection,count,count_owner_receipt_refusal,fingerprint,is_none,mint_fresh,new
+v1	src/master_state_identity.rs	f913543f7eea2afd		as_ref,format_contract_counts,format_row_counts,from,into_inner,is_none_or,load,lock,push_str,unwrap_or_else
+v1	src/master_state_identity.rs	fa1031d43cca9a89	writer-call	and_then,beam,binds_original_receipt,map_err,new,to_string
+v1	src/master_state_identity.rs	fa65acffafe9ce20		
+v1	src/master_state_identity.rs	fa6a26dcd895d38f		final_chord_row_seal,operation_readback,post_document,ratio,ssc_bound_origin
+v1	src/master_state_identity.rs	fbe8528e9375deec		len
+v1	src/master_state_identity.rs	fcad936b24b1e970	writer-call	MetricRestBridge,beam,new
+v1	src/master_state_identity.rs	fcfc5243aa77edc8		
+v1	src/master_state_identity.rs	fcfc5243aa77edc8		
+v1	src/master_state_identity.rs	fcfc5243aa77edc8		
+v1	src/notation.rs	0dfeebf3f742ef0f		find,len,ok,trim
+v1	src/notation.rs	10e09bff9e65824b	writer-call	beam,discard_unadopted,ledger_bounded_lower_staff_clef_readback,let,new,note,push_preserving,render,score,staff
+v1	src/notation.rs	12be230ee0e5c800		contains
+v1	src/notation.rs	13af10e6a12fc74c		extract_first_i64,extract_first_text,trim,unwrap_or
+v1	src/notation.rs	1a411de80171b7de		as_str,beam,beam_tag_level,contains,find,is_none,is_some_and,len,push_str,remove,to_ascii_lowercase,trim,with_capacity
+v1	src/notation.rs	216d473b8399a8e2	writer-call	contains,extract_first_text,find,len,let,new,push
+v1	src/notation.rs	21d7e07f040e10e1	writer-call	BeamSafetyCaptured,as_str,beam,clone,discard_unadopted,enter,extend,find_measure_spans,into_iter,is_empty,ledger_bounded_lower_staff_clef_readback,len,let,map,mint_preserving_receipt,new,polish,polish_measure,push_preserving,push_str,recorded,remove,render,staff,take,to_string,with_capacity,with_context,with_recorded_representation
+v1	src/notation.rs	2b6127579fd96286		count,filter,iter,staff,trim
+v1	src/notation.rs	2e3e64190690c7cc		copied,iter,lower_staff_ledger_pressure,map,staff,sum
+v1	src/notation.rs	315f2ef6f037ebcb		expect,note,polish_measure
+v1	src/notation.rs	3e91c95ecec88f54		beam,contains,expect,note,polish_measure,remove
+v1	src/notation.rs	3ea33d047670dde9	writer-call	discard_unadopted,ledger_bounded_lower_staff_clef_readback,let,new,note,push_preserving,render,score,staff
+v1	src/notation.rs	45ddeb28edadbbe3		beam,expect,find,insert_beam_tags
+v1	src/notation.rs	465bca417483fe09		find,len,to_string,trim
+v1	src/notation.rs	4a3b379ef7eed1fd		as_deref,clef_course_pressure,collect_raw_notes,contains,counted,duration,extract_first_i64,extract_first_text,ledger_lines,let,max,measure_contains_lower_staff_clef,measure_contains_lower_staff_octave_shift,observe,observe_pitch,ratio,saturating_add,saturating_mul,saturating_sub,shifted,staff,then_some
+v1	src/notation.rs	552b1e2e6d3654a4	writer-call	contains,count,discard_unadopted,ledger_bounded_lower_staff_clef_readback,let,matches,new,note,push_preserving,render,score,staff
+v1	src/notation.rs	5599adcbca554678		max
+v1	src/notation.rs	583b21b33a29bf05	writer-call	any,collect_register_pressure_lower_staff_clef_events,collect_register_pressure_measure_summaries,copied,dedup_by_key,enumerate,flat_map,is_empty,iter,last,new,position,push,register_pressure_sum,rposition,sort_by_key,staff
+v1	src/notation.rs	5c0da0b6d61897d9		contains,find,map
+v1	src/notation.rs	5e386a11c785853f		collect,div_euclid,filter_map,find,iter,leading_visible_rest_covers_beat_gap,len,max,sort_by_key
+v1	src/notation.rs	5ee82e35674b4126		collect_raw_notes,collect_register_pressure_lower_staff_clef_events,count,detect_register_pressure_clef_island_completion_candidates,into_iter,is_empty,len,map,matches,push_str,saturating_add,staff,to_string,with_capacity
+v1	src/notation.rs	642b76ea139e7a81		complete_unique_register_pressure_clef_island,let,mint_preserving_receipt
+v1	src/notation.rs	665142c935e25df7		duration,filter,iter,ratio,sort_by_key,staff,voice
+v1	src/notation.rs	6ef4a5f3b6d4f75b		complete_unique_register_pressure_clef_island,let,note
+v1	src/notation.rs	6fc681712880c1b2		collect,copied,duration,filter,first,iter,ratio,sort_by_key,staff,voice
+v1	src/notation.rs	6ff83727baead734		beam,contains,expect,note,polish_measure,remove
+v1	src/notation.rs	73fdb1c3cc5c164f	writer-call	discard_unadopted,ledger_bounded_lower_staff_clef_readback,let,new,note,push_preserving,render,score,staff
+v1	src/notation.rs	74316187dd99b3b3	writer-call	find,len,new,push
+v1	src/notation.rs	7842668249bc4ddf	writer-call	backup,contains,copied,dedup,extract_first_i64,find,first,forward,has_lower_staff_clef_boundary,len,map,max,new,push,sort_by_key,sort_unstable,staff,unwrap_or
+v1	src/notation.rs	7b974dfd1687a61e	writer-call	discard_unadopted,find,ledger_bounded_lower_staff_clef_readback,let,new,note,push_preserving,render,replacen,score,staff,unwrap
+v1	src/notation.rs	89ce82e61372d5b1		collect,div_euclid,duration,filter_map,find,iter,leading_visible_rest_covers_beat_gap,len,max,ratio,sort_by_key
+v1	src/notation.rs	8abadcb3c403e76a	writer-call	backup,contains,copied,duration,extract_first_i64,extract_first_text,find,first,forward,get,len,map,max,new,push,ratio,sort_by_key,staff,to_string,unwrap_or,unwrap_or_default,unwrap_or_else,voice
+v1	src/notation.rs	921df5ab3d6ee34a		as_str,duration,ratio
+v1	src/notation.rs	96226483573206c6		complete_unique_register_pressure_clef_island,count,expect,historical_e052_clef_island,is_ok,let,matches,note,unwrap
+v1	src/notation.rs	a4e07168e956452d		beam,duration,note_on_staff,ratio,staff
+v1	src/notation.rs	a4e64406d98d64a3	writer-call	BeamSafetyCaptured,beam,clone,extend,find_measure_spans,into_iter,is_empty,is_some,joint_reading_course_active,ledger_bounded_lower_staff_clef_measure,ledger_clef,len,map,mint_preserving_receipt,new,push_str,record,recorded,staff,to_owned,to_string,with_capacity,with_recorded_representation
+v1	src/notation.rs	aaddd0a09aa47956		contains,find,len,map,staff
+v1	src/notation.rs	b0c779f2c84e64bd		
+v1	src/notation.rs	b0c779f2c84e64bd		
+v1	src/notation.rs	b0c779f2c84e64bd		
+v1	src/notation.rs	b0c779f2c84e64bd		
+v1	src/notation.rs	b3ab69f63bb5eb5a		beam,beam_tag_level,find,is_some,len,to_ascii_lowercase,trim
+v1	src/notation.rs	b52ee48d16e86349	writer-call	ends_with,find,len,new,push,to_string
+v1	src/notation.rs	b56c83f232d62bc3		count,historical_e052_clef_island,is_none,let,matches,unwrap
+v1	src/notation.rs	bb123024e56d9179	writer-call	and_then,any,children,contains,descendants,discard_unadopted,duration,expect,filter,find,has_tag_name,is_element,is_some_and,ledger_bounded_lower_staff_clef_readback,len,let,new,note,parse,prev_sibling,push_preserving,ratio,render,repeat,replace,replacen,staff,sustained_lower_staff_measure_clef_preference,then_some,to_owned,unwrap
+v1	src/notation.rs	bce1ec435d093e2d		count,match_indices
+v1	src/notation.rs	c56db65a54d45ecd		beam,contains,expect,note_on_staff,polish_measure,remove,staff
+v1	src/notation.rs	c629a8a62225c1df		count,historical_e052_clef_island,is_none,let,matches,unwrap
+v1	src/notation.rs	c7e16740f7489d72		and_then,extract_first_text,ok,trim
+v1	src/notation.rs	c7f74e3abd3c5f37		beam,contains,expect,note_on_staff,polish_measure,remove,staff
+v1	src/notation.rs	c8644c5100b2e4fc		contains,find,len,map,saturating_sub,starts_with,trim_start
+v1	src/notation.rs	cb82de89d5d957d9	writer-call	discard_unadopted,ledger_bounded_lower_staff_clef_readback,let,new,note,push_preserving,render,score,staff
+v1	src/notation.rs	cf8b5ec03e597abc		as_str
+v1	src/notation.rs	d0d4570ea834fac3		beam,contains,expect,note,polish_measure,remove
+v1	src/notation.rs	d202774a4ecf18e2	writer-call	as_ref,discard_unadopted,expect,ledger_bounded_lower_staff_clef_readback,len,let,new,note,push_preserving,render,score,staff,unwrap
+v1	src/notation.rs	d3d8185760059187	writer-call	contains,copied,exact_lower_staff_clef_sign,extract_first_i64,filter,find,first,is_empty,is_some_and,iter,ledger_bounded_lower_staff_clef_block,ledger_lines,len,lower_staff_chord_group_end,lower_staff_visible_group_positions,map,max,new,observe_lower_staff_octave_display_shift,or_else,push,push_str,sort_by_key,staff,sustained_lower_staff_measure_clef_preference,take,to_owned,to_string,unwrap_or,with_capacity
+v1	src/notation.rs	d5543cc23813d38b	writer-call	beam,ends_with,filter_map,find,into_iter,len,map_or,min,new,push,push_str,rfind,sort_by_key,to_string,to_vec,unwrap_or,with_capacity
+v1	src/notation.rs	d63151351672854b	writer-call	as_deref,contains,extract_first_text,find,len,map,new,observe_pitch,push,shifted,staff
+v1	src/notation.rs	d6820b990ba824f8	writer-call	discard_unadopted,find,ledger_bounded_lower_staff_clef_readback,let,new,note,push_preserving,render,score,staff,unwrap
+v1	src/notation.rs	e544b5c547ecb015	writer-call	as_musicxml_text,beam,clone,collect_lower_staff_clef_boundaries,collect_note_infos,collect_raw_notes,count,count_beam_tags,div_euclid,edits,entry,event_ordinal,extract_first_i64,filter,find,from,get,insert_beam_tags,is_beam_candidate,is_empty,is_partial_beat_post_rest_beam_group,is_safe_beam_group,iter,keys,len,let,level,lower_staff_clef_beam_segment,map,map_or,max,metric_beam_plan,musicxml,new,or_default,push,push_str,remove,retain,retain_only_structurally_bound_external_beams,sort_by_key,staff,state,strip_beam_tags,structurally_complete_external_beam_levels,to_owned,to_string,trim,unwrap_or,voice,with_capacity
+v1	src/notation.rs	ea61fdbea9450dc8	writer-call	as_slice,beam,beam_level,clear,collect,enumerate,filter_map,find,from,from_level_groups,iter,len,map,new,push,sort_by_key,take
+v1	src/notation.rs	ec790684ec76304b		find,is_empty,len,map_or,push_str,remove,rfind,trim,with_capacity
+v1	src/notation.rs	f47954e06ed9b861		as_deref,contains,extract_first_text,find,len,map
+v1	src/notation.rs	f4dcc640cce31d14	writer-call	as_deref,collect_raw_notes,collect_register_pressure_lower_staff_clef_events,contains,extract_first_text,filter,filter_map,find,find_measure_spans,into_iter,is_empty,new,note_text_midi,push,staff,unwrap_or
+v1	src/notation.rs	fe84d6e05ada9667		
+v1	src/notation.rs	ffffdbb1d5e29328	writer-call	and_then,as_deref,beam,beam_level,clear,clone,copied,div_euclid,entry,external_beam_gap_is_structurally_bound,find,insert,is_beam_candidate,is_some,iter,last,len,lower_staff_clef_beam_segment,max,new,observed_beam_state,or_default,push,sort_by_key,staff,voice
+v1	src/pipeline.rs	19fcbac703e18b19	exported-writer,writer-call,writer-reachable	final_gate_evaluated,from_process_code,into_exit_code,real_main,registered_final_artifact_paths,render,validate_joint_reading_final_artifacts,validate_registered_final_artifacts
+v1	src/pipeline.rs	1ed3efd4bd8fa710		Failure,from
+v1	src/pipeline.rs	406412fdf59c860f		map_err,musicxml,register_final_artifacts,render,resolve_source_plan
+v1	src/pipeline.rs	b2d6764ac76fd351		Failure,try_from
+v1	src/pipeline.rs	c3afaa6d2ee2a5f7		Failure,from_process_code
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	00f195f41056367e		find,is_empty,len,trim
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	036d96ad723c6a33	writer-call	attribute,children,clone,cloned,concat,document,enumerate,filter,find_next_measure_bounds,has_tag_name,is_empty,iter,joint_lower_course_measurements,lower_staff_clef_measure,new,ok_or_else,push,range,registernotationsrichtungen_im_dokument,registernotationsrichtungen_in_takt,root_element,staff,to_owned
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	07f7353bb8aef137	writer-call	as_musicxml_text,beam,collect,copied,edits,event_ordinal,expect,iter,level,map,musicxml,state,structural_metric_beam_hierarchy_plan
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	0983dfb694d3418d		contains,expect,find,let,pruefe_registernotationsmaterialisierung,registernotationsrichtungen_in_takt,richtung,unwrap
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	0a0b61cf3be2c59d		expect,find,let,registernotationsrichtungen_in_takt,richtung
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	0c030bd65bbdc470		validate_octave_shift_direction_semantics_with_layout
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	0cce23afd10c6350		beam,contains,expect,find,len,let,map,note,patch_beat_scoped_beaming_in_measure,rest
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	15bfa1ee6894b162		contains,expect_err,to_string,validate_final_layout_aware_octave_shift_direction_semantics
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	170c91bea313c891		from,push_str
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	19d204935af06503	writer-call	clone,compare,into,is_empty,new,parent_preview,plan,proposal,push,replace,score,unwrap
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	1a261d936fc2a299	writer-call,writer-reachable	adopt_metric_rest_continuation,adopt_projected_rest_bridge_output,as_ref,beam,bind_projected_bridge_voice_guard,bind_rest_bridge_cursor_exchange,bind_rest_bridge_main_state,choose_structural_rest_bridge_candidate_groups,clone,close_committed_cross_staff_beam_gestures,contains,count,cursor_exchange_edits,discard_unadopted,document,expect,find,fixture,is_empty,is_err,is_none,is_ok,len,let,map,matches,new,partial_beat_note_infos,partial_beat_raw_notes,push_preserving,ratio,read_to_string,realize_metric_rest_continuation,remove,remove_file,render,replace,replacen,require_state_root,rfind,score,staff,state_for,synthetic_bridge_voice_guard,to_string,unwrap,voice,xml
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	1a6a54f6c6ed9a47	direct-writer,writer-call,writer-name-root,writer-reachable	append,clamp,dedup_by,filter,first_structural_measure_locator,fractional_structural_measure_locator,insert_dynamic_direction_into_measure,insert_performance_words_direction_into_measure,insert_tempo_words_direction_into_measure,let,map,map_or_else,measure_number,push,push_additive,round,sort_by_key,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	1bb58e666011ddc0	writer-call	beam,beat_scoped_visible_rest_note,duration,get,insert,into_iter,is_empty,join,len,map,new,partial_beat_note_infos,partial_beat_raw_notes,plan_exact_metric_visible_rest_durations,push,push_str,ratio,staff,to_string,unchanged,voice,with_capacity
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	1dec2467f7e2d18c	direct-writer,writer-call,writer-name-root,writer-reachable	append,current,hide_exact_duplicate_visible_noteheads,hide_redundant_visible_staff_rests,let,prune_redundant_lower_staff_clefs,prune_rest_only_staff2_clef_noops,push_exact,remove,remove_orphan_slur_and_tie_endpoints,staff
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	1e70f41203103066		direction_block_contains_continue_octave_shift,find,len,push_str,remove,trim,with_capacity
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	20ffb00781c72bc0	writer-call,writer-reachable	clone,count,insert_tempo,matches,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	227579b930ed6120	writer-call	any,clone,entry,filter,is_empty,iter,len,map,max,min,new,ok_or_else,or_default,push,push_str,ratio,recorded,registernotations_tonanker,registernotationsrichtung_xml,saturating_add,saturating_mul,sort_by_key,with_capacity
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	2449158b91346a9f		beam,contains,expect,partial_beat_rewrite_owned_beam_levels
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	273c405074ce9184		beam,let,note,patch_beat_scoped_beaming_in_measure
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	28056723073d3709		map_err,parse,registernotationsrichtungen_im_dokument
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	2ad305111cd68935		as_deref,extract_attr_from_opening_tag,find
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	2b0cf8035c0d3625		clone,display,kind,musicxml,remove,remove_file,render
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	2c8f0bb54912f591		contains,expect,normalize_final_export_xml,to_string,validate_octave_shift_direction_semantics
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	2dc123fc234dc5b1		backup,duration,ratio
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	2e2a5aa82d562a45		beam,extend,into_iter,is_empty,len,let,map,max,mint_preserving_receipt,partial_beam,partial_beat_first_i64,partial_beat_measure_spans,patch_partial_beat_post_rest_beams_in_measure,push_str,recorded,take,unwrap_or,with_capacity,with_recorded_representation
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	2e429d8fcf821a02		len,saturating_add,saturating_mul,size_of_val
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	2ea0cc0d18d08513	writer-call,writer-reachable	abs,and_then,as_deref,contains,descendants,extract_attr_from_opening_tag,extract_first_text_from_fragment,filter,find,find_next_measure_bounds,from,get,has_tag_name,insert_direction_into_measure,is_none_or,is_some_and,len,let,map,measure_number,new,ok,parse,push_additive,rsplit_once,staff,text,to_string,trim
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	2ff12d3052656bc3		beam,expect,mint_preserving_receipt,partial_beam,recorded,recorded_documents,with_metric_rest_bridge
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	30654aca562d1d8b		expect,len,registernotationsrichtungen_aus_sichtauftrag,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	311d072d9455965c	writer-call,writer-reachable	clone,insert_tempo,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	334a2b5ae8edf6df	writer-call,writer-reachable	contains,count,insert_tempo,matches,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	3880414f716e15c3		as_bytes,get_mut,hex
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	3e2d1c84032e9187	writer-call	len,new
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	3e3b40757998a561	writer-call	expect,filter,iter,len,new,registernotationsrichtungen_aus_sichtauftrag,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	41574e400cd933ae		beam,expect,info,len,structural_beam_group_needs_owned_plan_normalization,structural_metric_beam_hierarchy_plan,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	431a192acaf128ed	writer-call,writer-reachable	count,insert_tempo,matches,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	465bca417483fe09		find,len,to_string,trim
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	48408932c9c35074	writer-call,writer-reachable	count,insert_tempo,matches,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	48408932c9c35074	writer-call,writer-reachable	count,insert_tempo,matches,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	4c47c304524c4bec	writer-call	new
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	53e29e3e9f01f8db		beam,expect,info,len,structural_beam_group_needs_owned_plan_normalization,structural_metric_beam_hierarchy_plan,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	5497388c39c3ea3c		beat_scoped_unchanged_note_map,extend,is_empty,len,let,lift,max,partial_beat_first_i64,partial_beat_measure_spans,patch_beat_scoped_rest_completion_in_measure,push_str,unwrap_or,with_capacity
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	554aa42dd7715df4		as_ref,get_or_init,map_err,parse
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	55852be6b3a5a05b	writer-call	as_ref,bezeichnung,groesse,let,map,new,unwrap_or_default
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	559b4f1e3732edb1		any,as_str,attribute,children,clone,copied,filter,find,get,is_element,is_empty,iter,map,max,min,name,ok_or_else,range,registernotations_tonanker,root_element,saturating_sub,tag_name
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	59db19e799024712		beam,duration,ratio,staff,to_string,voice
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	5cfc821545310e7a	writer-call	and_then,any,attribute,bezeichnung,carried_origin,children,clone,contains,copied,descendants,drop,enumerate,filter,filter_map,find,first,is_element,is_empty,is_some,len,map,map_err,name,new,ok,ok_or_else,parse,push,range,root_element,saturating_add,saturating_sub,tag_name,text,to_string,trim,unwrap_or,unwrap_or_default,xml_kind_dauer
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	5dfc947e6b036029		repeat
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	602f1aaed8d64432		find,len,ok,trim
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	6109518aa0d89271	writer-call	and_then,any,as_deref,as_str,attribute,children,contains,descendants,direction_words_texts,extract_attr_from_opening_tag,filter,find,first,insert,is_element,is_empty,is_some,is_some_and,len,map,map_err,name,new,ok_or_else,omission_is_adopted,parse,range,staff,tag_name,text
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	61691f84d5e7fcab		contains,expect,registernotationsrichtung_xml,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	63661877cbfc93c1		beam,beat_scoped_unchanged_note_map,extend,is_empty,len,let,lift,max,partial_beat_first_i64,partial_beat_measure_spans,patch_beat_scoped_beaming_in_measure,push_str,unwrap_or,with_capacity
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	6a1cee52bf79be71		as_str,close_beat_scoped_rest_completion_crossing_rest_suffix,duration,expect,filter,find_next_measure_bounds,len,let,map,max,mint_block_receipt,musicxml,parse_musicxml_current_meter,push_str,ratio,render,saturating_add,with_capacity
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	6a31635c4d3cf0ed		backup,beat_scoped_rest_completion_crossing_rest_suffix,beat_scoped_rest_completion_cursor_state,beat_scoped_rest_completion_pitched_timeline,beat_scoped_visible_rest_note,checked_sub,copied,duration,into_iter,is_empty,is_green,is_some,iter,join,len,map,plan_exact_metric_visible_rest_durations,push_str,ratio,retain,staff,voice,with_capacity
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	6b226433ee6e623e		find,len,to_string,unwrap_or
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	6d2a1d308394a682		beam,lift,partial_beat_raw_notes,unchanged
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	6f23c1c651d65723		display,musicxml,read_to_string,validate_musicxml_export_semantics_from_xml,with_context
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	6f32b70ab554042b	writer-call	beobachte_vor_k00,borrow_mut,clone,evaluate,gemeinsame_registerkurs_gegenrechnung,generated_comparison_source,into_inner,len,loesche,new,ok,push,sichtmaterialisierungsauftrag,sperre_fuer_tests,unwrap,vergleiche_gebundene_lesekurse
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	6f3300b39a571bf9		to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	6f94515d6f93e5f8	writer-call	all,beam,clone,div_euclid,entry,filter_map,find,get,is_empty,iter,len,map_or,max,new,or_default,partial_beat_extend_states_from_plan,partial_beat_group_needs_post_rest_beam,partial_beat_insert_beam_tags,partial_beat_is_beam_candidate,partial_beat_note_infos,partial_beat_raw_notes,partial_beat_strip_beam_tags,push,push_str,sort_by_key,staff,to_string,voice,with_capacity
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	708f6f936b9d682b		
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	717111f087f5017c		clone,contains,duration,filter_map,iter,partial_beat_first_text,partial_beat_note_infos,partial_beat_raw_notes,ratio,sort,staff,unwrap_or_default,voice,zip
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	71b18ea77f9794d1	writer-call	find,len,new,push,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	770e064fbae9ef01	writer-call	add_beat_scoped_beam_groups,beam,clear,contains,get,is_empty,len,max,metric_beam_clef_boundaries,new,partial_beat_insert_beam_tags,partial_beat_note_infos,partial_beat_raw_notes,partial_beat_strip_beam_tags,push,push_str,to_owned,to_string,unchanged,with_capacity
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	798ac76b87ca0388		choose_clef_bounded_rest_bridges,collect,duration,into_iter,map,note,partial_beat_note_infos,partial_beat_raw_notes,ratio,staff
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	8056c7a8e05e365c	writer-call,writer-reachable	insert_direction_into_measure
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	8056c7a8e05e365c	writer-call,writer-reachable	insert_direction_into_measure
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	8211e222ff1e64f8		expect,find,let,pruefe_registernotationsmaterialisierung,registernotationsrichtungen_in_takt,richtung
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	83056035f1851708		count,filter,iter,typed_info,upper_plan_rows
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	84fc4fd55cae64bc	writer-call	borrow,chain,clone,evaluate,into,is_empty,iter,new,ok,parent_preview,plan,proposal,rev,score,unwrap
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	86a98f927f8ead9a	writer-call	add_visible_voice_rest_completion,beam,beat_scoped_mark_note_hidden,beat_scoped_rest_completion_cursor_state,beat_scoped_rest_completion_pitched_timeline,beat_scoped_visible_rest_note,clone,contains,contains_key,duration,filter,get,insert,into_iter,is_empty,is_green,iter,join,len,let,map,max,new,normalize_metric_visible_rests_with_actual_carry,partial_beat_note_infos,partial_beat_raw_notes,plan_exact_metric_visible_rest_durations,plan_visible_voice_rest_completion_gaps,push,push_str,ratio,raw_note_text,retain,saturating_mul,staff,then,to_string,unchanged,voice,with_capacity
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	86e1a38bdb6b0012		beam,expect,iter,len,structural_beam_group_needs_owned_plan_normalization,structural_metric_beam_hierarchy_plan,to_string,typed_info
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	877b2c4dafc405e5	writer-call	find,is_empty,len,new,push,to_string,trim
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	8a1752e88ef9c68b	writer-call,writer-reachable	count,insert_tempo,matches,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	8c250a4548c467aa		expect,validate_final_layout_aware_octave_shift_direction_semantics
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	8c26e1aa6cf96699		beobachte_registernotationsrichtungen,len,let,push_str,sort,sort_by_key,to_vec,with_capacity
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	8d035bc0f1066f8d		and_then,attribute,beam,children,collect,filter,find,has_tag_name,let,map,note,parse,patch_beat_scoped_beaming_in_measure,root_element,staff,text,unwrap
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	8da7c500f73eb304		trim
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	8df02e1f52579ba8	writer-call	attribute,children,clone,cloned,concat,enumerate,filter,find_next_measure_bounds,has_tag_name,is_empty,iter,joint_lower_course_measurements,lower_staff_clef_measure,new,ok_or_else,parse,push,range,registernotationsrichtungen_aus_sichtauftrag,registernotationsrichtungen_in_takt,root_element,staff,to_owned
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	908ec2d999e33dda	direct-writer,writer-call,writer-name-root,writer-reachable	as_str,clef_readability,clone,collect,count_existing_lower_staff_clef_switches,current,expect,extend,find_next_measure_bounds,into_iter,is_empty,len,let,lower_staff_clef_measure,map,new,observe_selected_state,push,recorded,replace_bound_clef_measure_authorized,staff,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	95167b72b8278265		contains
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	95a6e9bf37df994b		clone,entry,or_default,payload,push,saturating_sub
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	961895d9bf071d8f		beam,duration,ratio,staff,to_string,voice
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	9684578b759da324		and_then,contains,extract_first_text_from_fragment,midi_for_pitch,ok,trim,unwrap_or
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	99c1b3396e0a30da	writer-call	abs_diff,all,and_then,any,as_ref,backup,beam,bridge_is_post_projection,bridge_voice_admission,capture_rest_bridge_extension_output_offered,choose_clef_bounded_rest_bridges,clone,collect,contains,contains_key,discard_unadopted,display,entry,enumerate,expect,extend,filter,filter_map,find,finish,first,flat_map,forward,get,intersection,into_iter,is_empty,is_none,is_none_or,is_some,is_some_and,is_subset,iter,join,len,let,map,map_or_else,max,new,observe_metric_rest_continuation,or_default,partial_beat_first_i64,partial_beat_measure_number,partial_beat_measure_spans,partial_beat_note_infos,partial_beat_observed_beam_states,partial_beat_raw_notes,partial_beat_rewrite_owned_beam_levels,provisional_bridge_offered,push,push_preserving,push_str,realize_metric_rest_bridge_receipt,realize_metric_rest_continuation,render,rest_bridge_withdrawal_rows,saturating_add,sort,sort_by_key,staff,structural_rest_bridge_beam_states,then,to_owned,to_string,unwrap_or,unwrap_or_default,unwrap_or_else,voice,with_bound_provisional_bridges,with_capacity,yes_no
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	9a8e28ca51e2064b		context,current,let,remove,remove_generated_octave_word_labels,validate_octave_shift_direction_semantics
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	9dba0e4762d31910		context,display,musicxml,validate_final_layout_aware_octave_shift_direction_semantics
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	9e052aad4f5d338e		as_str,expect,filter,len,map,mint_block_receipt,render,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	9e6c1e20426ebaca		contains,expect,expect_err,let,pruefe_registernotationsmaterialisierung,registernotationsrichtungen_in_takt,replace,richtung,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	a57035afd7b74ac5		clone,find,get,iter,map
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	a6fbcafc486ab338		beam,push_format_args,push_static_section_header_v795,staff,yes_no
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	a75e92372ef4243d		all_direction_types_empty,find,len,let,mint_preserving_receipt,push_str,remove,remove_octave_words_from_direction_block,to_string,with_capacity
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	a854f8094b518c2a	writer-call	children,clone,enumerate,filter,has_tag_name,into_iter,new,parse,push,range,registernotations_tonanker,root_element,staff
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	aa72fcf4e4a8aa60		duration,ratio
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	ac90b0b73c2ed351		typed_info,upper_plan_rows
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	aedc8cd6ea74ff48		expect,find,iter,registernotationsrichtungen_aus_sichtauftrag,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	b0c779f2c84e64bd		
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	b0c779f2c84e64bd		
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	b2a5a106d912f64e	writer-call	as_millis,as_ref,borrow,cycle,elapsed,evaluate,gemeinsame_registerkurs_gegenrechnung,generated_comparison_source,is_empty,is_some_and,iter,map,new,now,ok,plan,proposal,push,take,zip
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	b7667625c33eae5f		all,iter,typed_info,upper_plan_rows
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	b819702de8fc9c98		expect,validate_final_layout_aware_octave_shift_direction_semantics
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	b9cef439b73273ce		typed_info,upper_plan_rows
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	bbdb08356540bdd9		backup,beat_scoped_plain_visible_rest,contains,duration,find,flatten,forward,into_iter,is_empty,len,map,max,min_by_key,partial_beat_first_i64,partial_beat_first_text,ratio,saturating_add,saturating_sub,staff,take,to_string,trim,unwrap_or,unwrap_or_else,voice
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	be9c707158ad9d7e	writer-call	as_musicxml_text,beam,copied,count,edits,event_ordinal,expect,filter,iter,level,map,musicxml,state,structural_metric_beam_hierarchy_plan,typed_info
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	c09d308f6813ff7e	writer-call,writer-reachable	first_structural_measure_locator,insert_tempo_words_direction_into_measure,staff,unwrap
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	c129980a5af69372	writer-call	beat_scoped_visible_rest_note,clone,duration,entry,extend,insert,is_empty,new,or_default,plan_exact_metric_visible_rest_durations,push,ratio,staff,voice
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	c3270c16d9978891		backup,contains,duration,find,flatten,forward,into_iter,len,map,max,min,min_by_key,partial_beat_first_i64,ratio,saturating_add,saturating_sub,unwrap_or
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	c544b39704fe4127		is_err,registernotationsrichtung_xml,richtung
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	c605c6a532f2d1e2		count,expect,let,matches,pruefe_registernotationsmaterialisierung,registernotationsrichtungen_in_takt,richtung
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	c793e2289050c3b6		contains,expect,registernotationsrichtung_xml,richtung
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	c8ab79f450d27be0	writer-call	expect,filter,iter,len,new,registernotationsrichtungen_aus_sichtauftrag,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	cf162be4783e6029	writer-call	any,beam,choose_structural_rest_bridge_candidate_groups,collect,crosses_metric_beam_clef_boundary,filter,get,into_iter,metric_beam_clef_boundaries,new,staff,windows
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	d228f1f4619716c7		staff
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	d31ffd0481215d66	direct-writer,writer-call,writer-name-root,writer-reachable	Reverse,any,as_str,attribute,beobachte_materialisierung,children,clone,collect,confirm_materialization,contains,count,current,drop,enclosed,entry,enumerate,evaluate,filter,get,insert,is_element,issue_origins,iter,iter_mut,keys,len,let,map,map_err,name,new,observe_selected_state,ok_or_else,or_default,parse,pruefe_registernotationsmaterialisierung,push,push_octave_block_with_transport,range,registernotationsrichtungen_aus_sichtauftrag,registernotationsrichtungen_in_takt,replace_bound_octave_measure_authorized,root_element,saturating_add,saturating_sub,sichtmaterialisierungsauftrag,sort_by_key,staff,tag_name,to_owned,to_string,unwrap_or,unwrap_or_else,vergleiche_gebundene_lesekurse,zip
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	d56f0bc34542cbea		at_owner,beam,clone,enforce_beat_scoped_beaming_in_xml,enforce_beat_scoped_rest_completion_in_xml,into,mint_block_receipt,observed_beam
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	d747236838e4f4b3	writer-call	compare,document,from_ref,gemeinsame_registerkurs_gegenrechnung,get,is_empty,is_none,is_ok,new,proposal,score,unwrap
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	d7da9fb65c292de4		borrow_mut,gemeinsame_registerkurs_gegenrechnung,lookup,ok,remember
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	db99deaf5a904363	writer-call	clone,contains,entry,find,iter,len,let,map,new,ok_or_else,or_default,push,registernotations_dokumentintervall,retain,saturating_add,saturating_mul,sort,sort_by_key,with_capacity
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	de14764fca1ab992		and_then,children,find,is_element,name,ok,tag_name,text,trim,unwrap_or
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	e5e4d35596b1c1a4	writer-call	expect,filter,iter,len,new,registernotationsrichtungen_aus_sichtauftrag,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	e811528f5844ce8c	writer-call	new
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	e83923df4cb74fe0	writer-call	and_then,any,as_mut,attribute,children,eq_ignore_ascii_case,filter,find,flush,is_element,is_some_and,map_err,name,new,parse,push,range,root_element,saturating_add,saturating_sub,tag_name,take,text,to_string,trim,unwrap_or,xml_kind_dauer
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	e86f3c711eb9f8f3	writer-call	contains,extract_first_text_from_fragment,find,len,lower_staff_clef_attributes,lower_staff_clef_state_after_attributes,map,midi_from_note_fragment,new,push,push_str,staff,to_owned,to_string,trim,unwrap_or_else,with_capacity
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	e9ac7866471bb2f5	writer-name-root	all,count,filter,iter,typed_info,upper_plan_rows
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	efa4aec5679229b4	writer-call	chain,document,eq,gemeinsame_registerkurs_gegenrechnung,get,is_none,is_ok,is_some,iter,map_err,new,parent_preview,rev,to_owned,to_string,unwrap
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	f04bfaeef4e11a63	writer-call	into,new
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	f0b311e20034688b	writer-call	borrow,borrow_mut,chain,evaluate,from,iter,new,ok,parent_preview,plan,proposal,rev,score
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	f22d5dd3866e19e7		count,matches
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	f31b7c6107aef30f		validate_octave_shift_direction_semantics_with_layout
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	f458e861edc76472		clone,contains,expect,normalize_final_export_xml,to_string
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	f4ca8eecb90147c6		beat_scoped_rest_type_and_dots,duration,let,map,max,ratio,staff,voice
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	f4fc87be0916c229		contains,expect_err,to_string,validate_octave_shift_direction_semantics
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	f4fc87be0916c229		contains,expect_err,to_string,validate_octave_shift_direction_semantics
+v1	src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs	fb3c2fe11e3b18f6	writer-call,writer-reachable	insert_direction_into_measure_authorized
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	054bd3ba4dcd0ade		render,resolve_stream_render_policy
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	1ecc68bb8b47d9ea		entry,into_inner,lock,or_insert,render,unwrap_or_else
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	313fe773f62992f8		map,ok,to_ascii_lowercase,trim,var
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	3177245d793714c2		musicxml,render
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	3cab1fe021ba33d7		flush,into_inner,live_progress_enabled,lock,stdout,unwrap_or_else
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	418c1aa2b573654c		pipeline_stdout_render_policy,render
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	537f3af429efd572		into_inner,lock,push,strip_ansi_codes,unwrap_or_else
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	5d73d507ec8bb3ef	calibration-threshold	as_ref,capture_console_line,clear_live_progress_line,clone,colorize,console_artifact_line_context,console_artifact_line_tag,duration,elapsed,format_duration_short,max,min,progress_bar,progress_bar_plain,progress_color_code_for_context,ratio,saturating_mul,trim_end
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	5f9b619f9622c7bb		checked_rem,max
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	63fdfa4303939c69		as_str,duration,elapsed,find,from_secs,into_inner,is_none,iter_mut,lock,max,now,push,ratio,rev,to_string,unwrap_or_else
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	6951798b94aef528		console_artifact_line
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	72dd5ec84eee2ef7		get_or_init,is_terminal,pipeline_console_preferences_from_env,render,resolve_stream_render_policy,stdout
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	814470719abbd7f3	writer-call	by_ref,chars,is_ascii_alphabetic,new,next,peek,peekable,push
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	87cf3d7560b3518f		as_deref,is_some,normalized_console_env_value,var_os
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	9cf428db2c9af326		ascii_progress_enabled,colorize,let,min,progress_color_code_for_context,repeat,saturating_mul
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	9e192bbfba668a43		min,render
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	b3290fe1cd4ea5a4	calibration-threshold	as_secs_f64,capture_console_line,colorize,duration,elapsed,format_duration_short,from_secs,from_secs_f64,join,max,min,progress_bar,progress_color_code_for_context,push,ratio,record_progress_timing,render,render_live_progress_line,saturating_mul,should_render_progress_state,to_string
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	bb30691e3c71fd39		as_ref,capture_console_line,clear_live_progress_line,colorize,console_artifact_line_context,console_artifact_line_tag,progress_color_code_for_context
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	bff0452e7e2cdde2		as_ref,color_progress_enabled,to_string
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	d269fd53b0b4b63e		as_secs,duration,ratio
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	d2efa1a39200fcec		flush,into_inner,live_progress_enabled,lock,stdout,unwrap_or_else
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	d9b1c2b508567f74		as_ref,capture_console_line,clear_live_progress_line
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	deaa58f3957b5c5c		pipeline_stdout_render_policy,render
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	dead81b4618ce80e		ascii_progress_enabled,let,max,min,repeat,saturating_mul
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	edbb137f3506f73a		render
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	fc5f0dd0f599995f		pipeline_stdout_render_policy,render
+v1	src/pipeline_shards/pipeline_runtime_progress_console_core.rs	fdf9433574ee75c4		render,should_render_progress_state
+v1	src/structural_write_authority/clef_surface_materialization.rs	03f317ab13cacb11		clef_start_tag_has_print_object_no,contains,for_each_clef,is_lower_staff_clef,staff
+v1	src/structural_write_authority/clef_surface_materialization.rs	176722496b85386c		clone,len,mint_file_bound_block_receipt,render
+v1	src/structural_write_authority/clef_surface_materialization.rs	18a6cb745a4b4487		fingerprint,get
+v1	src/structural_write_authority/clef_surface_materialization.rs	238a799732214dcb		contains,find,to_string
+v1	src/structural_write_authority/clef_surface_materialization.rs	255315f09985baf1		add_print_object_no_to_clef_start_tag,clef_start_tag_has_print_object_no,find,is_lower_staff_g_clef,len,push_str,staff,with_capacity
+v1	src/structural_write_authority/clef_surface_materialization.rs	38c79722c72d41cf		find,hide_visible_lower_staff_g_clefs_in_attributes,len,let,push_str,staff,with_capacity
+v1	src/structural_write_authority/clef_surface_materialization.rs	42e388b59216ae68	direct-writer,exported-writer,structural-writer-root,writer-call,writer-name-root,writer-reachable	as_str,clone,expect,filter,is_ok,len,map,mint_block_receipt,render,sink_surface_clef_candidate
+v1	src/structural_write_authority/clef_surface_materialization.rs	7b10a9966843ee12		checked_add,fingerprint,get,hide_visible_lower_staff_g_clefs,is_exact_replacement,len,let,push_str,saturating_sub,staff,to_string,with_capacity
+v1	src/structural_write_authority/clef_surface_materialization.rs	7fb725b532b504ae		hide_visible_lower_staff_g_preserve_f_context,inspection,is_none,source,staff
+v1	src/structural_write_authority/clef_surface_materialization.rs	890053ab28753070		
+v1	src/structural_write_authority/clef_surface_materialization.rs	a00957fcad733d30	writer-call	candidate_xml,contains,inspection,plan,project_clef_surface_plan,source,unwrap
+v1	src/structural_write_authority/clef_surface_materialization.rs	a09e080d326ec34a		
+v1	src/structural_write_authority/clef_surface_materialization.rs	a25cd27f9fe07636		find,inspect_clef_surface_span,len,unwrap
+v1	src/structural_write_authority/clef_surface_materialization.rs	a4d0f5751543048e		find,len,visit
+v1	src/structural_write_authority/clef_surface_materialization.rs	a8874bbe1236b575		render
+v1	src/structural_write_authority/clef_surface_materialization.rs	b0c779f2c84e64bd		
+v1	src/structural_write_authority/clef_surface_materialization.rs	b1515764f58df520		fingerprint,get,inspect_measure_clefs,let
+v1	src/structural_write_authority/clef_surface_materialization.rs	bb80e6570bca273d	writer-call	is_none,is_some,plan,project_clef_surface_plan,source,unwrap,verify_sounding_invariants
+v1	src/structural_write_authority/clef_surface_materialization.rs	c10961a765b56f11		hide_visible_lower_staff_g_preserve_f_context,inspection,staff,unwrap
+v1	src/structural_write_authority/clef_surface_materialization.rs	c87691bb297415a2	writer-call	as_deref,as_str,candidate_xml,discard_unadopted,expect,let,new,plan,prepare_render_receipt,project_clef_surface_plan,push_block,render,source,split_realized_post_document,to_string,unwrap,verify_sounding_invariants
+v1	src/structural_write_authority/clef_surface_materialization.rs	ed449d24b87f6db4		contains,is_lower_staff_clef,staff
+v1	src/structural_write_authority/clef_surface_materialization.rs	f00160c24ac248c5		contains
+v1	src/structural_write_authority/clef_surface_materialization.rs	f04c73ba70c0cab8		contains,find
+v1	src/structural_write_authority/clef_surface_materialization.rs	f44144c70cfb3a88		is_char_boundary,len
+v1	src/structural_write_authority/rustig_clef_planning.rs	019084f0dc0534a1		beam,beam_anchor_planner_input_trace,contains,event,fingerprint,observed,scan_lower_pitches
+v1	src/structural_write_authority/rustig_clef_planning.rs	01e86ed8074c7503		
+v1	src/structural_write_authority/rustig_clef_planning.rs	01e86ed8074c7503		
+v1	src/structural_write_authority/rustig_clef_planning.rs	01f459b400237ced		beam,event,find,observed,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	05094521182d066c		clef_count,len,raw_note_fragments
+v1	src/structural_write_authority/rustig_clef_planning.rs	05c40fdba4700bf7	writer-call	as_bytes,find,get,is_ascii_whitespace,is_empty,is_some_and,len,map,new,push
+v1	src/structural_write_authority/rustig_clef_planning.rs	07a8c9f7b73958b5	direct-writer,exported-writer,structural-writer-root,writer-call,writer-name-root,writer-reachable	apply_rustig_clef_course_to_buffer,as_ref,borrow,borrow_mut,clone,is_ok,is_some,take,with
+v1	src/structural_write_authority/rustig_clef_planning.rs	087fde3ff7878c90		as_deref,beam,find,is_element_start,len,map,tag_attribute_value,trim
+v1	src/structural_write_authority/rustig_clef_planning.rs	0a4d4fff423305fe		at,beam,beam_inside,contains,lower_primary_beam_serial_position,map
+v1	src/structural_write_authority/rustig_clef_planning.rs	0aa206ab9bfdcc90		contains,find,len,map,map_or
+v1	src/structural_write_authority/rustig_clef_planning.rs	0ac04e114ab01351		contains,copied,enumerate,get,is_empty,is_some_and,iter,position,remove,retain,trim,unwrap_or
+v1	src/structural_write_authority/rustig_clef_planning.rs	0d826c1d9126e565	writer-call	any,enumerate,insert,iter,new,normalize_clef_readability_insertions,observe,push,scan_lower_clef_surfaces,scan_lower_pitches,score_part_ranges
+v1	src/structural_write_authority/rustig_clef_planning.rs	0fcf59bedc71abb3	writer-call,writer-reachable	any,apply_rustig_clef_course_to_buffer,clef,clone,derive_clef_readability_primary_course_plan,find,iter,note,replacen,rfind,tied_note,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	1304c7954843ca2a	writer-call	find,len,map,new,observe_lower_staff_octave_display_shift,push,staff
+v1	src/structural_write_authority/rustig_clef_planning.rs	1874385c4a1b1d5f	writer-call,writer-reachable	apply_rustig_clef_course_to_buffer,clef,clone,note,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	18bc4a850eb5a263		len,then
+v1	src/structural_write_authority/rustig_clef_planning.rs	18f6c71e405d7560		beam,contains,derive_clef_readability_shadow_course_audit,event,len
+v1	src/structural_write_authority/rustig_clef_planning.rs	193757ef5e62f008		clef,derive_clef_readability_shadow_course_audit,note
+v1	src/structural_write_authority/rustig_clef_planning.rs	1a72e2e20f9a5abc		clef_count,clef_readability_primary_clef_block,iter,len,map,raw_note_fragments,remove,sum
+v1	src/structural_write_authority/rustig_clef_planning.rs	1c8ba7d31994237e	writer-call	beam,chain,clef_readability_primary_clef_block,contains,copied,enumerate,extend,filter,find,from,insert,iter,joint_clef_plan,lower_clef_surface_inside_open_tie,lower_clef_surface_inside_primary_beam_group,map,new,normalize_clef_readability_insertions,normalize_removal_ranges,ok_or,push,push_str,rev,scan_lower_clef_surfaces,score_part_ranges,sort_by_key,to_owned,verifies
+v1	src/structural_write_authority/rustig_clef_planning.rs	1dcb58b3904dcb1d		
+v1	src/structural_write_authority/rustig_clef_planning.rs	1e2c7332c58de9e1	writer-call	any,collect_lower_staff_attacks,collect_readability_transition_candidates,is_empty,iter,new,push,scan_lower_pitches_with_boundary_policy,sort_by_key,staff
+v1	src/structural_write_authority/rustig_clef_planning.rs	1f64f8fb2acdc66c		clef,derive_clef_readability_shadow_course_audit,map,note
+v1	src/structural_write_authority/rustig_clef_planning.rs	224f333bc2582a27		clef,derive_clef_readability_shadow_course_audit,note
+v1	src/structural_write_authority/rustig_clef_planning.rs	23cfbd5cca695555		is_some,let,observe_joint_boundaries,parent_reference
+v1	src/structural_write_authority/rustig_clef_planning.rs	24c35b3bc6062f12		all,any,beam,beamed_note,clef,collect_lower_staff_attacks,collect_readability_transition_candidates,find,iter,lower_primary_beam_group_contains_position,map,note,replacen,rfind,scan_lower_pitches,staff,tied_note,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	2a9950aa48881a39	writer-call	any,beam,beam_conflicts,iter,new,observe,octave_boundary,scan_lower_clef_surfaces,score_part_ranges,skip
+v1	src/structural_write_authority/rustig_clef_planning.rs	2b5ac3c0fa76347a		any,as_deref,first_tag_text,into_iter,last,note_ranges,scan_octave_events,take_while
+v1	src/structural_write_authority/rustig_clef_planning.rs	2bf136e766065b03	writer-call	Candidate,Surface,account_readability_surface,account_readability_transition,apply,at,beam,beam_inside,canonicalize_primary_materialized_replacements,clone,cmp,collect_readability_course_candidates,contains,enumerate,first,from,get,into_values,iter,len,lower_primary_beam_serial_position,map_or,min_by,new,observe,passage,push,retain,retain_best_readability,saturating_sub,scope,skip,sort_by_key,tie_open,total,with_capacity
+v1	src/structural_write_authority/rustig_clef_planning.rs	2c2fe12a792f028e		beam,scan_lower_pitches_with_beam_audit
+v1	src/structural_write_authority/rustig_clef_planning.rs	2d4b13603901de86	writer-call	ends_with,find,len,new,push
+v1	src/structural_write_authority/rustig_clef_planning.rs	2fc6215ae4cd448d	writer-call	beam,is_empty,new,observe,scan_lower_pitches_with_boundary_policy,solve_readability_course_with_boundaries,total
+v1	src/structural_write_authority/rustig_clef_planning.rs	319eb4e0f5fe8c11	writer-call	new,octave_boundary
+v1	src/structural_write_authority/rustig_clef_planning.rs	3ed227c0d0b1fd75	writer-call	attack_pressure,get,insert,last_mut,len,let,min,new,push,sort_by_key
+v1	src/structural_write_authority/rustig_clef_planning.rs	40db7f5110384355	writer-call	beam,new,observe
+v1	src/structural_write_authority/rustig_clef_planning.rs	4175632dca94d336	writer-call	any,elapsed,enumerate,insert,iter,len,new,now,observe,permits_single_insertion,push,scan_lower_clef_surfaces_with_time,scan_lower_pitches_with_prepared_time,score_part_ranges
+v1	src/structural_write_authority/rustig_clef_planning.rs	424f4b694de8ea61		as_bytes,get,is_ascii_whitespace,is_some_and,len,starts_with
+v1	src/structural_write_authority/rustig_clef_planning.rs	43ea217e6d629913	writer-call,writer-reachable	apply_rustig_clef_course_to_buffer,clef,clone,is_none,let,note,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	45cc50c82c52b476		beam,beam_anchor_planner_input_trace,contains,count,event,matches,observed,push_str,replace,retain,scan_lower_pitches
+v1	src/structural_write_authority/rustig_clef_planning.rs	465bca417483fe09		find,len,to_string,trim
+v1	src/structural_write_authority/rustig_clef_planning.rs	4764de45625fa0bc	writer-call	at,beam,beam_inside,lower_primary_beam_serial_position,map,new
+v1	src/structural_write_authority/rustig_clef_planning.rs	49a7644171a7926b	writer-call,writer-reachable	any,apply_rustig_clef_course_to_buffer,beam,beamed_note,clef,clone,collect_lower_staff_attacks,collect_readability_transition_candidates,contains,find,iter,lower_octave_shift_boundary_precedes_position,lower_primary_beam_group_contains_position,map,note,octave_shift,rfind,scan_lower_pitches,staff,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	49d265041ed6b828	writer-call,writer-reachable	apply_rustig_clef_course_to_buffer,clone,contains,count,enumerate,expect,into_iter,is_ok,let,matches,prepare_initial_render_clef_course,push_str,render,repeat,run,to_owned,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	4b8335f59d1aede7	writer-call,writer-reachable	apply_rustig_clef_course_to_buffer,clef,clone,contains,find,note,replacen,tied_note,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	4beb4c95ca190ca7	writer-call	any,iter,new,octave_boundary,scan_lower_clef_surfaces,score_part_ranges,skip,tie_open
+v1	src/structural_write_authority/rustig_clef_planning.rs	4c37b0af449393bd		is_some,saturating_sub
+v1	src/structural_write_authority/rustig_clef_planning.rs	504d320080bac67b		append_clef_readability_shadow_source,push_str,render
+v1	src/structural_write_authority/rustig_clef_planning.rs	52bd9694b5c411e1		comments_removed,contains,find,is_empty,is_some_and,len,map,push_str,remove,rfind,trim,with_capacity
+v1	src/structural_write_authority/rustig_clef_planning.rs	54e9d88a5c9d4514	writer-call	beam,new,permits_beam_insertion
+v1	src/structural_write_authority/rustig_clef_planning.rs	56db09124088835d	writer-call,writer-reachable	any,apply_rustig_clef_course_to_buffer,beam,beamed_note,clef,clone,collect_lower_staff_attacks,collect_readability_transition_candidates,contains,find,iter,map,note,replacen,rfind,scan_lower_pitches,staff,tied_note,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	5dbc83268d8c8493	writer-call	beam,beam_conflicts,new
+v1	src/structural_write_authority/rustig_clef_planning.rs	5f3cbcb2b8ce2e91	writer-call,writer-reachable	apply_rustig_clef_course_to_buffer,beam,beamed_note,clef,clone,contains,derive_clef_readability_primary_course_plan,filter,find,iter,len,note,rfind,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	60d3d377b1346bf6		collect,into_iter,map,note_ranges,to_string
+v1	src/structural_write_authority/rustig_clef_planning.rs	60d84ca1d3edb205		first_tag_text,unwrap_or_default,voice
+v1	src/structural_write_authority/rustig_clef_planning.rs	61f86fdaa578fcd6		find,len,map,to_string
+v1	src/structural_write_authority/rustig_clef_planning.rs	627d85af1e971428	writer-call	at,eq,fixture,get,is_none,len,let,lower_tie_serial_open_at_position,new,note,note_ranges,replace,strip_prefix,tie_open,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	6364e1c46fe2c8ce	writer-call	apply,clone,count,enumerate,filter,into_iter,is_some,iter,ledger_pressure,map,min,new,note,observe_pitch,passage,sum,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	67a6f5564bfa7d93		at,lower_octave_serial_boundary_precedes_position,map_or_else,scope
+v1	src/structural_write_authority/rustig_clef_planning.rs	68b0fb6eefc4b510	writer-call	and,and_then,as_deref,as_deref_mut,as_ref,at,beam,clear,clone,contains,copied,counted,first_tag_text,flatten,get,head,insert,is_none,is_some,is_some_and,len,let,lower_tie_identity,map,min,new,note_has_tie_type,note_ranges,observe,observe_pitch,or,origin_supported,primary_beam_state,push,remove,retain,scan_octave_events,scope,shift,shifted,sort_by_key,starts_with,then,unwrap_or,voice,zip
+v1	src/structural_write_authority/rustig_clef_planning.rs	6ac3c520e368b02f	calibration-threshold	and_then,as_ref,at,clef_kind_label,extend,filter_map,into_iter,iter,join,len,map,observe,retain,sort_by_key,then_some,unwrap_or,zip
+v1	src/structural_write_authority/rustig_clef_planning.rs	6b38785b85e4e49d		as_ref,as_str,map
+v1	src/structural_write_authority/rustig_clef_planning.rs	6e9e1195c6efbb3c		
+v1	src/structural_write_authority/rustig_clef_planning.rs	7096ad5c692ff205		clef,derive_clef_readability_shadow_course_audit,note
+v1	src/structural_write_authority/rustig_clef_planning.rs	782b953457bdea89		account_readability_transition
+v1	src/structural_write_authority/rustig_clef_planning.rs	7846c3ab443b31f9		beam,observe,scan_lower_pitches_with_boundary_policy
+v1	src/structural_write_authority/rustig_clef_planning.rs	793311ee202092bb		extend,fixture,into_iter,len,let,map,normalize_clef_readability_insertions,note,note_ranges,observe,permits_single_insertion,score_part_ranges,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	7baf7548ee2dbe65		add_passage,expect,is_some,min,saturating_add,try_from
+v1	src/structural_write_authority/rustig_clef_planning.rs	7e7c72db90af37c7		partition_point
+v1	src/structural_write_authority/rustig_clef_planning.rs	8060f44d42fc8970		at,beam,beam_inside,contains,lower_primary_beam_serial_position,map
+v1	src/structural_write_authority/rustig_clef_planning.rs	820fcb5d8a494e5a	writer-call	and_then,as_ref,at,contains_only_one_lower_clef,find,len,map,new,push,read_lower_clef,sort_by_key,unwrap_or
+v1	src/structural_write_authority/rustig_clef_planning.rs	82f6231e6a1968bd		len
+v1	src/structural_write_authority/rustig_clef_planning.rs	8725882884e63024		clef,derive_clef_readability_shadow_course_audit,map,note
+v1	src/structural_write_authority/rustig_clef_planning.rs	87a84b54adbdb1fc	writer-call	any,as_deref,beam,checked_sub,contains,derive,find,first_tag_text,get,get_mut,insert,into_iter,is_empty,is_some,is_some_and,map,map_or,new,note_ranges,partition_point,primary_beam_state,remove,scan_octave_events,score_part_ranges,values,voice
+v1	src/structural_write_authority/rustig_clef_planning.rs	8a2ad837e1949b39		
+v1	src/structural_write_authority/rustig_clef_planning.rs	8a540934c0f94e67	writer-call	append_beam_anchor_rows,beam,cloned,collect_readability_course_candidates,filter,fingerprint,is_empty,is_some,is_some_and,iter,len,measure_ranges,new,observe,partition_point,push_str,retain
+v1	src/structural_write_authority/rustig_clef_planning.rs	90508a90fc1cf7a0		any,clef,derive_clef_readability_shadow_course_audit,iter,note,starts_with
+v1	src/structural_write_authority/rustig_clef_planning.rs	9168f81a2aac72f2		beam,chain,clef_readability_reason,is_empty,iter,len,push,push_str,take,yes_no
+v1	src/structural_write_authority/rustig_clef_planning.rs	91c18e36e2da92c2	writer-call	all,append_clef_readability_shadow_course_audit_section,beam,contains,count,derive_clef_readability_shadow_course_audit,event,iter,len,matches,new,repeat,replace
+v1	src/structural_write_authority/rustig_clef_planning.rs	92382c7664b123f5		at,lower_tie_serial_open_at_position,map_or_else,tie_open
+v1	src/structural_write_authority/rustig_clef_planning.rs	9424a38209f36501		
+v1	src/structural_write_authority/rustig_clef_planning.rs	9473ae9484891a6d	writer-call	find,is_element_start,len,map,new,push
+v1	src/structural_write_authority/rustig_clef_planning.rs	94bc0879ccce2e3f	calibration-threshold	clef_kind_label,filter_map,iter,join,len,retain,then_some,zip
+v1	src/structural_write_authority/rustig_clef_planning.rs	95047878a4f63848		beam,event,find,observed,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	967bad1a151fc569	writer-call	account_readability_surface,apply,enumerate,get,is_empty,iter,len,map_or,new,observe,passage,retain,skip,zip
+v1	src/structural_write_authority/rustig_clef_planning.rs	9a762c24f2e5dc91		beam,beam_anchor_planner_input_trace,contains,event,observed,scan_lower_pitches
+v1	src/structural_write_authority/rustig_clef_planning.rs	9bc5ce517259b0a0		clef_readability_primary_clef_block,collect,iter,map
+v1	src/structural_write_authority/rustig_clef_planning.rs	a122e891847831a0	writer-call	as_deref,contains,first_tag_text,insert,is_empty,lower_tie_identity,new,note_has_tie_type,note_ranges,remove
+v1	src/structural_write_authority/rustig_clef_planning.rs	a51cf00c6af752c9	writer-call	and_then,as_deref,as_ref,attribute,beam,beam_conflicts,contains,descendants,enumerate,filter,find,first_tag_text,get_mut,guard_group_context,guard_time,has_tag_name,insert,into,into_iter,iter,map,map_err,map_or_else,new,note_ranges,observe,octave_boundary,ok_or,parse,primary_beam_state,push,range,remove,scan_lower_clef_surfaces,score_part_ranges,skip,tie_open,unwrap_or,voice
+v1	src/structural_write_authority/rustig_clef_planning.rs	a5499a78785550d3		
+v1	src/structural_write_authority/rustig_clef_planning.rs	a942685a69765fa2		beam,beam_inside,contains,get,insert,is_char_boundary,is_some_and,len,starts_with,tie_open
+v1	src/structural_write_authority/rustig_clef_planning.rs	a982c02629a80bc5		clef,derive_clef_readability_shadow_course_audit,map,note
+v1	src/structural_write_authority/rustig_clef_planning.rs	abe5ca0f708ddb7e		and_then,checked_add,checked_sub,clef_count,len,raw_note_fragments,remove
+v1	src/structural_write_authority/rustig_clef_planning.rs	ac5c81811ad53f10	writer-call	beam,new,scan_lower_pitches,scan_lower_pitches_with_beam_audit
+v1	src/structural_write_authority/rustig_clef_planning.rs	acfbeb3fea3c3c47	writer-call	new,tie_open
+v1	src/structural_write_authority/rustig_clef_planning.rs	b0c779f2c84e64bd		
+v1	src/structural_write_authority/rustig_clef_planning.rs	b0c779f2c84e64bd		
+v1	src/structural_write_authority/rustig_clef_planning.rs	b0c779f2c84e64bd		
+v1	src/structural_write_authority/rustig_clef_planning.rs	b0c779f2c84e64bd		
+v1	src/structural_write_authority/rustig_clef_planning.rs	b0c779f2c84e64bd		
+v1	src/structural_write_authority/rustig_clef_planning.rs	b0c779f2c84e64bd		
+v1	src/structural_write_authority/rustig_clef_planning.rs	b0c779f2c84e64bd		
+v1	src/structural_write_authority/rustig_clef_planning.rs	b26b7e60aa601ca8		
+v1	src/structural_write_authority/rustig_clef_planning.rs	b2a144ac6bd325e0		duration,now,ratio
+v1	src/structural_write_authority/rustig_clef_planning.rs	b2baac4e2b263af7	writer-call,writer-reachable	apply_rustig_clef_course_to_buffer,clef,clone,count,derive_clef_readability_primary_course_plan,derive_clef_readability_shadow_course_audit,map,matches,note,raw_note_fragments,unwrap,verifies
+v1	src/structural_write_authority/rustig_clef_planning.rs	b5bbfaba008b40d8		beam,clone,contains,is_empty,lower_clef_surface_inside_open_tie,lower_clef_surface_inside_primary_beam_group,observe_lower_clef_guard_conflicts,sample,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	b70cc26c3407e27b	writer-call	collect,into_iter,map,new,score_part_ranges
+v1	src/structural_write_authority/rustig_clef_planning.rs	ba9b113d46c06a9f		as_ref,clone,get,get_or_init,observe,partition_point
+v1	src/structural_write_authority/rustig_clef_planning.rs	c0ad1c1a30d59a4c		and_then,as_ref,beam,binary_search_by_key,descendants,filter,filter_map,first_tag_text,is_element,iter,location,map,measure_number_at_position,measure_ranges,name,note_ordinal,note_ranges,ok,parse,partition_point,push,range,saturating_sub,tag_name,to_string,unwrap_or_else
+v1	src/structural_write_authority/rustig_clef_planning.rs	c8b2e7e956099a5a	writer-call	append_clef_readability_shadow_course_audit_section,beam,contains,count,derive_clef_readability_primary_course_plan,derive_clef_readability_shadow_course_audit,event,len,matches,new,observed
+v1	src/structural_write_authority/rustig_clef_planning.rs	c9de1fe6e2867c4c		as_millis,elapsed,first_tag_text,replace,unwrap_or_default
+v1	src/structural_write_authority/rustig_clef_planning.rs	ca25278876769509		as_deref,find,is_element_start,map,tag_attribute_value
+v1	src/structural_write_authority/rustig_clef_planning.rs	cbed6b9e27f99abe		any,beam,beamed_note_in_voice,clef,collect_lower_staff_attacks,collect_readability_transition_candidates,find,iter,lower_octave_shift_boundary_precedes_position,lower_primary_beam_group_contains_position,map,note,note_in_voice,scan_lower_clef_surfaces,scan_lower_pitches,solve_readability_course,staff,unwrap,voice
+v1	src/structural_write_authority/rustig_clef_planning.rs	cf487f57f3ad054a		ledger_lines,max
+v1	src/structural_write_authority/rustig_clef_planning.rs	d14a13205166ac97		from,iter,ledger_pressure,len,push,sort_unstable_by_key,with_capacity
+v1	src/structural_write_authority/rustig_clef_planning.rs	d2afecf199b0bb2d	direct-writer,exported-writer,structural-writer-root,writer-name-root,writer-reachable	beam,chain,clone,derive_clef_readability_primary_course_plan,insert_str,insertion_blocks,into_iter,is_empty,is_ok,iter,lower_clef_surface_inside_open_tie,lower_clef_surface_inside_primary_beam_group,map,mint_preserving_receipt,recorded,removal_ranges,replace_range,rev,rustig_clef_course,rustig_clef_course_journal,sort_unstable_by_key,source_matches,verifies,with_recorded_representation
+v1	src/structural_write_authority/rustig_clef_planning.rs	d33d3159b38eb76a		
+v1	src/structural_write_authority/rustig_clef_planning.rs	d3edaa8f4053eaee		beam,compare,fixture,note,repeat,replace,replacen,to_owned
+v1	src/structural_write_authority/rustig_clef_planning.rs	d57c72c61b857820		as_ref,observe,scan_lower_pitches_with_prepared_time
+v1	src/structural_write_authority/rustig_clef_planning.rs	d5d32d41d6bc9477		get,insert,precedes
+v1	src/structural_write_authority/rustig_clef_planning.rs	d6167dd69e94088f		total
+v1	src/structural_write_authority/rustig_clef_planning.rs	d85ebef8f4f7d220		as_millis,elapsed,fixture,map,note,now,observe_joint_boundaries,parent_reference,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	da708748987a878a		collect,into_iter
+v1	src/structural_write_authority/rustig_clef_planning.rs	dd7161456be1c026		find,len,map,push_str,with_capacity
+v1	src/structural_write_authority/rustig_clef_planning.rs	ddab316b0fb1195a	exported-writer,writer-call,writer-reachable	apply_rustig_clef_course_to_buffer,let,to_owned
+v1	src/structural_write_authority/rustig_clef_planning.rs	ddb4aa81748be160	writer-call	collect,filter_map,into_iter,is_some,new,sort_by_key,to_string,to_vec
+v1	src/structural_write_authority/rustig_clef_planning.rs	de74fe5dba836075		
+v1	src/structural_write_authority/rustig_clef_planning.rs	df87be8915d0ef19	writer-call	any,as_bytes,as_ref,beam,beam_anchor_planner_input_trace,borrow_mut,clear,clef_count,clef_readability_primary_clef_block,emit,enumerate,extend,fingerprint,into_iter,is_empty,is_none,iter,joint_clef_plan,joint_reading_course_active,len,lock,map,new,normalize_clef_readability_insertions,normalize_removal_ranges,observe,push,raw_note_fragments,remove,retain,scan_lower_clef_surfaces,scan_lower_pitches,score_part_ranges,solve_readability_course,stderr,sum,take,with,write_all,zip
+v1	src/structural_write_authority/rustig_clef_planning.rs	e0c9b9a505de158e		recorded,rustig_clef_course,rustig_clef_course_journal,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	e3f1c7b3e57f1bd2		find,is_element_start,map,saturating_add
+v1	src/structural_write_authority/rustig_clef_planning.rs	e49589a151ad87c6	writer-call,writer-reachable	any,apply_rustig_clef_course_to_buffer,beam,beamed_note,clef,clone,contains,derive_clef_readability_primary_course_plan,find,iter,map,note,rfind,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	e587ee38d3ed080a	writer-call	any,beam,dedup,enumerate,get,is_char_boundary,is_some_and,iter,len,new,observe,permits_beam_insertion,remove,sort_unstable_by_key,starts_with,tie_open
+v1	src/structural_write_authority/rustig_clef_planning.rs	e5bd71c278cd3379	writer-call,writer-reachable	apply_rustig_clef_course_to_buffer,binds_recorded_representation,clef,clone,expect,has_recorded_representation_for_test,let,map,note,unwrap,unwrap_err
+v1	src/structural_write_authority/rustig_clef_planning.rs	e61299e200a3ac6b		find,map,measure_ranges,tag_attribute_value
+v1	src/structural_write_authority/rustig_clef_planning.rs	e6b9e63d771f52e2		is_empty
+v1	src/structural_write_authority/rustig_clef_planning.rs	e82656a5c96351cc		
+v1	src/structural_write_authority/rustig_clef_planning.rs	ea4f2b392c548334		as_ref,observe,scan_lower_clef_surfaces_with_time
+v1	src/structural_write_authority/rustig_clef_planning.rs	eaf2f2572b5252c1		iter,ledger_pressure,map,sum
+v1	src/structural_write_authority/rustig_clef_planning.rs	ee4c360b7d70cfa4		cmp,is_char_boundary,iter,last,len,push,sort_unstable_by,then_with,with_capacity
+v1	src/structural_write_authority/rustig_clef_planning.rs	f3be58da6943d9b4	writer-call	any,append_beam_anchor_rows,beam,clef_kind_label,count,enumerate,filter,into_iter,is_empty,iter,len,map,matches,measure_number_at_position,new,projected_course,projected_readability_course,push,retain,scan_lower_clef_surfaces,scan_lower_pitches_with_beam_audit,score_part_ranges,score_readability_course,solve_readability_course,to_string,unwrap_or_else,zip
+v1	src/structural_write_authority/rustig_clef_planning.rs	f4befc72cc5da2ca	writer-call	any,attribute,beam,chain,children,clef_readability_primary_clef_block,clone,concat,count,descendants,filter,filter_map,find,first,has_tag_name,insert,is_none,iter,ledger_lines,len,lower_clef_surface_inside_open_tie,lower_clef_surface_inside_primary_beam_group,map,mapping_change_count,max,new,normalize_clef_readability_insertions,normalize_removal_ranges,observe,parse,push,range,raw_note_fragments,retain,rev,root_element,scan_lower_clef_surfaces,scan_lower_pitches,score_readability_course,solve_readability_course,sort_by_key,text,then_some,to_owned,total,unwrap_or,zip
+v1	src/structural_write_authority/rustig_clef_planning.rs	f4cc785ae018bb6b	writer-call	append_beam_anchor_rows,beam,contains,event,find,len,new,observed,unwrap
+v1	src/structural_write_authority/rustig_clef_planning.rs	f61630e002a3f6d8	writer-call	new,recorded,rustig_clef_course,unwrap_err
+v1	src/structural_write_authority/rustig_clef_planning.rs	fa89f113243859bb	writer-call	is_empty,last_mut,let,min,new,push,zip
+v1	src/structural_write_authority/rustig_clef_planning.rs	fd38059ceaf601ff		any,beam,beamed_note,clef,derive_clef_readability_primary_course_plan,find,iter,map,note,rfind,unwrap

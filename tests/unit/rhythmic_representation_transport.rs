@@ -206,3 +206,35 @@ fn actual_layout_noop_keeps_encoded_original_ranges_without_issuing_a_receipt() 
         assert!(next.same_identities_as(&state));
     }
 }
+
+#[test]
+fn indexed_offsets_match_the_original_scan_for_all_ranges() {
+    let edits = vec![
+        (0..0, "X".to_owned()), (0..0, "YZ".to_owned()), (1..3, "u".to_owned()),
+        (3..3, "vv".to_owned()), (3..4, "".to_owned()), (5..5, "w".to_owned()),
+    ];
+    let proof = transport("abcde", "XYZauvvew", edits.clone());
+    let ranges = (0..=5).rev().flat_map(|start| (start..=5).map(move |end| start..end))
+        .collect::<Vec<_>>();
+    let scan = |range: Range<usize>| {
+        let (mut removed, mut inserted) = (0, 0);
+        for (edit, replacement) in &edits {
+            if edit.end <= range.start {
+                removed += edit.end - edit.start;
+                inserted += replacement.len();
+            } else if edit.start >= range.end {
+                break;
+            } else {
+                return (*edit == range).then(|| {
+                    let start = range.start - removed + inserted;
+                    start..start + replacement.len()
+                });
+            }
+        }
+        Some(range.start - removed + inserted..range.end - removed + inserted)
+    };
+    let expected = ranges.iter().cloned().map(scan).collect::<Vec<_>>();
+    let observed = proof.carry_observed_ranges("abcde", "XYZauvvew", ranges.clone()).unwrap();
+    assert_eq!(observed, expected);
+    assert_eq!(proof.steps[0].carry_original_range(3..4).unwrap(), 7..7);
+}

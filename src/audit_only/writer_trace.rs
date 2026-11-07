@@ -573,7 +573,7 @@ fn normalize_measure_selector(token: &str) -> Option<String> {
     Some(number.to_string())
 }
 
-fn measure_selected(selected: &Option<BTreeSet<String>>, number: &str) -> bool {
+pub(super) fn measure_selected(selected: &Option<BTreeSet<String>>, number: &str) -> bool {
     match selected {
         None => true,
         Some(values) => normalize_measure_selector(number)
@@ -1179,7 +1179,11 @@ pub fn render_epoch_continuity_report_body() -> String {
     crate::audit_only::destructive_edit_attribution::append_identity_coverage_and_thread_loss_report(&mut out);
     crate::master_state_identity::append_master_lineage_report(&mut out);
     crate::master_state_identity::append_render_lineage_report(&mut out);
-    super::rest_boundary_readback::append_report(&mut out);
+    WRITER_TRACE_STATE.with(|slot| {
+        let trace = slot.borrow();
+        let trace_measures = trace.as_ref().map(|state| &state.selected_measures);
+        super::rest_boundary_readback::append_report(&mut out, trace_measures);
+    });
     out
 }
 

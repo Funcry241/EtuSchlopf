@@ -464,7 +464,6 @@ pub use orchestrator_artifact_sink_authority::{
     write_master_musicxml_output_authorized,
     write_result_report_output_authorized,
     write_retention_return_checkpoint_authorized,
-    write_sister_feedback_beam_checkpoint_authorized,
     write_visible_rest_role_checkpoint_authorized,
 
 };

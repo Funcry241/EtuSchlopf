@@ -516,3 +516,23 @@ fn productive_consumer_seal_rejects_foreign_binding_and_admits_repaired_partitio
     assert!(channels.require_consumer_admission(&case.canonical, &foreign).is_err());
     assert!(channels.require_consumer_admission(&case.canonical, &FrozenSerializedVoicePlan::default()).is_err());
 }
+
+#[test]
+fn shared_partition_check_checks_edges_before_capacity() {
+    let model = ChannelConsumerModel { notes: Vec::new() };
+    let role = SerializedVoicePresentationRole::UpperPrimary;
+    let class_role = [(1, role), (2, role)].into_iter().collect();
+    let role_by_channel = [(1, role)].into_iter().collect();
+    let channels = [(1, 1), (2, 1)].into_iter().collect();
+    let empty = TimeConflictEdges::new();
+    let written = TimeConflictEdges::fixture(&[(1, 2)].into_iter().collect());
+    let mut input = ChannelSearchInput {
+        model: &model, class_order: &[1, 2], class_role: &class_role,
+        sounding_different: &empty, written_different: &written,
+    };
+    assert!(matches!(input.check_partition(&channels, &role_by_channel, None),
+        Err(ChannelPartitionRefusal::Conflict)));
+    let no_written_conflicts = TimeConflictEdges::new();
+    input.written_different = &no_written_conflicts;
+    assert!(input.check_partition(&channels, &role_by_channel, None).is_ok());
+}

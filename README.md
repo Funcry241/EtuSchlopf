@@ -90,7 +90,7 @@ du am eigenen Ergebnis.
 
 ## Quellstand und Beiträge
 
-Der Entwicklungsquellstand ist **r1602**. Der native Lauf war dunkelgrün. Alle 20 MusicXML-Dateien stimmen bytegenau mit r1601 überein. [Native Abnahme r1602](docs/evidence/r1602/README.md) Die Windows-Testversion enthält r1602. Das Notenbeispiel stammt aus dem nativen r1602-Lauf.
+Der Entwicklungsquellstand ist **r1657 / 0.10.1839**. Der native Korpuslauf umfasst alle zehn Etüden und wurde angenommen. [Native Abnahme r1657](docs/evidence/r1657/README.md). Die neueren Optimierungen r1658/r1659 stehen bis zur nativen Abnahme auf dem [Kandidatenzweig](https://github.com/Funcry241/EtuSchlopf/tree/codex/r1658-r1659-rhythm-performance). Die Windows-Testversion und das Notenbeispiel verwenden r1602.
 
 Die Download-Engine wurde aus dem angenommenen nativen Stand **r1602** gebaut.
 Der [zum geprüften Build gehörende r1602-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1602-windows-preview/EtuSchlopf-r1602-source.zip)
@@ -113,4 +113,5 @@ Meldung und – bei einem Notationsfehler – die betroffene Stelle.
 
 EtuSchlopf steht unter der [MIT-Lizenz](LICENSE).
 [Fremdkomponenten und Lizenzen](docs/THIRD_PARTY_NOTICES.md).
+
 

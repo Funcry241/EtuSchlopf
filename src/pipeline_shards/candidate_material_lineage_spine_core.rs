@@ -3008,6 +3008,15 @@ fn freeze_final_sounding_material(
             label: attack.voice.clone(),
         })
         .collect::<Vec<_>>();
+    let original_course_input = candidate.master_state.original_respelling_input(pre_final_chord_xml);
+    let mut received_notation_evidence = String::new();
+    if let Err(error) = original_course_input.append_received_notation_obligations(
+        pre_final_chord_xml, &mut received_notation_evidence,
+    ) {
+        received_notation_evidence.push_str(&format!(
+            "ReceivedNotationObligations: Unknown; {error}; canonical_role_authority=none\n"));
+    }
+    pre_serialization_constraint_audit.append_counterfactual_body(&received_notation_evidence);
     let frozen_channels =
         crate::structural_write_authority::build_frozen_serialization_voice_channels_with_original_beams(
             final_chord_structural_plan,
@@ -3015,6 +3024,30 @@ fn freeze_final_sounding_material(
             Some(&lane_plan.actual_source_beam_binding),
             &legacy_label_preferences,
         )?;
+    let frozen_serialized_voice_plan =
+        crate::structural_write_authority::bind_musicxml_voice_labels(
+            &frozen_channels,
+            &legacy_label_preferences,
+        )?;
+    frozen_channels.require_consumer_admission(
+        final_chord_structural_plan, &frozen_serialized_voice_plan,
+    )?;
+    if !final_chord_structural_plan.is_bound() || !frozen_serialized_voice_plan.is_bound() {
+        return Err(anyhow!(
+            "FrozenSerializedVoiceChordConstraintCutover: frozen structure/voice seal did not bind"
+        ));
+    }
+    let mut written_only_probe = String::new();
+    let replacement = frozen_channels.checked_written_only_replacement(
+        &mut written_only_probe,
+        final_chord_structural_plan,
+        &frozen_voice_attacks,
+        &lane_plan.actual_source_beam_binding,
+        &legacy_label_preferences,
+        &frozen_serialized_voice_plan,
+    );
+    let (frozen_channels, frozen_serialized_voice_plan) =
+        replacement.unwrap_or((frozen_channels, frozen_serialized_voice_plan));
     // Report the channel plan selected by the existing canonical serialization authority.
     eprintln!(
         "FrozenChannelConsumerAllocation: {} channels={} evidence={:?}",
@@ -3045,19 +3078,7 @@ fn freeze_final_sounding_material(
             &pre_serialization_source_rows,
             &frozen_channels,
         );
-    let frozen_serialized_voice_plan =
-        crate::structural_write_authority::bind_musicxml_voice_labels(
-            &frozen_channels,
-            &legacy_label_preferences,
-        )?;
-    frozen_channels.require_consumer_admission(
-        final_chord_structural_plan, &frozen_serialized_voice_plan,
-    )?;
-    if !final_chord_structural_plan.is_bound() || !frozen_serialized_voice_plan.is_bound() {
-        return Err(anyhow!(
-            "FrozenSerializedVoiceChordConstraintCutover: frozen structure/voice seal did not bind"
-        ));
-    }
+    pre_serialization_constraint_audit.append_counterfactual_body(&written_only_probe);
     lane_plan.notation_voice_pre_serialization_constraint_audit =
         pre_serialization_constraint_audit;
     lane_plan.final_chord_structural_plan = final_chord_structural_plan.clone();
@@ -3070,7 +3091,7 @@ fn freeze_final_sounding_material(
         pre_final_chord_xml, candidate.master_state.actual_beam_capture(), &original_notation_voices,
     );
     lane_plan.final_chord_structural_plan.bind_original_respelling_input(
-        candidate.master_state.original_respelling_input(pre_final_chord_xml),
+        original_course_input,
     );
     lane_plan.frozen_serialized_voice_plan = frozen_serialized_voice_plan;
     candidate.material_lineage.frozen_sounding_temporal_lane_plan = lane_plan;

@@ -154,7 +154,7 @@ enum RenderCheckpointStage {
     FinalPianoRestGlyph,
 
     
-    SisterFeedbackBeam,
+    MetricRestContinuation,
     ExternalFeedbackClosure,
     KeySignatureSpelling,
     DirectionRelocation,
@@ -172,7 +172,7 @@ impl RenderCheckpointStage {
             Self::FinalPianoRestGlyph => "final_piano_rest_glyph",
 
             
-            Self::SisterFeedbackBeam => "sister_feedback_beam",
+            Self::MetricRestContinuation => "metric_rest_continuation",
             Self::ExternalFeedbackClosure => "external_feedback_closure",
             Self::KeySignatureSpelling => "key_signature_spelling",
             Self::DirectionRelocation => "direction_relocation",
@@ -540,7 +540,15 @@ render_checkpoint_entry!(write_visible_rest_role_checkpoint_authorized, VisibleR
 render_checkpoint_entry!(write_final_piano_rest_glyph_checkpoint_authorized, FinalPianoRestGlyph);
 
 
-render_checkpoint_entry!(write_sister_feedback_beam_checkpoint_authorized, SisterFeedbackBeam);
+pub(super) fn write_metric_rest_continuation_checkpoint(
+    _boundary: &super::RenderAdoptionCommitBoundary,
+    path: &Path,
+    verified: &str,
+) -> (io::Result<()>, Option<ExactTransformationReceipt>) {
+    let result = OrchestratedRenderCheckpointCapability::issue(path, verified, RenderCheckpointStage::MetricRestContinuation)
+        .and_then(|capability| capability.write());
+    (result, None)
+}
 render_checkpoint_entry!(write_external_feedback_closure_checkpoint_authorized, ExternalFeedbackClosure);
 render_checkpoint_entry!(write_key_signature_spelling_checkpoint_authorized, KeySignatureSpelling);
 render_checkpoint_entry!(write_direction_relocation_checkpoint_authorized, DirectionRelocation);

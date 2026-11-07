@@ -40,3 +40,4 @@ darfst; private Pfade und persönliche Daten bitte vorher entfernen.
 Tritt es immer oder nur manchmal auf? Falls du es nicht weißt, lass die Frage offen.
 
 Das Projekt wird privat gepflegt; eine Bearbeitungsfrist ist nicht zugesagt.
+
