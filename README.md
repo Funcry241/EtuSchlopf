@@ -11,11 +11,11 @@ Leg beide Dateien in denselben Ordner und zieh die MIDI-Datei auf EtuSchlopf. **
 
 Der Name darf dich zum Schmunzeln bringen. Die Mathematik dahinter nehmen wir ernst. Probier EtuSchlopf mit deinem eigenen Stück aus oder schau dir an, wie es arbeitet. [Die Mathematik hinter EtuSchlopf](docs/MATHEMATIK.md)
 
-**[Windows-EXE herunterladen · Testversion r1602](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1602-windows-preview/EtuSchlopf-Windows-x64.exe)**
+**[Windows-EXE herunterladen · Testversion r1684](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1684-windows-preview/EtuSchlopf-Windows-x64.exe)**
 
 Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI und WAV als Eingabe
 
-[Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1602-windows-preview) ·
+[Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1684-windows-preview) ·
 [Erstes Stück](#dein-erstes-stück) · [Grenzen der Testversion](#aktueller-stand) ·
 [Technische Dokumentation](docs/DEVELOPMENT.md) · [Mathematik dahinter](docs/MATHEMATIK.md)
 
@@ -33,7 +33,7 @@ kann erforderlich sein.
 
 ## Dein erstes Stück
 
-**[Kleines Startbeispiel herunterladen](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1602-windows-preview/EtuSchlopf-Beispiel-r1602.zip)** – synthetisches MIDI/WAV-Paar mit der PDF, die die veröffentlichte r1602-EXE daraus erzeugt hat.
+**[Kleines Startbeispiel herunterladen](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1684-windows-preview/EtuSchlopf-Beispiel-r1684.zip)** – synthetisches MIDI/WAV-Paar mit der PDF, die die veröffentlichte r1684-EXE daraus erzeugt hat.
 
 1. Lade die Windows-EXE herunter. Für die PDF-Ausgabe brauchst du außerdem **[MuseScore](https://musescore.org/de/download)**.
 2. Lege MIDI und WAV in denselben Ordner. Die Namen vor der Dateiendung müssen übereinstimmen: `Mein Stück.mid` und `Mein Stück.wav`.
@@ -77,23 +77,24 @@ Laufbericht zusammentragen. Unbekannte technische Angaben kannst du offenlassen.
 
 ## Aktueller Stand
 
-Die Windows-Testversion enthält **Engine r1602 / 0.10.1839** und den verbesserten
+Die Windows-Testversion enthält **Engine r1684 / 0.10.1839** und den verbesserten
 Starter. Unterstützt sind 2/4, 3/4 und 4/4 sowie Taktwechsel an Taktgrenzen.
 Andere Taktarten, Triolen und Wechsel mitten im Takt bleiben nicht unterstützt.
 
-Der Windows-Build, Pakettests, der isolierte Start ohne PDF sowie Strict-Clippy
-und native Tests sind bestanden. Der private native Korpus umfasst zehn vollständige
-Etüden mit MuseScore. Die [Versionshinweise mit Prüfbelegen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1602-windows-preview)
+Windows-Build, Pakettests, isolierter Start ohne Entwickler-PATH und ein frisch
+gerendertes PDF-Startbeispiel sind bestanden. Strict-Clippy und native Tests
+sind im angenommenen Entwicklungslauf bestanden. Der private native Korpus umfasst zehn vollständige
+Etüden mit MuseScore. Die [Versionshinweise mit Prüfbelegen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1684-windows-preview)
 beschreiben den Umfang. Das ersetzt keine unabhängige Bewertung fremder Stücke
 und keinen interaktiven Anwender-Probelauf. Lesbarkeit und Spielbarkeit prüfst
 du am eigenen Ergebnis.
 
 ## Quellstand und Beiträge
 
-Der Entwicklungsquellstand ist **r1684 / 0.10.1839**. Der vollständige native Korpuslauf mit zehn Etüden wurde angenommen: Build und Strict-Clippy bestanden, 2992 Tests bestanden, vier ignoriert. [Native Abnahme r1684](docs/evidence/r1684/README.md). Dieser Stand enthält die Weiterentwicklung seit r1659 einschließlich der C3-Behandlung ursprünglicher Pausenanker und der Verbesserungen an der Watch-Webansicht. Die [Mathematik-Seite](docs/MATHEMATIK.md) beschreibt 34 Verfahrensfamilien und trennt produktive Entscheidungen, Audits, historische Modelle und offene Grenzen. r1684 selbst aktualisiert die Dokumentation auf dem Laufzeitstand r1683. Die Windows-Testversion und das Notenbeispiel verwenden weiterhin r1602.
+Der Entwicklungsquellstand ist **r1684 / 0.10.1839**. Der vollständige native Korpuslauf mit zehn Etüden wurde angenommen: Build und Strict-Clippy bestanden, 2992 Tests bestanden, vier ignoriert. [Native Abnahme r1684](docs/evidence/r1684/README.md). Dieser Stand enthält die Weiterentwicklung seit r1659 einschließlich der C3-Behandlung ursprünglicher Pausenanker und der Verbesserungen an der Watch-Webansicht. Die [Mathematik-Seite](docs/MATHEMATIK.md) beschreibt 34 Verfahrensfamilien und trennt produktive Entscheidungen, Audits, historische Modelle und offene Grenzen. r1684 selbst aktualisiert die Dokumentation auf dem Laufzeitstand r1683. Die Windows-Testversion und das herunterladbare Startbeispiel verwenden ebenfalls r1684. Der oben abgebildete Korpusausschnitt bleibt als historisches Notenbeispiel aus r1602 gekennzeichnet.
 
-Die Download-Engine wurde aus dem angenommenen nativen Stand **r1602** gebaut.
-Der [zum geprüften Build gehörende r1602-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1602-windows-preview/EtuSchlopf-r1602-source.zip)
+Die Download-Engine wurde aus dem angenommenen nativen Stand **r1684** gebaut.
+Der [zum geprüften Build gehörende r1684-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1684-windows-preview/EtuSchlopf-r1684-source.zip)
 und das Dateiprüfsummen-Manifest stehen beim Release bereit. Für den exakten
 Engine-Build ist dieser Snapshot maßgeblich; der zugehörige Prüfzweig enthält
 den Starter und die Skripte zur vollständigen Rekonstruktion und Verifikation.
