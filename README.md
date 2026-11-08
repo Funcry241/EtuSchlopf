@@ -23,9 +23,9 @@ Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI u
 
 ## Ein Blick auf die Noten
 
-[![Erstes Klaviersystem der Etüde Nr. 1 aus r1602](docs/images/etude-1-r1602-ausschnitt.png)](docs/examples/etude-1-r1602.pdf)
+[![Erstes Klaviersystem der Etüde Nr. 1 aus r1684](docs/images/etude-1-r1684-ausschnitt.png)](docs/examples/etude-1-r1684.pdf)
 
-*Etüde Nr. 1 aus dem nativen r1602-Lauf. Bild anklicken für die vollständige PDF.*
+*Etüde Nr. 1 aus dem nativen r1684-Lauf. Bild anklicken für die vollständige PDF.*
 
 Das Projekt ist experimentell und privat gepflegt. Prüfe am eigenen Stück,
 ob dir die Fassung bei der weiteren Arbeit hilft. Musikalische Nachbearbeitung
@@ -91,7 +91,7 @@ du am eigenen Ergebnis.
 
 ## Quellstand und Beiträge
 
-Der Entwicklungsquellstand ist **r1684 / 0.10.1839**. Der vollständige native Korpuslauf mit zehn Etüden wurde angenommen: Build und Strict-Clippy bestanden, 2992 Tests bestanden, vier ignoriert. [Native Abnahme r1684](docs/evidence/r1684/README.md). Dieser Stand enthält die Weiterentwicklung seit r1659 einschließlich der C3-Behandlung ursprünglicher Pausenanker und der Verbesserungen an der Watch-Webansicht. Die [Mathematik-Seite](docs/MATHEMATIK.md) beschreibt 34 Verfahrensfamilien und trennt produktive Entscheidungen, Audits, historische Modelle und offene Grenzen. r1684 selbst aktualisiert die Dokumentation auf dem Laufzeitstand r1683. Die Windows-Testversion und das herunterladbare Startbeispiel verwenden ebenfalls r1684. Der oben abgebildete Korpusausschnitt bleibt als historisches Notenbeispiel aus r1602 gekennzeichnet.
+Der Entwicklungsquellstand ist **r1684 / 0.10.1839**. Der vollständige native Korpuslauf mit zehn Etüden wurde angenommen: Build und Strict-Clippy bestanden, 2992 Tests bestanden, vier ignoriert. [Native Abnahme r1684](docs/evidence/r1684/README.md). Dieser Stand enthält die Weiterentwicklung seit r1659 einschließlich der C3-Behandlung ursprünglicher Pausenanker und der Verbesserungen an der Watch-Webansicht. Die [Mathematik-Seite](docs/MATHEMATIK.md) beschreibt 34 Verfahrensfamilien und trennt produktive Entscheidungen, Audits, historische Modelle und offene Grenzen. r1684 selbst aktualisiert die Dokumentation auf dem Laufzeitstand r1683. Die Windows-Testversion und das herunterladbare Startbeispiel verwenden ebenfalls r1684. Der oben abgebildete Korpusausschnitt stammt ebenfalls aus dem angenommenen nativen r1684-Lauf.
 
 Die Download-Engine wurde aus dem angenommenen nativen Stand **r1684** gebaut.
 Der [zum geprüften Build gehörende r1684-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1684-windows-preview/EtuSchlopf-r1684-source.zip)
