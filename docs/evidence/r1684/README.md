@@ -27,7 +27,7 @@ Das Take-ZIP und der anschließend exportierte Quell-Snapshot sind unterschiedli
 
 [Exportmanifest](manifest.txt) und [Laufergebnis](run_outcome_audit.txt) dokumentieren den frischen Korpuslauf. Das Manifest beschreibt auch Dateien des privaten vollständigen Exports; deren Aufzählung bedeutet nicht, dass sie hier veröffentlicht sind.
 
-[Dateiprüfsummen des angenommenen Quell-Snapshots](accepted_source_sha256.tsv) erfassen alle 2070 Dateien, einschließlich `Cargo.lock`. Der GitHub-Baum übernimmt diesen Quellstand mit öffentlichen Dokumentationsanpassungen und erhält vorhandene GitHub-Dateien sowie historische Belege. Er ist kein byteidentisches Take-ZIP. Abweichende öffentliche Einstiegsdateien sind `README.md`, `docs/README.md`, `docs/CONTRIBUTING.md` und `docs/community/issue_templates/01_fehler.md`; `docs/DEVELOPMENT.md` und dieser Belegordner ergänzen den Snapshot.
+[Dateiprüfsummen des angenommenen Quell-Snapshots](accepted_source_sha256.tsv) erfassen alle 2070 Dateien, einschließlich `Cargo.lock`. Der GitHub-Baum übernimmt diesen Quellstand mit öffentlichen Dokumentationsanpassungen und erhält vorhandene GitHub-Dateien sowie historische Belege. Er ist kein byteidentisches Take-ZIP. Abweichende öffentliche Einstiegsdateien sind `README.md`, `docs/README.md`, `docs/CONTRIBUTING.md` und `docs/community/issue_templates/01_fehler.md` sowie `docs/MATHEMATIK.md` (wiederhergestellter Quellenabschnitt); `docs/DEVELOPMENT.md` und dieser Belegordner ergänzen den Snapshot.
 
 ## Inhalt und Grenzen
 

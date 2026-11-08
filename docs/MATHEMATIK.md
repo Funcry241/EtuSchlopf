@@ -64,7 +64,7 @@ Quelle: [pianistic_symbolic_capability_reachability.rs](../src/audit_only/pianis
 
 ## Verfahrensfamilien im aktuellen Quellstand
 
-Die Quellen nennen die jeweiligen Implementierungsstellen, nicht automatisch einen universellen mathematischen Satz über das gesamte Programm.
+Die Quellstellen nennen die jeweiligen Implementierungsstellen, nicht automatisch einen universellen mathematischen Satz über das gesamte Programm. Wissenschaftliche Grundlagen, Originalarbeiten und ihr jeweiliger Bezug stehen gesondert im Abschnitt [Quellen](#quellen).
 
 | # | Aufgabe und Mathematik | Rolle und wichtigste Grenze | Quellstelle |
 |---|---|---|---|
@@ -256,4 +256,32 @@ Standardverfahren bleiben Standardverfahren: dynamische Programmierung, lexikogr
 
 Unser Eigenanteil liegt in den musikalischen Modellen, dem Zusammenspiel der Bedingungen, den gebundenen Owner-Übergängen und den gewählten Prioritäten. Die drei Projektbegriffe benennen solche Zusammenstellungen. Weder deren wissenschaftliche Neuheit noch die Behauptung „so gibt es das sonst nirgends“ ist hier nachgewiesen.
 
-Historische Literaturanker der bisherigen Seite sind Bellman und Viterbi für dynamische Verfahren, Golumbic für Intervallgraphen, Gauss und Legendre für quadratische Ausgleichsverfahren, Hoare für Programm-Invarianten, Necula für beweistragenden Code sowie Knuth/Plass für die Verwandtschaft mit Umbruchproblemen. Diese Verwandtschaft ersetzt keinen konkreten EtuSchlopf-Beweis. Für den externen Basic-Pitch-Sensor bleibt Bittner et al., ICASSP 2022, der benannte Modellbezug; dessen Benchmark ist kein Messwert unseres Korpus. Die vorliegende Überarbeitung ist eine Quell- und Statusprüfung, keine erneute vollständige Literaturrecherche.
+Die Literaturbezüge stehen im folgenden eigenen Quellenabschnitt. Die Implementierungslinks weiter oben zeigen, wo EtuSchlopf die jeweiligen Verfahren tatsächlich verwendet. Beides gehört zur Dokumentation: Literatur erklärt das bekannte Verfahren; Code und Projektverträge belegen seine konkrete Umsetzung und seine Grenzen.
+
+## Quellen
+
+Die Quellen der früheren Fassung sind hier wieder einzeln aufgeführt. Hinzu kommt der Literaturbezug zur nun ausdrücklich beschriebenen Goertzel-Rekurrenz. Die Zuordnung unterscheidet mathematische Grundlagen, konzeptionelle Verwandtschaft, tatsächlich verwendete Fremdmodelle und empirischen Kontext. Keiner dieser Bezüge validiert pauschal die gesamte Pipeline.
+
+### Mathematische und algorithmische Grundlagen
+
+- **Quadratische Ausgleichsverfahren:** C. F. Gauss, *Theoria motus corporum coelestium* (1809); A.-M. Legendre, *Nouvelles méthodes pour la détermination des orbites des comètes* (1805; [Originalausgabe im BnF-Katalog](https://catalogue.bnf.fr/ark:/12148/cb30775990h)). Historischer Bezug zur Methode der kleinsten Quadrate. Die quadratischen Kosten und ihre Gewichte in EtuSchlopf sind eigene Modellentscheidungen; die Referenzen begründen weder eine Normalverteilung der Musikdaten noch diese konkreten Gewichte.
+- **Dynamische Programmierung:** Richard Bellman, *Dynamic Programming*, Princeton University Press (1957; [Verlagsseite](https://press.princeton.edu/books/paperback/9780691146683/dynamic-programming)). Grundlage für mehrstufige Optimierung. Die konkreten C3-Zustände, Gruppenpflichten und Kosten werden durch die Projektverträge definiert.
+- **Optimale Pfade in Zustandsfolgen:** Andrew J. Viterbi, „Error Bounds for Convolutional Codes and an Asymptotically Optimum Decoding Algorithm“, *IEEE Transactions on Information Theory* 13(2), 260–269 (1967), [DOI: 10.1109/TIT.1967.1054010](https://doi.org/10.1109/TIT.1967.1054010). Methodischer Bezug zu dynamischen Pfadverfahren; EtuSchlopf behauptet damit weder eine Implementierung des ursprünglichen Kanaldecoders noch dessen statistische Voraussetzungen.
+- **Intervallgraphen und perfekte Graphen:** Martin Charles Golumbic, *Algorithmic Graph Theory and Perfect Graphs*, Academic Press (1980; [Originalausgabe beim Verlag](https://www.sciencedirect.com/science/book/9780122892608)). Grundlage für die Beziehung zwischen maximaler Überlappung und Farbzahl im beschriebenen Intervallmodell. Zusätzliche musikalische Bindungen folgen nicht aus dem Graphsatz.
+- **Gezielte Frequenzauswertung:** Gerald Goertzel, „An Algorithm for the Evaluation of Finite Trigonometric Series“, *The American Mathematical Monthly* 65(1), 34–35 (1958), [DOI: 10.2307/2310304](https://doi.org/10.2307/2310304). Literaturbezug zur oben angegebenen Spektralrekurrenz. Frequenzraster, Fenster, Normalisierung und Interpretation bleiben die konkreten Entscheidungen der Audioprobe.
+
+### Programmnachweise und Integrität
+
+- **Programminvarianten:** C. A. R. Hoare, „An Axiomatic Basis for Computer Programming“, *Communications of the ACM* 12(10), 576–580, 583 (1969), [DOI: 10.1145/363235.363259](https://doi.org/10.1145/363235.363259). Grundlage für Aussagen über Vorbedingungen, Programme und Nachbedingungen. Ein Projekt-Gate ist dadurch noch kein vollständiger formaler Beweis des Programms.
+- **Beweistragender Code:** George C. Necula, „Proof-Carrying Code“, *POPL* (1997), [DOI: 10.1145/263699.263712](https://doi.org/10.1145/263699.263712). Konzeptionelle Verwandtschaft der SchlopfFormel mit expliziten, maschinell prüfbaren Übergangsbelegen. Die projektinternen Receipts und Authorities sind keine behauptete vollständige Implementierung dieses PCC-Systems.
+- **SHA-256:** National Institute of Standards and Technology, *Secure Hash Standard*, FIPS PUB 180-4 (2015), [NIST-Publikation](https://csrc.nist.gov/pubs/fips/180-4/upd1/final), [DOI: 10.6028/NIST.FIPS.180-4](https://doi.org/10.6028/NIST.FIPS.180-4). Referenz für den Hashalgorithmus; Bytebindung ersetzt keine Herkunfts- oder musikalische Identitätsaussage.
+- **FNV-Hash:** Glenn Fowler, Landon Curt Noll und Phong Vo, [FNV-1/FNV-1a: Beschreibung und Referenzcode der Autoren](https://www.isthe.com/chongo/tech/comp/fnv/index.html). Bezug für die nichtkryptografischen Fingerprints. FNV wird ausdrücklich nicht als kryptografischer Integritätsbeweis eingeordnet.
+
+### Umbruch, Audiomodell und Spielbarkeitskontext
+
+- **Umbruchprobleme:** Donald E. Knuth und Michael F. Plass, „Breaking Paragraphs into Lines“, *Software: Practice and Experience* 11(11), 1119–1184 (1981), [DOI: 10.1002/spe.4380111102](https://doi.org/10.1002/spe.4380111102). Konzeptionelle Verwandtschaft der Schlöpfchen-Formel und endlicher Umbruchvergleiche mit global bewerteten Partitionen. Absatzumbruch und musikalische Seitenoptimierung haben verschiedene Zulässigkeitsbedingungen; ein vollständiger Seitenoptimierer wird daraus nicht abgeleitet.
+- **Tatsächlich verwendetes Fremdmodell Basic Pitch:** Rachel M. Bittner, Juan José Bosch, David Rubinstein, Gabriel Meseguer-Brocal und Sebastian Ewert, „A Lightweight Instrument-Agnostic Model for Polyphonic Note Transcription and Multipitch Estimation“, *ICASSP* (2022), [Autorenversion: arXiv:2203.09893](https://arxiv.org/abs/2203.09893). Bezug des externen neuronalen WAV-Sensors. Die Benchmark-Werte des Papers sind keine EtuSchlopf-Messwerte und erzeugen keine musikalische Schreibbefugnis.
+- **Handspanne und alternative Klaviatur:** Craig Turner et al., „An alternative 6-inch octave keyboard reduces forearm muscle activation level and improves finger postures in expert pianists with smaller hand spans“, *Applied Ergonomics* 133, 104709 (2026; online 2025), [DOI: 10.1016/j.apergo.2025.104709](https://doi.org/10.1016/j.apergo.2025.104709). Empirischer Kontext für die Trennung von Musikanspruch, Instrumentengeometrie und individueller Fähigkeit; keine Kalibrierung unserer Spielformel.
+- **Handspanne, Klaviaturgröße und EMG:** Ju-Yang Chi et al., „Interaction between hand span and different sizes of keyboards on EMG activity in pianists: An observational study“, *Applied Ergonomics* 97, 103518 (2021), [DOI: 10.1016/j.apergo.2021.103518](https://doi.org/10.1016/j.apergo.2021.103518). Weiterer empirischer Kontext; daraus folgt kein universeller Spannweiten- oder Löschgrenzwert für EtuSchlopf.
+
+Die konkrete Einbindung des Audiomodells und der beiden Handspannenstudien ist zusätzlich unter [Forschungsbezüge und ihre tatsächliche Rolle](RESEARCH_CONTEXT.md) dokumentiert. Die Projektbegriffe und selbst gesetzten Kosten werden durch diese Literatur nicht nachträglich zu extern bestätigten mathematischen oder musikalischen Gesetzen.

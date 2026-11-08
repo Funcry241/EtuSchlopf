@@ -52,7 +52,7 @@ jobs:
             $sourceCount++
           }
           if ($sourceCount -ne 2070) { throw 'Accepted source inventory is incomplete' }
-          if ($projection.Count -ne 4) { throw 'Unexpected public documentation projection' }
+          if ($projection.Count -ne 5) { throw 'Unexpected public documentation projection' }
       - name: Build accepted engine
         run: |
           rustup toolchain install 1.98.0 --profile minimal
