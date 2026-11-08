@@ -180,33 +180,23 @@
         }
         out.push_str(&xml[last..]);
     
-        // Derselbe idempotente Readback läuft nach der lokalen Clef-/Beam-
-        // Politur erneut, damit ein dort entfernter Quell-Rückkehrschlüssel
-        // nicht als sichtbare Hilfslinienregression im Endartefakt verbleibt.
-        let last_capture = RepresentationCapture::default();
-        let (post_cleanup_clef_readback_xml, post_cleanup_receipt) = ledger_bounded_lower_staff_clef_readback(
-            &out,
-            LowerStaffClefReadbackScope::BeamSafetyCaptured(last_capture.clone()),
-        );
-        let last_transport = last_capture.take()?;
-        let mut internal = crate::master_state_identity::RenderTransitionReceipts::new();
-        internal.push_preserving(post_cleanup_receipt, &post_cleanup_clef_readback_xml);
-        internal.discard_unadopted(crate::master_state_identity::RenderDiscardReason::ReadOnlyProbe);
-
+        // Clef decisions are complete before beam polishing. polish_measure
+        // changes only beam tags inside notes and copies all intervening bytes.
+        // Preserve that course directly; no post-polish clef repair is needed.
         let preserving_receipt =
             crate::master_state_identity::PreservingTransformationReceipt::mint_preserving_receipt(
                 NotationPolishPreservingMint { _sealed: () },
                 lineage_pre_xml,
-                &post_cleanup_clef_readback_xml,
+                &out,
             );
         let rhythmic_transport = RhythmicRepresentationTransport::polish(
             &NotationPolishPreservingMint { _sealed: () }, vec![
-                first_transport, RepresentationStep::recorded(xml, &out, representation_edits), last_transport]);
+                first_transport, RepresentationStep::recorded(xml, &out, representation_edits)]);
         let preserving_receipt = preserving_receipt.map(|receipt|
             receipt.with_recorded_representation(rhythmic_transport.clone()));
         Ok(PolishResult {
             rhythmic_transport,
-            xml: post_cleanup_clef_readback_xml,
+            xml: out,
             stats: total,
             preserving_receipt,
         })
@@ -614,6 +604,85 @@
         match sign {
             "G" => "\n      <attributes>\n        <clef number=\"2\"><!-- etuschlopf-ledger-bound-clef-readback etuschlopf-register-pressure-gould-write --><sign>G</sign><line>2</line></clef>\n      </attributes>",
             _ => "\n      <attributes>\n        <clef number=\"2\"><!-- etuschlopf-ledger-bound-clef-readback etuschlopf-register-pressure-gould-write --><sign>F</sign><line>4</line></clef>\n      </attributes>",
+        }
+    }
+
+    #[cfg(test)]
+    mod pre_polish_clef_course_tests {
+        use super::*;
+
+        fn discard(receipt: Option<PreservingTransformationReceipt>, xml: &str) {
+            let mut receipts = crate::master_state_identity::RenderTransitionReceipts::new();
+            receipts.push_preserving(receipt, xml);
+            receipts.discard_unadopted(crate::master_state_identity::RenderDiscardReason::ReadOnlyProbe);
+        }
+
+        #[test]
+        fn beam_polish_preserves_the_completed_clef_course() {
+            let mut changed_beams = 0;
+            let mut changed_clefs = 0;
+            for (sign, line) in [("F", 4), ("G", 2)] {
+                for octave in 1..=6 {
+                    for step in ["C", "F", "B"] {
+                        let pitch = format!("<pitch><step>{step}</step><octave>{octave}</octave></pitch>");
+                        let note = |staff: u8, opening: &str, tags: &str, payload: &str, duration: &str| {
+                            format!("<note{opening}>{tags}{payload}{duration}<voice>2</voice><type>16th</type><staff>{staff}</staff><beam number='1'>begin</beam></note>")
+                        };
+                        let head = note(2, "", "", &pitch, "<duration>24</duration>");
+                        let groups = [
+                            head.clone(),
+                            format!("{head}{}", note(2, "", "<chord/>", &pitch, "<duration>24</duration>")),
+                            note(2, " print-object='no'", "", &pitch, "<duration>24</duration>"),
+                            note(2, "", "", "<rest/>", "<duration>24</duration>"),
+                            note(2, "", "<grace/>", &pitch, ""),
+                        ];
+                        for group in groups {
+                            for boundary in ["", "<attributes><clef number='2'><sign>G</sign><line>2</line></clef></attributes>", "<direction><direction-type><octave-shift type='down' size='8'/></direction-type><staff>2</staff></direction>"] {
+                                let body = format!("{}<backup><duration>24</duration></backup>{group}{boundary}{group}", note(1, "", "", &pitch, "<duration>24</duration>"));
+                                let opening = format!("<attributes><divisions>96</divisions><clef number='2'><sign>{sign}</sign><line>{line}</line></clef></attributes>");
+                                // Relocated independent copies, inherited state, cursor controls,
+                                // chord adjacency and octave-display state all use the same invariant.
+                                for ordinal in [11, 83] {
+                                    let xml = format!("<score-partwise><part id='synthetic'><measure number='{ordinal}'>{opening}{body}</measure><measure number='{}'>{body}</measure></part></score-partwise>", ordinal + 7);
+                                    let (early, receipt) = ledger_bounded_lower_staff_clef_readback(&xml, LowerStaffClefReadbackScope::BeamSafety);
+                                    discard(receipt, &early);
+                                    changed_clefs += usize::from(early != xml);
+                                    let mut before_beams = String::new();
+                                    let mut after_beams = String::new();
+                                    let mut polished = String::new();
+                                    let mut last = 0;
+                                    let mut divisions = 1;
+                                    for span in find_measure_spans(&early) {
+                                        polished.push_str(&early[last..span.start]);
+                                        let measure = &early[span.start..span.end];
+                                        let result = polish_measure(measure, divisions).unwrap();
+                                        divisions = result.divisions;
+                                        before_beams.push_str(&strip_beam_tags(measure).split_whitespace().collect::<String>());
+                                        after_beams.push_str(&strip_beam_tags(&result.text).split_whitespace().collect::<String>());
+                                        changed_beams += usize::from(result.text != measure);
+                                        polished.push_str(&result.text);
+                                        last = span.end;
+                                    }
+                                    polished.push_str(&early[last..]);
+                                    assert_eq!(before_beams, after_beams, "beam owner must preserve non-beam content modulo formatting whitespace");
+                                    let (legacy_post, receipt) = ledger_bounded_lower_staff_clef_readback(&polished, LowerStaffClefReadbackScope::BeamSafety);
+                                    discard(receipt, &legacy_post);
+                                    assert_eq!(legacy_post, polished, "post-polish clef repair must be inert");
+                                    let result = polish_musicxml(&xml).unwrap();
+                                    assert_eq!(result.xml, legacy_post, "single-pass and former two-pass results must be equal");
+                                    assert_eq!(result.rhythmic_transport.recorded_documents().unwrap(), (xml.as_str(), result.xml.as_str()));
+                                    result.preserving_receipt.as_ref().unwrap()
+                                        .validate_preserving_transition::<NotationPolishPreservingMint>(&xml, &result.xml).unwrap();
+                                    assert!(result.preserving_receipt.is_some());
+                                    discard(result.preserving_receipt, &result.xml);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            assert!(changed_beams > 0, "probe must exercise the beam writer");
+            assert!(changed_clefs > 0, "probe must exercise the early clef writer");
         }
     }
 

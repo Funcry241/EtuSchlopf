@@ -123,34 +123,31 @@ pub fn spawn_mqtt_web_ui(
 
 fn run_mqtt_bridge(mqtt_address: SocketAddr, shared: Arc<SharedWebState>) {
     loop {
-        match MqttSessionStateClient::connect(mqtt_address) {
-            Ok(mut client) => {
-                shared.set_mqtt(MqttBridgeState::Live);
-                loop {
-                    match client.read_next() {
-                        Ok(Some(publication)) => {
-                            let Ok(snapshot) = decode_session_snapshot_json_v2(&publication.payload)
-                            else {
-                                continue;
-                            };
-                            let topic_matches = mqtt_topic_for_session(
-                                &snapshot.observation_session_id,
-                            )
-                            .as_deref()
-                                == Some(publication.topic.as_str());
-                            if topic_matches {
-                                shared.put_session(
-                                    snapshot.observation_session_id,
-                                    publication.payload,
-                                );
-                            }
+        if let Ok(mut client) = MqttSessionStateClient::connect(mqtt_address) {
+            shared.set_mqtt(MqttBridgeState::Live);
+            loop {
+                match client.read_next() {
+                    Ok(Some(publication)) => {
+                        let Ok(snapshot) = decode_session_snapshot_json_v2(&publication.payload)
+                        else {
+                            continue;
+                        };
+                        let topic_matches = mqtt_topic_for_session(
+                            &snapshot.observation_session_id,
+                        )
+                        .as_deref()
+                            == Some(publication.topic.as_str());
+                        if topic_matches {
+                            shared.put_session(
+                                snapshot.observation_session_id,
+                                publication.payload,
+                            );
                         }
-                        Ok(None) => {}
-                        Err(_) => break,
                     }
+                    Ok(None) => {}
+                    Err(_) => break,
                 }
             }
-            Err(_) => {}
         }
         shared.set_mqtt(MqttBridgeState::Reconnecting);
         thread::sleep(MQTT_RECONNECT_DELAY);
@@ -206,12 +203,13 @@ fn serve_http_client(
         );
     };
 
-    if let Some(encoded_label) = path.strip_prefix("/pdf-data/") {
+    if let Some(encoded_request) = path.strip_prefix("/pdf-data/") {
         return serve_project_pdf_when_ready(
             &mut stream,
             project_root,
             watch_started_at,
-            encoded_label,
+            &shared,
+            encoded_request,
         );
     }
     match path {
@@ -282,26 +280,35 @@ fn write_sse_state(stream: &mut TcpStream, json: &str) -> io::Result<()> {
     stream.flush()
 }
 
-fn read_http_request(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
+fn read_http_request(stream: &mut impl Read) -> io::Result<Vec<u8>> {
     let mut request = Vec::with_capacity(1024);
     let mut buffer = [0_u8; 1024];
-    while request.len() < MAX_HTTP_REQUEST_BYTES {
-        let read = stream.read(&mut buffer)?;
+    loop {
+        let available = MAX_HTTP_REQUEST_BYTES - request.len();
+        if available == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Watch HTTP request exceeds local limit",
+            ));
+        }
+        let read_limit = buffer.len().min(available);
+        let read = match stream.read(&mut buffer[..read_limit]) {
+            Ok(read) => read,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        };
         if read == 0 {
-            break;
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "Watch HTTP request ended before complete headers",
+            ));
         }
         request.extend_from_slice(&buffer[..read]);
-        if request.windows(4).any(|window| window == b"\r\n\r\n") {
-            break;
+        if let Some(end) = request.windows(4).position(|window| window == b"\r\n\r\n") {
+            request.truncate(end + 4);
+            return Ok(request);
         }
     }
-    if request.len() >= MAX_HTTP_REQUEST_BYTES {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Watch HTTP request exceeds local limit",
-        ));
-    }
-    Ok(request)
 }
 
 fn request_path(request: &[u8]) -> Option<&str> {
@@ -327,10 +334,10 @@ fn serve_project_pdf_when_ready(
     stream: &mut TcpStream,
     project_root: &Path,
     watch_started_at: SystemTime,
-    encoded_label: &str,
+    shared: &SharedWebState,
+    encoded_request: &str,
 ) -> io::Result<()> {
-    let Some(project_label) = percent_decode_path_segment(encoded_label)
-        .filter(|label| valid_project_label(label))
+    let Some((session_id, project_label)) = decode_pdf_request(encoded_request)
     else {
         return write_http_response(
             stream,
@@ -341,6 +348,17 @@ fn serve_project_pdf_when_ready(
     };
     let deadline = Instant::now() + PDF_WAIT_TIMEOUT;
     loop {
+        let matches_session = shared.state.lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .current_session_id.as_deref() == Some(session_id.as_str());
+        if !matches_session {
+            return write_http_response(
+                stream,
+                "409 Conflict",
+                "text/plain; charset=utf-8",
+                b"PDF-Anfrage gehoert nicht zum aktuellen Watch-Lauf",
+            );
+        }
         if let Some((mut file, length)) = open_current_run_project_pdf(
             project_root,
             &project_label,
@@ -363,6 +381,16 @@ fn serve_project_pdf_when_ready(
         }
         thread::sleep(PDF_WAIT_POLL);
     }
+}
+
+fn decode_pdf_request(encoded_request: &str) -> Option<(String, String)> {
+    let (session, label) = encoded_request.split_once('/')?;
+    let session = percent_decode_path_segment(session)?;
+    let label = percent_decode_path_segment(label)?;
+    if session.is_empty() || !valid_project_label(&label) {
+        return None;
+    }
+    Some((session, label))
 }
 
 fn open_current_run_project_pdf(
@@ -518,7 +546,7 @@ const WATCH_HTML: &str = r#"<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>EtuSchlopf Watch</title>
+<title>WAITING · EtuSchlopf Watch</title>
 <style>
 :root{color-scheme:dark;--bg:#0b1014;--panel:#111820;--panel2:#151e27;--line:#26323d;--text:#e8eef3;--muted:#8f9da9;--soft:#b9c5cf;--live:#6ce5b1;--cyan:#7cd7ff;--warn:#f5ca72;--bad:#ff7f8a;--radius:18px}*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(circle at 80% -10%,#142432 0,transparent 35%),var(--bg);color:var(--text);font-family:Inter,"Segoe UI",system-ui,-apple-system,sans-serif}body{padding:32px}main{max-width:1120px;margin:0 auto}.top{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:28px}.brand{display:flex;align-items:center;gap:14px}.mark{width:42px;height:42px;border:1px solid var(--line);border-radius:13px;display:grid;place-items:center;background:linear-gradient(145deg,#16212b,#0e151b);font-weight:800;letter-spacing:-1px;color:var(--cyan)}h1{font-size:17px;letter-spacing:.16em;margin:0;font-weight:700}.sub{color:var(--muted);font-size:12px;margin-top:4px}.runstate{display:inline-flex;align-items:center;gap:9px;color:var(--soft);font-size:12px;letter-spacing:.08em;font-weight:700}.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);box-shadow:0 0 0 4px rgba(143,157,169,.08)}.runstate[data-state=running] .dot{background:var(--live);box-shadow:0 0 18px rgba(108,229,177,.55);animation:softPulse 1.8s ease-in-out infinite}.runstate[data-state=completed] .dot{background:var(--cyan)}.runstate[data-state=failed] .dot{background:var(--bad)}.runstate[data-state=cancelled] .dot{background:var(--warn)}.runstate[data-state=dark_green] .dot{background:var(--live);box-shadow:0 0 14px rgba(108,229,177,.35)}.runstate[data-state=light_green] .dot{background:#a8e6c4}.runstate[data-state=yellow] .dot{background:var(--warn)}.runstate[data-state=red] .dot{background:var(--bad)}.shell{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:rgba(17,24,32,.92);box-shadow:0 24px 70px rgba(0,0,0,.28)}.empty{padding:72px 34px;text-align:center;color:var(--muted)}.empty strong{display:block;color:var(--text);font-size:22px;margin-bottom:8px}.session{padding:30px}.session+.session{border-top:1px solid var(--line)}.hero{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-bottom:24px}.herometric{text-align:right;color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase}.herometric b{display:block;color:var(--text);font-size:20px;letter-spacing:0;margin-top:3px;font-weight:600;font-variant-numeric:tabular-nums}.eyebrow{font-size:10px;letter-spacing:.13em;color:#70808d;text-transform:uppercase;margin-bottom:8px}.title{font-size:30px;font-weight:680;letter-spacing:-.025em}.path{margin-top:8px;color:var(--soft);font-size:15px}.activity{color:var(--cyan)}.clock{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;white-space:nowrap}.progress{position:relative;height:7px;background:#0b1116;border-radius:99px;overflow:hidden;margin:0 0 22px}.progress>i{display:block;position:relative;height:100%;background:linear-gradient(90deg,var(--cyan),var(--live));border-radius:99px;transition:width .25s ease}.progress.running>i::after{content:"";position:absolute;inset:0;width:42%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.24),transparent);transform:translateX(-140%);animation:progressSweep 2.8s ease-in-out infinite}.corpusstats{display:flex;flex-wrap:wrap;gap:10px 18px;margin:0 0 20px;color:var(--muted);font-size:12px}.corpusstats b{color:var(--text);font-weight:650}.activecallouts{display:flex;flex-direction:column;gap:8px;margin:-8px 0 22px}.activecallout{display:flex;align-items:center;gap:9px;margin:0;color:var(--soft);font-size:13px}.activecallout .activepulse{width:7px;height:7px;border-radius:50%;background:var(--live);box-shadow:0 0 14px rgba(108,229,177,.45);animation:softPulse 1.8s ease-in-out infinite}.activecallout b{color:var(--text);font-weight:650}.projectlist{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#0f161d}.projectcolumns,.projectrow>summary{display:grid;grid-template-columns:22px minmax(180px,.9fr) minmax(250px,1.2fr) 118px;align-items:center;gap:12px}.projectcolumns{padding:9px 16px;border-bottom:1px solid var(--line);color:#657480;font-size:9px;letter-spacing:.1em;text-transform:uppercase}.projectcolumns span:last-child{text-align:right}.projectwaiting{padding:22px 16px;color:var(--muted);font-size:13px;text-align:center}.projectrow{border:0;border-bottom:1px solid var(--line);background:transparent}.projectrow:last-child{border-bottom:0}.projectrow>summary{list-style:none;padding:13px 16px;cursor:pointer;transition:background .18s ease}.projectrow>summary::-webkit-details-marker{display:none}.projectrow>summary:hover{background:rgba(124,215,255,.035)}.projectrow.failed>summary{background:rgba(255,127,138,.035)}.projectrow.running>summary{background:linear-gradient(90deg,rgba(108,229,177,.045),rgba(108,229,177,.012) 38%,transparent 70%)}.projectdot{font-size:13px;text-align:center;color:var(--muted)}.projectrow.running .projectdot{color:var(--live);animation:softPulse 1.8s ease-in-out infinite}.projectrow.completed .projectdot{color:var(--cyan)}.projectrow.failed .projectdot{color:var(--bad)}.projectrow.cancelled .projectdot{color:var(--warn)}.projectname{font-size:14px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.projectstate{display:block;justify-self:stretch;text-align:left;font-size:13px;color:var(--soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.projectage{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;white-space:nowrap;text-align:right}.projectdetails{display:flex;flex-wrap:wrap;gap:12px 22px;padding:0 16px 14px 50px;color:var(--muted);font-size:11px}.projectdetails b{color:var(--soft);font-weight:600;margin-left:5px}.systemstrip{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:15px;padding:0 2px;color:#64727e;font-size:11px}.systemitem{display:inline-flex;gap:8px;align-items:center}.systemitem strong{color:#84929e;font-weight:600}.systemitem .sysstate{color:#6f7e89}.terminalstate{font-weight:650}.terminalstate.completed{color:var(--cyan)}.terminalstate.failed{color:var(--bad)}.terminalstate.cancelled{color:var(--warn)}.phasebox{margin:4px 0 22px;padding:18px;border:1px solid var(--line);border-radius:14px;background:#0f161d}.phasehead{color:var(--muted);font-size:11px;margin-bottom:15px}.phaserail{display:grid;grid-template-columns:repeat(6,1fr);gap:7px}.phase{min-width:0}.phasebar{height:5px;border-radius:99px;background:#27323b;overflow:hidden;position:relative}.phase.done .phasebar{background:#45687a}.phase.active .phasebar{background:linear-gradient(90deg,var(--cyan),var(--live));box-shadow:0 0 13px rgba(108,229,177,.18)}.phase.active .phasebar::after{content:"";position:absolute;inset:0;width:50%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.25),transparent);animation:progressSweep 2.4s ease-in-out infinite}.phase.problem .phasebar{background:var(--bad)}.phaselabel{display:block;margin-top:7px;color:#61717d;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.phase.done .phaselabel{color:#9caab5}.phase.active .phaselabel{color:var(--text);font-weight:650}.currentline{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:22px;padding:0 2px}.currentmetrics{display:flex;justify-content:flex-end;gap:26px;flex-wrap:wrap}.currentlabel{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#657480;margin-bottom:5px}.currentstate{font-size:15px;color:var(--soft)}.currenttime{text-align:right;color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase}.currenttime b{display:block;color:var(--text);font-size:18px;letter-spacing:0;margin-top:3px;font-weight:600;font-variant-numeric:tabular-nums}.detailsbox{border-top:1px solid var(--line);padding-top:16px}.detailsbox>summary{list-style:none;cursor:pointer;color:#7d8d99;font-size:11px;letter-spacing:.05em}.detailsbox>summary::-webkit-details-marker{display:none}.detailsbox>summary::after{content:"  ›"}.detailsbox[open]>summary::after{content:"  ⌄"}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px;margin-top:14px}.card{border:1px solid var(--line);background:var(--panel2);border-radius:14px;padding:18px}.cardhead{display:flex;justify-content:space-between;gap:14px;align-items:center}.role{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.11em}.name{font-size:16px;font-weight:650;margin-top:4px}.state{font-size:13px;color:var(--soft);margin-top:14px;min-height:20px}.ages{display:flex;gap:20px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}.age{font-size:12px;color:var(--muted)}.age b{display:block;color:var(--text);font-size:13px;margin-top:3px;font-weight:600}.mini{font-size:12px;color:var(--muted);white-space:nowrap}.footer{display:flex;justify-content:flex-end;margin-top:14px;color:#53616d;font-size:10px;letter-spacing:.02em}.transport[data-state=live]{color:#61756f}.transport[data-state=reconnecting]{color:#806f52}.transport[data-state=closed]{color:#53616d}.pdf-link{color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:8px;min-width:0;border-radius:7px}.pdf-link:hover,.pdf-link:focus-visible{color:var(--cyan);outline:none}.pdf-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pdf-chip{flex:0 0 auto;border:1px solid #33424f;border-radius:999px;padding:2px 6px;color:#71818e;font-size:8px;letter-spacing:.08em;font-weight:700;vertical-align:middle;transition:color .15s ease,border-color .15s ease}.pdf-link:hover .pdf-chip,.pdf-link:focus-visible .pdf-chip{color:var(--cyan);border-color:#41687a}@keyframes softPulse{0%,100%{opacity:.58;transform:scale(.9)}50%{opacity:1;transform:scale(1.08)}}@keyframes progressSweep{0%,30%{transform:translateX(-140%)}72%,100%{transform:translateX(270%)}}@media(prefers-reduced-motion:reduce){.runstate[data-state=running] .dot,.projectrow.running .projectdot,.activecallout .activepulse,.progress.running>i::after,.phase.active .phasebar::after{animation:none}}@media(max-width:760px){body{padding:18px}.top,.hero,.currentline{flex-direction:column}.session{padding:22px}.title{font-size:25px}.footer{justify-content:flex-start}.projectcolumns{display:none}.projectrow>summary{grid-template-columns:18px minmax(0,1fr) auto}.projectstate{grid-column:2/4;padding-top:2px}.projectage{grid-column:3}.projectdetails{padding-left:46px}.systemstrip{flex-direction:column;gap:6px}.phaserail{grid-template-columns:repeat(3,1fr);row-gap:14px}.currenttime{text-align:left}}
 </style>
@@ -527,7 +555,7 @@ const WATCH_HTML: &str = r#"<!doctype html>
 <main>
 <div class="top"><div class="brand"><div class="mark">ES</div><div><h1>ETUSCHLOPF WATCH</h1><div class="sub">Live runtime observation</div></div></div><div id="runStatus" class="runstate" data-state="waiting"><span class="dot"></span><span id="runStatusLabel">WAITING</span></div></div>
 <div id="shell" class="shell"><div class="empty"><strong>Watch wird verbunden</strong>Warte auf den ersten Runtime-Snapshot …</div></div>
-<div class="footer"><span id="transport" class="transport" data-state="connecting" title="127.0.0.1:47622 · 127.0.0.1:47623">MQTT · lokal · read-only · CONNECTING</span></div>
+<div class="footer"><span id="transport" class="transport" data-state="connecting" title="127.0.0.1:47622 · 127.0.0.1:47623">Live-Verbindung · lokal · read-only · CONNECTING</span></div>
 </main>
 <script>
 const $=s=>document.querySelector(s);const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -537,40 +565,126 @@ const projectStages=['project_run_preparation','project_arrangement_solver','pro
 let lastModel={mqtt:'connecting',current_session_id:null,sessions:[]};let receivedAt=performance.now();let transportState='connecting';let lastStructureKey='';
 function formatMillis(ms){const s=Math.floor(Math.max(0,Number(ms||0))/1000);if(s<1)return'<1 s';if(s<60)return s+' s';const m=Math.floor(s/60),r=s%60;if(m<60)return m+':'+String(r).padStart(2,'0');return Math.floor(m/60)+'h '+String(m%60).padStart(2,'0');}
 function age(ms){return formatMillis(Number(ms||0)+Math.max(0,performance.now()-receivedAt));}
-function runDuration(o){const live=o?.source?.status==='running'?Math.max(0,performance.now()-receivedAt):0;return formatMillis(Number(o?.run_elapsed_millis||0)+live);}
+function runDuration(o){const live=o?.source?.status==='running'&&!launcherEnded(lastModel)?Math.max(0,performance.now()-receivedAt):0;return formatMillis(Number(o?.run_elapsed_millis||0)+live);}
 function path(src){const a=activity[src.activity];return esc(stage[src.stage]||src.stage)+(a?' <span class="activity">› '+esc(a)+'</span>':'');}
 function summary(s){const ss=s.sources.map(x=>x.source.status);if(ss.includes('failed'))return'failed';if(ss.includes('running'))return'running';if(ss.includes('cancelled'))return'cancelled';return'completed';}
 function currentSession(model){if(!model?.current_session_id)return null;return model.sessions.find(s=>s.observation_session_id===model.current_session_id)||null;}
 function visibleSessions(model){const current=currentSession(model);return current?[current]:[];}
 function sessionOutcome(s){const launcher=s?.sources.find(o=>o.source.source_role==='launcher');return launcher?.source?.outcome_color||null;}
-function overall(model){const current=currentSession(model);if(!current)return'waiting';const lifecycle=summary(current);return lifecycle==='running'?lifecycle:(sessionOutcome(current)||lifecycle);}
+function overall(model){const current=currentSession(model);if(!current||!current.sources.length)return'waiting';if(launcherEnded(model)){const owner=current.sources.find(o=>o.source.source_role==='launcher').source;return sessionOutcome(current)||owner.status;}return summary(current);}
 function structureKey(model){const current=currentSession(model);return JSON.stringify(current?[current.observation_session_id,current.sources.map(o=>o.source)]:null);}
 function terminalAgeLabel(status){return status==='failed'?'fehlgeschlagen vor':status==='cancelled'?'abgebrochen vor':'abgeschlossen vor';}
 function clock(sessionId,o,kind){const value=kind==='seen'?o.last_seen_age_millis:kind==='run'?o.run_elapsed_millis:o.last_state_change_age_millis;const text=kind==='run'?runDuration(o):age(value);return `<span class="clock" data-session="${esc(sessionId)}" data-source="${esc(o.source.source_id)}" data-age-kind="${kind}">${text}</span>`;}
 function sourceLookup(){const map=new Map();const current=currentSession(lastModel);if(current)current.sources.forEach(o=>map.set(current.observation_session_id+'\u0000'+o.source.source_id,o));return map;}
 function tick(){const lookup=sourceLookup();document.querySelectorAll('.clock[data-session][data-source]').forEach(el=>{const o=lookup.get(el.dataset.session+'\u0000'+el.dataset.source);if(!o)return;const kind=el.dataset.ageKind;const value=kind==='seen'?o.last_seen_age_millis:o.last_state_change_age_millis;el.textContent=kind==='run'?runDuration(o):age(value);});setRunStatus(overall(lastModel));setTransport(transportState);}
-const pdfCache=new Map(),pdfPending=new Set();
-function pdfRoute(label){return '/pdf-data/'+encodeURIComponent(label);}
-function pdfLink(label,extraClass=''){const ready=pdfCache.get(label);return `<a class="pdf-link ${extraClass}" data-pdf="${encodeURIComponent(label)}" href="${ready||'#'}" target="_blank" rel="noopener" title="${ready?'PDF öffnen':'PDF wird vorbereitet'}"><span class="pdf-label">${esc(label)}</span><span class="pdf-chip">${ready?'PDF ↗':'PDF …'}</span></a>`;}
-function refreshPdfLinks(label){const ready=pdfCache.get(label);if(!ready)return;document.querySelectorAll('.pdf-link').forEach(link=>{if(decodeURIComponent(link.dataset.pdf||'')!==label)return;link.href=ready;link.title='PDF öffnen';const chip=link.querySelector('.pdf-chip');if(chip)chip.textContent='PDF ↗';});}
-function preparePdf(label){if(!label||pdfCache.has(label)||pdfPending.has(label))return;pdfPending.add(label);fetch(pdfRoute(label),{cache:'no-store'}).then(r=>{if(!r.ok||!String(r.headers.get('content-type')||'').startsWith('application/pdf'))throw 0;return r.blob();}).then(blob=>{pdfCache.set(label,URL.createObjectURL(blob));refreshPdfLinks(label);}).catch(()=>{}).finally(()=>pdfPending.delete(label));}
-function primeProjectPdfs(sessions){sessions.forEach(s=>s.sources.filter(x=>x.source.source_role==='project'&&x.source.project_label).forEach(x=>preparePdf(x.source.project_label)));}
-function sourceCard(sessionId,o){const s=o.source;const role=s.source_role==='project'?'Projekt':s.source_role==='corpus'?'Korpus':'Launcher';const name=s.project_label||role;const displayName=s.source_role==='project'?pdfLink(name):esc(name);let extra='';if(s.progress){extra=`<div class="mini">${s.progress.completed} / ${s.progress.total} · ${s.progress.active} aktiv</div>`;}const terminal=s.status!=='running';const state=terminal?`<span class="terminalstate ${esc(s.status)}">${esc(sourceStatusLabel[s.status]||s.status)}</span>`:path(s);const ages=terminal?`<div class="age">Dauer<b>${clock(sessionId,o,'run')}</b></div><div class="age">${terminalAgeLabel(s.status)}<b>${clock(sessionId,o,'state')}</b></div>`:`<div class="age">Laufzeit<b>${clock(sessionId,o,'run')}</b></div><div class="age">Phase seit<b>${clock(sessionId,o,'state')}</b></div><div class="age">gesehen<b>${clock(sessionId,o,'seen')}</b></div>`;return `<div class="card"><div class="cardhead"><div><div class="role">${role}</div><div class="name">${displayName}</div></div>${extra}</div><div class="state">${state}</div><div class="ages">${ages}</div></div>`;}
+const pdfCache=new Map();
+function pdfKey(sessionId,label){return JSON.stringify([sessionId,label]);}
+function pdfRoute(sessionId,label){return '/pdf-data/'+encodeURIComponent(sessionId)+'/'+encodeURIComponent(label);}
+function watchId(sessionId,sourceId,place){return 'watch-'+encodeURIComponent(JSON.stringify([sessionId,sourceId,place]));}
+function pdfPresentation(entry){
+  if(entry?.status==='ready')return {text:'PDF ↗',title:'PDF öffnen',ready:true,loading:false};
+  if(entry?.status==='error')return {text:'PDF erneut laden',title:'PDF nicht verfügbar. Erneut laden.',ready:false,loading:false};
+  return {text:'PDF …',title:'PDF wird vorbereitet',ready:false,loading:true};
+}
+function pdfLink(sessionId,label,extraClass=''){
+  const entry=pdfCache.get(pdfKey(sessionId,label)),state=pdfPresentation(entry);
+  return `<a class="pdf-link ${extraClass}" data-pdf-session="${encodeURIComponent(sessionId)}" data-pdf="${encodeURIComponent(label)}" data-pdf-state="${entry?.status||'loading'}" href="${entry?.url||'#'}" target="_blank" rel="noopener" title="${state.title}" aria-label="${esc(label+': '+state.title)}"${state.ready?'':' role="button"'}${state.loading?' aria-disabled="true" aria-busy="true"':''}><span class="pdf-label">${esc(label)}</span><span class="pdf-chip">${state.text}</span></a>`;
+}
+function refreshPdfLinks(sessionId,label){
+  const entry=pdfCache.get(pdfKey(sessionId,label));if(!entry)return;
+  const state=pdfPresentation(entry);
+  document.querySelectorAll('.pdf-link').forEach(link=>{
+    if(decodeURIComponent(link.dataset.pdfSession||'')!==sessionId||decodeURIComponent(link.dataset.pdf||'')!==label)return;
+    link.href=entry.url||'#';link.title=state.title;link.dataset.pdfState=entry.status;
+    link.setAttribute('aria-label',label+': '+state.title);
+    if(state.ready)link.removeAttribute('role');else link.setAttribute('role','button');
+    if(state.loading){link.setAttribute('aria-disabled','true');link.setAttribute('aria-busy','true');}
+    else{link.removeAttribute('aria-disabled');link.removeAttribute('aria-busy');}
+    const chip=link.querySelector('.pdf-chip');if(chip)chip.textContent=state.text;
+  });
+}
+function preparePdf(sessionId,label,retry=false){
+  if(!sessionId||!label||currentSession(lastModel)?.observation_session_id!==sessionId)return;
+  const key=pdfKey(sessionId,label),previous=pdfCache.get(key);
+  if(previous&&(previous.status!=='error'||!retry))return;
+  const entry={sessionId,label,status:'loading',controller:new AbortController()};
+  pdfCache.set(key,entry);refreshPdfLinks(sessionId,label);
+  const current=()=>pdfCache.get(key)===entry&&currentSession(lastModel)?.observation_session_id===sessionId;
+  fetch(pdfRoute(sessionId,label),{cache:'no-store',signal:entry.controller.signal})
+    .then(r=>{if(!r.ok||!String(r.headers.get('content-type')||'').startsWith('application/pdf'))throw new Error('PDF unavailable');return r.blob();})
+    .then(blob=>{if(!current())return;if(!blob.size)throw new Error('Empty PDF');entry.url=URL.createObjectURL(blob);entry.status='ready';entry.controller=null;refreshPdfLinks(sessionId,label);})
+    .catch(()=>{if(!current())return;entry.status='error';entry.controller=null;refreshPdfLinks(sessionId,label);});
+}
+function primeProjectPdfs(sessions){
+  const sessionId=sessions[0]?.observation_session_id;
+  for(const [key,entry] of pdfCache){if(entry.sessionId!==sessionId){entry.controller?.abort();pdfCache.delete(key);}}
+  sessions.forEach(s=>s.sources.filter(x=>x.source.source_role==='project'&&x.source.project_label).forEach(x=>preparePdf(s.observation_session_id,x.source.project_label)));
+}
+function sourceCard(sessionId,o){const s=o.source;const role=s.source_role==='project'?'Projekt':s.source_role==='corpus'?'Korpus':'Launcher';const name=s.project_label||role;const displayName=s.source_role==='project'?pdfLink(sessionId,name):esc(name);let extra='';if(s.progress){extra=`<div class="mini">${s.progress.completed} / ${s.progress.total} · ${s.progress.active} aktiv</div>`;}const terminal=s.status!=='running';const state=terminal?`<span class="terminalstate ${esc(s.status)}">${esc(sourceStatusLabel[s.status]||s.status)}</span>`:path(s);const ages=terminal?`<div class="age">Dauer<b>${clock(sessionId,o,'run')}</b></div><div class="age">${terminalAgeLabel(s.status)}<b>${clock(sessionId,o,'state')}</b></div>`:`<div class="age">Laufzeit<b>${clock(sessionId,o,'run')}</b></div><div class="age">Phase seit<b>${clock(sessionId,o,'state')}</b></div><div class="age">gesehen<b>${clock(sessionId,o,'seen')}</b></div>`;return `<div class="card" id="${watchId(sessionId,s.source_id,'card')}" data-watch-control><div class="cardhead"><div><div class="role">${role}</div><div class="name">${displayName}</div></div>${extra}</div><div class="state">${state}</div><div class="ages">${ages}</div></div>`;}
 const projectCollator=new Intl.Collator('de',{numeric:true,sensitivity:'base'});
 function projectStatusText(s){return s.status==='running'?path(s):`<span class="terminalstate ${esc(s.status)}">${esc(sourceStatusLabel[s.status]||s.status)}</span>`;}
-function projectRow(sessionId,o){const s=o.source;const terminal=s.status!=='running';const symbol=s.status==='running'?'●':s.status==='completed'?'✓':s.status==='failed'?'✕':'○';const name=s.project_label||s.source_id;return `<details class="projectrow ${esc(s.status)}" data-source-id="${esc(s.source_id)}"><summary><span class="projectdot">${symbol}</span>${pdfLink(name,'projectname')}<span class="projectstate">${projectStatusText(s)}</span><span class="projectage">${clock(sessionId,o,'run')}</span></summary><div class="projectdetails"><span>${terminal?'Dauer':'Laufzeit'} <b>${clock(sessionId,o,'run')}</b></span><span>Phase seit <b>${clock(sessionId,o,'state')}</b></span><span>gesehen <b>${clock(sessionId,o,'seen')}</b></span></div></details>`;}
+function projectRow(sessionId,o){const s=o.source;const terminal=s.status!=='running';const symbol=s.status==='running'?'●':s.status==='completed'?'✓':s.status==='failed'?'✕':'○';const name=s.project_label||s.source_id;return `<details class="projectrow ${esc(s.status)}" data-source-id="${esc(s.source_id)}" id="${watchId(sessionId,s.source_id,'row')}" data-watch-control><summary><span class="projectdot">${symbol}</span>${pdfLink(sessionId,name,'projectname')}<span class="projectstate">${projectStatusText(s)}</span><span class="projectage">${clock(sessionId,o,'run')}</span></summary><div class="projectdetails"><span>${terminal?'Dauer':'Laufzeit'} <b>${clock(sessionId,o,'run')}</b></span><span>Phase seit <b>${clock(sessionId,o,'state')}</b></span><span>gesehen <b>${clock(sessionId,o,'seen')}</b></span></div></details>`;}
 function systemItem(o){if(!o)return'';const s=o.source;const label=s.source_role==='corpus'?'Korpus':'Launcher';const state=s.status==='running'?path(s):esc(sourceStatusLabel[s.status]||s.status);return `<span class="systemitem"><strong>${label}</strong><span class="sysstate">${state}</span></span>`;}
 function corpusStats(corpus,projects){const p=corpus?.source.progress;const failed=projects.filter(x=>x.source.status==='failed').length;const active=p?.active??projects.filter(x=>x.source.status==='running').length;const completed=p?.completed??projects.filter(x=>x.source.status==='completed').length;const pending=p&&Number.isFinite(p.total)?Math.max(0,p.total-completed-active):null;const parts=[`<span><b>${completed}</b> abgeschlossen</span>`,`<span><b>${active}</b> aktiv</span>`];if(pending!==null)parts.push(`<span><b>${pending}</b> ausstehend</span>`);if(failed)parts.push(`<span><b>${failed}</b> fehlgeschlagen</span>`);return parts.join('');}
 function activeProjectCallouts(sessionId,projects){const active=projects.filter(x=>x.source.status==='running');if(!active.length)return'';return `<div class="activecallouts">${active.map(o=>{const name=o.source.project_label||o.source.source_id;return `<div class="activecallout"><span class="activepulse"></span><span><b>${esc(name)}</b> · ${path(o.source)} · Laufzeit ${clock(sessionId,o,'run')} · Phase ${clock(sessionId,o,'state')}</span></div>`;}).join('')}</div>`;}
-function renderCorpusSession(s){const projects=s.sources.filter(x=>x.source.source_role==='project').sort((a,b)=>projectCollator.compare(a.source.project_label||a.source.source_id,b.source.project_label||b.source.source_id));const corpus=s.sources.find(x=>x.source.source_role==='corpus');const launcher=s.sources.find(x=>x.source.source_role==='launcher');const timing=corpus||launcher||projects[0];const st=summary(s);const p=corpus?.source.progress;const width=p&&p.total?Math.max(0,Math.min(100,100*p.completed/p.total)):null;const headline=p&&p.total&&st==='completed'?`${p.completed} / ${p.total} abgeschlossen`:'Korpuslauf';const rows=projects.length?projects.map(o=>projectRow(s.observation_session_id,o)).join(''):'<div class="projectwaiting">Projekte werden vorbereitet …</div>';const columns=projects.length?'<div class="projectcolumns"><span></span><span>Projekt</span><span>Aktueller Stand</span><span>Zeit</span></div>':'';const metric=timing?`<div class="herometric">${timing.source.status==='running'?'Laufzeit':'Gesamtdauer'}<b>${clock(s.observation_session_id,timing,'run')}</b></div>`:'';return `<section class="session corpus"><div class="hero"><div><div class="eyebrow">Korpus</div><div class="title">${esc(headline)}</div></div>${metric}</div>${activeProjectCallouts(s.observation_session_id,projects)}${width===null?'':`<div class="progress ${st==='running'?'running':''}"><i style="width:${width}%"></i></div>`}<div class="corpusstats">${corpusStats(corpus,projects)}</div><div class="projectlist">${columns}${rows}</div><details class="detailsbox"><summary>Technische Details</summary><div class="grid">${[launcher,corpus].filter(Boolean).map(o=>sourceCard(s.observation_session_id,o)).join('')}</div></details></section>`;}
+function renderCorpusSession(s){const projects=s.sources.filter(x=>x.source.source_role==='project').sort((a,b)=>projectCollator.compare(a.source.project_label||a.source.source_id,b.source.project_label||b.source.source_id));const corpus=s.sources.find(x=>x.source.source_role==='corpus');const launcher=s.sources.find(x=>x.source.source_role==='launcher');const timing=corpus||launcher||projects[0];const st=summary(s);const p=corpus?.source.progress;const width=p&&p.total?Math.max(0,Math.min(100,100*p.completed/p.total)):null;const headline=p&&p.total&&st==='completed'?`${p.completed} / ${p.total} abgeschlossen`:'Korpuslauf';const rows=projects.length?projects.map(o=>projectRow(s.observation_session_id,o)).join(''):'<div class="projectwaiting">Projekte werden vorbereitet …</div>';const columns=projects.length?'<div class="projectcolumns"><span></span><span>Projekt</span><span>Aktueller Stand</span><span>Zeit</span></div>':'';const metric=timing?`<div class="herometric">${timing.source.status==='running'?'Laufzeit':'Gesamtdauer'}<b>${clock(s.observation_session_id,timing,'run')}</b></div>`:'';return `<section class="session corpus"><div class="hero"><div><div class="eyebrow">Korpus</div><div class="title">${esc(headline)}</div></div>${metric}</div>${activeProjectCallouts(s.observation_session_id,projects)}${width===null?'':`<div class="progress ${st==='running'?'running':''}"><i style="width:${width}%"></i></div>`}<div class="corpusstats">${corpusStats(corpus,projects)}</div><div class="projectlist">${columns}${rows}</div><details class="detailsbox" id="${watchId(s.observation_session_id,'','details')}" data-watch-control><summary>Technische Details</summary><div class="grid">${[launcher,corpus].filter(Boolean).map(o=>sourceCard(s.observation_session_id,o)).join('')}</div></details></section>`;}
 function phaseRail(source){if(!source||source.source_role!=='project')return'';const index=projectStages.indexOf(source.stage);if(index<0)return'';return `<div class="phaserail">${projectStages.map((_,i)=>{let cls='future';if(source.status==='completed'||i<index)cls='done';else if(i===index)cls=source.status==='running'?'active':source.status==='failed'||source.status==='cancelled'?'problem':'done';return `<div class="phase ${cls}"><div class="phasebar"></div><span class="phaselabel">${projectStageShort[i]}</span></div>`;}).join('')}</div>`;}
-function renderSingleSession(s){const projects=s.sources.filter(x=>x.source.source_role==='project');const primary=projects.find(x=>x.source.status==='running')||projects[0]||s.sources.find(x=>x.source.source_role==='corpus')||s.sources[0];const label=primary?.source.project_label||'EtuSchlopf';const title=primary?.source.source_role==='project'?pdfLink(label):esc(label);const ordered=[...s.sources].sort((a,b)=>{const r={launcher:0,corpus:1,project:2};return(r[a.source.source_role]??9)-(r[b.source.source_role]??9)||a.source.source_id.localeCompare(b.source.source_id)});const state=primary?projectStatusText(primary.source):'';const phase=primary?.source.source_role==='project'?`<div class="phasebox"><div class="phasehead">Arbeitsfluss</div>${phaseRail(primary.source)}</div>`:'';const metrics=primary?(primary.source.status==='running'?`<div class="currentmetrics"><div class="currenttime">Laufzeit<b>${clock(s.observation_session_id,primary,'run')}</b></div><div class="currenttime">Phase seit<b>${clock(s.observation_session_id,primary,'state')}</b></div></div>`:`<div class="currentmetrics"><div class="currenttime">Dauer<b>${clock(s.observation_session_id,primary,'run')}</b></div></div>`):'';const current=primary?`<div class="currentline"><div><div class="currentlabel">Aktueller Stand</div><div class="currentstate">${state}</div></div>${metrics}</div>`:'';const eyebrow=primary?.source.source_role==='project'?'Einzelprojekt':primary?.source.source_role==='corpus'?'Korpus':'Systemstart';return `<section class="session"><div class="hero"><div><div class="eyebrow">${eyebrow}</div><div class="title">${title}</div><div class="path">${primary&&primary.source.status==='running'?path(primary.source):''}</div></div></div>${phase}${current}<details class="detailsbox"><summary>Technische Details</summary><div class="grid">${ordered.map(o=>sourceCard(s.observation_session_id,o)).join('')}</div></details></section>`;}
+function renderSingleSession(s){const projects=s.sources.filter(x=>x.source.source_role==='project');const primary=projects.find(x=>x.source.status==='running')||projects[0]||s.sources.find(x=>x.source.source_role==='corpus')||s.sources[0];const label=primary?.source.project_label||'EtuSchlopf';const title=primary?.source.source_role==='project'?pdfLink(s.observation_session_id,label):esc(label);const ordered=[...s.sources].sort((a,b)=>{const r={launcher:0,corpus:1,project:2};return(r[a.source.source_role]??9)-(r[b.source.source_role]??9)||a.source.source_id.localeCompare(b.source.source_id)});const state=primary?projectStatusText(primary.source):'';const phase=primary?.source.source_role==='project'?`<div class="phasebox"><div class="phasehead">Arbeitsfluss</div>${phaseRail(primary.source)}</div>`:'';const metrics=primary?(primary.source.status==='running'?`<div class="currentmetrics"><div class="currenttime">Laufzeit<b>${clock(s.observation_session_id,primary,'run')}</b></div><div class="currenttime">Phase seit<b>${clock(s.observation_session_id,primary,'state')}</b></div></div>`:`<div class="currentmetrics"><div class="currenttime">Dauer<b>${clock(s.observation_session_id,primary,'run')}</b></div></div>`):'';const current=primary?`<div class="currentline"><div><div class="currentlabel">Aktueller Stand</div><div class="currentstate">${state}</div></div>${metrics}</div>`:'';const eyebrow=primary?.source.source_role==='project'?'Einzelprojekt':primary?.source.source_role==='corpus'?'Korpus':'Systemstart';return `<section class="session"><div class="hero"><div><div class="eyebrow">${eyebrow}</div><div class="title" id="${watchId(s.observation_session_id,primary?.source.source_id||'','title')}" data-watch-control>${title}</div><div class="path">${primary&&primary.source.status==='running'?path(primary.source):''}</div></div></div>${phase}${current}<details class="detailsbox" id="${watchId(s.observation_session_id,'','details')}" data-watch-control><summary>Technische Details</summary><div class="grid">${ordered.map(o=>sourceCard(s.observation_session_id,o)).join('')}</div></details></section>`;}
 function renderSession(s){const projects=s.sources.filter(x=>x.source.source_role==='project');const corpus=s.sources.some(x=>x.source.source_role==='corpus');return corpus||projects.length>1?renderCorpusSession(s):renderSingleSession(s);}
-function setTransport(state){transportState=state;const el=$('#transport');el.dataset.state=state;const label=state==='live'?'LIVE':state==='reconnecting'?'RECONNECTING':state==='closed'?'CLOSED':'CONNECTING';el.textContent='MQTT · lokal · read-only · '+label;}
-function setRunStatus(state){const el=$('#runStatus');el.dataset.state=state;$('#runStatusLabel').textContent=state==='waiting'?'WAITING':statusLabel[state]||state.toUpperCase();}
-function renderStructure(){const visible=visibleSessions(lastModel);setRunStatus(overall(lastModel));setTransport(transportState);primeProjectPdfs(visible);const shell=$('#shell');if(!visible.length){shell.innerHTML='<div class="empty"><strong>Watch ist bereit</strong>Warte auf den ersten Runtime-Snapshot …</div>';return;}const openRows=new Set([...shell.querySelectorAll('details.projectrow[open]')].map(x=>x.dataset.sourceId));const detailsOpen=!!shell.querySelector('details.detailsbox[open]');shell.innerHTML=visible.map(renderSession).join('');shell.querySelectorAll('details.projectrow').forEach(x=>{if(openRows.has(x.dataset.sourceId))x.open=true;});if(detailsOpen){const details=shell.querySelector('details.detailsbox');if(details)details.open=true;}pdfCache.forEach((_,label)=>refreshPdfLinks(label));tick();}
-const shell=$('#shell');shell.addEventListener('click',e=>{const link=e.target.closest('.pdf-link');if(!link)return;e.stopPropagation();if(!pdfCache.has(decodeURIComponent(link.dataset.pdf)))e.preventDefault();});
-const events=new EventSource('/events');events.addEventListener('state',e=>{try{const next=JSON.parse(e.data);lastModel=next;receivedAt=performance.now();transportState=next.mqtt;primeProjectPdfs(visibleSessions(next));const key=structureKey(next);if(key!==lastStructureKey){lastStructureKey=key;renderStructure();}else tick();}catch{}});events.onerror=()=>{const current=currentSession(lastModel);const terminal=!!current&&summary(current)!=='running';transportState=terminal?'closed':'reconnecting';setTransport(transportState);};setInterval(tick,1000);
+function setTransport(state){transportState=state;const el=$('#transport');el.dataset.state=state;const label=state==='live'?'LIVE':state==='reconnecting'?'RECONNECTING':state==='closed'?'CLOSED':'CONNECTING';el.textContent='Live-Verbindung · lokal · read-only · '+label;}
+function setRunStatus(state){
+  const el=$('#runStatus');el.dataset.state=state;
+  const label=state==='waiting'?'WAITING':statusLabel[state]||state.toUpperCase();
+  $('#runStatusLabel').textContent=label;
+  const progress=currentSession(lastModel)?.sources.find(o=>o.source.source_role==='corpus')?.source.progress;
+  const count=progress?.total?' · '+progress.completed+'/'+progress.total:'';
+  const title=label+count+' · EtuSchlopf Watch';
+  if(document.title!==title)document.title=title;
+}
+function captureInteraction(shell){
+  const active=document.activeElement;
+  const owner=shell.contains(active)?active.closest('[data-watch-control]'):null;
+  const tag=active.tagName==='A'||active.tagName==='SUMMARY'?active.tagName:null;
+  return {
+    focus:owner&&tag?{id:owner.id,tag}:null,
+    expanded:new Set([...shell.getElementsByTagName('details')].filter(el=>el.open&&el.id).map(el=>el.id))
+  };
+}
+function restoreInteraction(shell,state){
+  for(const details of shell.getElementsByTagName('details')){
+    if(state.expanded.has(details.id))details.open=true;
+  }
+  const owner=state.focus?document.getElementById(state.focus.id):null;
+  const control=owner&&shell.contains(owner)?owner.getElementsByTagName(state.focus.tag)[0]:null;
+  if(control)control.focus({preventScroll:true});
+}
+function renderStructure(){const visible=visibleSessions(lastModel);setRunStatus(overall(lastModel));setTransport(transportState);primeProjectPdfs(visible);const shell=$('#shell');if(!visible.length){shell.innerHTML='<div class="empty"><strong>Watch ist bereit</strong>Warte auf den ersten Runtime-Snapshot …</div>';return;}const interaction=captureInteraction(shell);shell.innerHTML=visible.map(renderSession).join('');pdfCache.forEach(entry=>refreshPdfLinks(entry.sessionId,entry.label));tick();restoreInteraction(shell,interaction);}
+
+const shell=$('#shell');
+shell.addEventListener('click',e=>{
+  const link=e.target.closest('.pdf-link');if(!link)return;e.stopPropagation();
+  const sessionId=decodeURIComponent(link.dataset.pdfSession||''),label=decodeURIComponent(link.dataset.pdf||'');
+  const entry=pdfCache.get(pdfKey(sessionId,label));
+  if(entry?.status==='ready')return;
+  e.preventDefault();if(entry?.status==='error')preparePdf(sessionId,label,true);
+});
+shell.addEventListener('keydown',e=>{if(e.key===' '&&e.target.closest('.pdf-link[role="button"]'))e.preventDefault();});
+shell.addEventListener('keyup',e=>{const link=e.target.closest('.pdf-link[role="button"]');if(e.key===' '&&link){e.preventDefault();link.click();}});
+function launcherEnded(model){
+  const launcher=currentSession(model)?.sources.find(o=>o.source.source_role==='launcher');
+  return !!launcher&&['completed','failed','cancelled'].includes(launcher.source.status);
+}
+const events=new EventSource('/events');
+events.addEventListener('state',e=>{
+  try{
+    const next=JSON.parse(e.data);lastModel=next;receivedAt=performance.now();transportState=next.mqtt;
+    if(launcherEnded(next)){events.close();transportState='closed';}
+    primeProjectPdfs(visibleSessions(next));
+    const key=structureKey(next);if(key!==lastStructureKey){lastStructureKey=key;renderStructure();}else tick();
+  }catch{}
+});
+events.onerror=()=>setTransport(events.readyState===EventSource.CLOSED?'closed':'reconnecting');
+setInterval(tick,1000);
 </script>
 </body>
 </html>"#;
@@ -579,10 +693,16 @@ const events=new EventSource('/events');events.addEventListener('state',e=>{try{
 mod tests {
     use super::{
         encode_browser_state, open_current_run_project_pdf, percent_decode_path_segment,
-        request_path, valid_project_label, MqttBridgeState, SharedWebState, WebState, WATCH_HTML,
+        read_http_request, request_path, serve_http_client, valid_project_label, MqttBridgeState,
+        SharedWebState, WebState, MAX_HTTP_REQUEST_BYTES, WATCH_HTML,
     };
     use std::collections::BTreeMap;
     use std::fs;
+    use std::io::{self, Read, Write};
+    use std::net::{Shutdown, TcpListener, TcpStream};
+    use std::path::Path;
+    use std::sync::Arc;
+    use std::thread;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     #[test]
@@ -629,16 +749,199 @@ mod tests {
         assert_eq!(request_path(b"POST /events HTTP/1.1\r\n\r\n"), None);
     }
 
+    fn local_http_exchange(request: &[u8]) -> (io::Result<()>, Vec<u8>) {
+        let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            serve_http_client(stream, Arc::new(SharedWebState::new(None)), Path::new("."), UNIX_EPOCH)
+        });
+        let mut client = TcpStream::connect_timeout(&address, Duration::from_secs(2)).unwrap();
+        client.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        client.write_all(request).unwrap();
+        client.shutdown(Shutdown::Write).unwrap();
+        let mut response = Vec::new();
+        client.read_to_end(&mut response).unwrap();
+        (server.join().unwrap(), response)
+    }
+
+    fn local_pdf_exchange(root: &Path, current: Option<&str>, route: &str) -> Vec<u8> {
+        let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        let root = root.to_path_buf();
+        let shared = Arc::new(SharedWebState::new(current.map(str::to_string)));
+        let server = thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            serve_http_client(stream, shared, &root, UNIX_EPOCH)
+        });
+        let mut client = TcpStream::connect_timeout(&address, Duration::from_secs(2)).unwrap();
+        client.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        client.write_all(format!("GET /pdf-data/{route} HTTP/1.1\r\nHost: localhost\r\n\r\n").as_bytes()).unwrap();
+        client.shutdown(Shutdown::Write).unwrap();
+        let mut response = Vec::new();
+        client.read_to_end(&mut response).unwrap();
+        server.join().unwrap().unwrap();
+        response
+    }
+
+    #[test]
+    fn pdf_route_requires_the_current_session_even_when_the_named_pdf_is_fresh() {
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let root = std::env::temp_dir().join(format!("watch-session-pdf-{}-{nonce}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let pdf = b"%PDF-1.7\nsynthetic current PDF\n%%EOF\n";
+        fs::write(root.join("Synthetic Ω.pdf"), pdf).unwrap();
+        let good = local_pdf_exchange(&root, Some("run-Ω"), "run-%CE%A9/Synthetic%20%CE%A9");
+        assert!(good.starts_with(b"HTTP/1.1 200 OK\r\n"));
+        assert!(good.ends_with(pdf));
+        for current in [Some("other-run"), None] {
+            let rejected = local_pdf_exchange(&root, current, "run-%CE%A9/Synthetic%20%CE%A9");
+            assert!(rejected.starts_with(b"HTTP/1.1 409 Conflict\r\n"));
+            assert!(!rejected.windows(pdf.len()).any(|w| w == pdf));
+        }
+        for route in ["Synthetic%20%CE%A9", "run-%CE%A9/..%2Foutside", "run-%CE%A9/Synthetic%2Fother"] {
+            assert!(local_pdf_exchange(&root, Some("run-Ω"), route).starts_with(b"HTTP/1.1 400 Bad Request\r\n"));
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn pdf_request_decodes_session_as_data_and_keeps_project_path_validation() {
+        assert_eq!(super::decode_pdf_request("session%2Fpart/Synthetic%20%CE%A9"), Some(("session/part".to_string(), "Synthetic Ω".to_string())));
+        for bad in ["", "/Synthetic", "session/", "session/%FF", "session/%ZZ", "session/..", "session/part/other", "session/%20Synthetic"] {
+            assert!(super::decode_pdf_request(bad).is_none(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn http_client_does_not_dispatch_incomplete_headers() {
+        let (result, response) = local_http_exchange(b"GET /state HTTP/1.1\r\nHost: localhost\r\n");
+        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::UnexpectedEof);
+        assert!(response.is_empty(), "an incomplete header must not reach the state route");
+    }
+
+    fn padded_http_header(length: usize) -> Vec<u8> {
+        let prefix = b"GET /state HTTP/1.1\r\nHost: localhost\r\nX-Pad: ";
+        let suffix = b"\r\n\r\n";
+        assert!(length >= prefix.len() + suffix.len());
+        let mut bytes = prefix.to_vec();
+        bytes.resize(length - suffix.len(), b'x');
+        bytes.extend_from_slice(suffix);
+        bytes
+    }
+
+    struct HttpChunks<'a> {
+        bytes: io::Cursor<&'a [u8]>,
+        chunk: usize,
+    }
+
+    impl Read for HttpChunks<'_> {
+        fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+            let length = output.len().min(self.chunk);
+            self.bytes.read(&mut output[..length])
+        }
+    }
+
+    #[test]
+    fn http_header_terminator_survives_every_stream_split() {
+        let header = b"GET /events HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        for split in 0..=header.len() {
+            let mut input = io::Cursor::new(&header[..split]).chain(io::Cursor::new(&header[split..]));
+            let bytes = read_http_request(&mut input).unwrap();
+            assert_eq!(bytes, header);
+            assert_eq!(request_path(&bytes), Some("/events"));
+        }
+    }
+
+    #[test]
+    fn http_header_limit_is_inclusive_and_independent_of_read_chunks() {
+        for length in [MAX_HTTP_REQUEST_BYTES - 1, MAX_HTTP_REQUEST_BYTES, MAX_HTTP_REQUEST_BYTES + 1] {
+            let header = padded_http_header(length);
+            for chunk in [1, 2, 3, 13, 1024] {
+                let mut input = HttpChunks { bytes: io::Cursor::new(&header), chunk };
+                let result = read_http_request(&mut input);
+                if length <= MAX_HTTP_REQUEST_BYTES {
+                    assert_eq!(result.unwrap(), header);
+                } else {
+                    assert_eq!(result.unwrap_err().kind(), io::ErrorKind::InvalidData);
+                }
+                assert!(input.bytes.position() <= MAX_HTTP_REQUEST_BYTES as u64);
+            }
+        }
+    }
+
+    #[test]
+    fn http_header_rejects_eof_at_every_incomplete_prefix() {
+        let header = b"GET /state HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        for end in 0..header.len() {
+            let error = read_http_request(&mut io::Cursor::new(&header[..end])).unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+        }
+    }
+
+    #[test]
+    fn http_header_read_ahead_is_not_counted_as_header_bytes() {
+        let header = padded_http_header(MAX_HTTP_REQUEST_BYTES - 1);
+        let mut with_payload = header.clone();
+        with_payload.extend(std::iter::repeat_n(b'z', MAX_HTTP_REQUEST_BYTES * 2));
+        let mut input = HttpChunks { bytes: io::Cursor::new(&with_payload), chunk: 1024 };
+        assert_eq!(read_http_request(&mut input).unwrap(), header);
+        assert!(input.bytes.position() <= MAX_HTTP_REQUEST_BYTES as u64);
+        assert!(input.bytes.position() < with_payload.len() as u64);
+    }
+
+    #[test]
+    fn http_header_retries_an_interrupted_read() {
+        struct InterruptedOnce<R> { inner: R, pending: bool }
+        impl<R: Read> Read for InterruptedOnce<R> {
+            fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+                if self.pending {
+                    self.pending = false;
+                    Err(io::Error::from(io::ErrorKind::Interrupted))
+                } else {
+                    self.inner.read(output)
+                }
+            }
+        }
+        let header = b"GET /state HTTP/1.1\r\n\r\n";
+        let mut input = InterruptedOnce { inner: io::Cursor::new(header), pending: true };
+        assert_eq!(read_http_request(&mut input).unwrap(), header);
+        assert!(!input.pending);
+    }
+
+    #[test]
+    fn http_header_preserves_other_transport_errors() {
+        struct FailedRead(io::ErrorKind);
+        impl Read for FailedRead {
+            fn read(&mut self, _output: &mut [u8]) -> io::Result<usize> {
+                Err(io::Error::from(self.0))
+            }
+        }
+        for kind in [io::ErrorKind::TimedOut, io::ErrorKind::ConnectionReset] {
+            assert_eq!(read_http_request(&mut FailedRead(kind)).unwrap_err().kind(), kind);
+        }
+    }
+
+    #[test]
+    fn http_client_serves_complete_headers_at_the_byte_limit() {
+        for length in [MAX_HTTP_REQUEST_BYTES - 1, MAX_HTTP_REQUEST_BYTES] {
+            let (result, response) = local_http_exchange(&padded_http_header(length));
+            result.unwrap();
+            assert!(response.starts_with(b"HTTP/1.1 200 OK\r\n"));
+            assert!(response.windows(b"\"sessions\":[]".len()).any(|bytes| bytes == b"\"sessions\":[]"));
+        }
+    }
+
     #[test]
     fn pdf_route_decodes_unicode_but_rejects_path_shaping_labels() {
         assert_eq!(
-            percent_decode_path_segment("Et%C3%BCde%20Nr.%206").as_deref(),
-            Some("Etüde Nr. 6")
+            percent_decode_path_segment("Synthetisch%20%CE%A9").as_deref(),
+            Some("Synthetisch Ω")
         );
-        assert!(valid_project_label("Etüde Nr. 6"));
-        assert!(!valid_project_label("../Etüde Nr. 6"));
-        assert!(!valid_project_label("Etüde Nr. 6\\alt"));
-        assert!(percent_decode_path_segment("Et%C3%ZZde").is_none());
+        assert!(valid_project_label("Synthetisch Ω"));
+        assert!(!valid_project_label("../Synthetisch Ω"));
+        assert!(!valid_project_label("Synthetisch Ω\\alt"));
+        assert!(percent_decode_path_segment("Synth%CE%ZZ").is_none());
     }
 
     #[test]
@@ -649,17 +952,17 @@ mod tests {
             .as_nanos();
         let root = std::env::temp_dir().join(format!("etuschlopf-watch-pdf-{unique}"));
         fs::create_dir_all(&root).expect("create fixture root");
-        let pdf = root.join("Etüde Nr. 6.pdf");
+        let pdf = root.join("Synthetisch Ω.pdf");
         fs::write(&pdf, b"%PDF-1.7\nfixture\n%%EOF\n").expect("write fixture PDF");
-        assert!(open_current_run_project_pdf(&root, "Etüde Nr. 6", UNIX_EPOCH).is_some());
+        assert!(open_current_run_project_pdf(&root, "Synthetisch Ω", UNIX_EPOCH).is_some());
         assert!(open_current_run_project_pdf(
             &root,
-            "Etüde Nr. 6",
+            "Synthetisch Ω",
             SystemTime::now() + Duration::from_secs(60),
         )
         .is_none());
         fs::write(&pdf, b"%PDF-1.7\npartial").expect("write partial PDF");
-        assert!(open_current_run_project_pdf(&root, "Etüde Nr. 6", UNIX_EPOCH).is_none());
+        assert!(open_current_run_project_pdf(&root, "Synthetisch Ω", UNIX_EPOCH).is_none());
         fs::remove_dir_all(root).expect("remove fixture root");
     }
 

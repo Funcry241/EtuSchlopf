@@ -361,7 +361,7 @@ fn write_suback(stream: &mut TcpStream, packet_id: u16, subscriptions: usize) ->
     packet.push(0x90);
     push_remaining_length(&mut packet, remaining)?;
     packet.extend_from_slice(&packet_id.to_be_bytes());
-    packet.extend(std::iter::repeat(0x00).take(subscriptions));
+    packet.extend(std::iter::repeat_n(0x00, subscriptions));
     stream.write_all(&packet)
 }
 

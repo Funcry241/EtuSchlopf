@@ -686,7 +686,7 @@ mod tests {
                     status: SnapshotSourceStatusV2::Running,
                     stage: SnapshotStageV2::ProjectInitialRenderTransaction,
                     activity: None,
-                    project_label: Some("Etüde \"A\"".to_string()),
+                    project_label: Some("Synthese Ω \"A\"".to_string()),
                     progress: None,
                     started_unix_millis: 1_000,
                     terminal_duration_millis: Some(12),
@@ -701,7 +701,7 @@ mod tests {
         let json = encode_session_snapshot_json_v2(&snapshot);
         assert!(json.starts_with("{\"protocol_version\":2,\"observation_session_id\":\"obs-1\""));
         assert!(json.contains("\"revision\":3"));
-        assert!(json.contains("\"project_label\":\"Etüde \\\"A\\\"\""));
+        assert!(json.contains("\"project_label\":\"Synthese Ω \\\"A\\\"\""));
         assert!(json.contains("\"last_seen_age_millis\":4"));
         assert!(json.contains("\"last_state_change_age_millis\":9"));
         assert!(json.contains("\"run_elapsed_millis\":12"));

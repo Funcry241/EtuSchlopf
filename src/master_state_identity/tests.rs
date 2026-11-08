@@ -1298,3 +1298,23 @@ fn ssc_additive_origin_rejects_foreign_pre_state_without_changing_receipt() {
 pub(crate) fn forget_additive_origin_for_tests(receipt: &AdditiveTransformationReceipt) {
     crate::ssc_evidence_proof::release_unadopted_additive_origin(&SSC_ORIGIN_ACCESS, &receipt.identity);
 }
+
+#[test]
+fn conserved_projection_preserves_serialized_fields_and_defaults() {
+    let xml = r#"<score-partwise xmlns="urn:music"><part id="P&amp;1"><measure>
+      <attributes><divisions> 8 </divisions><key><fifths>-2</fifths></key><time><beats>3</beats><beat-type>8</beat-type></time><clef/></attributes>
+      <note print-object="no"><pitch><step> D </step><octave>5</octave><alter>-1</alter></pitch><duration> 2 </duration><duration>99</duration><chord/><grace/><cue/><voice>2</voice><staff>1</staff><tie type="stop"/><tie/><tie type="start"/><tie type="start"/></note>
+      <note><rest/></note><note><unpitched/></note><backup><duration>4</duration></backup>
+      <forward><duration>2</duration><voice>1</voice><staff>2</staff></forward>
+      <barline><bar-style> light-heavy </bar-style><repeat direction="backward"/></barline>
+      <barline location="left"/></measure><measure/></part><part><measure/></part></score-partwise>"#;
+    assert_eq!(conserved_content_projection(xml).as_deref(), Some(concat!(
+        "P|P&1\nM\nD|8\nK|-2\nT|3/8\n",
+        "N|D5/-1|2|true|true|true|2|1|,start,start,stop|no\n",
+        "N|rest||false|false|false||||yes\n",
+        "N|unpitched||false|false|false||||yes\n",
+        "B|4\nF|2|1|2\nL|right|light-heavy|backward\nL|left||\nM\nP|\nM\n"
+    )));
+    assert_eq!(conserved_content_projection("<broken>"), None);
+    assert_eq!(conserved_content_projection("<score-partwise/>"), Some(String::new()));
+}

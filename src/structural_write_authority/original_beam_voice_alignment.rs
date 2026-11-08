@@ -45,6 +45,49 @@ pub(super) struct OriginalBeamVoiceGroup {
 }
 
 impl CanonicalFinalChordStructuralPlan {
+    // This is inherited producer evidence, never inferred from current XML
+    // labels, acoustic lanes, roles or a report. Every current source fragment
+    // must retain a binding to the same independently captured notation voice.
+    pub(super) fn proves_common_original_notation_voice(&self, sources: &BTreeSet<usize>) -> bool {
+        let Some(group) = self.original_beam_voice_groups.first() else { return false; };
+        if sources.is_empty() || !std::sync::Arc::ptr_eq(&group.source_resources, &self.source_locators)
+            || self.original_beam_voice_groups.iter().any(|other|
+                !std::sync::Arc::ptr_eq(&group.notation_voices, &other.notation_voices)) {
+            return false;
+        }
+        let mut represented = BTreeSet::new();
+        let mut common: Option<&str> = None;
+        for locator in self.source_locators.iter().filter(|row| sources.contains(&row.source_event_id)) {
+            let Some(voice) = group.notation_voices.get(&(locator.source_event_id, locator.attack_id)) else {
+                return false;
+            };
+            if voice.trim().is_empty() || common.is_some_and(|current| current != voice) { return false; }
+            common = Some(voice);
+            represented.insert(locator.source_event_id);
+        }
+        common.is_some() && represented == *sources
+    }
+
+    // MusicXML channel names are reusable across independent written frames.
+    // A whole technical channel is not a musical line. Establish origin in
+    // the sealed component's written footprint; every physical conservation
+    // check still covers the entire proposal and all source resources.
+    pub(super) fn proves_original_notation_voice_for_component_reuse(
+        &self,
+        component: &BTreeSet<usize>,
+        destination: &BTreeSet<usize>,
+    ) -> bool {
+        let footprint = self.source_locators.iter()
+            .filter(|row| component.contains(&row.source_event_id))
+            .map(|row| row.measure).collect::<BTreeSet<_>>();
+        let mut relevant = self.source_locators.iter()
+            .filter(|row| destination.contains(&row.source_event_id) && footprint.contains(&row.measure))
+            .map(|row| row.source_event_id).collect::<BTreeSet<_>>();
+        if relevant.is_empty() { return false; }
+        relevant.extend(component);
+        self.proves_common_original_notation_voice(&relevant)
+    }
+
     pub(crate) fn bind_original_beam_voice_groups(
         &mut self,
         original: &str,
@@ -224,6 +267,12 @@ impl CanonicalFinalChordStructuralPlan {
 }
 
 impl OriginalBeamVoiceGroup {
+    /// Sealed original-owner membership and the independently carried pre-lane
+    /// notation relation. Coordinates and current labels mint no new identity.
+    pub(super) fn allocation_sources(&self) -> BTreeSet<usize> {
+        self.members.iter().map(|&(source, _)| source).collect()
+    }
+
     pub(super) fn closed_bridge_origins(&self, authored: &BTreeSet<OriginalBeamOccurrenceKey>) -> ClosedBridgeOrigins {
         self.positive_origins.iter().enumerate().filter(|(_,origin)|
             closed_primary(&origin.states) && origin.members.is_subset(authored))
@@ -1245,6 +1294,189 @@ pub(super) fn bridge_test_actual_alignment_plan(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn original_notation_component_is_allocated_before_voice_materialization() {
+        for (scope, copies, staff, competing_rest) in [(37usize, 1usize, 1u8, false), (137, 1, 1, false), (237, 2, 1, false), (337, 1, 2, false), (437, 2, 2, false), (537, 1, 1, true)] {
+            let mut input = crate::pipeline::actual_beam_owner_capture_tests::input()
+                .replace("probe", &scope.to_string())
+                .replace("<voice>3</voice>", &format!("<voice>{staff}</voice>"));
+            if staff == 2 {
+                input = input.replace("<staff>1</staff>", "<staff>2</staff>")
+                    .replace("<clef><sign>G</sign><line>2</line></clef>",
+                        "<staves>2</staves><clef number=\"1\"><sign>G</sign><line>2</line></clef><clef number=\"2\"><sign>F</sign><line>4</line></clef>");
+            }
+            if competing_rest {
+                let notes = ["C", "D", "E", "F"].into_iter().cycle().take(16).map(|step|
+                    format!("<note><pitch><step>{step}</step><octave>5</octave></pitch><duration>24</duration><voice>3</voice><type>16th</type><staff>1</staff></note>")).collect::<String>();
+                input = format!("<score-partwise version=\"4.0\"><part-list><score-part id=\"P\"><part-name>Piano</part-name></score-part></part-list><part id=\"P\"><measure number=\"{scope}\"><attributes><divisions>96</divisions><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>{notes}<backup><duration>384</duration></backup><note><rest measure=\"yes\"/><duration>384</duration><voice>1</voice><type>whole</type><staff>1</staff></note></measure></part></score-partwise>");
+            }
+            if copies == 2 {
+                let doc = roxmltree::Document::parse(&input).unwrap();
+                let measure = doc.descendants().find(|node| node.has_tag_name("measure")).unwrap().range();
+                let duplicate = input[measure].replace(&format!("number=\"{scope}\""), &format!("number=\"{}\"", scope + 1));
+                input.insert_str(input.find("</part>").unwrap(), &duplicate);
+            }
+            let (original, receipt, capture) = crate::pipeline::actual_beam_owner_capture_tests::execute(&input);
+            capture.binds_original_receipt(&receipt).unwrap();
+            let evidence = final_chord_declassified_evidence_from_xml(&original).unwrap();
+            let (mut canonical, _) = plan_canonical_final_chord_structure_once(&original, &evidence).unwrap();
+            let notation = crate::pipeline::actual_beam_owner_capture_tests::notation_voice_bindings(
+                &original, canonical.source_locators.iter().map(|locator|
+                    ((locator.source_event_id, locator.attack_id), "independent-line-name".to_owned())));
+            canonical.bind_original_beam_voice_groups(&original, Some(&Ok(capture.clone())), &notation);
+            let observation = super::super::actual_source_beam_binding::observe_actual_source_beam_binding(
+                &canonical, &original, Some(&Ok(capture.clone())));
+            let mut offset = 0;
+            let offsets = canonical.measures.iter().map(|measure| {
+                let start = offset; offset += measure.expected_duration; (measure.measure, start)
+            }).collect::<BTreeMap<_, _>>();
+            let mut attacks = BTreeMap::new();
+            for locator in canonical.source_locators.iter() {
+                let lane = 1 + attacks.len() % 2;
+                attacks.entry(locator.source_event_id).or_insert(FrozenVoiceAttackEvidenceRow {
+                    source_event_id: locator.source_event_id, attack_id: locator.attack_id,
+                    absolute_start: offsets[&locator.measure] + locator.onset,
+                    absolute_end: offsets[&locator.measure] + locator.onset + locator.duration + 1,
+                    staff: locator.staff.parse().unwrap(), technical_lane: lane,
+                });
+            }
+            let attacks = attacks.into_values().collect::<Vec<_>>();
+            assert!(attacks.windows(2).any(|pair| pair[0].absolute_end > pair[1].absolute_start));
+            let channels = build_frozen_serialization_voice_channels_for_canonical(&canonical, &attacks).unwrap();
+            assert!(channels.channel_count() > 1);
+            let voices = bind_musicxml_voice_labels(&channels, &[]).unwrap();
+            let mut report = String::new();
+            let replacement = channels.checked_original_notation_beam_components(
+                &mut report, &canonical, &attacks, &observation, &[], &voices);
+            if competing_rest {
+                assert!(replacement.is_none(), "{report}");
+                assert!(report.contains("original_component_source_rest_collision"), "{report}");
+                continue;
+            }
+            assert!(replacement.is_some(), "{report}");
+            let (replacement_channels, replacement) = replacement.unwrap();
+            for group in &canonical.original_beam_voice_groups {
+                assert_eq!(group.allocation_sources().iter().map(|source|
+                    replacement.label_for_source(*source)).collect::<BTreeSet<_>>().len(), 1);
+            }
+            let labels = voices.channel_to_label.values().cloned().collect::<BTreeSet<_>>();
+            let names = labels.iter().enumerate().map(|(index, _)| format!("opaque-lane-{index}"))
+                .collect::<Vec<_>>();
+            let alpha = final_chord_permute_sealed_voice_labels(&voices, &names).unwrap();
+            let rename = labels.into_iter().zip(names).collect::<BTreeMap<_, _>>();
+            let sources = canonical.original_beam_voice_groups.iter()
+                .flat_map(OriginalBeamVoiceGroup::allocation_sources).collect::<BTreeSet<_>>();
+            let rebound = replacement_channels.bind_original_component_labels(&canonical, &alpha, &sources).unwrap();
+            for source in sources {
+                assert_eq!(rebound.label_for_source(source),
+                    Some(rename[replacement.label_for_source(source).unwrap()].as_str()));
+            }
+            let independent = crate::pipeline::actual_beam_owner_capture_tests::notation_voice_bindings(
+                &original, canonical.source_locators.iter().enumerate().map(|(index, locator)|
+                    ((locator.source_event_id, locator.attack_id), format!("independent-line-{}", index % 2))));
+            canonical.bind_original_beam_voice_groups(&original, Some(&Ok(capture)), &independent);
+            assert!(canonical.original_beam_voice_groups.is_empty());
+            assert!(channels.checked_original_notation_beam_components(
+                &mut String::new(), &canonical, &attacks, &observation, &[], &voices).is_none());
+            canonical.original_beam_voice_groups.clear();
+            assert!(channels.checked_original_notation_beam_components(
+                &mut String::new(), &canonical, &attacks, &observation, &[], &voices).is_none());
+        }
+    }
+
+    #[test]
+    fn original_group_equality_and_written_time_are_composed_before_materialization() {
+        for (scope, copies, written_overlap, independent_line, missing_origin, foreign_component, coupled_channels, external_line) in [
+            (43, 1, false, false, false, false, false, false), (1043, 2, false, false, false, false, false, false),
+            (2043, 1, true, false, false, false, false, false), (3043, 1, false, true, false, false, false, false),
+            (4043, 1, false, false, true, false, false, false), (5043, 1, false, false, false, true, false, false),
+            (6043, 2, false, false, false, false, true, false), (7043, 1, false, false, false, false, false, true),
+        ] {
+            let note = |step: &str, duration: i64, kind: &str|
+                format!("<note><pitch><step>{step}</step><octave>4</octave></pitch><duration>{duration}</duration><voice>1</voice><type>{kind}</type><staff>1</staff></note>");
+            let prefix = ["C", "D", "E"].iter().map(|step| note(step,24,"16th")).collect::<String>();
+            let last = note("F", if written_overlap {48} else {24}, if written_overlap {"eighth"} else {"16th"});
+            let tail = if foreign_component {
+                format!("{}{}<note><rest/><duration>48</duration><voice>1</voice><type>eighth</type><staff>1</staff></note>", note("C",24,"16th"),note("D",24,"16th"))
+            } else { "<note><rest/><duration>96</duration><voice>1</voice><type>quarter</type><staff>1</staff></note>".to_owned() };
+            let body = format!("{prefix}{last}{}{}{}<note><rest/><duration>48</duration><voice>1</voice><type>eighth</type><staff>1</staff></note>{}{tail}",
+                if written_overlap {"<backup><duration>24</duration></backup>"} else {""},
+                note("G",24,"16th"),note("A",24,"16th"),note("B",96,"quarter"));
+            let measures = (0..copies).map(|index| {
+                // Different staffs have independent role/consumer resources.
+                // The coupled duplicate separately preserves the old refusal.
+                let body = if index == 1 && !coupled_channels { body.replace("<staff>1</staff>", "<staff>2</staff>") } else { body.clone() };
+                format!("<measure number=\"{}\"><attributes><divisions>96</divisions><time><beats>4</beats><beat-type>4</beat-type></time><staves>2</staves><clef number=\"1\"><sign>G</sign><line>2</line></clef><clef number=\"2\"><sign>F</sign><line>4</line></clef></attributes>{body}</measure>", scope+index)
+            }).collect::<String>();
+            let measures = if external_line {
+                format!("<measure number=\"{}\"><attributes><divisions>96</divisions><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>{}</measure>{measures}",scope-1,note("C",384,"whole"))
+            } else { measures };
+            let input = format!("<score-partwise version=\"4.0\"><part-list><score-part id=\"P\"><part-name>Piano</part-name></score-part></part-list><part id=\"P\">{measures}</part></score-partwise>");
+            let (original, _, capture) = crate::pipeline::actual_beam_owner_capture_tests::execute(&input);
+            let evidence = final_chord_declassified_evidence_from_xml(&original).unwrap();
+            let (mut canonical,_) = plan_canonical_final_chord_structure_once(&original,&evidence).unwrap();
+            let notation = crate::pipeline::actual_beam_owner_capture_tests::notation_voice_bindings(
+                &original, canonical.source_locators.iter()
+                    .filter(|row| !missing_origin || row.onset != 0)
+                    .map(|row| ((row.source_event_id,row.attack_id),
+                        if external_line && row.measure < scope {"unrelated-earlier-line"}
+                        else if foreign_component && row.onset >= 288 {"foreign-line"}
+                        else if independent_line && row.onset < 96 {"independent-line"} else {"named-line"}.to_owned())));
+            canonical.bind_original_beam_voice_groups(&original,Some(&Ok(capture.clone())),&notation);
+            let observation = super::super::actual_source_beam_binding::observe_actual_source_beam_binding(&canonical,&original,Some(&Ok(capture)));
+            let offsets = canonical.measures.iter().scan(0,|offset,row| {
+                let start=*offset;*offset+=row.expected_duration;Some((row.measure,start))
+            }).collect::<BTreeMap<_,_>>();
+            let attacks = canonical.source_locators.iter().map(|row| FrozenVoiceAttackEvidenceRow {
+                source_event_id:row.source_event_id,attack_id:row.attack_id,
+                absolute_start:offsets[&row.measure]+row.onset,
+                absolute_end:offsets[&row.measure]+row.onset+if row.onset==72 {48} else if foreign_component && row.onset==192 {120} else {row.duration},
+                staff:row.staff.parse().unwrap(),technical_lane:if row.onset==96 {2} else {1},
+            }).collect::<Vec<_>>();
+            let baseline = build_frozen_serialization_voice_channels_for_canonical(&canonical,&attacks).unwrap();
+            let labels = bind_musicxml_voice_labels(&baseline,&[]).unwrap();
+            let mut report=String::new();
+            let replacement = baseline.checked_original_notation_beam_components(
+                &mut report,&canonical,&attacks,&observation,&[],&labels);
+            if coupled_channels {
+                assert!(replacement.is_none(), "{report}");
+                assert!(report.contains("original_component_has_no_label_preserving_binding"), "{report}");
+                continue;
+            }
+            let (refined,refined_voices) = replacement.expect(&report);
+            let reuse_expected = !written_overlap && !independent_line && !missing_origin;
+            let expected=if !reuse_expected || foreign_component {2} else {copies};
+            assert_eq!(refined.channel_count(),expected,"{report}");
+            assert_eq!(report.contains("OriginalNotationWrittenRefinement: admitted"),reuse_expected,"{report}");
+            if foreign_component {
+                let label_at = |onset| {
+                    let source = canonical.source_locators.iter().find(|row| row.onset == onset).unwrap().source_event_id;
+                    refined_voices.label_for_source(source).unwrap()
+                };
+                assert_eq!(label_at(0), label_at(96));
+                assert_ne!(label_at(0), label_at(288));
+            }
+            if external_line {
+                let component = canonical.source_locators.iter().filter(|row|
+                    row.measure == scope && (row.onset == 96 || row.onset == 120))
+                    .map(|row|row.source_event_id).collect::<BTreeSet<_>>();
+                let outside = canonical.source_locators.iter().find(|row|row.measure < scope).unwrap().source_event_id;
+                let host_sources = baseline.source_to_channel.iter().filter_map(|(source, channel)|
+                    (*channel == baseline.source_to_channel[&outside]).then_some(*source)).collect::<BTreeSet<_>>();
+                let mut whole_channel = host_sources.clone();whole_channel.extend(&component);
+                assert!(!canonical.proves_common_original_notation_voice(&whole_channel));
+                assert!(canonical.proves_original_notation_voice_for_component_reuse(&component,&host_sources));
+                assert!(!canonical.proves_original_notation_voice_for_component_reuse(&component,&BTreeSet::from([outside])));
+                assert_eq!(refined_voices.label_for_source(outside), labels.label_for_source(outside));
+            }
+            // A sounding overlap still exists in the positive case. It is not
+            // erased or shortened to manufacture written compatibility.
+            assert!(attacks.iter().any(|a| attacks.iter().any(|b|
+                a.source_event_id!=b.source_event_id && a.absolute_start < b.absolute_start
+                    && a.absolute_end > b.absolute_start)));
+        }
+    }
 
     fn fixture() -> (
         CanonicalFinalChordStructuralPlan,

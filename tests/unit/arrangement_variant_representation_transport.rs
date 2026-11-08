@@ -301,3 +301,28 @@ fn failed_clef_capture_stays_unknown_without_replacing_original_adoption() {
     master.adopt_materialized_document(after.clone(), receipts, "UnknownClefObservation");
     assert!(master.lineage().lineage_continuity_holds(&after));
 }
+
+#[test]
+#[ignore = "manual synthetic performance measurement; no timing threshold"]
+fn arrangement_variant_performance_probe() {
+    for measures in [16, 64] {
+        let rows = (0..measures * 8).map(|i|
+            (i + 1, (i * 48) as i64, [1, 2][i % 2], 60 + (i % 8) as i32)).collect::<Vec<_>>();
+        let arrangements = (0..24).map(|_| arranged(&rows, measures)).collect::<Vec<_>>();
+        let reference = ReferenceReport::default();
+        let signature = build_reference_signature(&reference, &parse_musicxml(&arrangements[0].xml).unwrap());
+        let timings = crate::audit_only::performance_timings::BatchTimings::new(
+            "SyntheticPerformance", "VariantProbe", 0,
+            ["InitialCustodyAndGenesis", "Fidelity", "Polish", "Layout", "OwnedRhythmContinuation",
+             "ReceiptValidationAndAdoption", "ParseMusicXml", "RunChecks", "FinalizeHints"]);
+        let started = Instant::now();
+        for arrangement in arrangements {
+            let result = evaluate_arrangement_variant("SyntheticPerformance", arrangement,
+                &reference, &signature, &CheckOptions { strict: true }, Some(2), &timings).unwrap();
+            result.arrangement_stats.rhythmic_courses.as_ref().unwrap()
+                .validate_binding(result.master_state.document()).unwrap();
+            assert!(result.master_state.lineage().lineage_continuity_holds(result.master_state.document()));
+        }
+        println!("SyntheticVariantProbe: measures={measures}; repetitions=24; wall_us={}", started.elapsed().as_micros());
+    }
+}

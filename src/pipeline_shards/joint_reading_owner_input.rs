@@ -159,13 +159,48 @@ impl JointReadingOwnerInput {
         let mut groups = primary.into_values().map(|members| JointReadingOwnerGroup {
             kind: JointReadingGroupKind::PrimaryBeam, members,
         }).collect::<Vec<_>>();
-        for attachment in capture.chord_attachments(source)? {
+        let attachments = capture.chord_attachments(source)?;
+        let rest_clock = attachments.iter().any(|row| row.original_rest_host.is_some())
+            .then(|| c3_adapter::observe_clock(source)).transpose()
+            .map_err(|error| anyhow!("Original chord rest-host clock: {error:?}"))?;
+        let mut rest_cohorts = BTreeMap::<(usize, usize), Vec<usize>>::new();
+        for attachment in attachments {
             let member = locate(&attachment.member)?;
             let Some(head_range) = attachment.original_head.as_ref() else {
                 // Only the producer's explicit absence is local. A lost or
                 // ambiguous continuation remains an error for the whole input.
                 anyhow::ensure!(attachment.original_head_absent,
                     "Joint reading chord lost its original physical head continuation");
+                if let Some(host) = &attachment.original_rest_host {
+                    let document = roxmltree::Document::parse(&source[host.clone()])?;
+                    let root = document.root_element();
+                    let child = |name| root.children().find(|node| node.has_tag_name(name));
+                    anyhow::ensure!(child("rest").is_some() && child("pitch").is_none()
+                        && child("chord").is_none() && child("grace").is_none()
+                        && child("duration").and_then(|node| node.text())
+                            .and_then(|text| text.trim().parse::<i64>().ok()).is_some_and(|duration| duration > 0),
+                        "Original chord rest host is not a positive cursor carrier");
+                    let clock = rest_clock.as_ref().expect("rest-host clock prepared above");
+                    let at = clock.times.get(&(host.start, false))
+                        .ok_or_else(|| anyhow!("Original rest host has no carried clock"))?;
+                    anyhow::ensure!(clock.times.get(&(attachment.member.start, false)) == Some(at),
+                        "Original chord rest-host support changed its member onset");
+                    let host_staff = child("staff").and_then(|node| node.text()).unwrap_or("1").trim();
+                    let member_document = roxmltree::Document::parse(&source[attachment.member.clone()])?;
+                    let member_voice = member_document.root_element().children()
+                        .find(|node| node.has_tag_name("voice")).and_then(|node| node.text()).map(str::trim);
+                    anyhow::ensure!(child("voice").and_then(|node| node.text()).map(str::trim) == member_voice,
+                        "Original chord rest-host voice support changed");
+                    if host_staff != heads[member].staff {
+                        for staff in [host_staff, heads[member].staff.as_str()] {
+                            unknown_groups.insert(staff.to_owned(),
+                                "original rest-host chord dependency crosses staff domains".to_string());
+                        }
+                    } else {
+                        rest_cohorts.entry((host.start, host.end)).or_default().push(member);
+                    }
+                    continue;
+                }
                 unknown_groups.insert(heads[member].staff.clone(),
                     "original chord producer observed no pitched physical head".to_string());
                 continue;
@@ -190,6 +225,8 @@ impl JointReadingOwnerInput {
                 members: vec![head, member],
             });
         }
+        groups.extend(rest_cohorts.into_values().filter(|members| members.len() > 1)
+            .map(|members| JointReadingOwnerGroup { kind: JointReadingGroupKind::Chord, members }));
         // A tie is carried by its existing attack identity, not matched by
         // spelling, pitch, voice, adjacency or a final XML traversal ordinal.
         let mut ties = BTreeMap::<SoundingAttackId, Vec<usize>>::new();

@@ -600,7 +600,7 @@ fn fixture_owner_input(xml: &str) -> crate::pipeline::JointReadingOwnerInput {
 }
 
 #[test]
-fn original_orphan_chord_keeps_its_domain_unknown_and_independent_domain_solved() {
+fn original_rest_host_closes_chord_context_without_a_beam_head() {
     for orphan_staff in [1, 2] { for copies in [1, 2] {
         let independent = 3 - orphan_staff;
         let mut orphan = n('E', 4, 4 * DIV, orphan_staff); orphan.chord = true; orphan.hidden = true;
@@ -612,17 +612,43 @@ fn original_orphan_chord_keeps_its_domain_unknown_and_independent_domain_solved(
         let source = capture.current.as_ref();
         let mut owner = fixture_owner_input(source);
         owner.bind_original_groups(&capture).unwrap();
-        assert_eq!(owner.unknown_groups.len(), 1);
+        assert!(owner.unknown_groups.is_empty());
+        let attachment = &capture.chord_attachments(source).unwrap()[0];
+        assert!(attachment.original_rest_host.is_some());
+        assert!(attachment.original_head.is_none());
+        assert!(attachment.head.is_none(), "a rest host is not a positive beam head");
         let mut lost = capture.as_ref().clone();
         lost.chord_attachments.as_mut().unwrap()[0].original_head_absent = false;
         assert!(fixture_owner_input(source).bind_original_groups(&lost).is_err());
         let mut capabilities = Capabilities::new(source);
         for staff in ["1", "2"] { capabilities.staves.insert(staff.into(), cap(all_states(), source)); }
         let proposal = owner.c3_proposal(&capabilities, None).unwrap();
+        assert!(matches!(proposal.staves[&orphan_staff.to_string()], StaffVerdict::Solved(_)));
+        assert!(matches!(proposal.staves[&independent.to_string()], StaffVerdict::Solved(_)));
+        let mut missing = capture.as_ref().clone();
+        for row in missing.chord_attachments.as_mut().unwrap() { row.original_rest_host = None; }
+        let mut unbound = fixture_owner_input(source);
+        unbound.bind_original_groups(&missing).unwrap();
+        let proposal = unbound.c3_proposal(&capabilities, None).unwrap();
         assert!(matches!(&proposal.staves[&orphan_staff.to_string()], StaffVerdict::Unknown { reason }
             if reason.contains("no pitched physical head")));
         assert!(matches!(proposal.staves[&independent.to_string()], StaffVerdict::Solved(_)));
     }}
+}
+
+#[test]
+fn original_rest_host_cross_staff_dependency_remains_unknown() {
+    let mut member = n('E', 4, 4 * DIV, 2); member.voice = 1; member.chord = true; member.hidden = true;
+    let independent = (0..8).map(|i| note_xml(&n(if i % 2 == 0 { 'C' } else { 'D' }, 4, 1, 1))
+        .replace("</voice>", "</voice><type>eighth</type>")).collect::<String>();
+    let xml = score(&[head_attrs(DIV, 4, 4, "F") + &rest(4 * DIV, 1) + &note_xml(&member)
+        + &backup(4 * DIV) + &independent]);
+    let (_, _, capture) = crate::pipeline::actual_beam_owner_capture_tests::execute(&xml);
+    let source = capture.current.as_ref();
+    let mut owner = fixture_owner_input(source);
+    owner.bind_original_groups(&capture).unwrap();
+    assert!(owner.unknown_groups.values().all(|reason| reason.contains("crosses staff domains")));
+    assert_eq!(owner.unknown_groups.len(), 2);
 }
 
 #[test]

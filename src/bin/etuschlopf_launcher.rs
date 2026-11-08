@@ -6221,8 +6221,8 @@ PdfSource: adopted nein; label MusicXML.
         ));
         fs::create_dir_all(&root).expect("create test dir");
         let version = env!("CARGO_PKG_VERSION");
-        let projects = (1..=10)
-            .map(|number| format!("Etüde Nr. {number}"))
+        let projects = (1..=3)
+            .map(|number| format!("Synthetic Project {number}"))
             .collect::<Vec<_>>();
         let mut manifest = CorpusRunManifest::started(
             version,
@@ -6248,7 +6248,7 @@ PdfSource: adopted nein; label MusicXML.
         fs::write(
             &report_path,
             format!(
-                "ETUSCHLOPF-CORPUS-EMERGENCE\nWerkzeug: etuschlopf {version}\nRunId: corpus-launcher-test\nGeneratedUnixSeconds: 200\nFullCorpus: ja\nProjectCount: 10\nCurrentVersionProjectCount: 10\nProjects: {}\nSelectionEligible: ja\n",
+                "ETUSCHLOPF-CORPUS-EMERGENCE\nWerkzeug: etuschlopf {version}\nRunId: corpus-launcher-test\nGeneratedUnixSeconds: 200\nFullCorpus: ja\nProjectCount: 3\nCurrentVersionProjectCount: 3\nProjects: {}\nSelectionEligible: ja\n",
                 projects.join(", ")
             ),
         )

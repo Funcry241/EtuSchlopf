@@ -37,36 +37,33 @@ fn run_ui(address: SocketAddr, mut current_session_id: Option<String>) {
     render(&sessions, connection, address);
 
     loop {
-        match MqttSessionStateClient::connect(address) {
-            Ok(mut client) => {
-                connection = ConnectionState::Live;
-                render(&sessions, connection, address);
-                loop {
-                    match client.read_next() {
-                        Ok(Some(publication)) => {
-                            if let Ok(snapshot) = decode_session_snapshot_json_v2(&publication.payload) {
-                                let topic_matches = mqtt_topic_for_session(&snapshot.observation_session_id)
-                                    .as_deref()
-                                    == Some(publication.topic.as_str());
-                                if topic_matches {
-                                    let session_id = snapshot.observation_session_id.clone();
-                                    if current_session_id.is_none() {
-                                        current_session_id = Some(session_id.clone());
-                                        sessions.clear();
-                                    }
-                                    if current_session_id.as_deref() == Some(session_id.as_str()) {
-                                        sessions.insert(session_id, snapshot);
-                                        render(&sessions, connection, address);
-                                    }
+        if let Ok(mut client) = MqttSessionStateClient::connect(address) {
+            connection = ConnectionState::Live;
+            render(&sessions, connection, address);
+            loop {
+                match client.read_next() {
+                    Ok(Some(publication)) => {
+                        if let Ok(snapshot) = decode_session_snapshot_json_v2(&publication.payload) {
+                            let topic_matches = mqtt_topic_for_session(&snapshot.observation_session_id)
+                                .as_deref()
+                                == Some(publication.topic.as_str());
+                            if topic_matches {
+                                let session_id = snapshot.observation_session_id.clone();
+                                if current_session_id.is_none() {
+                                    current_session_id = Some(session_id.clone());
+                                    sessions.clear();
+                                }
+                                if current_session_id.as_deref() == Some(session_id.as_str()) {
+                                    sessions.insert(session_id, snapshot);
+                                    render(&sessions, connection, address);
                                 }
                             }
                         }
-                        Ok(None) => {}
-                        Err(_) => break,
                     }
+                    Ok(None) => {}
+                    Err(_) => break,
                 }
             }
-            Err(_) => {}
         }
         connection = ConnectionState::Reconnecting;
         render(&sessions, connection, address);
@@ -338,7 +335,7 @@ mod tests {
         assert_eq!(format_age(400), "<1s");
         assert_eq!(format_age(3_000), "3s");
         assert_eq!(format_age(197_000), "3:17");
-        assert_eq!(truncate("Etüde Nr. 6", 20), "Etüde Nr. 6");
+        assert_eq!(truncate("Synthetisch Ω", 20), "Synthetisch Ω");
         assert_eq!(truncate("123456789", 6), "12345…");
     }
 

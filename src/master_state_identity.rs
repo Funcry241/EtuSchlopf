@@ -1939,85 +1939,106 @@ fn conserved_projection_is_subsequence(pre_xml: &str, post_xml: &str) -> bool {
 /// layout elements are presentation and may change under a PRESERVING contract.
 fn conserved_content_projection(xml: &str) -> Option<String> {
     let document = roxmltree::Document::parse(xml).ok()?;
-    let child_text = |node: roxmltree::Node<'_, '_>, name: &str| -> String {
+    use std::fmt::Write;
+    fn child_text<'a, 'input: 'a>(node: roxmltree::Node<'a, 'input>, name: &str) -> &'a str {
         node.children()
             .find(|child| child.has_tag_name(name))
             .and_then(|child| child.text())
-            .map_or_else(String::new, |text| text.trim().to_string())
-    };
+            .map(str::trim)
+            .unwrap_or("")
+    }
     let has_child = |node: roxmltree::Node<'_, '_>, name: &str| {
         node.children().any(|child| child.has_tag_name(name))
     };
     let mut out = String::new();
-    for part in document.descendants().filter(|node| node.has_tag_name("part")) {
-        out.push_str(&format!("P|{}\n", part.attribute("id").unwrap_or("")));
+    for part in document
+        .descendants()
+        .filter(|node| node.has_tag_name("part"))
+    {
+        let _ = writeln!(out, "P|{}", part.attribute("id").unwrap_or(""));
         for measure in part.children().filter(|node| node.has_tag_name("measure")) {
             out.push_str("M\n");
             for element in measure.children().filter(roxmltree::Node::is_element) {
                 match element.tag_name().name() {
                     "note" => {
-                        let content = element
-                            .children()
-                            .find(|child| child.has_tag_name("pitch"))
-                            .map_or_else(
-                                || {
-                                    if has_child(element, "rest") {
-                                        "rest".to_string()
-                                    } else {
-                                        "unpitched".to_string()
-                                    }
-                                },
-                                |pitch| {
-                                    format!(
-                                        "{}{}/{}",
-                                        child_text(pitch, "step"),
-                                        child_text(pitch, "octave"),
-                                        child_text(pitch, "alter")
-                                    )
-                                },
+                        out.push_str("N|");
+                        if let Some(pitch) =
+                            element.children().find(|child| child.has_tag_name("pitch"))
+                        {
+                            let _ = write!(
+                                out,
+                                "{}{}/{}",
+                                child_text(pitch, "step"),
+                                child_text(pitch, "octave"),
+                                child_text(pitch, "alter")
                             );
+                        } else {
+                            out.push_str(if has_child(element, "rest") {
+                                "rest"
+                            } else {
+                                "unpitched"
+                            });
+                        }
                         let mut ties = element
                             .children()
                             .filter(|child| child.has_tag_name("tie"))
-                            .map(|tie| tie.attribute("type").unwrap_or("").to_string())
+                            .map(|tie| tie.attribute("type").unwrap_or(""))
                             .collect::<Vec<_>>();
                         ties.sort();
-                        out.push_str(&format!(
-                            "N|{}|{}|{}|{}|{}|{}|{}|{}|{}\n",
-                            content,
+                        let _ = write!(
+                            out,
+                            "|{}|{}|{}|{}|{}|{}|",
                             child_text(element, "duration"),
                             has_child(element, "chord"),
                             has_child(element, "grace"),
                             has_child(element, "cue"),
                             child_text(element, "voice"),
                             child_text(element, "staff"),
-                            ties.join(","),
-                            element.attribute("print-object").unwrap_or("yes"),
-                        ));
+                        );
+                        for (index, tie) in ties.iter().enumerate() {
+                            if index != 0 {
+                                out.push(',');
+                            }
+                            out.push_str(tie);
+                        }
+                        let _ = writeln!(
+                            out,
+                            "|{}",
+                            element.attribute("print-object").unwrap_or("yes")
+                        );
                     }
-                    "backup" => out.push_str(&format!("B|{}\n", child_text(element, "duration"))),
-                    "forward" => out.push_str(&format!(
-                        "F|{}|{}|{}\n",
-                        child_text(element, "duration"),
-                        child_text(element, "voice"),
-                        child_text(element, "staff")
-                    )),
+                    "backup" => {
+                        let _ = writeln!(out, "B|{}", child_text(element, "duration"));
+                    }
+                    "forward" => {
+                        let _ = writeln!(
+                            out,
+                            "F|{}|{}|{}",
+                            child_text(element, "duration"),
+                            child_text(element, "voice"),
+                            child_text(element, "staff")
+                        );
+                    }
                     "attributes" => {
                         // Only conserved attributes are projected; an attributes
                         // element that carries only clefs or staff details is
                         // presentation and leaves no trace.
                         if has_child(element, "divisions") {
-                            out.push_str(&format!("D|{}\n", child_text(element, "divisions")));
+                            let _ = writeln!(out, "D|{}", child_text(element, "divisions"));
                         }
                         for key in element.children().filter(|child| child.has_tag_name("key")) {
-                            out.push_str(&format!("K|{}\n", child_text(key, "fifths")));
+                            let _ = writeln!(out, "K|{}", child_text(key, "fifths"));
                         }
-                        for time in element.children().filter(|child| child.has_tag_name("time")) {
-                            out.push_str(&format!(
-                                "T|{}/{}\n",
+                        for time in element
+                            .children()
+                            .filter(|child| child.has_tag_name("time"))
+                        {
+                            let _ = writeln!(
+                                out,
+                                "T|{}/{}",
                                 child_text(time, "beats"),
                                 child_text(time, "beat-type")
-                            ));
+                            );
                         }
                     }
                     "barline" => {
@@ -2026,12 +2047,13 @@ fn conserved_content_projection(xml: &str) -> Option<String> {
                             .find(|child| child.has_tag_name("repeat"))
                             .and_then(|repeat| repeat.attribute("direction"))
                             .unwrap_or("");
-                        out.push_str(&format!(
-                            "L|{}|{}|{}\n",
+                        let _ = writeln!(
+                            out,
+                            "L|{}|{}|{}",
                             element.attribute("location").unwrap_or("right"),
                             child_text(element, "bar-style"),
                             repeat
-                        ));
+                        );
                     }
                     _ => {}
                 }

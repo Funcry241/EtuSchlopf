@@ -458,6 +458,9 @@ impl ActualCanonicalBeamCapture {
                         next.original_head = row.original_head.as_ref().map(|range|
                             readback.carry_range(range.clone()).map_err(|e| e.to_string()))
                             .transpose()?;
+                        next.original_rest_host = row.original_rest_host.as_ref().map(|range|
+                            readback.carry_range(range.clone()).map_err(|e| e.to_string()))
+                            .transpose()?;
                         Ok(next)
                     })
                     .collect::<Result<Vec<_>, String>>()
@@ -523,6 +526,17 @@ impl ActualCanonicalBeamCapture {
                 }
                 let moved_heads = head_indices.into_iter().zip(moved_heads)
                     .map(|((index, _), range)| (index, range)).collect::<std::collections::BTreeMap<_, _>>();
+                let rest_indices = rows.iter().enumerate().filter_map(|(index, row)|
+                    row.original_rest_host.as_ref().map(|range| (index, range.clone())))
+                    .collect::<Vec<_>>();
+                let moved_rests = transport.carry(before, after,
+                    rest_indices.iter().map(|(_, range)| range.clone()).collect())
+                    .map_err(|error| error.to_string())?;
+                if moved_rests.len() != rest_indices.len() {
+                    return Err("Incomplete original chord rest-host carry".into());
+                }
+                let moved_rests = rest_indices.into_iter().zip(moved_rests)
+                    .map(|((index, _), range)| (index, range)).collect::<std::collections::BTreeMap<_, _>>();
                 Ok(rows
                     .iter()
                     .cloned()
@@ -531,6 +545,7 @@ impl ActualCanonicalBeamCapture {
                     .map(|(index, (mut row, range))| {
                         row.member = range;
                         row.original_head = moved_heads.get(&index).cloned();
+                        row.original_rest_host = moved_rests.get(&index).cloned();
                         row
                     })
                     .collect())
@@ -788,6 +803,12 @@ impl ActualCanonicalBeamCapture {
                     return None;
                 }
                 let mut row = row.clone();
+                // A surviving pitched member must retain the negative record
+                // when only its non-pitched support loses continuation. Dropping
+                // the whole row would hide the missing dependency from C3.
+                if row.original_rest_host.as_ref().is_some_and(&touches) {
+                    row.original_rest_host = None;
+                }
                 if let Some(head) = row.head {
                     row.head = Some(indices.get(head).copied().flatten()?);
                 }
@@ -820,6 +841,8 @@ impl ActualCanonicalBeamCapture {
                 row.member = locate(&row.member).ok_or("Missing FinalChord chord member emission")?;
                 row.original_head = row.original_head.as_ref().map(|range|
                     locate(range).ok_or("Missing FinalChord chord head emission")).transpose()?;
+                row.original_rest_host = row.original_rest_host.as_ref().map(|range|
+                    locate(range).ok_or("Missing FinalChord chord rest-host emission")).transpose()?;
                 Ok(row)
             }).collect());
         retained.carried(after, ranges, attachments, false, locate)
@@ -862,6 +885,18 @@ impl ActualCanonicalBeamCapture {
                 return Err("Incomplete chord attachment continuation".into());
             }
             for (before, next) in prior.iter().zip(&rows) {
+                match (&before.original_rest_host, &next.original_rest_host) {
+                    (Some(old), Some(new)) => {
+                        let old = self.current.get(old.clone()).ok_or("Invalid original chord rest host")?;
+                        let new = after.get(new.clone()).ok_or("Invalid continued chord rest host")?;
+                        if signature(old).map_err(|error| error.to_string())?
+                            != signature(new).map_err(|error| error.to_string())? {
+                            return Err("Original chord rest-host content changed at a following owner".into());
+                        }
+                    }
+                    (None, None) => {}
+                    _ => return Err("Original chord rest-host binding changed at a following owner".into()),
+                }
                 match (&before.original_head, &next.original_head) {
                     (Some(old), Some(new)) => {
                         let old = self.current.get(old.clone()).ok_or("Invalid original physical chord head")?;
@@ -972,6 +1007,9 @@ pub(crate) struct ActualBeamChordAttachment {
     /// Physical head emitted from the same original operation, including heads
     /// outside the beam decision scope. This is not a positive beam decision.
     pub(crate) original_head: Option<std::ops::Range<usize>>,
+    /// Non-pitched cursor host, captured by the same original emitter. This
+    /// relationship is neither a pitched head nor an independent beam decision.
+    pub(crate) original_rest_host: Option<std::ops::Range<usize>>,
     /// Original emitter proved there was no pitched physical head. Distinct
     /// from a head whose operation continuation is missing or ambiguous.
     pub(crate) original_head_absent: bool,
@@ -993,9 +1031,11 @@ fn capture_actual_chord_beam_attachments(
         .filter(|node| node.has_tag_name("measure"))
     {
         let mut physical_head: Option<std::ops::Range<usize>> = None;
+        let mut rest_host: Option<std::ops::Range<usize>> = None;
         for node in measure.children().filter(|node| node.is_element()) {
             if node.has_tag_name("forward") || node.has_tag_name("backup") {
                 physical_head = None;
+                rest_host = None;
             }
             if !node.has_tag_name("note") {
                 continue;
@@ -1004,6 +1044,8 @@ fn capture_actual_chord_beam_attachments(
             let pitched = node.children().any(|child| child.has_tag_name("pitch"));
             if !chord {
                 physical_head = pitched.then(|| node.range());
+                rest_host = node.children().any(|child| child.has_tag_name("rest"))
+                    .then(|| node.range());
                 continue;
             }
             if !pitched {
@@ -1046,6 +1088,15 @@ fn capture_actual_chord_beam_attachments(
                 let first = heads.next()?.0;
                 heads.next().is_none().then_some(first)
             });
+            let original_rest_host = rest_host.as_ref().map(|range| {
+                let output = beam_map.carry(range).and_then(|range| rest_map.carry(&range))
+                    .ok_or_else(|| anyhow::anyhow!("Missing original chord rest-host operation continuation"))?;
+                anyhow::ensure!(actual_beam_note_signature(&before[range.clone()], true)?
+                    == actual_beam_note_signature(after.get(output.clone())
+                        .ok_or_else(|| anyhow::anyhow!("Invalid emitted chord rest host"))?, true)?,
+                    "Original chord rest host changed inside the beam owner");
+                Ok::<_, anyhow::Error>(output)
+            }).transpose()?;
             let unknown = head.is_none().then(|| {
                 if physical_head.is_none() {
                     "No original pitched physical chord head".to_owned()
@@ -1056,6 +1107,7 @@ fn capture_actual_chord_beam_attachments(
             rows.push(ActualBeamChordAttachment {
                 member: output,
                 original_head: head_range,
+                original_rest_host,
                 original_head_absent: physical_head.is_none(),
                 head,
                 unknown,

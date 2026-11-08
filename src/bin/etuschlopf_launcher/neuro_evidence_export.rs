@@ -12,22 +12,13 @@ const ARTIFACT_KIND: &str = "etuschlopf_neuro_evidence";
 const SCHEMA_VERSION: u32 = 2;
 const POPULATION_SCOPE: &str = "qualified_key_change_candidates_v1";
 const CORPUS_COMMIT_ARTIFACT_KIND: &str = "etuschlopf_neuro_corpus_commit";
-const CORPUS_COMMIT_SCHEMA_VERSION: u32 = 1;
+const CORPUS_COMMIT_SCHEMA_VERSION: usize = 2;
+// Schema 1 had no member count and defined exactly ten members. Read-only
+// compatibility for old commits; new corpora take their size from the manifest.
+const LEGACY_CORPUS_COMMIT_PROJECT_COUNT: usize = 10;
 const CORPUS_COMMIT_MAX_BYTES: usize = 128 * 1024;
 const EMPTY_PAYLOAD_SHA256: &str =
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-const REQUIRED_CORPUS_PROJECTS: [&str; 10] = [
-    "Etüde Nr. 1",
-    "Etüde Nr. 2",
-    "Etüde Nr. 3",
-    "Etüde Nr. 4",
-    "Etüde Nr. 5",
-    "Etüde Nr. 6",
-    "Etüde Nr. 7",
-    "Etüde Nr. 8",
-    "Etüde Nr. 9",
-    "Etüde Nr. 10",
-];
 const PRODUCER: &str = "EtuSchlopf";
 const CORPUS_ID: &str = "etuschlopf-tonal-audit";
 const OWNER: &str = "TonalSegmentationEvidenceAudit";
@@ -275,8 +266,8 @@ pub(super) fn publish_neuro_evidence_for_successful_corpus_run(
     })?;
 
     let staged_result = (|| {
-        let mut prepared = Vec::with_capacity(REQUIRED_CORPUS_PROJECTS.len());
-        for (index, project_id) in REQUIRED_CORPUS_PROJECTS.iter().enumerate() {
+        let mut prepared = Vec::with_capacity(corpus.expected_projects.len());
+        for (index, project_id) in corpus.expected_projects.iter().enumerate() {
             let evidence = corpus
                 .projects
                 .iter()
@@ -303,6 +294,7 @@ pub(super) fn publish_neuro_evidence_for_successful_corpus_run(
         }
         validate_prepared_corpus(
             &prepared,
+            &corpus.expected_projects,
             &producer_build,
             &source_identity,
             corpus_run_id,
@@ -361,21 +353,17 @@ pub(super) fn publish_neuro_evidence_for_successful_corpus_run(
 fn validate_required_corpus_members(
     corpus: &super::corpus_run_manifest::CorpusRunManifest,
 ) -> Result<(), String> {
-    if corpus.expected_project_count != REQUIRED_CORPUS_PROJECTS.len()
-        || corpus.expected_projects.len() != REQUIRED_CORPUS_PROJECTS.len()
-        || corpus.projects.len() != REQUIRED_CORPUS_PROJECTS.len()
+    if corpus.expected_project_count == 0
+        || corpus.expected_projects.len() != corpus.expected_project_count
+        || corpus.projects.len() != corpus.expected_project_count
     {
         return Err(format!(
-            "Neuro-Evidence-Corpus: 10/10 erforderlich, Manifest meldet expected {} / names {} / evidence {}",
+            "Neuro-Evidence-Corpus: vollstaendige nichtleere Projektmenge erforderlich, Manifest meldet expected {} / names {} / evidence {}",
             corpus.expected_project_count,
             corpus.expected_projects.len(),
             corpus.projects.len()
         ));
     }
-    let required = REQUIRED_CORPUS_PROJECTS
-        .iter()
-        .copied()
-        .collect::<BTreeSet<_>>();
     let expected = corpus
         .expected_projects
         .iter()
@@ -386,9 +374,13 @@ fn validate_required_corpus_members(
         .iter()
         .map(|row| row.project.as_str())
         .collect::<BTreeSet<_>>();
-    if expected != required || evidenced != required {
+    if expected.len() != corpus.expected_project_count
+        || evidenced.len() != corpus.expected_project_count
+        || expected.iter().any(|name| name.trim().is_empty())
+        || expected != evidenced
+    {
         return Err(
-            "Neuro-Evidence-Corpus: Projektmenge ist nicht exakt Etuede Nr. 1 bis 10"
+            "Neuro-Evidence-Corpus: Projektmengen sind leer, doppelt oder inkonsistent"
                 .to_string(),
         );
     }
@@ -509,14 +501,15 @@ fn prepare_project_archive(
 
 fn validate_prepared_corpus(
     prepared: &[PreparedCorpusArchive],
+    expected_projects: &[String],
     producer_build: &str,
     source_identity: &str,
     corpus_run_id: &str,
 ) -> Result<(), String> {
-    if prepared.len() != REQUIRED_CORPUS_PROJECTS.len() {
+    if expected_projects.is_empty() || prepared.len() != expected_projects.len() {
         return Err(format!(
-            "Neuro-Evidence-Corpus: vorbereitet {} statt 10 Archive",
-            prepared.len()
+            "Neuro-Evidence-Corpus: vorbereitet {} statt {} Archive",
+            prepared.len(), expected_projects.len()
         ));
     }
     let mut projects = BTreeSet::new();
@@ -549,12 +542,12 @@ fn validate_prepared_corpus(
             ));
         }
     }
-    let required = REQUIRED_CORPUS_PROJECTS
+    let required = expected_projects
         .iter()
-        .copied()
+        .map(String::as_str)
         .collect::<BTreeSet<_>>();
-    if projects != required {
-        return Err("Neuro-Evidence-Corpus: vorbereitete Projektmenge ist nicht 10/10".to_string());
+    if required.len() != expected_projects.len() || projects != required {
+        return Err("Neuro-Evidence-Corpus: vorbereitete Projektmenge weicht vom Manifest ab".to_string());
     }
     Ok(())
 }
@@ -576,6 +569,7 @@ fn corpus_commit_json(
         &mut out,
         "  \"schema-version\": {CORPUS_COMMIT_SCHEMA_VERSION},"
     );
+    let _ = writeln!(&mut out, "  \"project-count\": {},", prepared.len());
     let _ = writeln!(&mut out, "  \"producer\": \"{PRODUCER}\",");
     let _ = writeln!(
         &mut out,
@@ -634,9 +628,9 @@ fn validate_corpus_commit_bytes(
     if commit.is_empty() || commit.len() > CORPUS_COMMIT_MAX_BYTES {
         return Err("Neuro-Evidence-Corpus: Commit-Groesse ausserhalb Vertrag".to_string());
     }
+    let count = corpus_commit_project_count(commit)?;
     for required in [
         format!("\"artifact-kind\": \"{CORPUS_COMMIT_ARTIFACT_KIND}\""),
-        format!("\"schema-version\": {CORPUS_COMMIT_SCHEMA_VERSION}"),
         format!("\"producer-build\": \"{}\"", json_escape(producer_build)),
         format!("\"corpus-run-id\": \"{}\"", json_escape(corpus_run_id)),
         format!(
@@ -656,16 +650,16 @@ fn validate_corpus_commit_bytes(
             ));
         }
     }
-    if prepared.len() != REQUIRED_CORPUS_PROJECTS.len()
-        || commit.matches("\"project-id\":").count() != REQUIRED_CORPUS_PROJECTS.len()
-        || commit.matches("\"evidence-archive\":").count() != REQUIRED_CORPUS_PROJECTS.len()
-        || commit.matches("\"archive-sha-256\":").count() != REQUIRED_CORPUS_PROJECTS.len()
+    if prepared.len() != count
+        || commit.matches("\"project-id\":").count() != count
+        || commit.matches("\"evidence-archive\":").count() != count
+        || commit.matches("\"archive-sha-256\":").count() != count
         || commit
             .matches("\"qualified-decision-count\":")
             .count()
-            != REQUIRED_CORPUS_PROJECTS.len()
+            != count
     {
-        return Err("Neuro-Evidence-Corpus: Commit enthaelt nicht exakt zehn Mitglieder".to_string());
+        return Err("Neuro-Evidence-Corpus: Commit-Mitgliederzahl weicht vom gebundenen Umfang ab".to_string());
     }
     for archive in prepared {
         for required in [
@@ -688,6 +682,26 @@ fn validate_corpus_commit_bytes(
         }
     }
     Ok(())
+}
+
+fn corpus_commit_project_count(commit: &str) -> Result<usize, String> {
+    if commit.matches("\"schema-version\"").count() != 1 {
+        return Err("Neuro-Evidence-Corpus: Commit-Schemaversion fehlt oder ist mehrdeutig".to_string());
+    }
+    let count = match retention_json_usize(commit, "schema-version")? {
+        1 => LEGACY_CORPUS_COMMIT_PROJECT_COUNT,
+        CORPUS_COMMIT_SCHEMA_VERSION => {
+            if commit.matches("\"project-count\"").count() != 1 {
+                return Err("Neuro-Evidence-Corpus: Commit-Projektzahl fehlt oder ist mehrdeutig".to_string());
+            }
+            retention_json_usize(commit, "project-count")?
+        }
+        _ => return Err("Neuro-Evidence-Corpus: unbekannte Commit-Schemaversion".to_string()),
+    };
+    if count == 0 {
+        return Err("Neuro-Evidence-Corpus: leerer Commit ist kein Korpusbeleg".to_string());
+    }
+    Ok(count)
 }
 
 fn publish_prepared_corpus(
@@ -867,8 +881,8 @@ fn plan_transfer_retention(
     }
     let cohorts = commits
         .iter()
-        .filter_map(|path| validate_retention_cohort(output_dir, path).ok())
-        .collect::<Vec<_>>();
+        .map(|path| validate_retention_cohort(output_dir, path))
+        .collect::<Result<Vec<_>, _>>()?;
     let committed_names = cohorts
         .iter()
         .flat_map(|cohort| cohort.members.iter().map(|member| member.file_name.clone()))
@@ -1016,8 +1030,8 @@ fn validate_retention_cohort(
         .lines()
         .filter(|line| line.contains("\"project-id\":"))
         .collect::<Vec<_>>();
-    if lines.len() != REQUIRED_CORPUS_PROJECTS.len() {
-        return Err("Transfer-Retention: Commit ist nicht 10/10".to_string());
+    if lines.len() != corpus_commit_project_count(&commit)? {
+        return Err("Transfer-Retention: Commit-Mitgliederzahl verletzt".to_string());
     }
     let mut projects = BTreeSet::new();
     let mut files = BTreeSet::new();
@@ -1042,13 +1056,6 @@ fn validate_retention_cohort(
             qualified_decision_count: retention_json_usize(line, "qualified-decision-count")?,
             manifest: String::new(),
         });
-    }
-    let required = REQUIRED_CORPUS_PROJECTS
-        .iter()
-        .copied()
-        .collect::<BTreeSet<_>>();
-    if projects.iter().map(String::as_str).collect::<BTreeSet<_>>() != required {
-        return Err("Transfer-Retention: Commit-Projektmenge ist nicht 10/10".to_string());
     }
     validate_corpus_commit_bytes(
         &commit,
@@ -1988,22 +1995,150 @@ fn utc_civil_from_unix_days(days: i64) -> Result<(i64, u32, u32), String> {
 mod tests {
     use super::*;
 
-    const SAMPLE_REPORT: &str = concat!(
-        "Kurz: TonalSegmentationEvidenceAudit: BoundariesChecked 43; ",
-        "KeyChangeCandidates 2; FullEvidenceCandidates 0; PromisingCandidates 1; ",
-        "HeldCandidates 1; WriterOpen nein; RenderXmlWrite nein; LegacyMusicMutation nein; ",
-        "MasterApply nein.\n",
-        "TonalBoundaryLedger: BoundaryM | Window | SourceFifths | Candidate | LBDM | Bee | ",
-        "Margin | Stable | BassCadence | AccidentalCostBeforeAfter | HMM | GreenGroups | ",
-        "Counterevidence | Verdict\n",
-        "31 | 27-34 | 2 | H-Dur/B-major(5) | 2 | 2 | 104 | 4 | 4 | 21/2 | 68 | 5 | notation_saving_small | promising_candidate_more_corpus_calibration\n",
-        "30 | 26-33 | 2 | H-Dur/B-major(5) | 1 | 1 | 82 | 0 | 4 | 17/0 | 46 | 3 | boundary_weak,short_tonicization_risk,notation_saving_small | held_as_tonicization_or_chromatic_colour\n",
-        "Decision: Audit-only.\n"
-    );
+    fn synthetic_projects(count: usize) -> Vec<String> {
+        (0..count).map(|index| format!("Synthetic Project {index} Ω")).collect()
+    }
+
+    fn synthetic_corpus(projects: Vec<String>) -> super::super::corpus_run_manifest::CorpusRunManifest {
+        use super::super::corpus_run_manifest::{project_evidence, CorpusRunManifest};
+        let mut corpus = CorpusRunManifest::started("0.10.1839", "synthetic-run".to_string(), 1, projects.clone());
+        corpus.projects = projects.iter().map(|name| project_evidence(name, Path::new("synthetic.result.txt"), "synthetic report", Some(0), true)).collect();
+        corpus
+    }
+
+    #[test]
+    fn corpus_membership_uses_the_manifest_under_renaming_reordering_and_size_changes() {
+        for count in [1, 3, 11] {
+            let mut corpus = synthetic_corpus(synthetic_projects(count));
+            validate_required_corpus_members(&corpus).expect("arbitrary complete synthetic corpus");
+            corpus.projects.reverse();
+            validate_required_corpus_members(&corpus).expect("evidence order does not define membership");
+            for (index, name) in corpus.expected_projects.iter_mut().enumerate() {
+                let old = name.clone();
+                *name = format!("Renamed Input {} Ü", index + 100);
+                corpus.projects.iter_mut().find(|row| row.project == old).unwrap().project = name.clone();
+            }
+            validate_required_corpus_members(&corpus).expect("labels carry identity without selecting a special corpus");
+            let mut invalid = corpus.clone();
+            invalid.projects.pop();
+            assert!(validate_required_corpus_members(&invalid).is_err());
+            let mut invalid = corpus.clone();
+            invalid.projects[0].project = "Unexpected Synthetic Input".to_string();
+            assert!(validate_required_corpus_members(&invalid).is_err());
+            let mut invalid = corpus.clone();
+            invalid.expected_project_count += 1;
+            assert!(validate_required_corpus_members(&invalid).is_err());
+            if count > 1 {
+                let mut invalid = corpus.clone();
+                invalid.expected_projects[1] = invalid.expected_projects[0].clone();
+                invalid.projects[1].project = invalid.projects[0].project.clone();
+                assert!(validate_required_corpus_members(&invalid).is_err());
+            }
+        }
+        assert!(validate_required_corpus_members(&synthetic_corpus(Vec::new())).is_err());
+        assert!(validate_required_corpus_members(&synthetic_corpus(vec![" ".to_string()])).is_err());
+    }
+
+    #[test]
+    fn variable_corpus_archives_publish_and_roundtrip_through_retention_without_named_witnesses() {
+        for count in [1, 3, 11, LEGACY_CORPUS_COMMIT_PROJECT_COUNT] {
+            let root = test_zip_path("variable_corpus").with_extension("");
+            let stage = root.join("target/staging");
+            fs::create_dir_all(&stage).unwrap();
+            let report = stage.join("synthetic.result.txt");
+            fs::write(&report, sample_report(0)).unwrap();
+            let projects = synthetic_projects(count);
+            let prepared = projects.iter().enumerate().map(|(index, name)| {
+                let file_name = format!("etuschlopf_neuro_evidence_synthetic_{index}.zip");
+                prepare_project_archive(&report, name, sample_provenance(), file_name.clone(), stage.join(file_name)).unwrap()
+            }).collect::<Vec<_>>();
+            let p = sample_provenance();
+            validate_prepared_corpus(&prepared, &projects, p.producer_build, p.source_identity, p.corpus_run_id).unwrap();
+            assert!(validate_prepared_corpus(&prepared[..count-1], &projects, p.producer_build, p.source_identity, p.corpus_run_id).is_err());
+            let commit = corpus_commit_json(&prepared, p.producer_build, p.source_identity, p.corpus_run_id, p.created_at_utc);
+            validate_corpus_commit_bytes(&commit, &prepared, p.producer_build, p.source_identity, p.corpus_run_id).unwrap();
+            let staged = stage.join("etuschlopf_neuro_corpus_commit_synthetic.json");
+            fs::write(&staged, &commit).unwrap();
+            let published = publish_prepared_corpus(&root, &prepared, &staged).unwrap();
+            let output = root.join(NEURO_EVIDENCE_OUTPUT_DIR);
+            let cohort = validate_retention_cohort(&output, &published).unwrap();
+            assert_eq!(cohort.members.iter().map(|a| a.project_id.clone()).collect::<BTreeSet<_>>(), projects.into_iter().collect());
+            if count == LEGACY_CORPUS_COMMIT_PROJECT_COUNT {
+                let legacy = commit.replace("\"schema-version\": 2", "\"schema-version\": 1");
+                let legacy = legacy.lines().filter(|line| !line.contains("\"project-count\"")).collect::<Vec<_>>().join("\n");
+                fs::write(&published, legacy).unwrap();
+                assert_eq!(validate_retention_cohort(&output, &published).unwrap().members.len(), count);
+            }
+            // An incomplete or corrupt commit must stop cleanup rather than be
+            // discarded and leave its surviving archives eligible as standalones.
+            let damaged = commit.replace(&format!("\"project-count\": {count}"), &format!("\"project-count\": {}", count+1));
+            fs::write(&published, damaged).unwrap();
+            assert!(plan_transfer_retention(&output, &BTreeSet::new()).is_err());
+            assert!(published.is_file());
+            for member in &cohort.members { assert!(output.join(&member.file_name).is_file()); }
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn commit_schema_binds_variable_counts_and_reads_the_legacy_count_without_project_names() {
+        for count in [1, 3, 11] {
+            let prepared = test_retention_cohort(Path::new("synthetic"), "count", "synthetic-time").members;
+            let mut members = Vec::new();
+            for index in 0..count {
+                let mut member = prepared[0].clone();
+                member.project_id = format!("Synthetic Member {index}");
+                member.file_name = format!("etuschlopf_neuro_evidence_synthetic_{index}.zip");
+                member.archive_sha256 = format!("{index:064x}");
+                members.push(member);
+            }
+            let commit = corpus_commit_json(&members, "build", "source", "run", "time");
+            validate_corpus_commit_bytes(&commit, &members, "build", "source", "run").expect("variable count bound");
+            let wrong_count = commit.replace(&format!("\"project-count\": {count}"), &format!("\"project-count\": {}", count + 1));
+            assert!(validate_corpus_commit_bytes(&wrong_count, &members, "build", "source", "run").is_err());
+            assert!(validate_corpus_commit_bytes(&commit, &members[..count-1], "build", "source", "run").is_err());
+        }
+        assert_eq!(corpus_commit_project_count("{\"schema-version\":1}").unwrap(), LEGACY_CORPUS_COMMIT_PROJECT_COUNT);
+        for invalid in ["{\"schema-version\":2}", "{\"schema-version\":2,\"project-count\":0}", "{\"schema-version\":99,\"project-count\":3}"] {
+            assert!(corpus_commit_project_count(invalid).is_err());
+        }
+    }
+
+    fn sample_report(offset: usize) -> String {
+        format!(concat!(
+            "Kurz: TonalSegmentationEvidenceAudit: BoundariesChecked {boundaries}; ",
+            "KeyChangeCandidates 2; FullEvidenceCandidates 0; PromisingCandidates 1; ",
+            "HeldCandidates 1; WriterOpen nein; RenderXmlWrite nein; LegacyMusicMutation nein; ",
+            "MasterApply nein.\n",
+            "TonalBoundaryLedger: BoundaryM | Window | SourceFifths | Candidate | LBDM | Bee | ",
+            "Margin | Stable | BassCadence | AccidentalCostBeforeAfter | HMM | GreenGroups | ",
+            "Counterevidence | Verdict\n",
+            "{a} | {pre_a}-{post_a} | 2 | H-Dur/B-major(5) | 2 | 2 | 104 | 4 | 4 | 21/2 | 68 | 5 | notation_saving_small | promising_candidate_more_corpus_calibration\n",
+            "{b} | {pre_b}-{post_b} | 2 | H-Dur/B-major(5) | 1 | 1 | 82 | 0 | 4 | 17/0 | 46 | 3 | boundary_weak,short_tonicization_risk,notation_saving_small | held_as_tonicization_or_chromatic_colour\n",
+            "Decision: Audit-only.\n"
+        ), boundaries=offset+12, a=offset+6, pre_a=offset+2, post_a=offset+9,
+           b=offset+5, pre_b=offset+1, post_b=offset+8)
+    }
 
     fn sample_rows() -> Vec<TonalAuditRow> {
-        let summary = parse_tonal_audit_summary(SAMPLE_REPORT).expect("summary");
-        parse_tonal_audit_rows(SAMPLE_REPORT, summary).expect("rows")
+        let summary = parse_tonal_audit_summary(&sample_report(0)).expect("summary");
+        parse_tonal_audit_rows(&sample_report(0), summary).expect("rows")
+    }
+
+    #[test]
+    fn synthetic_tonal_report_rows_relocate_without_changing_their_audit_values() {
+        let baseline = sample_rows();
+        for offset in [17, 100] {
+            let report = sample_report(offset);
+            let summary = parse_tonal_audit_summary(&report).unwrap();
+            let mut rows = parse_tonal_audit_rows(&report, summary).unwrap();
+            for row in &mut rows {
+                row.boundary_measure -= offset;
+                row.pre_start_measure -= offset;
+                row.post_end_measure -= offset;
+            }
+            assert_eq!(rows, baseline);
+        }
     }
 
     fn sample_provenance() -> EvidenceProvenance<'static> {
@@ -2026,7 +2161,7 @@ mod tests {
             fs::write(project_root.join("ZIP_KIND.txt"), "revision=r9000\n")
                 .expect("revision");
             let report = project_root.join("Synthetic Project.result.txt");
-            fs::write(&report, SAMPLE_REPORT).expect("synthetic report");
+            fs::write(&report, sample_report(0)).expect("synthetic report");
             let path = publish_neuro_evidence_for_successful_normal_run(
                 project_root,
                 &report,
@@ -2054,7 +2189,7 @@ mod tests {
         let stage = project_root.join("target/staging");
         fs::create_dir_all(&stage).expect("staging");
         let report = stage.join("synthetic.result.txt");
-        fs::write(&report, SAMPLE_REPORT).expect("synthetic report");
+        fs::write(&report, sample_report(0)).expect("synthetic report");
         let stamp = "20260815T193000_000000000Z";
         let name = format!("etuschlopf_neuro_evidence_{stamp}_01.zip");
         let archive = prepare_project_archive(
@@ -2148,8 +2283,8 @@ mod tests {
 
     #[test]
     fn report_summary_parser_requires_machine_tonal_summary() {
-        let summary = parse_tonal_audit_summary(SAMPLE_REPORT).expect("summary");
-        let rows = parse_tonal_audit_rows(SAMPLE_REPORT, summary).expect("rows");
+        let summary = parse_tonal_audit_summary(&sample_report(0)).expect("summary");
+        let rows = parse_tonal_audit_rows(&sample_report(0), summary).expect("rows");
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].source_fifths, 2);
         assert_eq!(rows[0].candidate_fifths, 5);
@@ -2159,10 +2294,9 @@ mod tests {
         assert!(rows[1].counter_boundary_weak);
         assert!(rows[1].counter_short_tonicization_risk);
         assert!(parse_tonal_audit_summary("no tonal evidence").is_err());
-        let truncated = SAMPLE_REPORT.replace(
-            "30 | 26-33 | 2 | H-Dur/B-major(5) | 1 | 1 | 82 | 0 | 4 | 17/0 | 46 | 3 | boundary_weak,short_tonicization_risk,notation_saving_small | held_as_tonicization_or_chromatic_colour\n",
-            "",
-        );
+        let report = sample_report(0);
+        let row = report.lines().find(|line| line.ends_with(HELD_CANDIDATE)).unwrap();
+        let truncated = report.replace(&format!("{row}\n"), "");
         let summary = parse_tonal_audit_summary(&truncated).expect("summary");
         assert!(parse_tonal_audit_rows(&truncated, summary).is_err());
     }
@@ -2312,12 +2446,13 @@ mod tests {
     }
 
     #[test]
+    // Protected negative-check identity retained; cardinality is now manifest-bound.
     fn corpus_commit_binds_exact_ten_project_archives() {
-        let prepared = REQUIRED_CORPUS_PROJECTS
+        let prepared = synthetic_projects(3)
             .iter()
             .enumerate()
             .map(|(index, project_id)| PreparedCorpusArchive {
-                project_id: (*project_id).to_string(),
+                project_id: project_id.to_string(),
                 file_name: format!("etuschlopf_neuro_evidence_test_{:02}.zip", index + 1),
                 staged_path: PathBuf::from(format!("staged_{:02}.zip", index + 1)),
                 archive_sha256: format!("{:064x}", index + 1),
@@ -2340,8 +2475,8 @@ mod tests {
             "corpus-test",
         )
         .expect("commit closure");
-        assert_eq!(commit.matches("\"project-id\":").count(), 10);
-        assert_eq!(commit.matches("\"archive-sha-256\":").count(), 10);
+        assert_eq!(commit.matches("\"project-id\":").count(), prepared.len());
+        assert_eq!(commit.matches("\"archive-sha-256\":").count(), prepared.len());
         assert!(commit.contains("\"population-scope\": \"qualified_key_change_candidates_v1\""));
     }
 
@@ -2459,11 +2594,11 @@ mod tests {
         token: &str,
         created_at_utc: &str,
     ) -> RetentionCorpusCohort {
-        let members = REQUIRED_CORPUS_PROJECTS
+        let members = synthetic_projects(3)
             .iter()
             .enumerate()
             .map(|(index, project_id)| PreparedCorpusArchive {
-                project_id: (*project_id).to_string(),
+                project_id: project_id.to_string(),
                 file_name: format!(
                     "etuschlopf_neuro_evidence_{token}_{:02}.zip",
                     index + 1

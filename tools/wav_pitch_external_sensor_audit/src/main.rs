@@ -239,7 +239,8 @@ fn run() -> Result<()> {
         format!("{freeze_sha}\n").as_bytes(),
     )?;
 
-    let deterministic_repeat = if args.project == "Etüde Nr. 6" {
+    // Qualification follows the frozen sensor input, independently of its label.
+    let deterministic_repeat = {
         let repeat = infer_basic_pitch(&model_path, &mono_22050, source_frame_count)?;
         let mut repeat_events = decode_polyphonic_events(&repeat)?;
         normalize_event_order(&mut repeat_events);
@@ -248,8 +249,6 @@ fn run() -> Result<()> {
         } else {
             "no"
         }
-    } else {
-        "not_probed"
     };
 
     // STAGE 2: Only after SENSOR_OUTPUT_FROZEN may the FrozenLegacySourceOracle be read or

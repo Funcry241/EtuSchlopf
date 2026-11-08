@@ -2539,6 +2539,20 @@ fn remove_orphan_slur_and_tie_endpoints(
     if notes.is_empty() {
         return ((0, 0), master_state_identity::OwnerReceipts::default());
     }
+    // Exact extrema of this owner's immutable visible/non-rest observations.
+    // Strict ordinal comparisons preserve the existing global slur pairing.
+    let mut first_slur_start = BTreeMap::<&str, usize>::new();
+    let mut last_slur_stop = BTreeMap::<&str, usize>::new();
+    for (ordinal, note) in notes.iter().enumerate() {
+        if !note.visible || note.rest { continue; }
+        for tag in &note.slurs {
+            match tag.type_attr.as_str() {
+                "start" => { first_slur_start.entry(tag.number.as_str()).or_insert(ordinal); }
+                "stop" => { last_slur_stop.insert(tag.number.as_str(), ordinal); }
+                _ => {}
+            }
+        }
+    }
     let mut remove_slur_ranges: Vec<(usize, usize)> = Vec::new();
     let mut remove_tie_ranges: Vec<(usize, usize)> = Vec::new();
 
@@ -2550,21 +2564,13 @@ fn remove_orphan_slur_and_tie_endpoints(
             }
             match tag.type_attr.as_str() {
                 "start" => {
-                    let has_stop = notes.iter().skip(idx + 1).any(|other| {
-                        other.visible
-                            && !other.rest
-                            && other.slurs.iter().any(|candidate| candidate.number == tag.number && candidate.type_attr == "stop")
-                    });
+                    let has_stop = last_slur_stop.get(tag.number.as_str()).is_some_and(|stop| *stop > idx);
                     if !has_stop {
                         remove_slur_ranges.push((tag.abs_start, tag.abs_end));
                     }
                 }
                 "stop" => {
-                    let has_start = notes.iter().take(idx).any(|other| {
-                        other.visible
-                            && !other.rest
-                            && other.slurs.iter().any(|candidate| candidate.number == tag.number && candidate.type_attr == "start")
-                    });
+                    let has_start = first_slur_start.get(tag.number.as_str()).is_some_and(|start| *start < idx);
                     if !has_start {
                         remove_slur_ranges.push((tag.abs_start, tag.abs_end));
                     }

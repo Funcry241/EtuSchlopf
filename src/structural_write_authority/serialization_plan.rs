@@ -1857,6 +1857,11 @@ impl FrozenSerializationVoiceChannelPlan {
         production: &FrozenSerializedVoicePlan,
     ) -> Option<(Self, FrozenSerializedVoicePlan)> {
         written_assignment_graph_probe::append(out, self, canonical, original_beams, production);
+        if let Some(replacement) = self.checked_original_notation_beam_components(
+            out, canonical, attacks, original_beams, legacy_preferences, production,
+        ) {
+            return Some(replacement);
+        }
         // Both runs use the same allocator, original beam observation and label
         // preferences. Only the sounding conflict edges differ.
         let probe = build_frozen_serialization_voice_channels(
@@ -1915,6 +1920,186 @@ impl FrozenSerializationVoiceChannelPlan {
             return Some(pair);
         }
         let _ = writeln!(out, "WrittenOnlyChannelDecision: retained_baseline; reason=no_verified_channel_merge");
+        None
+    }
+
+    fn checked_original_notation_beam_components(
+        &self,
+        out: &mut String,
+        canonical: &CanonicalFinalChordStructuralPlan,
+        attacks: &[FrozenVoiceAttackEvidenceRow],
+        original_beams: &ActualSourceBeamBindingObservation,
+        legacy_preferences: &[LegacyVoiceLabelPreferenceRow],
+        production: &FrozenSerializedVoicePlan,
+    ) -> Option<(Self, FrozenSerializedVoicePlan)> {
+        let _timing = crate::audit_only::voice_allocation_timing::Timer::span("OriginalComponents");
+        let projection_reuse = cross_role_channel_sharing::ProjectionReuse::new(canonical, original_beams);
+        let mut accepted_sources = std::collections::BTreeSet::new();
+        let mut accepted: Option<(Self, FrozenSerializedVoicePlan)> = None;
+        for group in &canonical.original_beam_voice_groups {
+            let sources = group.allocation_sources();
+            let labels = sources.iter().filter_map(|source| production.label_for_source(*source))
+                .collect::<std::collections::BTreeSet<_>>();
+            if labels.len() < 2 { continue; }
+            let _proposal_timing = crate::audit_only::voice_allocation_timing::Timer::span("OriginalComponent");
+            let mut proposed_sources = accepted_sources.clone();
+            proposed_sources.extend(sources.iter().copied());
+            let attempt = (|| -> io::Result<_> {
+                let channels = build_frozen_serialization_voice_channels_with_notation_components(
+                    canonical, attacks, Some(original_beams), legacy_preferences, &proposed_sources,
+                    Some(&projection_reuse),
+                )?;
+                let voices = channels.bind_original_component_labels(canonical, production, &proposed_sources)?;
+                channels.require_consumer_admission(canonical, &voices)?;
+                cross_role_channel_sharing::check_original_notation_component_projection(
+                    canonical, production, &voices, original_beams, &proposed_sources, &projection_reuse,
+                )?;
+                Ok((channels, voices))
+            })();
+            match attempt {
+                Ok(pair) => {
+                    accepted_sources = proposed_sources;
+                    accepted = Some(pair);
+                    let _ = writeln!(out, "OriginalNotationBeamAllocation: admitted; scope=sealed_source_component; authority=original_owner_and_pre_lane_relation");
+                }
+                Err(error) => {
+                    let _ = writeln!(out, "OriginalNotationBeamAllocation: retained_baseline; reason={error}");
+                }
+            }
+        }
+        // Compose the admitted original-source quotient with written-time
+        // compatibility before materialization. Technical channels may contain
+        // unrelated resources; only the sealed source-closed component moves.
+        if let Some((mut channels, mut voices)) = accepted.take() {
+            let mut channel_order = std::collections::BTreeMap::new();
+            for row in canonical.source_locators.iter() {
+                if let Some(&channel) = channels.source_to_channel.get(&row.source_event_id) {
+                    let rank = channel_order.len();
+                    channel_order.entry(channel).or_insert(rank);
+                }
+            }
+            for group in &canonical.original_beam_voice_groups {
+                let sources = group.allocation_sources();
+                if !sources.is_subset(&accepted_sources) { continue; }
+                if let Some((next_channels, next_voices)) = channels.checked_original_component_written_reuse(
+                    out, canonical, &voices, &sources, &channel_order, &projection_reuse,
+                ) {
+                    let _ = writeln!(out, "OriginalNotationWrittenRefinement: admitted; sources={sources:?}; moved_sources={}; channels_before={}; channels_after={}; authority=original_notation_and_complete_written_preservation",
+                        sources.len(), channels.channel_count(), next_channels.channel_count());
+                    channels = next_channels;
+                    voices = next_voices;
+                }
+            }
+            accepted = Some((channels, voices));
+        }
+        projection_reuse.append_diagnostics(out);
+        crate::audit_only::voice_allocation_timing::summary();
+        accepted
+    }
+
+    fn bind_original_component_labels(
+        &self,
+        canonical: &CanonicalFinalChordStructuralPlan,
+        before: &FrozenSerializedVoicePlan,
+        sources: &std::collections::BTreeSet<usize>,
+    ) -> io::Result<FrozenSerializedVoicePlan> {
+        let invalid = || io::Error::new(io::ErrorKind::InvalidData,
+            "original_component_has_no_label_preserving_binding");
+        if !self.authority_bound || !before.authority_bound
+            || self.source_to_channel.keys().ne(before.source_to_label.keys())
+        { return Err(invalid()); }
+        let mut names = std::collections::BTreeMap::new();
+        let mut used = std::collections::BTreeSet::new();
+        // Reserve every unaffected lane first. No unrelated source can lose
+        // its existing label because a component's channel count changed.
+        for (&channel, role) in &self.channel_to_role {
+            let outside = self.source_to_channel.iter()
+                .filter(|(source, assigned)| **assigned == channel && !sources.contains(*source))
+                .map(|(source, _)| before.label_for_source(*source).map(str::to_owned).ok_or_else(invalid))
+                .collect::<io::Result<std::collections::BTreeSet<_>>>()?;
+            if outside.len() > 1 { return Err(invalid()); }
+            if let Some(label) = outside.first() {
+                if before.role_for_label(label) != Some(*role) || !used.insert(label.clone()) {
+                    return Err(invalid());
+                }
+                names.insert(channel, label.clone());
+            }
+        }
+        for (&channel, role) in &self.channel_to_role {
+            if names.contains_key(&channel) { continue; }
+            let mut selected = None;
+            // Actual producer order supplies a naming tie-break, never an
+            // opaque identifier or numerical voice-label preference.
+            for matching_role in [true, false] {
+                selected = canonical.source_locators.iter().filter(|row|
+                    sources.contains(&row.source_event_id)
+                        && self.source_to_channel.get(&row.source_event_id) == Some(&channel))
+                    .filter_map(|row| before.label_for_source(row.source_event_id))
+                    .find(|label| !used.contains(*label)
+                        && (!matching_role || before.role_for_label(label) == Some(*role)))
+                    .map(str::to_owned);
+                if selected.is_some() { break; }
+            }
+            let label = selected.ok_or_else(invalid)?;
+            used.insert(label.clone());
+            names.insert(channel, label);
+        }
+        let canonical_names = bind_musicxml_voice_labels(self, &[])?;
+        let mapping = canonical_names.channel_to_label.iter()
+            .map(|(channel, label)| (label.clone(), names[channel].clone()))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let permutation = canonical_names.channel_to_label.values().cloned()
+            .collect::<std::collections::BTreeSet<_>>().iter()
+            .map(|label| mapping[label].clone()).collect::<Vec<_>>();
+        final_chord_permute_sealed_voice_labels(&canonical_names, &permutation)
+    }
+
+    fn checked_original_component_written_reuse(
+        &self,
+        out: &mut String,
+        canonical: &CanonicalFinalChordStructuralPlan,
+        before: &FrozenSerializedVoicePlan,
+        sources: &std::collections::BTreeSet<usize>,
+        channel_order: &std::collections::BTreeMap<usize, usize>,
+        reuse: &cross_role_channel_sharing::ProjectionReuse<'_>,
+    ) -> Option<(Self, FrozenSerializedVoicePlan)> {
+        let guests = sources.iter().filter_map(|source| self.source_to_channel.get(source).copied())
+            .collect::<std::collections::BTreeSet<_>>();
+        let &guest = guests.first()?;
+        if guests.len() != 1 { return None; }
+        let mut hosts = self.channel_to_role.keys().copied().filter(|host|
+            channel_order.get(host).zip(channel_order.get(&guest)).is_some_and(|(a, b)| a < b)
+                && self.channel_to_role[host] == self.channel_to_role[&guest]).collect::<Vec<_>>();
+        hosts.sort_by_key(|host| channel_order[host]);
+        for host in hosts {
+            let destination_sources = self.source_to_channel.iter().filter_map(|(source, channel)|
+                (*channel == host).then_some(*source)).collect();
+            if !canonical.proves_original_notation_voice_for_component_reuse(sources, &destination_sources) {
+                let _ = writeln!(out, "OriginalNotationWrittenRefinement: retained_component; sources={sources:?}; reason=no_complete_common_original_notation_voice");
+                continue;
+            }
+            let mut proposed = self.clone();
+            for source in sources { *proposed.source_to_channel.get_mut(source)? = host; }
+            if !proposed.source_to_channel.values().any(|channel| *channel == guest) {
+                proposed.channel_to_role.remove(&guest);
+            }
+            proposed.channel_count = proposed.channel_to_role.len();
+            proposed.label_continuation = None;
+            proposed.semantic_fingerprint_fnv64 = fingerprint(&format!(
+                "ETUSCHLOPF_ORIGINAL_WRITTEN_REUSE_V1|{:016x}|{:?}|{host}",
+                self.semantic_fingerprint_fnv64, sources));
+            proposed.consumer_allocation = ChannelConsumerAllocation::AdmittedAfterOriginalWrittenReuse;
+            let Ok(voices) = proposed.bind_original_component_labels(canonical, before, sources) else { continue; };
+            let admission = proposed.require_consumer_admission(canonical, &voices)
+                .and_then(|()| cross_role_channel_sharing::check_original_component_written_reuse(
+                    canonical, before, &voices, sources, reuse));
+            match admission {
+                Ok(()) => return Some((proposed, voices)),
+                Err(error) => {
+                    let _ = writeln!(out, "OriginalNotationWrittenRefinement: retained_component; sources={sources:?}; reason={error}");
+                }
+            }
+        }
         None
     }
 
@@ -2007,13 +2192,13 @@ impl FrozenSerializationVoiceChannelPlan {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct CanonicalFrozenRoleAllocation {
     source_roles: std::collections::BTreeMap<usize, SerializedVoicePresentationRole>,
     channel_roles: std::collections::BTreeMap<usize, SerializedVoicePresentationRole>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct FrozenSerializedVoicePlan {
     canonical_role_allocation: Option<std::sync::Arc<CanonicalFrozenRoleAllocation>>,
     authority_bound: bool,
@@ -4802,6 +4987,33 @@ fn build_frozen_serialization_voice_channels(
     legacy_preferences: &[LegacyVoiceLabelPreferenceRow],
     use_sounding_conflicts: bool,
 ) -> io::Result<FrozenSerializationVoiceChannelPlan> {
+    build_frozen_serialization_voice_channels_inner(canonical, attacks, original_beams,
+        legacy_preferences, use_sounding_conflicts, &std::collections::BTreeSet::new(), None)
+}
+
+fn build_frozen_serialization_voice_channels_with_notation_components<'owner>(
+    canonical: &'owner CanonicalFinalChordStructuralPlan,
+    attacks: &[FrozenVoiceAttackEvidenceRow],
+    original_beams: Option<&'owner ActualSourceBeamBindingObservation>,
+    legacy_preferences: &[LegacyVoiceLabelPreferenceRow],
+    notation_components: &std::collections::BTreeSet<usize>,
+    projection_reuse: Option<&cross_role_channel_sharing::ProjectionReuse<'owner>>,
+) -> io::Result<FrozenSerializationVoiceChannelPlan> {
+    build_frozen_serialization_voice_channels_inner(canonical, attacks, original_beams,
+        legacy_preferences, true, notation_components, projection_reuse)
+}
+
+fn build_frozen_serialization_voice_channels_inner<'owner>(
+    canonical: &'owner CanonicalFinalChordStructuralPlan,
+    attacks: &[FrozenVoiceAttackEvidenceRow],
+    original_beams: Option<&'owner ActualSourceBeamBindingObservation>,
+    legacy_preferences: &[LegacyVoiceLabelPreferenceRow],
+    use_sounding_conflicts: bool,
+    notation_components: &std::collections::BTreeSet<usize>,
+    projection_reuse: Option<&cross_role_channel_sharing::ProjectionReuse<'owner>>,
+) -> io::Result<FrozenSerializationVoiceChannelPlan> {
+    let _timing = crate::audit_only::voice_allocation_timing::Timer::span("Allocation");
+    let preparation_timing = crate::audit_only::voice_allocation_timing::Timer::probe("InputAndGraph");
     if !canonical.voice_free_evidence_sufficiency_green() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -4955,6 +5167,19 @@ fn build_frozen_serialization_voice_channels(
         );
     }
 
+    for group in &canonical.original_beam_voice_groups {
+        let sources = group.allocation_sources();
+        if sources.is_empty() || !sources.is_subset(notation_components) { continue; }
+        let first = *sources.first().expect("nonempty original notation component");
+        for source in sources {
+            if !parent.contains_key(&source) {
+                return Err(io::Error::new(io::ErrorKind::InvalidData,
+                    "Original notation beam source is absent from frozen attacks"));
+            }
+            final_chord_union_find_join(&mut parent, first, source);
+        }
+    }
+
     let sources = parent.keys().copied().collect::<Vec<_>>();
     let mut class_by_source = std::collections::BTreeMap::<usize, usize>::new();
     for source in sources {
@@ -5029,6 +5254,17 @@ fn build_frozen_serialization_voice_channels(
                     ));
                 }
             }
+        } else if members.iter().any(|source| notation_components.contains(source)) {
+            let first = attack_by_source[&members[0]];
+            if members.iter().any(|source| attack_by_source[source].staff != first.staff) {
+                return Err(io::Error::new(io::ErrorKind::InvalidData,
+                    "Original notation component spans unsupported presentation staffs"));
+            }
+            // Inherit the existing primary family if any member already had
+            // it. Opaque source ordering cannot choose the resulting role.
+            let lane = members.iter().map(|source| attack_by_source[source].technical_lane)
+                .min().expect("nonempty original notation component");
+            final_chord_default_presentation_role(first.staff, lane)?
         } else {
             let first = attack_by_source
                 .get(&members[0])
@@ -5209,6 +5445,8 @@ fn build_frozen_serialization_voice_channels(
         &no_sounding_conflicts
     };
 
+    drop(preparation_timing);
+    let greedy_timing = crate::audit_only::voice_allocation_timing::Timer::probe("Greedy");
     let mut channel_by_class = std::collections::BTreeMap::<usize, usize>::new();
     let mut channel_role = std::collections::BTreeMap::<usize, SerializedVoicePresentationRole>::new();
     let mut next_channel = 1usize;
@@ -5256,6 +5494,7 @@ fn build_frozen_serialization_voice_channels(
     // The greedy assignment above is the first candidate of a deterministic
     // finite alternative. Only if the consumer would leave a required channel unreserved
     // does the search continue, under exactly the same edges and roles.
+    drop(greedy_timing);
     let (mut channel_by_class, mut channel_role, mut consumer_allocation) =
         match channel_consumer_model(written, &class_by_source) {
             None => (
@@ -5284,7 +5523,7 @@ fn build_frozen_serialization_voice_channels(
                         {
                             let context = cross_role_channel_sharing::SharingContext::new(
                                 canonical, observation, &class_by_source, &source_to_role, legacy_preferences,
-                            );
+                            ).with_reuse(projection_reuse);
                             match context.check_overflow_recolouring(
                                 &input, &channel_by_class, &channel_role, &candidate.0, &candidate.1,
                             ) {
@@ -5315,7 +5554,7 @@ fn build_frozen_serialization_voice_channels(
             written_different: &written_different };
         let context = cross_role_channel_sharing::SharingContext::new(
             canonical, observation, &class_by_source, &source_to_role, legacy_preferences,
-        );
+        ).with_reuse(projection_reuse);
         let eligible = context.eligible_classes();
         match context.search(&input, &channel_by_class, &channel_role, &eligible) {
             Some((shared, roles, moved, baseline_voices)) => {
@@ -5370,6 +5609,7 @@ fn build_frozen_serialization_voice_channels(
 
     }
 
+    let _signature_timing = crate::audit_only::voice_allocation_timing::Timer::probe("SemanticSignature");
     let mut semantic_signature = String::from("ETUSCHLOPF_SERIALIZATION_CHANNEL_WRITTEN_SEMANTICS_V2\n");
     let mut sorted_classes = class_signatures.values().cloned().collect::<Vec<_>>();
     sorted_classes.sort();
@@ -5451,6 +5691,7 @@ const CONSUMER_VOICES_PER_STAFF: usize = 4;
 /// role, a staff, a label or a writer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ChannelConsumerAllocation {
+    AdmittedAfterOriginalWrittenReuse,
     AdmittedAfterWrittenOnlyMerge,
     AdmittedAfterCrossRoleSharing { channels_before: usize, channels_after: usize, shared_classes: Vec<usize> },
     NoAdmittedCrossRolePartition { eligible_classes: usize, classes: usize },
@@ -5478,6 +5719,7 @@ impl ChannelConsumerAllocation {
     pub(crate) const fn label(&self) -> &'static str {
         match self {
             Self::AdmittedFirstCandidate => "admitted_first_candidate",
+            Self::AdmittedAfterOriginalWrittenReuse => "admitted_after_original_written_reuse",
             Self::AdmittedAfterWrittenOnlyMerge => "admitted_after_written_only_merge",
             Self::AdmittedAfterCrossRoleSharing { .. } => "admitted_after_cross_role_sharing",
             Self::NoAdmittedCrossRolePartition { .. } => "no_admitted_cross_role_partition",
@@ -5870,6 +6112,7 @@ fn channel_search_after_consumer_overflow(
     std::collections::BTreeMap<usize, SerializedVoicePresentationRole>,
     ChannelConsumerAllocation,
 ) {
+    let _timing = crate::audit_only::voice_allocation_timing::Timer::span("OverflowRecolouring");
     let roles_present = input
         .class_role
         .values()
@@ -6461,6 +6704,18 @@ struct FinalChordBindingMeasure {
     expected_duration: i64,
     measure_close: usize,
     notes: Vec<FinalChordEncodingNote>,
+}
+
+// Parsed bytes and their offsets share one immutable source lifetime. Callers
+// cannot provide a different source alongside these binding measurements.
+struct FinalChordBindingSource<'a> {
+    xml: &'a str,
+    measures: Vec<FinalChordBindingMeasure>,
+}
+impl<'a> FinalChordBindingSource<'a> {
+    fn parse(xml: &'a str) -> io::Result<Self> {
+        Ok(Self { xml, measures: final_chord_parse_binding_measures(xml)? })
+    }
 }
 
 fn final_chord_parse_binding_measures(candidate_xml: &str) -> io::Result<Vec<FinalChordBindingMeasure>> {
@@ -7254,7 +7509,26 @@ fn bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound
             "FinalChord physical binding requires sealed canonical structure and serialized voice plan",
         ));
     }
-    let measures = final_chord_parse_binding_measures(candidate_xml)?;
+    let source = FinalChordBindingSource::parse(candidate_xml)?;
+    bind_canonical_final_chord_encoding_plan_from_parsed_source(
+        &source, canonical, voice_plan, render_omissions,
+    )
+}
+
+fn bind_canonical_final_chord_encoding_plan_from_parsed_source(
+    source: &FinalChordBindingSource<'_>,
+    canonical: &CanonicalFinalChordStructuralPlan,
+    voice_plan: &FrozenSerializedVoicePlan,
+    render_omissions: Option<&std::collections::BTreeSet<RenderPrunedFinalChordOmissionKey>>,
+) -> io::Result<CanonicalBoundFinalChordEncodingPlan> {
+    if !canonical.voice_free_evidence_sufficiency_green() || !voice_plan.is_bound() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "FinalChord physical binding requires sealed canonical structure and serialized voice plan",
+        ));
+    }
+    let candidate_xml = source.xml;
+    let measures = &source.measures;
     let allow_render_occurrence_witness = render_omissions.is_some();
     let action_by_fragment = canonical
         .actions
@@ -7305,7 +7579,7 @@ fn bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound
             continue;
         }
         let note = final_chord_find_binding_note(
-            &measures,
+            measures,
             canonical,
             locator,
             ignore_duration,
@@ -7383,7 +7657,7 @@ fn bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound
             render_omissions,
         ) {
             if !final_chord_render_pruned_tied_chain_is_fully_absent(
-                &measures,
+                measures,
                 &action.locator,
                 fragments,
             ) {
@@ -7401,7 +7675,7 @@ fn bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound
             continue;
         }
         let source_note = final_chord_find_binding_note(
-            &measures,
+            measures,
             canonical,
             &action.locator,
             false,
@@ -7447,7 +7721,7 @@ fn bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound
                     )
                 })?;
             let anchor = final_chord_find_binding_note(
-                &measures,
+                measures,
                 canonical,
                 anchor_locator,
                 false,
@@ -7515,7 +7789,7 @@ fn bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound
             continue;
         }
         let note = final_chord_find_binding_note(
-            &measures,
+            measures,
             canonical,
             &action.locator,
             false,

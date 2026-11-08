@@ -3602,7 +3602,7 @@ mod tests {
             take_name: "NativeInventoryEvidenceModelCapabilityIdentityClosure".to_string(),
             run_id: "obs-test".to_string(),
             scope: "PROJECT".to_string(),
-            scope_project: "Etüde Nr. 6".to_string(),
+            scope_project: "Synthetic Project Ω".to_string(),
             source_scope_sha256: "sha256:test".to_string(),
             source_file_count: 1,
             input_fingerprint: "sha256:input".to_string(),

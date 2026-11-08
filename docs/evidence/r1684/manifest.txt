@@ -1,0 +1,123 @@
+ETUSCHLOPF ASSISTANT EXPORT
+============================
+ZipKind: assistant_export
+TakeCompatible: false
+Mode: corpus_run
+Version: 0.10.1839
+EvidenceVersion: 0.10.1839
+FinalExit: 0
+ManifestValid: true
+ManifestReason: manifest_hash_bound_full_corpus_valid_with_outcome_projection
+FullCorpus: true
+ProjectEvidence: 10/10
+ReportEvidenceValid: true
+RendererOutcomeObserved: true
+WriterOutcomeObserved: true
+WriteProjects: 10
+RoutesWritten: 0
+ForwardNodesReplaced: 0
+ForwardDurationReplaced: 0
+CandidateRowsAfter: 0
+BeamLostBeginCandidates: 0
+BeamLostBeginNotesWritten: 0
+BeamLostBeginCandidateRowsAfter: 0
+CrossStaffRestSuppressions: 0
+SourceHigherBeamNotesRestored: 0
+RestVerticalAnchorsWritten: 4
+LedgerBoundedClefBoundariesWritten: 7
+RenderXmlWriteCommitted: true
+RenderNotationMutation: true
+SoundingEventMutation: false
+DeclaredMusicMutation: true
+MasterMusicXmlMutation: false
+BuildExit: 0
+ClippyExit: 0
+LauncherTests: 0 | ok. 2992 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 42.51s (15 test binaries)
+SourceSnapshotComplete: true
+SourceSnapshotFileCount: 2070
+SourceSnapshotArchive: EtuSchlopf_v0_10_1839_r1684_unbuilt_source.zip
+SourceSnapshotSha256: ec869f02d4ba7162b5793643d09248ecfa93f091dbc3af3404c1304d0724b59d
+InventoryStatus: not_requested
+InventoryJson: none
+InventoryJsonSha256: none
+InventoryXlsx: none
+InventoryXlsxSha256: none
+InventoryRunId: none
+InventoryRunScope: none
+InventoryCorpusManifestRunId: none
+InventoryContractVersion: none
+ArchitectureContractVersion: none
+XlsxContractVersion: none
+ProjectFolderCatalog: bounded_corpus_run_without_target_descendants_tsv_only
+ProjectFolderCatalogExcludedGeneratedPrefix: target/
+ProjectFolderCatalogTsv: project_file_catalog.tsv
+ProjectFolderCatalogEntries: 2208
+ProjectFolderCatalogFiles: 2154
+ProjectFolderCatalogDirectories: 54
+ProjectFolderCatalogSymlinks: 0
+ProjectFolderCatalogPlannedOutputs: 7
+
+INCLUDED-FILES
+--------------
+- manifest.txt
+- corpus_run_manifest.json
+- corpus_emergence.result.txt
+- Etüde Nr. 1.result.txt
+- Etüde Nr. 1.musicxml
+- Etüde Nr. 1.render.musicxml
+- Etüde Nr. 1.pdf
+- Etüde Nr. 2.result.txt
+- Etüde Nr. 2.musicxml
+- Etüde Nr. 2.render.musicxml
+- Etüde Nr. 2.pdf
+- Etüde Nr. 3.result.txt
+- Etüde Nr. 3.musicxml
+- Etüde Nr. 3.render.musicxml
+- Etüde Nr. 3.pdf
+- Etüde Nr. 4.result.txt
+- Etüde Nr. 4.musicxml
+- Etüde Nr. 4.render.musicxml
+- Etüde Nr. 4.pdf
+- Etüde Nr. 5.result.txt
+- Etüde Nr. 5.musicxml
+- Etüde Nr. 5.render.musicxml
+- Etüde Nr. 5.pdf
+- Etüde Nr. 6.result.txt
+- Etüde Nr. 6.musicxml
+- Etüde Nr. 6.render.musicxml
+- Etüde Nr. 6.pdf
+- Etüde Nr. 7.result.txt
+- Etüde Nr. 7.musicxml
+- Etüde Nr. 7.render.musicxml
+- Etüde Nr. 7.pdf
+- Etüde Nr. 8.result.txt
+- Etüde Nr. 8.musicxml
+- Etüde Nr. 8.render.musicxml
+- Etüde Nr. 8.pdf
+- Etüde Nr. 9.result.txt
+- Etüde Nr. 9.musicxml
+- Etüde Nr. 9.render.musicxml
+- Etüde Nr. 9.pdf
+- Etüde Nr. 10.result.txt
+- Etüde Nr. 10.musicxml
+- Etüde Nr. 10.render.musicxml
+- Etüde Nr. 10.pdf
+- corpus_emergence.strict-clippy.txt
+- visual_preflight.strict-tests.txt
+- etuschlopf.console.txt
+- run_outcome_audit.txt
+- ZIP_KIND.txt
+- project_file_catalog.tsv
+- source_snapshot/SOURCE_SNAPSHOT.txt
+- source_snapshot/EtuSchlopf_v0_10_1839_r1684_unbuilt_source.zip
+- transition_history.json
+- assistant_handoff_latest.txt
+- assistant_context.json
+
+OMITTED-FILES
+-------------
+- PROJECT_FILE_CATALOG.md | duplicate_human_rendering_omitted_tsv_exported
+
+UPLOAD-INSTRUCTION
+------------------
+Im Chat assistant_export_latest.zip hochladen. Diese Diagnose-ZIP nie mit --take verwenden.

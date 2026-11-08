@@ -894,7 +894,7 @@ fn append_clef_register_stability_audit_section(
     writeln!(file, "CLEF-REGISTER-STABILITY-SSOT-AUDIT")?;
     writeln!(file, "---------------------------------")?;
     writeln!(file, "Status: v{expected_version} auditiert die gesamte Schluessel-/Register-Stabilitaet scoreweit und regelbasiert.")?;
-    writeln!(file, "Scope: alle Visual-Preflight-Projekte; Etuede 6 bleibt Regression/Referenz; keine MusicMutation; kein MasterApply; kein produktiver MusicXML-Write.")?;
+    writeln!(file, "Scope: alle Visual-Preflight-Projekte aus der gebundenen Auswahl; keine MusicMutation; kein MasterApply; kein produktiver MusicXML-Write.")?;
     writeln!(file, "SingleSourceOfTruth: {}", policy.summary())?;
     writeln!(file, "NoMeasureSpecificLogic: ja; keine Takt-18/22/24/25/32/33/39-Ausnahme im Praedikat. Wenn diese Takte erscheinen, dann nur weil generische Regeln anschlagen.")?;
     writeln!(file, "BehindBarsTruthCleanup: rote Hotspot-PDFs werden nicht als Freigabeartefakte ausgegeben; sie bleiben hoechstens interne technische Zeugen.")?;

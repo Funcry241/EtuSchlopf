@@ -2,7 +2,8 @@
 //! from the original captured owner; projected XML supplies compatibility checks.
 use super::*;
 use std::collections::{BTreeMap, BTreeSet};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 use super::ordered_received_beam_readback::{self, OwnerEdge, OwnerEdgeReadback};
 
 type Partition = BTreeMap<usize, usize>;
@@ -12,14 +13,99 @@ type OccurrenceKey = (usize, u8, usize);
 type BeamEdge = (u8, OccurrenceKey, OccurrenceKey);
 type SeenPartitions = BTreeSet<(Partition, Roles)>;
 
-pub(super) struct SharingContext<'a> {
+// A reuse boundary is one immutable canonical plan and one actual owner capture.
+// Hashes are diagnostic only. Projection hits require equality of every field of
+// the bound voice plan. Eviction changes recomputation, never a decision.
+pub(super) struct ProjectionReuse<'a> {
     canonical: &'a CanonicalFinalChordStructuralPlan,
     observation: &'a ActualSourceBeamBindingObservation,
     ordered_edges: Result<Vec<OwnerEdge<'a>>, &'static str>,
-    classes: &'a Partition,
-    source_roles: &'a Roles,
-    legacy: &'a [LegacyVoiceLabelPreferenceRow],
+    projections: RefCell<std::collections::VecDeque<Rc<SharingProjection>>>,
+    witnesses: RefCell<BTreeMap<usize, Result<actual_source_beam_binding::SharingBeamWitness<'a>, &'static str>>>,
+    binding_source: std::cell::OnceCell<FinalChordBindingSource<'a>>,
+    projection_hits: Cell<usize>,
+    projection_misses: Cell<usize>,
+    witness_hits: Cell<usize>,
+    witness_misses: Cell<usize>,
+    edge_loss_detail_emitted: Cell<bool>,
+}
+
+impl<'a> ProjectionReuse<'a> {
+    // Performance-only LRU bound. All evicted values are recomputed by the same
+    // projector; this does not bound traversal or candidate admission.
+    const RETAINED_PROJECTIONS: usize = 64;
+
+    pub(super) fn new(canonical: &'a CanonicalFinalChordStructuralPlan,
+        observation: &'a ActualSourceBeamBindingObservation) -> Self {
+        Self { canonical, observation, ordered_edges: ordered_received_beam_readback::owner_edges(canonical, observation), projections: RefCell::default(), witnesses: RefCell::default(),
+            binding_source: std::cell::OnceCell::new(),
+            projection_hits: Cell::new(0), projection_misses: Cell::new(0),
+            witness_hits: Cell::new(0), witness_misses: Cell::new(0),
+            edge_loss_detail_emitted: Cell::new(false) }
+    }
+
+    fn matches(&self, canonical: &CanonicalFinalChordStructuralPlan,
+        observation: &ActualSourceBeamBindingObservation) -> bool {
+        std::ptr::eq(self.canonical, canonical) && std::ptr::eq(self.observation, observation)
+    }
+
+    fn witness(&self, fragment: usize)
+        -> Result<actual_source_beam_binding::SharingBeamWitness<'a>, &'static str> {
+        if let Some(row) = self.witnesses.borrow().get(&fragment).copied() {
+            self.witness_hits.set(self.witness_hits.get() + 1);
+            return row;
+        }
+        self.witness_misses.set(self.witness_misses.get() + 1);
+        let row = self.observation.sharing_witness_diagnostic(self.canonical, fragment);
+        self.witnesses.borrow_mut().insert(fragment, row);
+        row
+    }
+
+    fn project(&self, voices: FrozenSerializedVoicePlan)
+        -> io::Result<Rc<SharingProjection>> {
+        let edges = self.ordered_edges.as_deref().map_err(|reason| sharing_error(reason))?;
+        let mut entries = self.projections.borrow_mut();
+        if let Some(index) = entries.iter().position(|entry| entry.voices == voices) {
+            self.projection_hits.set(self.projection_hits.get() + 1);
+            let result = entries.remove(index).expect("located projection");
+            entries.push_back(Rc::clone(&result));
+            return Ok(result);
+        }
+        drop(entries);
+        self.projection_misses.set(self.projection_misses.get() + 1);
+        if self.binding_source.get().is_none() {
+            let xml = &self.canonical.written_projection.as_ref()
+                .ok_or_else(|| sharing_error("Missing source producer"))?.original_xml;
+            let source = FinalChordBindingSource::parse(xml)?;
+            let _ = self.binding_source.set(source);
+        }
+        let result = Rc::new(SharingContext::project_voices_from_source(
+            self.canonical, voices, Some(edges), self.binding_source.get().expect("parsed source"),
+        )?);
+        let mut entries = self.projections.borrow_mut();
+        if entries.len() == Self::RETAINED_PROJECTIONS { entries.pop_front(); }
+        entries.push_back(Rc::clone(&result));
+        Ok(result)
+    }
+
+    pub(super) fn append_diagnostics(&self, out: &mut String) {
+        let row = format!("OriginalNotationAllocationReuse: projection_hits={}; projection_misses={}; witness_hits={}; witness_misses={}; retained_projections={}; equality=complete_bound_voice_plan; lifetime=immutable_owner_scope; authority=none",
+            self.projection_hits.get(), self.projection_misses.get(), self.witness_hits.get(),
+            self.witness_misses.get(), self.projections.borrow().len());
+        let _ = writeln!(out, "{row}");
+        eprintln!("{row}");
+    }
+}
+
+pub(super) struct SharingContext<'a, 'input, 'reuse> {
+    canonical: &'a CanonicalFinalChordStructuralPlan,
+    observation: &'a ActualSourceBeamBindingObservation,
+    classes: &'input Partition,
+    source_roles: &'input Roles,
+    legacy: &'input [LegacyVoiceLabelPreferenceRow],
     diagnostics: RefCell<SharingDiagnostics>,
+    local_reuse: ProjectionReuse<'a>,
+    shared_reuse: Option<&'reuse ProjectionReuse<'a>>,
 }
 
 // Observations are never queried by admission or traversal decisions.
@@ -30,6 +116,7 @@ struct SharingDiagnostics {
     channel_rows: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct SharingNote {
     source: usize,
     attack: usize,
@@ -47,11 +134,54 @@ struct SharingNote {
     non_pitched_chord_head: Option<(usize, usize)>,
 }
 
+// Connected components of the class/measure incidence graph restricted to the
+// remaining guest classes. This computes the same least fixed point as repeated
+// whole-score scans, while visiting each incident edge only once per component.
+struct MeasureIncidence {
+    by_class: BTreeMap<usize, BTreeSet<usize>>,
+    by_measure: BTreeMap<usize, BTreeSet<usize>>,
+}
+impl MeasureIncidence {
+    fn new(baseline: &SharingProjection, classes: &Partition) -> Self {
+        let mut value = Self { by_class: BTreeMap::new(), by_measure: BTreeMap::new() };
+        for note in baseline.notes.values() {
+            let class = classes[&note.source];
+            value.by_class.entry(class).or_default().insert(note.measure);
+            value.by_measure.entry(note.measure).or_default().insert(class);
+        }
+        value
+    }
+    fn groups(&self, members: &[usize]) -> Vec<Vec<usize>> {
+        let mut remaining = members.iter().copied().collect::<BTreeSet<_>>();
+        let mut out = Vec::new();
+        while let Some(first) = remaining.first().copied() {
+            let mut group = BTreeSet::from([first]);
+            let mut pending = vec![first];
+            let mut visited_measures = BTreeSet::new();
+            while let Some(class) = pending.pop() {
+                for measure in self.by_class.get(&class).into_iter().flatten() {
+                    if !visited_measures.insert(*measure) { continue; }
+                    for neighbour in &self.by_measure[measure] {
+                        if remaining.contains(neighbour) && group.insert(*neighbour) {
+                            pending.push(*neighbour);
+                        }
+                    }
+                }
+            }
+            for class in &group { remaining.remove(class); }
+            out.push(members.iter().copied().filter(|class| group.contains(class)).collect());
+        }
+        out
+    }
+}
+
 struct SharingTraversal<'a, 'b> {
     distributed_candidates: bool,
     input: &'a ChannelSearchInput<'b>,
     initial: &'a Partition,
     baseline: &'a SharingProjection,
+    measure_incidence: &'a MeasureIncidence,
+    refused_compatibility: &'a RefCell<SeenPartitions>,
 }
 
 struct ChannelEvacuation<'a> {
@@ -60,6 +190,7 @@ struct ChannelEvacuation<'a> {
     groups: &'a [Vec<usize>],
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct SharingProjection {
     voices: FrozenSerializedVoicePlan,
     notes: BTreeMap<OccurrenceKey, SharingNote>,
@@ -72,23 +203,33 @@ struct SharingProjection {
     owner_edges: Vec<OwnerEdgeReadback>,
 }
 
-impl<'a> SharingContext<'a> {
+impl<'a, 'input, 'reuse> SharingContext<'a, 'input, 'reuse> {
     pub(super) fn new(
         canonical: &'a CanonicalFinalChordStructuralPlan,
         observation: &'a ActualSourceBeamBindingObservation,
-        classes: &'a Partition,
-        source_roles: &'a Roles,
-        legacy: &'a [LegacyVoiceLabelPreferenceRow],
+        classes: &'input Partition,
+        source_roles: &'input Roles,
+        legacy: &'input [LegacyVoiceLabelPreferenceRow],
     ) -> Self {
         Self {
             canonical,
             observation,
-            ordered_edges: ordered_received_beam_readback::owner_edges(canonical, observation),
             classes,
             source_roles,
             legacy,
             diagnostics: RefCell::default(),
+            local_reuse: ProjectionReuse::new(canonical, observation),
+            shared_reuse: None,
         }
+    }
+
+    pub(super) fn with_reuse(mut self, reuse: Option<&'reuse ProjectionReuse<'a>>) -> Self {
+        self.shared_reuse = reuse.filter(|reuse| reuse.matches(self.canonical, self.observation));
+        self
+    }
+
+    fn reuse(&self) -> &ProjectionReuse<'a> {
+        self.shared_reuse.unwrap_or(&self.local_reuse)
     }
 
     fn observe(&self, reason: &'static str) {
@@ -135,7 +276,7 @@ impl<'a> SharingContext<'a> {
                 ordered.sort_by_key(|(_,note)|(note.onset,note.ordinal));
                 lines.push(format!("{prefix}; phase=written_edge_loss_lane; projection={name}; measure={measure}; staff={staff:?}; label={label:?}; note_count={}; order=onset_then_pitched_ordinal; authority=none",ordered.len()));
                 for (position,(key,note)) in ordered.into_iter().enumerate() {
-                    let witness=self.observation.sharing_witness_diagnostic(self.canonical,key.0)
+                    let witness=self.reuse().witness(key.0)
                         .map(|row|(row.source,row.attack,match row.kind {
                             actual_source_beam_binding::SharingBeamKind::OwnedDecision=>"OwnedDecision",
                             actual_source_beam_binding::SharingBeamKind::ChordContainer=>"ChordContainer",
@@ -167,7 +308,7 @@ impl<'a> SharingContext<'a> {
             for class in classes.iter().filter(|class|!eligible.contains(class)) {
                 let failure=self.canonical.source_locators.iter()
                     .filter(|l|self.classes.get(&l.source_event_id)==Some(class))
-                    .find_map(|l|self.observation.sharing_witness_diagnostic(self.canonical,l.fragment_id)
+                    .find_map(|l|self.reuse().witness(l.fragment_id)
                         .err().map(|reason|(reason,l.source_event_id,l.fragment_id)));
                 let (reason,identity)=failure.map(|(reason,source,fragment)|(reason,Some((source,fragment))))
                     .unwrap_or(("class_identity_or_all_level_evidence_invalid",None));
@@ -199,7 +340,7 @@ impl<'a> SharingContext<'a> {
     }
 
     fn row(&self, fragment: usize) -> Option<actual_source_beam_binding::SharingBeamWitness<'_>> {
-        self.observation.sharing_witness(self.canonical,fragment)
+        self.reuse().witness(fragment).ok()
     }
 
     pub(super) fn eligible_classes(&self) -> BTreeSet<usize> {
@@ -235,6 +376,7 @@ impl<'a> SharingContext<'a> {
 
     fn bound_voices(&self, by_class: &Partition, roles: &Roles,
         continuation: Option<&FrozenSerializedVoicePlan>) -> io::Result<FrozenSerializedVoicePlan> {
+        let _timing = crate::audit_only::voice_allocation_timing::Timer::probe("BoundVoices");
         let source_to_channel = self
             .classes
             .iter()
@@ -260,10 +402,9 @@ impl<'a> SharingContext<'a> {
     }
 
     fn projection(&self, by_class: &Partition, roles: &Roles,
-        continuation: Option<&FrozenSerializedVoicePlan>) -> io::Result<SharingProjection> {
+        continuation: Option<&FrozenSerializedVoicePlan>) -> io::Result<Rc<SharingProjection>> {
         let voices = self.bound_voices(by_class, roles, continuation)?;
-        let edges = self.ordered_edges.as_deref().map_err(|reason| sharing_error(reason))?;
-        Self::project_voices(self.canonical, voices, Some(edges))
+        self.reuse().project(voices)
     }
 
     #[cfg(test)]
@@ -279,16 +420,22 @@ impl<'a> SharingContext<'a> {
         voices: FrozenSerializedVoicePlan,
         owner_edges: Option<&[OwnerEdge<'_>]>,
     ) -> io::Result<SharingProjection> {
-        let source = &canonical
-            .written_projection
-            .as_ref()
-            .ok_or_else(|| sharing_error("Missing source producer"))?
-            .original_xml;
-        let bound = bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound(
-            source,
-            canonical,
-            &voices,
-            None,
+        let xml = &canonical.written_projection.as_ref()
+            .ok_or_else(|| sharing_error("Missing source producer"))?.original_xml;
+        let source = FinalChordBindingSource::parse(xml)?;
+        Self::project_voices_from_source(canonical, voices, owner_edges, &source)
+    }
+
+    fn project_voices_from_source(
+        canonical: &CanonicalFinalChordStructuralPlan,
+        voices: FrozenSerializedVoicePlan,
+        owner_edges: Option<&[OwnerEdge<'_>]>,
+        parsed: &FinalChordBindingSource<'_>,
+    ) -> io::Result<SharingProjection> {
+        let _timing = crate::audit_only::voice_allocation_timing::Timer::probe("CanonicalProjection");
+        let source = parsed.xml;
+        let bound = bind_canonical_final_chord_encoding_plan_from_parsed_source(
+            parsed, canonical, &voices, None,
         )?;
         let projected =
             project_canonical_bound_final_chord_encoding_plan_for_transaction_output_alpha(
@@ -501,6 +648,22 @@ impl<'a> SharingContext<'a> {
         context(baseline,before)==context(after,current)
     }
 
+    fn proves_added_written_pair(&self, (level, left, right): &BeamEdge) -> bool {
+        let (Some(a), Some(b)) = (self.row(left.0), self.row(right.0)) else {
+            return self.refuse("missing_new_beam_edge_witness");
+        };
+        let cohort = |row: actual_source_beam_binding::SharingBeamWitness<'_>| {
+            row.levels
+                .iter()
+                .find(|(l, _, _)| l == level)
+                .and_then(|(_, group, _)| *group)
+        };
+        if cohort(a).is_none() || cohort(a) != cohort(b) {
+            return self.refuse_detail("new_beam_edge_cohort_mismatch",format!("left={left:?}; right={right:?}; level={level}; original_left={:?}; original_right={:?}",cohort(a),cohort(b)));
+        }
+        true
+    }
+
     fn compatible(
         &self,
         baseline: &SharingProjection,
@@ -508,10 +671,19 @@ impl<'a> SharingContext<'a> {
         by_class: &Partition,
         roles: &Roles,
     ) -> bool {
-        let after = match self.projection(by_class, roles, Some(&baseline.voices)) {
-            Ok(after) => after,
-            Err(error) => return self.refuse_detail("proposed_projection_failed",error.to_string()),
+        let _timing = crate::audit_only::voice_allocation_timing::Timer::probe("Compatibility");
+        let voices = match self.bound_voices(by_class, roles, Some(&baseline.voices)) {
+            Ok(voices) => voices,
+            Err(error) => return self.refuse_detail("proposed_projection_failed", error.to_string()),
         };
+        // Contrapositive of existing preservation obligations, not a new
+        // admission rule. A passing proposal must keep these occurrence keys,
+        // staffs, onsets, chord relations and all non-voice bytes. Consequently
+        // its physical head labels must retain every existing written edge.
+        if let Some(proof) = unavoidable_written_edge_loss(baseline, &voices) {
+            self.observe("written_edge_loss_preflight");
+            return self.refuse_detail("existing_written_beam_edge_lost", format!("preflight={proof:?}; premise=existing_occurrence_and_non_voice_preservation"));
+        }
         let moved = self
             .classes
             .iter()
@@ -519,6 +691,27 @@ impl<'a> SharingContext<'a> {
                 (baseline_channels.get(class) != by_class.get(class)).then_some(*source)
             })
             .collect::<BTreeSet<_>>();
+        // All accepted outputs preserve non-voice bytes and physical heads.
+        // Under that mandatory premise, label substitution determines written
+        // edges whenever physical-head onset order is unambiguous. A changed
+        // relation between unmoved sources therefore cannot pass the full guard.
+        if let Some(expected) = preserved_written_connections(baseline, &voices) {
+            if let Some(edge) = first_unmoved_connection_change(baseline, &expected, &moved) {
+                self.observe("unmoved_connection_change_preflight");
+                return self.refuse_detail("unmoved_beam_connections_changed", format!(
+                    "preflight_edge={edge:?}; premise=existing_occurrence_and_non_voice_preservation"));
+            }
+            for edge in expected.difference(&baseline.edges) {
+                if !self.proves_added_written_pair(edge) {
+                    self.observe("new_connection_owner_proof_preflight");
+                    return false;
+                }
+            }
+        }
+        let after = match self.reuse().project(voices) {
+            Ok(after) => after,
+            Err(error) => return self.refuse_detail("proposed_projection_failed", error.to_string()),
+        };
         // Observe the old uncontinued vote without using it for admission.
         if let Ok(rebound) = self.bound_voices(by_class, roles, None) {
             for source in self.classes.keys() {
@@ -634,8 +827,12 @@ impl<'a> SharingContext<'a> {
             }
         }
         if !baseline.edges.is_subset(&after.edges) {
-            for line in self.beam_edge_loss_lines(baseline, &after, baseline_channels, by_class, roles) {
-                eprintln!("{line}");
+            // Keep the first complete explanation in this immutable batch.
+            // Every rejection still increments the existing search counters.
+            if !self.reuse().edge_loss_detail_emitted.replace(true) {
+                for line in self.beam_edge_loss_lines(baseline, &after, baseline_channels, by_class, roles) {
+                    eprintln!("{line}");
+                }
             }
             return self.refuse("existing_written_beam_edge_lost");
         }
@@ -680,21 +877,7 @@ impl<'a> SharingContext<'a> {
         if unchanged_edges(baseline) != unchanged_edges(&after) {
             return self.refuse("unmoved_beam_connections_changed");
         }
-        let prove_pair = |(level, left, right): &BeamEdge| {
-            let (Some(a), Some(b)) = (self.row(left.0), self.row(right.0)) else {
-                return self.refuse("missing_new_beam_edge_witness");
-            };
-            let cohort = |row: actual_source_beam_binding::SharingBeamWitness<'_>| {
-                row.levels
-                    .iter()
-                    .find(|(l, _, _)| l == level)
-                    .and_then(|(_, group, _)| *group)
-            };
-            if cohort(a).is_none() || cohort(a) != cohort(b) {
-                return self.refuse_detail("new_beam_edge_cohort_mismatch",format!("left={left:?}; right={right:?}; level={level}; original_left={:?}; original_right={:?}",cohort(a),cohort(b)));
-            }
-            true
-        };
+        let prove_pair = |edge: &BeamEdge| self.proves_added_written_pair(edge);
         // The paired readbacks use the same source-owned ordered edge list.
         // An after-state of Present proves its exact two endpoints and strand.
         match check_beam_transition(baseline, &after, prove_pair, |_, old, new|
@@ -726,6 +909,7 @@ impl<'a> SharingContext<'a> {
         &self, input: &ChannelSearchInput<'_>, initial: &Partition,
         roles: &Roles, eligible: &BTreeSet<usize>,
     ) -> Option<Placement> {
+        let _timing = crate::audit_only::voice_allocation_timing::Timer::span("CrossRoleSearch");
         *self.diagnostics.borrow_mut()=SharingDiagnostics::default();
         let result=self.search_inner(input,initial,roles,eligible);
         self.emit_diagnostics(result.is_some());
@@ -754,11 +938,16 @@ impl<'a> SharingContext<'a> {
         // Preserve the complete accepted whole-channel search before trying
         // the additional deterministic candidate family. Separate memoization
         // is required because the second pass has additional successors.
+        let measure_incidence = MeasureIncidence::new(&baseline, self.classes);
+        // The predicate has identical inputs in both traversal phases. Only its
+        // false result is retained; successors are still traversed in full.
+        let refused_compatibility = RefCell::new(SeenPartitions::new());
         for distributed_candidates in [false,true] {
             self.observe(if distributed_candidates {"distributed_candidate_phase_started"} else {"whole_only_phase_started"});
             let mut seen=BTreeSet::new();
             if let Some(result)=self.visit(
-                &SharingTraversal{input,initial,baseline:&baseline,distributed_candidates},
+                &SharingTraversal{input,initial,baseline:&baseline,distributed_candidates,
+                    measure_incidence: &measure_incidence, refused_compatibility: &refused_compatibility},
                 initial,roles,&mut seen,
             ) {return Some(result);}
         }
@@ -769,6 +958,7 @@ impl<'a> SharingContext<'a> {
     // and every connected measure input remain together, including cross-staff
     // notes and classes continuing into another measure. No beam consumer input
     // is split merely to find a host.
+    #[cfg(test)]
     fn evacuation_groups(baseline: &SharingProjection, members: &[usize], classes: &Partition) -> Vec<Vec<usize>> {
         let mut remaining=members.iter().copied().collect::<BTreeSet<_>>();
         let mut out=Vec::new();
@@ -840,11 +1030,15 @@ impl<'a> SharingContext<'a> {
         roles: &Roles,
         seen: &mut SeenPartitions,
     ) -> Option<Placement> {
+        let _timing = crate::audit_only::voice_allocation_timing::Timer::probe("Visit");
+        crate::audit_only::voice_allocation_timing::pulse();
         let SharingTraversal {
             input,
             initial,
             baseline,
             distributed_candidates,
+            measure_incidence,
+            refused_compatibility,
         } = *traversal;
         if !seen.insert((current.clone(), roles.clone())) {
             self.observe("partition_already_visited");
@@ -856,7 +1050,17 @@ impl<'a> SharingContext<'a> {
             Err(error) => { self.refuse_detail("proposed_label_continuation_failed", error.to_string()); return None; }
         };
         let failing = match input.check_partition(current, roles, Some(&voices)) {
-            Ok(()) if { self.observe("consumer_admissible_partition_checked"); self.compatible(baseline, initial, current, roles) } => {
+            Ok(()) if { self.observe("consumer_admissible_partition_checked"); {
+                let key = (current.clone(), roles.clone());
+                if refused_compatibility.borrow().contains(&key) {
+                    self.observe("compatibility_refusal_reused");
+                    false
+                } else {
+                    let compatible = self.compatible(baseline, initial, current, roles);
+                    if !compatible { refused_compatibility.borrow_mut().insert(key); }
+                    compatible
+                }
+            } } => {
                 let moved = input
                     .class_order
                     .iter()
@@ -956,7 +1160,7 @@ impl<'a> SharingContext<'a> {
         if !distributed_candidates {self.observe("partition_children_exhausted");return None;}
         // Second pass only: construct complete placements of whole components.
         for guest in guests {
-            let mut groups=Self::evacuation_groups(baseline,&members[&guest],self.classes);
+            let mut groups=measure_incidence.groups(&members[&guest]);
             if groups.len()<2 {continue;}
             let mut hosts=roles.keys().copied().filter(|ch|*ch!=guest && complete(ch)
                 && channel_role_staff(roles[ch])==channel_role_staff(roles[&guest])).collect::<Vec<_>>();
@@ -1014,6 +1218,220 @@ pub(super) fn check_written_only_projection(
         let _ = writeln!(out, "WrittenOnlyOwnerBeatClosure: certified_pairs={}; certified_moves={}; scope=complete_written_beat",
             closure.added_pairs.len(), closure.moved.len());
     }
+    Ok(())
+}
+
+/// Certify transport of one sealed source-closed original component.
+/// Independent notation origin supplies line identity; exact owner and written
+/// readback supplies conservation. No unrelated source moves and no edge is added.
+pub(super) fn check_original_component_written_reuse(
+    canonical: &CanonicalFinalChordStructuralPlan,
+    production: &FrozenSerializedVoicePlan,
+    proposed: &FrozenSerializedVoicePlan,
+    component_sources: &BTreeSet<usize>,
+    reuse: &ProjectionReuse<'_>,
+) -> io::Result<()> {
+    if !canonical.original_beam_voice_groups.iter().any(|group| group.allocation_sources() == *component_sources)
+        || component_sources.is_empty()
+        || !std::ptr::eq(reuse.canonical, canonical)
+        || production.source_to_role != proposed.source_to_role
+        || production.source_to_label.keys().ne(proposed.source_to_label.keys())
+    { return Err(sharing_error("original_written_reuse_foreign_or_changed_source_roles")); }
+    let changes = production.source_to_label.iter().filter_map(|(source, old)| {
+        let new = &proposed.source_to_label[source];
+        (old != new).then_some((old.as_str(), new.as_str()))
+    }).collect::<BTreeSet<_>>();
+    if changes.len() != 1 { return Err(sharing_error("notation_reuse_not_one_component_transport")); }
+    let &(guest, host) = changes.first().expect("one label substitution");
+    let destination_sources = production.source_to_label.iter().filter_map(|(source, label)|
+        (label == host).then_some(*source)).collect();
+    if !production.source_to_label.values().any(|label| label == host)
+        || !canonical.proves_original_notation_voice_for_component_reuse(component_sources, &destination_sources)
+        || production.source_to_label.iter().any(|(source, old)|
+            proposed.source_to_label[source] != if component_sources.contains(source) { host } else { old.as_str() })
+        || component_sources.iter().any(|source| production.label_for_source(*source) != Some(guest))
+    { return Err(sharing_error("original_written_reuse_missing_complete_original_line")); }
+    let before = reuse.project(production.clone())?;
+    let after = reuse.project(proposed.clone())?;
+    if before.notes.keys().ne(after.notes.keys()) || before.non_pitched != after.non_pitched
+        || before.non_pitched_note_positions != after.non_pitched_note_positions
+        || before.non_pitched_shadow_roles != after.non_pitched_shadow_roles
+        || before.edges != after.edges || before.owner_edges != after.owner_edges
+    { return Err(sharing_error("original_written_reuse_changed_occurrences_rests_or_beams")); }
+    let mut rests = Vec::new();
+    for raw in &after.non_pitched {
+        let doc = roxmltree::Document::parse(raw).map_err(|_| sharing_error("original_written_reuse_unreadable_rest"))?;
+        let node = doc.root_element();
+        if !node.has_tag_name("note") { continue; }
+        let label = match node.children().find(|child| child.has_tag_name("voice")) {
+            Some(voice) => voice.text().map(str::trim).filter(|text| !text.is_empty())
+                .ok_or_else(|| sharing_error("original_written_reuse_missing_rest_voice"))?,
+            None => "1",
+        };
+        rests.push(label.to_owned());
+    }
+    if rests.len() != after.non_pitched_note_positions.len() {
+        return Err(sharing_error("original_written_reuse_unknown_rest_positions"));
+    }
+    for (key, old) in &before.notes {
+        let new = &after.notes[key];
+        if old.source != new.source || old.attack != new.attack || old.measure != new.measure
+            || old.staff != new.staff || old.onset != new.onset || old.duration != new.duration
+            || old.beat_unit != new.beat_unit || old.chord_head != new.chord_head
+            || old.non_pitched_chord_head != new.non_pitched_chord_head
+            || old.non_voice_bytes != new.non_voice_bytes
+            || production.role_for_label(&old.label).is_none()
+            || production.role_for_label(&old.label) != proposed.role_for_label(&new.label)
+        { return Err(sharing_error("original_written_reuse_changed_written_content_or_role")); }
+        if old.label == new.label { continue; }
+        let doc = roxmltree::Document::parse(&old.non_voice_bytes)
+            .map_err(|_| sharing_error("original_written_reuse_unreadable_note"))?;
+        if old.chord_head.is_some() || old.non_pitched_chord_head.is_some()
+            || before.notes.values().any(|note| note.chord_head == Some(*key))
+            || doc.descendants().any(|node| node.has_tag_name("tie") || node.has_tag_name("tied") || node.has_tag_name("grace"))
+        { return Err(sharing_error("original_written_reuse_chord_tie_or_grace_requires_proof")); }
+        let end = new.onset.checked_add(new.duration).filter(|end| *end >= new.onset)
+            .ok_or_else(|| sharing_error("original_written_reuse_invalid_written_interval"))?;
+        let written = WrittenInterval { measure: new.measure, start: new.onset, end };
+        if after.notes.iter().any(|(other_key, other)| key != other_key
+            && new.measure == other.measure && new.staff == other.staff && new.label == other.label
+            && other.onset.checked_add(other.duration).filter(|end| *end >= other.onset)
+                .map(|end| WrittenInterval { measure: other.measure, start: other.onset, end })
+                .is_none_or(|other_written| written.overlaps(other_written)))
+            || after.non_pitched_note_positions.iter().zip(&rests).any(|((measure, onset, duration, staff), label)|
+                *measure == new.measure && *staff == new.staff && *label == new.label
+                    && onset.checked_add(*duration).filter(|end| *end >= *onset)
+                        .map(|end| WrittenInterval { measure: *measure, start: *onset, end })
+                        .is_none_or(|rest_written| written.overlaps(rest_written)))
+        { return Err(sharing_error("original_written_reuse_written_occupancy_collision")); }
+        for (projection, label) in [(&before, &old.label), (&after, &new.label)] {
+            if projection.voices.channel_for_label(label)
+                .and_then(|channel| projection.protected_resources.get(&channel))
+                .is_some_and(|resources| resources.contains("forward") || resources.contains("backup"))
+            { return Err(sharing_error("original_written_reuse_unresolved_cursor_channel")); }
+        }
+    }
+    Ok(())
+}
+
+/// A different sufficient proof from whole-beat channel reuse. The sealed
+/// source component supplies the notation equality; both exact projections
+/// still decide physical conservation and every existing beam relation.
+pub(super) fn check_original_notation_component_projection(
+    canonical: &CanonicalFinalChordStructuralPlan,
+    production: &FrozenSerializedVoicePlan,
+    proposed: &FrozenSerializedVoicePlan,
+    original: &ActualSourceBeamBindingObservation,
+    sources: &BTreeSet<usize>,
+    reuse: &ProjectionReuse<'_>,
+) -> io::Result<()> {
+    let mut attested = BTreeSet::new();
+    for group in &canonical.original_beam_voice_groups {
+        let members = group.allocation_sources();
+        if members.is_empty() || !members.is_subset(sources) { continue; }
+        let labels = members.iter().map(|source| proposed.label_for_source(*source))
+            .collect::<BTreeSet<_>>();
+        if labels.len() != 1 || labels.contains(&None) {
+            return Err(sharing_error("original_component_not_assigned_as_one_line"));
+        }
+        attested.extend(members);
+    }
+    if &attested != sources {
+        return Err(sharing_error("original_component_has_no_complete_sealed_notation_origin"));
+    }
+    let edges = ordered_received_beam_readback::owner_edges(canonical, original)
+        .map_err(sharing_error)?;
+    let project = |voices: FrozenSerializedVoicePlan| {
+        if reuse.matches(canonical, original) { reuse.project(voices) }
+        else { SharingContext::project_voices(canonical, voices, Some(&edges)).map(Rc::new) }
+    };
+    let before = project(production.clone())?;
+    let after = project(proposed.clone())?;
+    if before.notes.keys().ne(after.notes.keys()) || before.non_pitched != after.non_pitched
+        || before.non_pitched_note_positions != after.non_pitched_note_positions
+        || before.non_pitched_shadow_roles != after.non_pitched_shadow_roles
+    { return Err(sharing_error("original_component_occurrence_or_rest_resources_changed")); }
+    // Exact source rests are compatibility obligations, not an authority to
+    // reconstruct musical line identity. Unknown source cursor use refuses.
+    let mut rest_labels = Vec::new();
+    for raw in &before.non_pitched {
+        let doc = roxmltree::Document::parse(raw)
+            .map_err(|_| sharing_error("original_component_unreadable_cursor_resource"))?;
+        let node = doc.root_element();
+        if !node.has_tag_name("note") { continue; }
+        let label = match node.children().find(|child| child.has_tag_name("voice")) {
+            Some(voice) => voice.text().map(str::trim).filter(|text| !text.is_empty())
+                .ok_or_else(|| sharing_error("original_component_unresolved_rest_voice"))?,
+            None => "1",
+        };
+        rest_labels.push(label.to_owned());
+    }
+    if rest_labels.len() != before.non_pitched_note_positions.len() {
+        return Err(sharing_error("original_component_unresolved_rest_positions"));
+    }
+    let mut rest_intervals = BTreeMap::<(usize, String, String), Vec<(i64, i64)>>::new();
+    for ((measure, onset, duration, staff), label) in before.non_pitched_note_positions.iter().zip(rest_labels) {
+        let end = onset.checked_add(*duration).filter(|end| *end >= *onset)
+            .ok_or_else(|| sharing_error("original_component_invalid_rest_interval"))?;
+        rest_intervals.entry((*measure, staff.clone(), label)).or_default().push((*onset, end));
+    }
+    let mut changed = false;
+    for (key, old) in &before.notes {
+        let new = &after.notes[key];
+        if old.source != new.source || old.attack != new.attack || old.measure != new.measure
+            || old.staff != new.staff || old.onset != new.onset || old.duration != new.duration
+            || old.beat_unit != new.beat_unit || old.chord_head != new.chord_head
+            || old.non_pitched_chord_head != new.non_pitched_chord_head
+            || old.non_voice_bytes != new.non_voice_bytes
+        { return Err(sharing_error("original_component_non_voice_content_changed")); }
+        let role_changed = production.source_to_role.get(&old.source) != proposed.source_to_role.get(&old.source)
+            || production.role_for_label(&old.label) != proposed.role_for_label(&new.label);
+        if old.label != new.label || role_changed {
+            if !sources.contains(&old.source) || old.chord_head.is_some() || old.non_pitched_chord_head.is_some() {
+                return Err(sharing_error("original_component_changed_unproved_source"));
+            }
+            let same_staff_role = |role: Option<&SerializedVoicePresentationRole>| match role {
+                Some(SerializedVoicePresentationRole::UpperPrimary | SerializedVoicePresentationRole::UpperSecondary) => old.staff == "1",
+                Some(SerializedVoicePresentationRole::LowerPrimary | SerializedVoicePresentationRole::LowerSecondary) => old.staff == "2",
+                _ => false,
+            };
+            if !same_staff_role(production.source_to_role.get(&old.source))
+                || !same_staff_role(proposed.source_to_role.get(&old.source))
+            { return Err(sharing_error("original_component_changed_staff_or_auxiliary_role")); }
+            if old.label != new.label {
+                let end = new.onset.checked_add(new.duration)
+                    .ok_or_else(|| sharing_error("original_component_invalid_note_interval"))?;
+                if rest_intervals.get(&(new.measure, new.staff.clone(), new.label.clone()))
+                    .is_some_and(|intervals| intervals.iter().any(|&(start, stop)| new.onset < stop && start < end))
+                { return Err(sharing_error("original_component_source_rest_collision")); }
+                for (projection, label) in [(&before, &old.label), (&after, &new.label)] {
+                    if projection.voices.channel_for_label(label)
+                        .and_then(|channel| projection.protected_resources.get(&channel))
+                        .is_some_and(|resources| resources.contains("forward") || resources.contains("backup"))
+                    { return Err(sharing_error("original_component_unresolved_source_cursor_channel")); }
+                }
+            }
+            let doc = roxmltree::Document::parse(&old.non_voice_bytes)
+                .map_err(|_| sharing_error("original_component_unreadable_note"))?;
+            if doc.descendants().any(|node| node.has_tag_name("tie") || node.has_tag_name("tied") || node.has_tag_name("grace")) {
+                return Err(sharing_error("original_component_tie_or_grace_requires_further_proof"));
+            }
+            changed = true;
+        }
+    }
+    let mut improved = false;
+    check_beam_transition(&before, &after, |(level, left, right)| {
+        let (Some(a), Some(b)) = (original.sharing_witness(canonical, left.0), original.sharing_witness(canonical, right.0)) else { return false; };
+        let group = |row: actual_source_beam_binding::SharingBeamWitness<'_>| row.levels.iter()
+            .find(|(l, _, _)| l == level).and_then(|(_, group, _)| *group);
+        sources.contains(&a.source) && sources.contains(&b.source)
+            && group(a).is_some() && group(a) == group(b)
+    }, |_, old, new| old == OwnerEdgeReadback::SplitVoice && new == OwnerEdgeReadback::Present)
+        .map_err(|error| sharing_error(error.reason()))?;
+    for (old, new) in before.owner_edges.iter().zip(&after.owner_edges) {
+        improved |= *old == OwnerEdgeReadback::SplitVoice && *new == OwnerEdgeReadback::Present;
+    }
+    if !changed || !improved { return Err(sharing_error("original_component_has_no_proved_improvement")); }
     Ok(())
 }
 
@@ -1358,6 +1776,81 @@ fn sharing_error(message: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message)
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum WrittenLossNecessity {
+    SplitPhysicalHeads(BeamEdge),
+    InterruptedPhysicalHeads { edge: BeamEdge, blocker: OccurrenceKey },
+}
+
+// Necessary condition only: ambiguous or equal-onset ordering, attached members
+// and missing bindings fall through to the complete projector and verifier.
+fn unavoidable_written_edge_loss(before: &SharingProjection, voices: &FrozenSerializedVoicePlan)
+    -> Option<WrittenLossNecessity> {
+    let mut heads = BTreeMap::<(usize, &str, &str), Vec<(OccurrenceKey, &SharingNote)>>::new();
+    for (&key, note) in &before.notes {
+        if note.chord_head.is_none() && note.non_pitched_chord_head.is_none()
+            && let Some(label) = voices.label_for_source(note.source)
+        { heads.entry((note.measure, note.staff.as_str(), label)).or_default().push((key, note)); }
+    }
+    for lane in heads.values_mut() { lane.sort_by_key(|(_, note)| note.onset); }
+    for &(level, left, right) in &before.edges {
+        let a = &before.notes[&left];
+        let b = &before.notes[&right];
+        if a.chord_head.is_some() || b.chord_head.is_some()
+            || a.non_pitched_chord_head.is_some() || b.non_pitched_chord_head.is_some()
+        { continue; }
+        let (Some(a_label), Some(b_label)) = (voices.label_for_source(a.source), voices.label_for_source(b.source))
+            else { continue; };
+        if a_label != b_label { return Some(WrittenLossNecessity::SplitPhysicalHeads((level, left, right))); }
+        let low = a.onset.min(b.onset);
+        let high = a.onset.max(b.onset);
+        if let Some(lane) = heads.get(&(a.measure, a.staff.as_str(), a_label)) {
+            let start = lane.partition_point(|(_, note)| note.onset <= low);
+            for &(key, note) in lane[start..].iter().take_while(|(_, note)| note.onset < high) {
+                if note.states.get(&level).map(String::as_str) != Some("continue") {
+                    return Some(WrittenLossNecessity::InterruptedPhysicalHeads { edge: (level, left, right), blocker: key });
+                }
+            }
+        }
+    }
+    None
+}
+
+fn preserved_written_connections(
+    before: &SharingProjection, voices: &FrozenSerializedVoicePlan,
+) -> Option<BTreeSet<BeamEdge>> {
+    let mut relabelled = before.notes.clone();
+    for note in relabelled.values_mut() {
+        note.label = voices.label_for_source(note.source)?.to_owned();
+    }
+    // Ordinal is not an independently preserved field. With equal head onsets
+    // the projector may choose another order; that case needs the complete path.
+    let mut head_onsets = BTreeSet::new();
+    for note in relabelled.values() {
+        if note.chord_head.and_then(|key| relabelled.get(&key))
+            .is_some_and(|head| head.staff == note.staff && head.label == note.label)
+        { continue; }
+        if !head_onsets.insert((note.measure, note.staff.as_str(), note.label.as_str(), note.onset)) {
+            return None;
+        }
+    }
+    Some(written_connections(&relabelled))
+}
+
+fn first_unmoved_connection_change(
+    before: &SharingProjection, expected: &BTreeSet<BeamEdge>, moved: &BTreeSet<usize>,
+) -> Option<BeamEdge> {
+    before.edges.symmetric_difference(expected).copied().find(|(_,left,right)|
+        !moved.contains(&before.notes[left].source) && !moved.contains(&before.notes[right].source))
+}
+
+#[cfg(test)]
+fn unavoidable_unmoved_connection_change(
+    before: &SharingProjection, voices: &FrozenSerializedVoicePlan, moved: &BTreeSet<usize>,
+) -> Option<BeamEdge> {
+    first_unmoved_connection_change(before, &preserved_written_connections(before, voices)?, moved)
+}
+
 fn written_connections(notes: &BTreeMap<OccurrenceKey, SharingNote>) -> BTreeSet<BeamEdge> {
     let mut lanes = BTreeMap::<(usize, String, String), Vec<(OccurrenceKey, &SharingNote)>>::new();
     let mut members = BTreeMap::<OccurrenceKey, Vec<OccurrenceKey>>::new();
@@ -1582,6 +2075,32 @@ mod tests {
         let mut after=measure_context_fixture(&[(17,3,"1",0,"x")]);
         after.notes.get_mut(&(17,0,0)).unwrap().beam_levels=5;
         assert!(!SharingContext::unchanged_measure_beam_context(&before,&after,&(17,0,0)));
+    }
+
+    #[test]
+    fn indexed_measure_components_equal_fixed_point_for_every_guest_subset() {
+        let projection = measure_context_fixture(&[
+            (17, 3, "1", 0, "a"), (29, 3, "2", 24, "a"),
+            (31, 8, "1", 0, "a"), (41, 8, "2", 24, "a"),
+            (53, 11, "1", 0, "a"), (67, 12, "2", 0, "a"),
+            (71, 12, "1", 24, "a"),
+        ]);
+        let classes = BTreeMap::from([(17,101),(29,202),(31,202),(41,303),
+            (53,404),(67,505),(71,606)]);
+        let index = MeasureIncidence::new(&projection, &classes);
+        let universe = [101,202,303,404,505,606,707]; // includes an unrepresented class
+        for mask in 0..(1 << universe.len()) {
+            let mut members = universe.iter().enumerate().filter_map(|(i,c)|
+                ((mask & (1 << i)) != 0).then_some(*c)).collect::<Vec<_>>();
+            for _ in 0..2 {
+                assert_eq!(index.groups(&members), SharingContext::evacuation_groups(
+                    &projection, &members, &classes));
+                members.reverse();
+            }
+            if let Some(first) = members.first().copied() { members.push(first); }
+            assert_eq!(index.groups(&members), SharingContext::evacuation_groups(
+                &projection, &members, &classes));
+        }
     }
 
     #[test]
@@ -1840,6 +2359,173 @@ mod tests {
     }
 
     #[test]
+    fn written_loss_preflight_is_a_necessary_condition_under_all_label_assignments() {
+        let mut checked = 0;
+        let mut rejected = 0;
+        for offset in [59, 1059] { for copies in [1, 2] {
+            for mark in ["begin", "continue", "end", "none", "forward hook"] {
+                for onset in [0, 60, 120, 180, 240, 300] {
+                    for attached in [false, true] {
+                        let mut before = marked_fixture(&["begin", "continue", "end", mark], offset, copies);
+                        for copy in 0..copies {
+                            let blocker = before.notes.get_mut(&(offset + copy * 100 + 3, 0, 0)).unwrap();
+                            blocker.label = "b".into(); blocker.onset = onset;
+                            if attached { blocker.chord_head = Some((offset + copy * 100 + 1, 0, 0)); }
+                        }
+                        before.edges = written_connections(&before.notes);
+                        for assignment in 0..16 {
+                            let mut after = before.clone();
+                            let mut voices = FrozenSerializedVoicePlan::default();
+                            for (&key, note) in &mut after.notes {
+                                let index = (key.0 - offset) % 100;
+                                note.label = if assignment & (1 << index) == 0 { "a" } else { "b" }.into();
+                                voices.source_to_label.insert(note.source, note.label.clone());
+                            }
+                            let actual = written_connections(&after.notes);
+                            if unavoidable_written_edge_loss(&before, &voices).is_some() {
+                                assert!(!before.edges.is_subset(&actual));
+                                rejected += 1;
+                            }
+                            if before.edges.is_subset(&actual) {
+                                assert!(unavoidable_written_edge_loss(&before, &voices).is_none());
+                            }
+                            checked += 1;
+                        }
+                    }
+                }
+            }
+        }}
+        assert!(rejected > 0 && rejected < checked);
+        eprintln!("WrittenLossPreflightSynthetic: assignments={checked}; proved_refusals={rejected}; false_refusals=0; authority=none");
+    }
+
+    #[test]
+    fn unmoved_connection_preflight_is_necessary_under_every_preserved_ordinal_order() {
+        let mut certificates = 0;
+        let mut added_certificates = 0;
+        for offset in [17, 1017] {
+            for marks in [&["begin", "continue", "end", "begin", "end"][..], &["begin", "none", "end"][..]] {
+                let mut before = marked_fixture(marks, offset, 1);
+                before.edges = written_connections(&before.notes);
+                let keys = before.notes.keys().copied().collect::<Vec<_>>();
+                for mask in 0..(1 << keys.len()) { for moved_mask in 0..(1 << keys.len()) {
+                    let mut voices = before.voices.clone();
+                    let mut moved = BTreeSet::new();
+                    let mut after = before.clone();
+                    for (index, key) in keys.iter().enumerate() {
+                        let label = if mask & (1 << index) == 0 { "left" } else { "right" };
+                        voices.source_to_label.insert(before.notes[key].source, label.into());
+                        after.notes.get_mut(key).unwrap().label = label.into();
+                        if moved_mask & (1 << index) != 0 { moved.insert(before.notes[key].source); }
+                    }
+                    let proof = unavoidable_unmoved_connection_change(&before, &voices, &moved);
+                    certificates += usize::from(proof.is_some());
+                    for reverse in [false, true] {
+                        for (index, key) in keys.iter().enumerate() {
+                            after.notes.get_mut(key).unwrap().ordinal = if reverse { keys.len()-index } else { index };
+                        }
+                        after.edges = written_connections(&after.notes);
+                        let unchanged_pair = |(_,left,right): &BeamEdge|
+                            !moved.contains(&before.notes[left].source) && !moved.contains(&before.notes[right].source);
+                        let changed = before.edges.symmetric_difference(&after.edges).any(unchanged_pair);
+                        assert_eq!(proof.is_some(), changed);
+                        added_certificates += usize::from(after.edges.difference(&before.edges).any(unchanged_pair));
+                    }
+                    // Equal physical-head onsets cannot supply a certificate.
+                    let mut ambiguous = before.clone();
+                    for note in ambiguous.notes.values_mut() { note.onset = 0; }
+                    for key in &keys { voices.source_to_label.insert(before.notes[key].source, "one".into()); }
+                    assert!(unavoidable_unmoved_connection_change(&ambiguous, &voices, &moved).is_none());
+                }}
+            }
+        }
+        assert!(certificates > 0);
+        assert!(added_certificates > 0);
+    }
+
+    #[test]
+    fn exact_projection_reuse_preserves_cold_results_and_rejects_foreign_scope() {
+        for offset in [43, 1043] {
+            let (canonical, observation) = producer_group_fixture(true, offset);
+            let attacks = canonical.source_locators.iter().map(|row| FrozenVoiceAttackEvidenceRow {
+                source_event_id: row.source_event_id, attack_id: row.attack_id,
+                absolute_start: row.onset, absolute_end: row.onset + row.duration,
+                staff: row.staff.parse().unwrap(), technical_lane: 1,
+            }).collect::<Vec<_>>();
+            let channels = build_frozen_serialization_voice_channels_for_canonical(&canonical, &attacks).unwrap();
+            let voices = bind_musicxml_voice_labels(&channels, &[]).unwrap();
+            let edges = ordered_received_beam_readback::owner_edges(&canonical, &observation).unwrap();
+            let reuse = ProjectionReuse::new(&canonical, &observation);
+            let cold = SharingContext::project_voices(&canonical, voices.clone(), Some(&edges)).unwrap();
+            let start = std::time::Instant::now();
+            for _ in 0..16 {
+                assert_eq!(*reuse.project(voices.clone()).unwrap(), cold);
+            }
+            let warm_elapsed = start.elapsed();
+            let parsed_source = reuse.binding_source.get().unwrap() as *const FinalChordBindingSource<'_>;
+            assert_eq!(reuse.projection_misses.get(), 1);
+            assert_eq!(reuse.projection_hits.get(), 15);
+            // Equal diagnostic fingerprints do not permit reuse of a different
+            // bound label assignment, or even a changed metadata field.
+            let names = voices.channel_to_label.values().map(|name| format!("renamed-{name}")).collect::<Vec<_>>();
+            let alpha = final_chord_permute_sealed_voice_labels(&voices, &names).unwrap();
+            let alpha_cold = SharingContext::project_voices(&canonical, alpha.clone(), Some(&edges)).unwrap();
+            assert_eq!(*reuse.project(alpha).unwrap(), alpha_cold);
+            let mut changed_metadata = voices.clone();
+            changed_metadata.semantic_fingerprint_fnv64 ^= 1;
+            let _ = reuse.project(changed_metadata);
+            assert_eq!(reuse.projection_misses.get(), 3);
+            assert_eq!(reuse.binding_source.get().unwrap() as *const FinalChordBindingSource<'_>, parsed_source);
+            // Every field participates in the structural key, including the
+            // separately sealed canonical role allocation, never just labels.
+            let mut mutations = Vec::new();
+            let mut changed = voices.clone(); changed.authority_bound = !changed.authority_bound; mutations.push(changed);
+            let mut changed = voices.clone(); changed.source_to_role.clear(); mutations.push(changed);
+            let mut changed = voices.clone(); changed.source_to_channel.clear(); mutations.push(changed);
+            let mut changed = voices.clone(); changed.source_to_label.clear(); mutations.push(changed);
+            let mut changed = voices.clone(); changed.label_to_role.clear(); mutations.push(changed);
+            let mut changed = voices.clone(); changed.channel_to_label.clear(); mutations.push(changed);
+            let mut changed = voices.clone(); changed.channel_to_role.clear(); mutations.push(changed);
+            let mut changed = voices.clone(); changed.canonical_role_allocation = None; mutations.push(changed);
+            for changed in mutations { assert_ne!(voices, changed); }
+            let fragment = canonical.source_locators[0].fragment_id;
+            let witness = observation.sharing_witness_diagnostic(&canonical, fragment).unwrap();
+            for _ in 0..16 {
+                let reused = reuse.witness(fragment).unwrap();
+                assert_eq!((reused.source, reused.attack, reused.levels), (witness.source, witness.attack, witness.levels));
+                assert!(reused.kind == witness.kind);
+            }
+            for _ in 0..2 { assert!(reuse.witness(usize::MAX).is_err()); }
+            assert_eq!(reuse.witness_misses.get(), 2);
+            assert_eq!(reuse.witness_hits.get(), 16);
+            let other_canonical = canonical.clone();
+            assert!(!reuse.matches(&other_canonical, &observation));
+            let missing = ActualSourceBeamBindingObservation::default();
+            assert!(!reuse.matches(&canonical, &missing));
+            let classes = attacks.iter().map(|a| (a.source_event_id, a.source_event_id)).collect();
+            let context = SharingContext::new(&canonical, &missing, &classes, &voices.source_to_role, &[])
+                .with_reuse(Some(&reuse));
+            assert!(context.shared_reuse.is_none());
+            assert!(context.row(fragment).is_none());
+            let start = std::time::Instant::now();
+            for _ in 0..16 {
+                assert_eq!(SharingContext::project_voices(&canonical, voices.clone(), Some(&edges)).unwrap(), cold);
+            }
+            eprintln!("ProjectionReuseSyntheticBenchmark: scope={offset}; repeated=16; cold_us={}; warm_us={}; actual_projections=1; authority=none",
+                start.elapsed().as_micros(), warm_elapsed.as_micros());
+            for index in 0..=ProjectionReuse::RETAINED_PROJECTIONS {
+                let names = voices.channel_to_label.values().map(|name| format!("eviction-{index}-{name}")).collect::<Vec<_>>();
+                let renamed = final_chord_permute_sealed_voice_labels(&voices, &names).unwrap();
+                reuse.project(renamed).unwrap();
+            }
+            assert_eq!(reuse.projections.borrow().len(), ProjectionReuse::RETAINED_PROJECTIONS);
+            let misses = reuse.projection_misses.get();
+            assert_eq!(*reuse.project(voices).unwrap(), cold);
+            assert_eq!(reuse.projection_misses.get(), misses + 1);
+        }
+    }
+
+    #[test]
     fn indexed_beat_context_keeps_cross_staff_and_cross_measure_custody_checks() {
         let (_, original) = producer_group_fixture(false, 83);
         let heads = [(17, 0, 0), (29, 0, 0), (41, 0, 0), (53, 0, 0)];
@@ -1995,10 +2681,13 @@ mod tests {
         let before = context.projection(&channels,&roles,None).unwrap(); assert!(before.edges.is_empty());
         let proposed = channels.iter().map(|(id,ch)|(*id,if *ch==29 {17} else {*ch})).collect::<Partition>();
         let mut surviving=roles; surviving.remove(&29);
-        let after = context.projection(&proposed,&surviving,Some(&before.voices)).unwrap();
-        assert!(!after.edges.is_empty());
+        let misses = context.reuse().projection_misses.get();
         assert!(!context.compatible(&before,&channels,&proposed,&surviving));
         assert_eq!(context.diagnostic_count("new_beam_edge_cohort_mismatch"),1);
+        assert_eq!(context.diagnostic_count("new_connection_owner_proof_preflight"),1);
+        assert_eq!(context.reuse().projection_misses.get(), misses);
+        let after = context.projection(&proposed,&surviving,Some(&before.voices)).unwrap();
+        assert!(!after.edges.is_empty());
     }
 
     #[test]
@@ -2104,12 +2793,20 @@ mod tests {
             let groups = SharingContext::evacuation_groups(&baseline, &[class_order[7], tail], &classes);
             let hosts = [17, 29, 53];
             let evacuation = ChannelEvacuation { guest: 67, hosts: &hosts, groups: &groups };
-            let traversal = SharingTraversal { distributed_candidates: true, input: &input, initial: &initial, baseline: &baseline };
+            let measure_incidence = MeasureIncidence::new(&baseline, &classes);
+            let refused_compatibility = RefCell::new(SeenPartitions::new());
+            let traversal = SharingTraversal { distributed_candidates: true, input: &input, initial: &initial, baseline: &baseline, measure_incidence: &measure_incidence, refused_compatibility: &refused_compatibility };
             let first = context.place_evacuation_groups(&traversal, &evacuation, &initial, &roles, None).unwrap();
             let mut survivors = roles.clone(); survivors.remove(&67);
             assert!(!context.compatible(&baseline, &initial, &first, &survivors));
             assert!(context.diagnostic_count("new_beam_edge_cohort_mismatch") > 0);
             let result = context.evacuate_groups(&traversal, &evacuation, &initial, &roles, &mut SeenPartitions::new()).unwrap();
+            let hits = context.reuse().projection_hits.get();
+            let refusals_reused = context.diagnostic_count("compatibility_refusal_reused");
+            let repeated = context.evacuate_groups(&traversal, &evacuation, &initial, &roles, &mut SeenPartitions::new()).unwrap();
+            assert_eq!(result, repeated);
+            assert!(context.diagnostic_count("compatibility_refusal_reused") > refusals_reused);
+            assert!(context.reuse().projection_hits.get() > hits);
             assert_eq!(result.0[&class_order[7]], 53);
             assert!(context.diagnostic_count("unmoved_beam_connections_changed") > 0);
             assert_eq!(result.0[&tail], 17);

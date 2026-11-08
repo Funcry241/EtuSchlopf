@@ -482,6 +482,7 @@ fn an_original_cursor_boundary_cannot_borrow_the_previous_head() {
     assert!(row.head.is_none());
     assert!(row.original_head.is_none());
     assert!(row.original_head_absent);
+    assert!(row.original_rest_host.is_none(), "a cursor reset cannot borrow a preceding rest host");
     assert!(
         row.unknown
             .as_ref()
@@ -620,6 +621,79 @@ fn pure_chord_observation_does_not_guess_an_ambiguous_physical_head() {
     assert!(!rows[0].original_head_absent);
     assert!(rows[0].head.is_none());
     assert!(rows[0].unknown.is_some());
+}
+
+#[test]
+fn original_rest_host_observation_requires_the_exact_emitted_operation() {
+    let source = chord_observation_source().replace(
+        "<pitch><step>C</step><octave>3</octave></pitch>", "<rest/>");
+    let notes = partial_beat_raw_notes(&source);
+    let map = ActualBeamNoteMap::unchanged(&notes);
+    let rows = capture_actual_chord_beam_attachments(&source, &source, &map, &map, &[]).unwrap();
+    assert_eq!(rows[0].original_rest_host, Some(notes[0].start..notes[0].end));
+    assert!(rows[0].original_head.is_none());
+    assert!(rows[0].original_head_absent);
+    assert!(rows[0].head.is_none());
+    let changed = source.replacen("<duration>4</duration>", "<duration>5</duration>", 1);
+    assert!(capture_actual_chord_beam_attachments(&source, &changed, &map, &map, &[]).is_err());
+    let mut ambiguous = map.clone();
+    ambiguous.0.push(ambiguous.0[0].clone());
+    assert!(capture_actual_chord_beam_attachments(&source, &source, &ambiguous, &map, &[]).is_err());
+    let document = roxmltree::Document::parse(&source).unwrap();
+    let measure = document.descendants().find(|node| node.has_tag_name("measure")).unwrap();
+    let body = &source[measure.range()];
+    let doubled = source.replacen(body, &format!("{body}{}", body.replace("arbitrary", "relocated")), 1);
+    let notes = partial_beat_raw_notes(&doubled);
+    let map = ActualBeamNoteMap::unchanged(&notes);
+    let rows = capture_actual_chord_beam_attachments(&doubled, &doubled, &map, &map, &[]).unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_ne!(rows[0].original_rest_host, rows[1].original_rest_host);
+    for row in rows {
+        assert!(doubled[row.original_rest_host.unwrap()].contains("<rest"));
+        assert!(row.head.is_none());
+    }
+}
+
+#[test]
+fn original_rest_host_range_follows_receipts_and_rejects_changed_support() {
+    let host = "<note><rest/><duration>384</duration><voice>4</voice><type>whole</type><staff>2</staff></note>";
+    let member = "<note print-object=\"no\"><chord/><pitch><step>E</step><octave>4</octave></pitch><duration>384</duration><voice>4</voice><type>whole</type><staff>2</staff></note>";
+    let source = input().replace("</attributes>",
+        &format!("</attributes>{host}{member}<backup><duration>384</duration></backup>"));
+    let (after, _, capture) = execute(&source);
+    let row = &capture.chord_attachments(&after).unwrap()[0];
+    let original = row.original_rest_host.clone().unwrap();
+    let emissions = partial_beat_raw_notes(&after).into_iter()
+        .map(|note| note.start..note.end).filter(|range| *range != original).collect::<Vec<_>>();
+    let unsupported = capture.carry_final_chord(&after, emissions.iter().map(|range| (range, range))).unwrap();
+    let incomplete = &unsupported.chord_attachments(&after).unwrap()[0];
+    assert!(incomplete.original_rest_host.is_none());
+    assert!(incomplete.original_head_absent);
+    assert_eq!(incomplete.member, row.member, "missing support cannot erase its surviving member's negative evidence");
+    let at = original.start;
+    let insertion = "<!-- carried original rest host -->";
+    let post = format!("{}{insertion}{}", &after[..at], &after[at..]);
+    use crate::arrangement::representation_transport::{RepresentationStep, RhythmicRepresentationTransport};
+    let owner = PartialBeatBeamPreservingMint { _sealed: () };
+    let transport = RhythmicRepresentationTransport::partial_beam(&owner,
+        RepresentationStep::recorded(&after, &post, vec![(at..at, insertion.to_string())]));
+    let recorded = capture.carry_recorded(&transport).unwrap();
+    let recorded_host = recorded.chord_attachments(&post).unwrap()[0].original_rest_host.clone().unwrap();
+    assert_eq!(&post[recorded_host], &after[original.clone()]);
+    let receipt = crate::master_state_identity::tests::synthetic_exact_receipt_for_tests(
+        &after, &post, at, at, insertion);
+    let carried = capture.carry_exact(&receipt).unwrap();
+    let rest = carried.chord_attachments(&post).unwrap()[0].original_rest_host.clone().unwrap();
+    assert_eq!(rest.start, original.start + insertion.len());
+    assert_eq!(&post[rest.clone()], &after[original]);
+    let at = rest.start + post[rest].find("384").unwrap();
+    let changed = format!("{}383{}", &post[..at], &post[at + 3..]);
+    let receipt = crate::master_state_identity::tests::synthetic_exact_receipt_for_tests(
+        &post, &changed, at, at + 3, "383");
+    let rejected = carried.carry_exact(&receipt).unwrap();
+    assert!(rejected.chord_attachments(&changed).is_err());
+    assert_eq!(rejected.occurrences(&changed).unwrap().len(),
+        carried.occurrences(&post).unwrap().len());
 }
 
 fn beam_only_input_at(measure: usize) -> String {

@@ -60,7 +60,11 @@ fn run_rest_and_articulation_render_stage(
             trial.done_fragment = trial.done_fragment.replace("RenderXmlWrite nein", "RenderXmlWrite ja");
             trial.pipeline_line = trial.pipeline_line.replace("written nein", "written ja");
             let lane_root = render_state.require_state_root("RestArticulation current State");
-            let ((lane_post, lane_stats), lane_receipt) = human_bound_cursor_lane_owner_transfer_xml_with_receipt(lane_root.document());
+            // A rest write grants no XML-only cursor decision. E057 receives
+            // the existing canonical owner context and refuses an unprepared
+            // or stale exchange; final PDF preparation binds the live course.
+            let ((lane_post, lane_stats), lane_receipt) = human_bound_cursor_lane_owner_transfer_xml_with_receipt(
+                (lane_root.document(), &*render_final_chord_structural_plan));
             let mut lane_chain = RenderTransitionReceipts::new();
             lane_chain.push_preserving(lane_receipt, &lane_post);
             if lane_stats.written && lane_post != lane_root.document() {
@@ -240,3 +244,7 @@ fn run_rest_and_articulation_render_stage(
 
 
 
+
+#[cfg(test)]
+#[path = "../../tests/unit/rest_bridge_owner_handoff.rs"]
+mod rest_bridge_owner_handoff_tests;

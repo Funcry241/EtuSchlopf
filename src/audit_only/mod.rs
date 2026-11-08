@@ -73,3 +73,5 @@ pub(crate) mod c3_diagnostics;
 pub(crate) mod performance_timings;
 
 pub(crate) mod rest_boundary_readback;
+
+pub(crate) mod voice_allocation_timing;

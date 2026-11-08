@@ -1,0 +1,7 @@
+schema=1
+from_version=0.10.1839
+to_version=0.10.1839
+take_revision=1684
+accepted_zip_sha256=6a10566ed1dc2db8bb52989c37d432945d4c95dcf525842f472be0a862d9a8bb
+verdict=accepted
+authority=advisory_evidence_only

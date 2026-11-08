@@ -3017,6 +3017,16 @@ fn freeze_final_sounding_material(
             "ReceivedNotationObligations: Unknown; {error}; canonical_role_authority=none\n"));
     }
     pre_serialization_constraint_audit.append_counterfactual_body(&received_notation_evidence);
+    let original_notation_voices = OriginalNotationVoiceBindings {
+        original: std::sync::Arc::from(pre_final_chord_xml),
+        voices: active_attack_by_source.values().map(|attack|
+            ((attack.source_event_id.0, attack.attack_id.0), attack.voice.clone())).collect(),
+    };
+    let mut allocator_canonical = final_chord_structural_plan.clone();
+    allocator_canonical.bind_original_beam_voice_groups(
+        pre_final_chord_xml, candidate.master_state.actual_beam_capture(), &original_notation_voices,
+    );
+    let final_chord_structural_plan = &allocator_canonical;
     let frozen_channels =
         crate::structural_write_authority::build_frozen_serialization_voice_channels_with_original_beams(
             final_chord_structural_plan,
@@ -3082,14 +3092,7 @@ fn freeze_final_sounding_material(
     lane_plan.notation_voice_pre_serialization_constraint_audit =
         pre_serialization_constraint_audit;
     lane_plan.final_chord_structural_plan = final_chord_structural_plan.clone();
-    let original_notation_voices = OriginalNotationVoiceBindings {
-        original: std::sync::Arc::from(pre_final_chord_xml),
-        voices: active_attack_by_source.values().map(|attack|
-            ((attack.source_event_id.0, attack.attack_id.0), attack.voice.clone())).collect(),
-    };
-    lane_plan.final_chord_structural_plan.bind_original_beam_voice_groups(
-        pre_final_chord_xml, candidate.master_state.actual_beam_capture(), &original_notation_voices,
-    );
+
     lane_plan.final_chord_structural_plan.bind_original_respelling_input(
         original_course_input,
     );

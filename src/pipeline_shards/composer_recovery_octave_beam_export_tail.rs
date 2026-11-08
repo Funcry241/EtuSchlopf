@@ -4383,27 +4383,13 @@ fn apply_final_notation_polish_guard(xml: &mut String) -> master_state_identity:
     receipts.append(hide_exact_duplicate_visible_noteheads(xml).1);
     receipts.append(hide_redundant_visible_staff_rests(xml).1);
 
-    for _ in 0..4 {
-        let ((removed_slurs, removed_ties), endpoint_receipts) =
-            remove_orphan_slur_and_tie_endpoints(xml);
-        receipts.append(endpoint_receipts);
-        let (rest_only_clefs, rest_only_receipt) = prune_rest_only_staff2_clef_noops(xml);
-        receipts.push_exact(rest_only_receipt);
-        let ((empty_clefs, trailing_clefs, redundant_clefs, advance_clefs), redundant_receipt) =
-            prune_redundant_lower_staff_clefs(xml);
-        receipts.push_exact(redundant_receipt);
-        if removed_slurs
-            + removed_ties
-            + rest_only_clefs
-            + empty_clefs
-            + trailing_clefs
-            + redundant_clefs
-            + advance_clefs
-            == 0
-        {
-            break;
-        }
-    }
+    // Each existing owner closes its own domain in one visit. Clef-only
+    // deletions cannot invalidate retained endpoints or create a new empty
+    // visible-pitch interval; no outer fixed-point repair is necessary.
+    receipts.append(remove_orphan_slur_and_tie_endpoints(xml).1);
+    receipts.push_exact(prune_rest_only_staff2_clef_noops(xml).1);
+    receipts.push_exact(prune_redundant_lower_staff_clefs(xml).1);
+
     receipts
 }
 

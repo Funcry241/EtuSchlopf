@@ -15,6 +15,12 @@ Statusangaben zusätzlich zu Farben sowie eine Berücksichtigung von
 `prefers-reduced-motion` für die definierten Animationen. Die Ansicht besitzt
 auch eine Anpassung für schmale Browserfenster.
 
+Bei Statuswechseln erhält die Webansicht den Tastaturfokus und geöffnete
+Detailbereiche innerhalb derselben Sitzung. Synthetische Chromium-Browserproben
+prüfen Projektzeilen, PDF-Links, Umsortierung und Sitzungswechsel; siehe
+[Prüfumfang r1669](watch_keyboard_focus_r1669.md). Das ist keine vollständige
+Tastatur- oder Screenreaderprüfung.
+
 Diese Angaben beruhen auf dem
 [aktuellen Quelltext der Watch-Webansicht](../tools/etuschlopf_watch/src/web_watch.rs).
 Sie sind kein Nachweis einer vollständigen Tastatur-, Screenreader-, Kontrast-

@@ -32,7 +32,7 @@ impl MqttSessionStateClient {
         let Some((header, payload)) = read_packet(&mut stream)? else {
             return Err(io::Error::new(io::ErrorKind::TimedOut, "MQTT CONNACK timeout"));
         };
-        if header != 0x20 || payload.as_slice() != &[0x00, 0x00] {
+        if header != 0x20 || payload.as_slice() != [0x00, 0x00] {
             return Err(io::Error::new(
                 io::ErrorKind::ConnectionRefused,
                 "MQTT broker rejected Watch UI connection",

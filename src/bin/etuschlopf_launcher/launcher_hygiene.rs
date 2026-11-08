@@ -693,9 +693,6 @@ fn is_root_pdf_output_name(lower_name: &str) -> bool {
         || lower_name.contains("variant")
         || lower_name.contains("questions")
         || lower_name.contains("notation")
-        || lower_name.contains("etüde")
-        || lower_name.contains("etuede")
-        || lower_name.contains("etude")
 }
 
 fn is_root_temp_file_name(name: &str) -> bool {

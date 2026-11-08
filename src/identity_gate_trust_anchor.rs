@@ -308,10 +308,10 @@ const _: () = assert!(DESTRUCTIVE_TRANSFORMATION_SURFACE_BASELINE_V1_FNV1A64 == 
 const _: () = assert!(THIRTY_SURFACE_BATCH_SCAN_FNV1A64 == 0xf7cb74bb1ed893ec);
 const _: () = assert!(KODEX_GATE_CORE_OWNERSHIP_FNV1A64 == 0xa928770e3293682a);
 const _: () = assert!(TAKE_BOOTSTRAP_FNV1A64 == 0x74d6f5ad70f0a202);
-const _: () = assert!(LAUNCHER_FNV1A64 == 0x13d9182e76c8bdae);
+const _: () = assert!(LAUNCHER_FNV1A64 == 0x38c0a3b2d8d89c99);
 const _: () = assert!(LAUNCHER_ASSISTANT_EXPORT_FNV1A64 == 0x7cda8153ff46fbbb);
-const _: () = assert!(LAUNCHER_INVENTORY_EXPORT_FNV1A64 == 0xf7312a4d392b65a0);
-const _: () = assert!(LAUNCHER_NEURO_EVIDENCE_EXPORT_FNV1A64 == 0x5d6a8d60f1463924);
+const _: () = assert!(LAUNCHER_INVENTORY_EXPORT_FNV1A64 == 0x633282e2d752a97e);
+const _: () = assert!(LAUNCHER_NEURO_EVIDENCE_EXPORT_FNV1A64 == 0x15ccc748a3a502bd);
 const _: () = assert!(PUBLIC_ARTIFACT_RECOVERY_FNV1A64 == 0x6e8088e300ca8a66);
 const _: () = assert!(FORMAL_GREEN_CONTRACT_FNV1A64 == 0xd59a1810a0692951);
 const _: () = assert!(RUN_CMD_FNV1A64 == 0x3dfb3ce26934c140);

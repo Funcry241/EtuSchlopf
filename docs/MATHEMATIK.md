@@ -1,476 +1,259 @@
 # Mathematik in EtuSchlopf
 
-EtuSchlopf macht aus MIDI- und WAV-Aufnahmen von Klavieretüden Notensatz (MusicXML und PDF). Viele Teilaufgaben dabei sind Entscheidungen: In welchem System steht ein Ton? Welcher Schlüssel gilt? Wird ein Akkordton gezeigt oder verborgen? Diese Seite zeigt, wo wir dafür Mathematik einsetzen, woher sie stammt und wie belastbar sie heute ist.
+**Fachlicher Stand: nativ angenommener r1683, 8. November 2026.** Diese Überarbeitung gehört zur Dokumentationsrevision r1684. Sie verändert keine Formeln im Programm, Gewichte, Suchräume, Tests oder Schreibbefugnisse.
 
-**Angenommener Entwicklungsquellstand r1659.** Die [native Abnahme](evidence/r1659/README.md) dokumentiert den vollständigen Korpuslauf mit zehn Etüden. Die Optimierungen r1658/r1659 sind nativ angenommen. Gegenüber r1657 bleiben alle 20 MusicXML-Dateien bytegleich und alle 39 PDF-Seiten bei 144 dpi pixelgleich. Die [Windows-Testversion r1602](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1602-windows-preview) hat eigene Paketbelege. Korpuszahlen gelten für die jeweils angegebene Revision.
+EtuSchlopf verwendet Mathematik für musikalische Entscheidungen, Darstellungsentscheidungen, Messungen und technische Beweise. Diese Aufgaben sind verschieden: Eine Erhaltungsbilanz beweist keine Lesbarkeit; ein lesbarer Registerkurs beweist keine menschliche Spielbarkeit; eine bestandene Prüfung erlaubt nur den Übergang, dessen Bedingungen sie tatsächlich abdeckt.
 
-## Ehrlichkeitsregel
+Diese Seite ist eine **nach Aufgaben gegliederte Bestandsaufnahme** der überprüften Verfahrensfamilien. Sie ersetzt weder die kanonischen Verträge noch ein vollständiges Funktionsinventar. Die frühere Liste von 21 Themen war unvollständig. Insbesondere fehlten eigenständige Beschreibungen der Tonartbewertung, Phrasen- und Wiederholungsanalyse, Belegungsgraphen, WAV-Puls- und Spektralanalyse, vorhandenen Systemumbruchplanung und exakten Suchbeschleunigungen. Auch diese erweiterte Seite behauptet nicht, jede arithmetische Operation jeder Abhängigkeit aufzulisten.
 
-Die **Werkzeuge** sind bekannte Mathematik. Eigene Beiträge gibt es auf zwei Ebenen: die **Modellierung** (welche musikalische Frage wir wie formulieren, mit welchen Gewichten und Schwellen) und drei **projekteigene Formeln**, die mehrere Werkzeuge zu einem Ganzen verbinden: die SchlopfFormel, die Schlöpfchen-Formel und die symbolische Spielformel. Neue mathematische Sätze beanspruchen wir nicht. Jede Zeile ist entsprechend gekennzeichnet:
+## Wie die Aussagen zu lesen sind
 
-| Kennzeichen | Bedeutung |
+| Einordnung | Bedeutung |
 |---|---|
-| **bekannt** | Standardmathematik oder Standardinformatik, mit Lehrbuchquelle |
-| **eigene Modellierung** | bekanntes Werkzeug, aber Zielgröße, Gewichte oder Schwellen von uns festgelegt; nicht allgemein erprobt |
-| **eigene Konstruktion** | projekteigene Formel, die mehrere Bedingungen zu einem Ganzen verbindet; in der Tradition bekannter Ansätze, aber in dieser Form unsere; nicht extern begutachtet |
+| Bekanntes Verfahren | Zum Beispiel Intervallgraphen, dynamische Programmierung, Goertzel-Rekurrenz oder lexikografische Ordnung. |
+| Projekteigene Modellierung | Unsere Ereignisdefinitionen, Zulässigkeitsbedingungen, Kosten und Prioritäten. Ihre Allgemeingültigkeit folgt nicht aus der Bekanntheit des Verfahrens. |
+| Projekteigene Zusammenstellung | Ein Projektbegriff verbindet mehrere Bedingungen. Daraus folgt keine wissenschaftliche Neuheitsbehauptung. |
 
-Der **Status** sagt, was die Mathematik heute tut:
-
-| Status | Bedeutung |
+| Rolle | Was daraus folgt |
 |---|---|
-| **entscheidet** | im Produkt aktiv, beeinflusst die Noten |
-| **misst** | im Produkt aktiv, nur Bericht, ändert nichts (AuditOnly) |
-| **Prüfwerkzeug** | externes Leseskript für Analysen, nicht Teil des Produkts |
-| **geplant** | entworfen, noch nicht umgesetzt |
+| Entscheidet | Ein bestehender fachlicher Owner kann das Ergebnis unter seinen weiteren Bedingungen für eine Auswahl oder Materialisierung verwenden. Nicht jede Auswertung wird übernommen. |
+| Misst / prüft | Liefert Beobachtungen, Gegenbeispiele oder eine Prüfung; erhält dadurch keine musikalische Schreibbefugnis. |
+| Technische Erhaltung | Verändert Aufwand oder Aufbewahrung unter einem Äquivalenznachweis, ohne eine neue musikalische Präferenz einzuführen. |
+| Extern / historisch | Ein Diagnoseexperiment oder ein alter Messstand, kein aktueller Produktnachweis. |
+| Entwurf | Noch keine produktive Implementierung der beschriebenen Gesamtaufgabe. |
 
-## Leitidee: Notation als geordnete Entscheidungsfolge
+`UNKNOWN`, eine unvollständige Suche und eine bewiesene Unzulässigkeit sind unterschiedliche Ergebnisse. Fehlende Information wird weder zu Nullkosten noch zu einer Erlaubnis. „Optimal“ bedeutet höchstens optimal im ausdrücklich gebundenen Modell und Suchraum.
 
-1. **Ein Entscheider je Größe als Ziel.** Für Schreibweise, Register (Schlüssel und Oktavierung), System, Stimme, Balken und Layout soll die jeweilige Entscheidung einer klar abgegrenzten zuständigen Instanz gehören. Beobachter lesen nur. Das ist eine Leitidee; ihre vollständige Durchsetzung im gesamten Produkt wird damit nicht behauptet.
-2. **Topologische Reihenfolge.** Entschieden wird in der Reihenfolge der Abhängigkeiten, also Schreibweise → Register → Layout. Wie viele Hilfslinien ein Ton braucht, hängt von seiner Schreibweise ab: Es3 und Dis3 sind derselbe Ton, liegen aber auf verschiedenen Linien.
-3. **Invarianten am Ende.** Was eine Stufe nicht ändern darf, wird als Invariante formuliert und nach der Stufe geprüft.
+## Die drei Projektbegriffe
 
-*Herkunft:* bekannt (gerichtete azyklische Graphen und topologisches Sortieren; Invarianten im Sinne von Hoare). *Status:* Prinzip mit begrenzter produktiver Umsetzung. Seit r1576 übernimmt C3 im Korpus beide Systeme von Etüde 7 und 8; der Verlauf bleibt bis zum Abschluss gebunden. Die übrigen acht Etüden behalten ihren bisherigen Verlauf. Eine vollständige gemeinsame Registerentscheidung für alle unterstützten Eingaben ist damit noch nicht erreicht.
+### SchlopfFormel: Herkunft, Zuständigkeit und Übergangsnachweis
 
-## Die drei projekteigenen Formeln
+Unter diesem Namen fasst diese Seite die Bedingungen für einen erlaubten, belegten Übergang zusammen. Es gibt im Code keine einzelne kanonische Gesamtfunktion namens SchlopfFormel.
 
-### SchlopfFormel: wann eine Änderung zulässig ist
+Ein ausführbarer Teilkern ist die Entscheidung über die Einstufung **eines** Änderungsbelegs:
 
-**Leitgedanke:** Eine Veränderung am Notentext ist nur zulässig, wenn drei Dinge gebunden sind: ihre **Herkunft** (welcher Zustand vorher galt), ein **zuständiger Ausführer** (genau ein Owner) und ein **Nachweis** für genau diesen Übergang. Eine einzelne kanonische Gesamtgleichung unter diesem Namen gibt es im Code nicht. Die SchlopfFormel ist die Zusammenfassung mehrerer ausführbarer Bedingungen. Ihr derzeit schärfster Teilkern ist die Übernahmeregel für ein Änderungsbeleg $e$:
+$$A(e)=[p(e)=1]\land[m(e)+d(e)+i(e)=0].$$
 
-```math
-\mathrm{Permit}(e) = [p(e)=1] \;\land\; [u(e)+d(e)+i(e)=0] \;\land\; \neg\mathrm{Replay}(e)
-```
+$p$ zählt erlaubende Einstufungen, $m,d,i$ zählen fehlende, doppelte und ungültige Belege. Die Zähler sind keine Wahrscheinlichkeiten. Der Kern steht in `adoption_decision` in [ssc_evidence_proof.rs](../src/ssc_evidence_proof.rs). Er ist allein noch keine vollständige Freigabeformel.
 
-Dabei ist $p$ die Zahl der erlaubenden Einstufungen dieses einen Belegs (keine Wahrscheinlichkeit), und $u, d, i$ zählen fehlende, doppelte und ungültige Nachweise. Ein Beleg, der schon übernommen wurde, wird als Wiederholung abgewiesen. Dazu kommen:
-- lückenlose Belegkette: jeder Übergang ist von genau einem Beleg gedeckt;
-- Bindung an den tatsächlichen Vor- und Nachzustand;
-- getrennte Herkunftsketten für Master und Render;
-- Identität durch **Prägung** beim Erzeugen, nie durch Inhaltsvergleich, denn denselben Inhalt kann jeder erzeugen.
+Die Zusammenstellung verlangt außerdem die zuständige Authority, die Herkunft des Belegs, den gebundenen Vor- und Nachzustand, die jeweils erforderlichen Erhaltungsbedingungen und den Schutz gegen unzulässige Wiederverwendung. Die konkreten Prüfungen und ihre Zuständigkeit bleiben in den ausführbaren Verträgen. Master und Render besitzen getrennte Herkunftsketten.
 
-*Herkunft:* eigene Konstruktion. Verwandt mit beweistragendem Code (*proof-carrying code*, Necula 1997), Herkunftsnachweisen (*provenance*) und Fähigkeitstypen (*capabilities*). *Status:* entscheidet (`adoption_decision` und `ssc_adoption_verdict` in `src/ssc_evidence_proof.rs`; Belegkette in `src/master_state_identity.rs`).
-*Grenze:* Die SchlopfFormel sichert, **dass** eine Änderung erlaubt und belegt ist, nicht, **dass** sie musikalisch gut ist.
+**Grenze:** Eine zulässige Transformation ist damit nicht automatisch musikalisch gut. Ein Fingerprint ersetzt keine Ereignisidentität und kein musikalisches Qualitätsurteil.
 
-### Schlöpfchen-Formel: wie Seiten gefüllt werden
+### Schlöpfchen-Formel: die angestrebte Seitenfüllung
 
-**Aufbau (vereinbarte Formulierung):**
-- Getrennte Erfassung je Takt: horizontales und vertikales Notationsprofil, gleichzeitig notierte Köpfe.
-- Daraus werden Systemhüllen gebildet, aus Systemhüllen Seiten. Ungenutzter Platz wird beobachtet.
-- **Lesbarkeit ist Voraussetzung**, kein Zielwert.
-- Unter den zulässigen Kandidaten wird **lexikografisch** gewählt:
+Der bisher vereinbarte Entwurf lautet:
 
-```math
-\min_{\text{zulässig}}\ \big(\text{Seitenzahl},\ \text{übermäßige Dehnung},\ \text{Ausgewogenheit}\big)
-```
+$$\min_{x\in\mathcal F}(\text{Seitenzahl}(x),\text{übermäßige Dehnung}(x),\text{Unausgewogenheit}(x)).$$
 
-- Die Reihenfolge der Systeme bleibt erhalten.
-- Beobachtete Lücken aus echten Stücken sind keine Mindestmaße.
-- Horizontal und vertikal sind getrennte Dimensionen.
+$\mathcal F$ müsste die tatsächlich lesbaren und materialisierbaren Kandidaten enthalten. Lesbarkeit ist darin Voraussetzung. Horizontale Taktprofile, vertikale Systemhüllen und Seitenbelegung sind getrennte Größen; die Systemreihenfolge bleibt erhalten.
 
-*Herkunft:* eigene Konstruktion. Verwandt mit dem Zeilenumbruch nach Knuth und Plass (1981) und mit Packungsproblemen (*bin packing*). *Status:* **Die vollständige Formel ist geplant.** Begrenzte Teilumsetzungen erproben bereits eine niedrigere Seitenzahl bei unverändertem Systemverlauf und einen Systemtransfer zur Balance bei gleicher Seitenzahl. Sie verlangen eine frische Bestätigung durch den bestehenden Renderer und sind kein globaler Formeloptimierer. Siehe die Verträge zur [Seitenverfeinerung](selector_derivation_contract_same_system_page_refinement.md) und [festen Seitenbalance](selector_derivation_contract_fixed_page_balance_implementation.md). Die vollständige Formel und ihre Mindestbreiten und -abstände sind dadurch nicht verifiziert.
+**Status:** Diese Gesamtformel ist nicht als vollständiger Seitenoptimierer implementiert. Die bestehende horizontale Systemplanung ist davon zu unterscheiden. Seitenverdichtung bleibt zurückgestellt, bis sichtbare Mindestabstände und die zugehörige Vergleichsgrundlage festgelegt sind. Aus einer großen beobachteten Lücke folgt weder ein Mindestabstand noch automatisch die Erlaubnis zum Zusammenrücken.
 
-**Entwurf zur Seitenverdichtung bei festen Systemen.** Ein Kandidat mit weniger Seiten muss die obere und untere nutzbare Seitengrenze einhalten. Für benachbarte Systeme sollen typische Abstände mit typischen Abständen innerhalb der Klaviersysteme verglichen werden. Entsprechend werden die engsten Stellen miteinander verglichen. Die Messdefinition für Innenabstände, der Umgang mit verbindenden Zeichen und die PDF-Gegenproben stehen noch aus. Der eingefrorene Vertrag beschreibt die geerbte Systemobergrenze als Fehlerklasse und erlaubt die Untersuchung kleinerer Seitenzahlen. [Vertrag zur geerbten Seitengrenze](selector_derivation_contract_inherited_system_page_ceiling.md)
+Quelle: [Fehlerklasse zur unnötig beibehaltenen Seite](selector_derivation_contract_redundant_page_retention.md), [aktueller Arbeitsrahmen](assistant_memory/050_aktueller_stand.md). Dessen alte Revisionsangaben ersetzen keine aktuellen Laufbelege.
 
-### Symbolische Spielformel: was eine Stelle von den Händen verlangt
+### Symbolische Spielformel: Anforderungen und Fähigkeiten
 
-```math
-\exists\ \text{Belegung}: \ \text{Struktur} \land \text{statische Anforderungen} \land \text{Übergänge} \land \text{Wiederanschlag gleicher Taste}
-```
+$$\exists a:\ S(a)\land K(a)\land U(a)\land W(a).$$
 
-Die Variablen sind die physischen Verpflichtungen einer Stelle (welche Töne gleichzeitig, welche nacheinander). Der Wertebereich sind zehn Hand-/Finger-Plätze. Aus einer Belegung werden statische, Übergangs- und Wiederanschlagsanforderungen abgeleitet. Diese **Anforderungen** werden von den **Fähigkeiten** eines Pianistenmodells getrennt gehalten. Ein nicht modellierter Fähigkeitswert wird nie als „kann“ gelesen.
+$a$ belegt physische Verpflichtungen mit Hand-/Finger-Plätzen. $S$ steht für Strukturbedingungen, $K$ für statische Konfigurationen, $U$ für Übergänge und $W$ für Wiederanschläge gleicher Tasten. Anforderungen der Musik und Fähigkeiten eines Pianistenmodells bleiben getrennt.
 
-*Herkunft:* eigene Konstruktion auf Basis von Erfüllbarkeit (Constraint Satisfaction, SAT). *Status:* misst (`src/audit_only/pianistic_symbolic_capability_reachability.rs`). Das Referenzmodell ist ausdrücklich `MODEL_RELATIVE_ONLY`: Es beweist weder Spieltempo noch Spielbarkeit für einen konkreten Menschen. Literatur zu Handspanne und Klaviaturgröße begründet die Trennung von Anforderung und Fähigkeit, kalibriert aber keine Schwellen.
+**Status:** Audit. Die Formel und ein struktureller Beleg können vollständig sein, während die Fähigkeiten eines konkreten Menschen weiterhin nicht modelliert sind. Ein `MODEL_RELATIVE_ONLY`-Urteil beweist weder ein bestimmtes Spieltempo noch menschliche Spielbarkeit. Eine fehlende Fähigkeitseinstufung rechtfertigt keine Notenlöschung.
 
-## Übersicht
+Quelle: [pianistic_symbolic_capability_reachability.rs](../src/audit_only/pianistic_symbolic_capability_reachability.rs) und die dort konsumierten Fähigkeitsmodelle.
 
-| # | Frage | Mathematik | Herkunft | Status |
-|---|---|---|---|---|
-| 1 | Geht ein Ton verloren? | Erhaltungssatz (Bilanzidentität) | bekannt | misst |
-| 2 | Ist die Notation in sich stimmig (Schlüssel, Oktavierung, Haltebögen)? | endliche Zustandsautomaten, Invarianten R1–R5 | bekannt; Regeln: eigene Modellierung | misst |
-| 3 | Wie viele Stimmen braucht ein Takt mindestens? | Intervallgraph, Cliquenzahl ω | bekannt | misst |
-| 4 | Hat die Spielbarkeitsmessung alles gesehen? | Abdeckungsinvariante | bekannt | misst |
-| 5 | Wohin verteilt man verborgene Akkordtöne? | kleinste Quadrate (Gauss) mit gewichteter Zielfunktion | Prinzip bekannt; Zielfunktion: eigene Modellierung | entscheidet |
-| 6 | Welcher Lösungskandidat ist der beste? | lexikografische Ordnung | bekannt | entscheidet |
-| 7 | Wie schwer ist ein Ton mit $l$ Hilfslinien zu lesen? | Druckfunktion $p(l)$, genutzt von zwei Schlüsselplanern | eigene Modellierung | entscheidet |
-| 8 | Welcher Schlüssel- und Oktavverlauf? | dynamische Programmierung über vollständige Registerzustände; außerhalb übernommener C3-Kurse bisheriger Lesbarkeitskurs | bekannt; Kosten: eigene Modellierung | entscheidet; C3 im Korpus seit r1576 in E7/E8 übernommen |
-| 9 | Legt die Pipeline getrennte Anschläge zusammen? | Injektivität modulo Quellgleichheit | bekannt; Formulierung: eigene Modellierung | misst (R6-Bericht); entscheidet seit r1562 in der Gestenplatzierung; für die übrigen Platzierer geplant |
-| 10 | Was hat sich zwischen zwei Versionen geändert? | Differenz je Größe auf einer Identitätsabbildung | eigene Modellierung | Prüfwerkzeug |
-| 11 | Wie viele Töne muss man mindestens weglassen? | monotone Zweiteilung, Untergrenze | eigene Modellierung | Prüfwerkzeug |
-| 12 | Ist ein Zustand unverändert? Wer hat ihn erzeugt? | Hashfunktionen (FNV-1a 64, SHA-256) | bekannt | entscheidet (Prüfschranken) |
-| 13 | Wann darf man aufbewahrte Daten verwerfen? | Beobachtungsäquivalenz (Projektion) | bekannt | umgesetzt seit r1559 |
-| 14 | Woher kommt der Speicherbedarf? | lineare Regression | bekannt; Modell: eigene Auswertung | Hypothese |
-| 15 | Wann ist eine Änderung zulässig? | **SchlopfFormel** | eigene Konstruktion | entscheidet |
-| 16 | Wie werden Seiten gefüllt? | **Schlöpfchen-Formel** (lexikografische Seitenpackung) | eigene Konstruktion | Gesamtformel geplant; begrenzte Layout-Teilverfahren umgesetzt |
-| 17 | Was verlangt eine Stelle von den Händen? | **symbolische Spielformel** (Existenzaussage über Belegungen) | eigene Konstruktion | misst |
-| 18 | Wie werden Zeiten exakt verrechnet? | ggT/kgV, kanonische Zeitachsen, metrische Zerlegung stiller Intervalle | bekannt | entscheidet |
-| 19 | Welche harmonische Lesart? | Kostenvektoren, Pareto-Vergleich, begrenzte Suche auf lokalen Kandidatengraphen | bekannt; Kosten: eigene Modellierung | entscheidet (durch Owner begrenzt) |
-| 20 | Wann ersetzt ein Registerplan einen anderen? | Vergleich gegen den vollständigen eingefrorenen Basisplan (gemeinsame Spanne) | eigene Modellierung | entscheidet |
-| 21 | Passt die Aufnahme (WAV) zur MIDI? | neuronales Transkriptionsmodell (Basic Pitch) als unabhängiger Sensor | bekannt (fremdes Modell) | misst (separates Werkzeug, keine Schreibbefugnis) |
+## Verfahrensfamilien im aktuellen Quellstand
 
-## Die Werkzeuge im Einzelnen
+Die Quellen nennen die jeweiligen Implementierungsstellen, nicht automatisch einen universellen mathematischen Satz über das gesamte Programm.
 
-### 1. Erhaltungsbilanz
+| # | Aufgabe und Mathematik | Rolle und wichtigste Grenze | Quellstelle |
+|---|---|---|---|
+| 1 | Exakte Zeitrechnung: rationale Zahlen, ggT/kgV, gemeinsame Zeitachsen | Entscheidet / prüft. Geschriebene und klingende Zeit bleiben verschieden. | [Metrische Pausen](../src/model/metric_rest_notation.rs), [temporale Beobachtung](../src/clef_readability_observation/temporal.rs) |
+| 2 | Ereignisintervalle, Akkordanker und Fortsetzungen | Grundlage für Entscheidungen und Prüfungen. Ein Pausenanker kann klingendes Material tragen. | [serialisierte Zeitprüfung](../src/audit_only/serialized_temporal_replay.rs), [ursprüngliche Erfassung](../src/pipeline_shards/actual_beam_capture_core.rs) |
+| 3 | Materialbilanz und getrennte Herkunfts-/Sichtbarkeitsmaße | Misst. Anzahlen sind kein individueller Identitätsnachweis. | [material_conservation.rs](../src/audit_only/material_conservation.rs) |
+| 4 | R1–R5: Zustandsautomaten für Schlüssel, Oktavierungen und Haltebögen | Misst. Diese Regeln sind kein vollständiger Notationsbeweis. | [notation_invariants.rs](../src/audit_only/notation_invariants.rs) |
+| 5 | Koinzidenzen: Gleichheit von Einsatz und Taste unter Quellbindung | Misst. Kein universeller Platzierungs- oder Löschauftrag. | [material_coincidence.rs](../src/audit_only/material_coincidence.rs) |
+| 6 | Stimmenbedarf im Intervallmodell: Cliquenzahl und Färbung | Misst eine modellgebundene Mindestzahl, keine Erlaubnis zum Zusammenlegen musikalischer Stimmen. | [notation_invariants.rs](../src/audit_only/notation_invariants.rs) |
+| 7 | Gleichheitsklassen, Trennbedingungen und Widerspruchspfade der geschriebenen Zuordnung | Readback / Graphprüfung, kein neuer Allokator. Weitere Beweispflichten bleiben ausdrücklich offen. | [written_assignment_graph.rs](../src/structural_write_authority/written_assignment_graph.rs), [Probe](../src/structural_write_authority/written_assignment_graph_probe.rs) |
+| 8 | Lexikografische Kandidatenwahl | Entscheidet. Frühere Kriterien können durch spätere Vorteile nicht aufgewogen werden. | `CandidateDecisionKey` in der Pipeline |
+| 9 | Verteilung verborgener Akkordtöne: quadratische Kosten plus diskrete Strafen | Entscheidet unter weiteren Zulassungsprüfungen. Gewichte sind Modellierung, keine kalibrierte Wahrnehmung. | [hidden_chord_reduction_texture_rebuild_tail.rs](../src/pipeline_shards/hidden_chord_reduction_texture_rebuild_tail.rs) |
+| 10 | Gesten- und Kettenvarianten der Verteilung | Kandidatenentscheidungen. Die konkrete Variante und ihre musikalischen Wirkungen müssen einzeln nachgewiesen werden. | dieselbe Verteilungsfamilie und ihre bestehenden Owner |
+| 11 | Hilfsliniengeometrie und gradueller Druck | Beobachtung und Kosten des separaten Schlüsselplaners. Kein universelles Vier-Hilfslinien-Verbot. | [clef_readability_observation.rs](../src/clef_readability_observation.rs), [Schlüsselplanung](../src/structural_write_authority/rustig_clef_planning.rs) |
+| 12 | Separater Schlüsselverlauf: dynamische Programmierung | Entscheidet im jeweils zuständigen Pfad. Bei gebundenem C3-Kurs darf keine unabhängige spätere Entscheidung dessen Darstellung ersetzen. | [rustig_clef_planning.rs](../src/structural_write_authority/rustig_clef_planning.rs) |
+| 13 | C3: gemeinsamer Schlüssel-/Oktavkurs mit exakter Abschnittsdauer | Entscheidet in vollständig belegten, unterstützten Domänen. Systemübergreifende Kopplung bleibt derzeit eine mögliche UNKNOWN-Grenze. | [Suchkern](../src/pipeline_shards/joint_reading_c3_course.rs), [Adapter](../src/pipeline_shards/joint_reading_c3_adapter.rs) |
+| 14 | Vergleich vollständiger gemeinsamer Registerspannen | Entscheidet nur bei vollständigem Ausgangsplan, Anschluss und zulässiger Verbesserung. | [gemeinsame_spanne.rs](../src/registernotation/gemeinsame_spanne.rs) |
+| 15 | Tonart- und Schreibweisenbewertung: gewichtete Tonklassen, Tonika-/Dominantbeiträge, Vorzeichenkosten | Audit und daran gebundene produktive Schreibweisenentscheidung. Klingende Tonhöhe und Darstellung sind zu unterscheiden. | [key_signature_enharmonic_report_core.rs](../src/pipeline_shards/key_signature_enharmonic_report_core.rs) |
+| 16 | Harmonik-Kandidaten: Nichtdominanz / Pareto-Vergleich | Kandidatenauswahl innerhalb vorhandener Owner. Ein nichtdominierter Kandidat muss nicht übernommen werden. | [sheaf_noether_projection_core.rs](../src/pipeline_shards/sheaf_noether_projection_core.rs) |
+| 17 | Phrasen- und Grenzbeobachtung aus Rhythmus, Metrik, Kontur und tonalem Kontext | Audit. Grenzkorrelation allein erteilt keine Bogen- oder Abschnittsautorität. | [phrase_boundary_evidence.rs](../src/audit_only/phrase_boundary_evidence.rs) |
+| 18 | Exakte Wiederholungsdeskriptoren; Transpositions- und Augmentationsinvarianz | Audit. Nur die tatsächlich definierten Merkmale sind invariant; kein allgemeiner Ähnlichkeits- oder Phrasenbeweis. | dieselbe Phrasenbeobachtung |
+| 19 | Physische Handkonfigurationen und endliche Fähigkeitszuordnung | Audit. Ein unbelegter Fähigkeitswert bleibt unmodelliert. | [pianistic_configuration_constraint_kernel.rs](../src/audit_only/pianistic_configuration_constraint_kernel.rs) |
+| 20 | Fingerplatz-Belegung als Ungleichungsgraph; Degenerationsordnung und Färbungszeuge | Audit zur Spielformel. Ein struktureller Färbungszeuge ist keine vollständige pianistische Lösung. | [symbolische Spielformel](../src/audit_only/pianistic_symbolic_capability_reachability.rs) |
+| 21 | Statische und zeitliche Anforderungsprofile, Überlappungen, Wiederanschläge, Quantile | Audit. Verteilungen beschreiben Anforderungen und kalibrieren keine menschliche Grenze. | [temporale Anforderungen](../src/audit_only/pianistic_temporal_transition_demand_frontier.rs), [statische Frontier](../src/audit_only/pianistic_static_capability_frontier.rs) |
+| 22 | WAV-Angriff/Puls/Metrik: Energie- und Transientenverläufe, lokale Spitzen, Tempo-/Phasenhypothesen | Audit. Audiohypothesen werden vor ihrer Bewertung gegen MIDI eingefroren. | [wav_attack_pulse_metric.rs](../src/audit_only/wav_attack_pulse_metric.rs) |
+| 23 | Zeitabbildung zwischen nominalem Raster und Audio; Residuen und Quantile | Audit. Eine gute Anpassung ist kein Herkunftsnachweis für zusätzliche Quelltöne. | dieselbe WAV-Pulsanalyse |
+| 24 | Frequenzenergie und harmonische Beziehungen: Goertzel-Rekurrenz | Audit. Spektrale Energie ist kein sicherer unabhängiger Anschlagsnachweis. | [wav_pitch_harmonic_evidence.rs](../src/audit_only/wav_pitch_harmonic_evidence.rs) |
+| 25 | Basic Pitch: fremdes neuronales Transkriptionsmodell und unabhängiger Sensorvergleich | Separater Sensor / Audit. Keine automatische Übernahme in die kanonische musikalische Quelle. | [Sensorqualifikation](../src/audit_only/wav_pitch_sensor_qualification.rs), [Sensorbenchmark](../src/audit_only/wav_pitch_external_sensor_benchmark.rs) |
+| 26 | Horizontaler Systemumbruch: endliche Partitionen, Kapazität und lexikografische Kosten | Entscheidet im vorhandenen Layoutpfad. Seitenumfang und echte Lesbarkeit sind damit nicht global optimiert. | [horizontal_layout_global_reflow.rs](../src/pipeline_shards/horizontal_layout_global_reflow.rs) |
+| 27 | Renderer-Geometrie: Hüllen, Rechteckschnitt, Abstände und Umbruch-Readback | Misst / prüft nur unterstützte, eindeutig zugeordnete Geometrie. Kein vollständiger automatischer Schönheitsbeweis. | [Seitenabstände](../src/audit_only/renderer_page_clearance.rs), [Systemumbrüche](../src/audit_only/renderer_system_break_readback.rs) |
+| 28 | Lexikografische Seitenpackung nach Schlöpfchen | Entwurf; von der vorhandenen Systemplanung getrennt. | [Seitenfehlerklasse](selector_derivation_contract_redundant_page_retention.md) |
+| 29 | Präfixsummen und binäre Intervallsuche für dieselben additiven Kosten | Technische Erhaltung. Beschleunigung, keine neue musikalische Zielgröße. | [Schlüsselplanung](../src/structural_write_authority/rustig_clef_planning.rs), [Äquivalenzvertrag r1652](selector_derivation_contract_exact_clef_passage_prefix_costs_r1652.md) |
+| 30 | Indizierte Existenzprüfung von Bogenendpunkten | Technische Erhaltung im bestehenden Owner. Kein allgemeines optimales bipartites Bogenmatching. | [Nachweis r1666](indexed_slur_endpoint_pairing_r1666.md) |
+| 31 | Erreichbarkeit im Aufrufgraph, Capability- und Herkunftsprüfungen | Technische Zulassungsprüfungen. Pfad- und Quelltextprüfungen bestehen daneben weiter. | [semantic_capability_diff.rs](../src/build_gate/semantic_capability_diff.rs), [take_change_control.rs](../src/take_change_control.rs) |
+| 32 | Beobachtungsäquivalenz und reduzierte Aufbewahrung | Technische Erhaltung unter nachgewiesenen Leserabhängigkeiten. | [solver_candidate_retention.rs](../src/pipeline_shards/solver_candidate_retention.rs) |
+| 33 | Fingerprints und Hashfunktionen: FNV-1a, SHA-256 | Integritäts- und Bindungsprüfungen mit jeweiligen Kollisionsannahmen. Kein eigenständiger musikalischer Identitätsbeweis. | [SHA-256](../src/build_gate/sha256.rs), [Herkunft](../src/master_state_identity.rs) |
+| 34 | Externe Versionsvergleiche, vereinfachte Weglass-Untergrenzen und Regressionsmodelle | Historische Diagnosewerkzeuge. Keine produktive musikalische Autorität. | historische r1556-Auswertung der früheren Seitenfassung |
 
-Jeder Ton der Quelle wird genau einmal verbucht:
+## Zentrale Formeln und ihre Beweisgrenzen
 
-```math
-\text{Quelle} = \text{aktiv} + \text{inaktiv}, \qquad \text{aktiv} = \text{sichtbar} + \text{verborgen}
-```
+### Bilanz, Identität und Sichtbarkeit
 
-Im Korpus (r1556): 10.149 = 9.986 + 163 und 9.986 = 7.297 + 2.689. Damit sind knapp 27 % der aktiven Anschläge im Master verborgen, meist Akkordtöne, die zugunsten der Spielbarkeit nicht gezeigt werden.
+$$N_{\mathrm{Quelle}}=N_{\mathrm{aktiv}}+N_{\mathrm{inaktiv}},\qquad
+N_{\mathrm{aktiv}}=N_{\mathrm{sichtbar}}+N_{\mathrm{verborgen}}.$$
 
-Die Identität gilt in jeder Etüde exakt. Bricht sie, ist ein Ton verloren gegangen oder doppelt verbucht.
-*Herkunft:* bekannt (Erhaltungssätze, doppelte Buchführung). *Status:* misst (`src/audit_only/material_conservation.rs`).
+Diese Gleichheiten gelten nur für die im jeweiligen Bericht sauber abgegrenzte Grundgesamtheit. Quellanschläge, geschriebene Fragmente und sichtbare Köpfe sind nicht austauschbare Nenner.
 
-### 2. Notationsinvarianten R1–R5
+Eine bestandene Anzahlbilanz ist notwendig für die betreffende Buchführung, aber kein hinreichender Nachweis individuellen Erhalts: Eine Löschung und eine andere Einfügung können sich zahlenmäßig ausgleichen. Der aktuelle Bericht bezeichnet diese Projektion ausdrücklich als `cardinality_only_not_a_late_source_binding`. Herkunft und musikalische Eigenschaften brauchen eigene gebundene Nachweise.
 
-Je System wird die Notenfolge in Quellzeit mit einem kleinen Zustandsautomaten gelesen. Die Regeln:
+`CanonicalSourceRetention` und `ArrangementVisibleRetention` beantworten verschiedene Fragen. Eine verborgene Note ist nicht allein deshalb entfernt. Aus ihrem Verbergen folgt weder ein nachgewiesener Spielbarkeitskonflikt noch ein Beweis, dass die verbleibende Darstellung menschlich spielbar ist.
 
-| Regel | Verletzung |
+### Intervalle und Stimmenbedarf
+
+Für ein geschriebenes Ereignis gilt das halboffene Intervall $[t,t+d)$. Bei einem Sweep werden Enden vor gleichzeitigen Anfängen verarbeitet. Im vereinfachten Modell werden gleiche Einsätze und Dauern je Part/System/Takt zu einem Ereignis zusammengefasst.
+
+Für den dadurch erzeugten Intervallgraphen gilt:
+
+$$\chi(G)=\omega(G).$$
+
+Die maximale Überlappung ist damit die minimale Farbzahl **dieses Graphen**. Musikalische Linien, ursprüngliche Balkengruppen, Pausenpflichten, Akkordbindungen und technische Importkanäle besitzen zusätzliche Bedingungen. Aus der Graphzahl allein folgt keine erlaubte Zusammenlegung solcher Rollen. Der aktuelle `VoiceModel`-Bericht nennt diese Grenze ausdrücklich.
+
+### Quadratische Verteilungskosten
+
+Die implementierte lokale Bewertung enthält:
+
+$$E(t,s)=3\Delta t^2+24\Delta p^2+42^2[\text{System verschieden}]
++12^2[\text{Stimme verschieden}]+2(\Delta t-24k)^2+12000[\text{Platz bereits verwendet}].$$
+
+Zeit wird hier in der vorhandenen 96-Ticks-pro-Viertel-Projektion gemessen, Tonhöhe in Halbtönen. Der Code begrenzt zusätzlich den Kandidatenraum und prüft je nach Aufruf die Zielbelegung. Die Formel allein ist weder vollständige Zulässigkeit noch Erhaltungsbeweis. Der Name „Gauss“ bezeichnet hier quadratische Kosten; er behauptet keine Gauß-Verteilung der Musikdaten, kein statistisches Maximum-Likelihood-Modell und keine globale optimale Zuordnung aller Töne.
+
+Gewichte, Kandidatengrenzen und Strafen sind Projekteinstellungen. Ein Kandidaten-Score ist kein gemessener menschlicher Lese- oder Spielaufwand.
+
+### Tonartprofil und Schreibweise
+
+Die aktuelle Profilbewertung summiert Beiträge pro Ton. Vereinfacht mit dem vom Owner bestimmten Gewicht $w_n$, Tonklasse $c_n$ und Profil $P$ lautet der im Code sichtbare Kern:
+
+$$T(P)=\sum_n w_n\big(3[c_n\in\mathrm{Skala}(P)]-4[c_n\notin\mathrm{Skala}(P)]+2[c_n=\mathrm{Tonika}(P)]+[c_n=\mathrm{Dominante}(P)]+[P\text{ ist Moll}\land c_n=\mathrm{erhöhte\ Leittonklasse}(P)]\big).$$
+
+Dies ist eine Projekteinstellung und kein statistisch kalibrierter Tonartbeweis. Die tatsächliche Schreibweisenentscheidung verlangt zusätzliche Bedingungen zu Geltungsbereich, Stabilität, konkurrierenden Lesarten und Vorzeichenkosten. Enharmonische Umbenennung darf die klingende Tonhöhe nicht verändern. Ein Profilwert allein erteilt weder eine neue Tonhöhe noch eine neue Abschnittsgrenze.
+
+### Separater Schlüsselplan und C3 sind verschiedene Zielfunktionen
+
+Der separate Lesbarkeitskurs verwendet den graduellen Druck
+
+$$p(l)=l^2+8\max(l-3,0)$$
+
+und Kosten für Schlüsselwechsel, Redundanzen und kurze Ausflüge. Seine bekannten 24 Einheiten je Wechsel beziehungsweise kurzem Ausflug sind Setzungen dieses Modells. Daraus folgt keine universelle Grenze von drei Hilfslinien.
+
+C3 verwendet dagegen die eingefrorene **lexikografische** Reihenfolge
+
+$$ (h_8,h_7,h_6,h_5,h_4,k_o,u_k,k_s,g_b,h_3,c_h,h_2,h_1). $$
+
+| Größe | Bedeutung |
 |---|---|
-| R1 | redundanter Schlüssel (gleich dem geltenden) |
-| R2 | Schlüsselabschnitt ohne sichtbaren Notenkopf |
-| R3 | Oktavierung ohne Ende oder Ende ohne Anfang |
-| R4 | Oktavierung ohne sichtbaren Notenkopf |
-| R5 | Haltebogen je Taste: neuer Anschlag, solange ein Bogen dieser Taste offen ist; Bogenende ohne offenen Bogen; offener Bogen am Stückende |
+| $h_1,\ldots,h_7$ | Sichtbare Köpfe mit genau dieser Zahl an Hilfslinien; $h_8$ bündelt acht oder mehr. Das ungekappte Maximum wird getrennt berichtet. |
+| $k_o$ | Gleichzeitiger Schlüssel- und wirksamer Oktavwechsel an einer Grenze. |
+| $u_k$ | Köpfe unter den als unkonventionell bewerteten Kombinationen G mit Abwärtsoktavierung beziehungsweise F mit Aufwärtsoktavierung. Teuer, nicht pauschal verboten. |
+| $k_s$ | Maximale Abschnitte eines kombinierten Zustands, die kürzer als eine nominelle Taktlänge sind. |
+| $g_b$ | Grenzen innerhalb der positiv gebundenen Gruppen. Musikalische und materielle Verbote gelten daneben unverändert. |
+| $c_h$ | Echte Registerzeichen-Operationen. Reine Erinnerungszeichen werden getrennt behandelt. |
 
-Stand r1556: R1–R4 zusammen eine Meldung (R2 in Etüde 7), R5 keine.
-*Herkunft:* bekannt (endliche Automaten); die Regeln sind eigene Modellierung. *Status:* misst (`src/audit_only/notation_invariants.rs`, Zeile `NotationInvariants`).
+Die nominalen Zustände sind G2 oder F4 kombiniert mit loco, 8va, 8vb, 15ma oder 15mb. Mit Oktavanzahl $q\in\{0,1,-1,2,-2\}$ und diatonischer Tonposition $d$ gilt für die geschriebene Position $d_{\mathrm{geschrieben}}=d-7q$. Deshalb ist die Schreibweise relevant; MIDI-Tasten allein bestimmen die Hilfslinien nicht.
 
-### 3. Stimmenbedarf ω
+Nominale Zustände sind noch keine Schreibbefugnis. Im aktuellen Adapter unterstützt der obere Owner nur seine tatsächlich angebotenen Zustände; zusätzliche F-Schlüsselalternativen im oberen System folgen nicht aus der nominalen Zehnermenge. Anfang, Ende, Zustandsalter, Zeitachse, Gruppen und Anschluss müssen gebunden sein. Für gekoppelte Systeme darf ein unabhängiger Einzelsystemkurs nicht als gemeinsames Optimum ausgegeben werden.
 
-Je System und Takt bilden Noten mit gleichem Einsatz und gleicher Dauer ein Ereignis, also das Intervall $[\text{Einsatz}, \text{Einsatz} + \text{Dauer})$. Die Mindestzahl an Stimmen ist die größte Zahl gleichzeitig überlappender Ereignisse, die **Cliquenzahl ω** des Intervallgraphen. Intervallgraphen sind perfekt, deshalb gilt Cliquenzahl = chromatische Zahl. Eine gierige Färbung nach Beginn mit Wiederverwendung eines freien Kanals ist für diesen reinen Intervallgraphen optimal. Nach dem Zusammenfassen durch Gleichheitsbedingungen gilt diese Aussage nicht automatisch. Dann ist ω zunächst nur eine Untergrenze, kein Beweis einer optimalen Kanalzahl.
+Die Schutzregel lautet für jeden sichtbaren Kopf $n$:
 
-Stand r1556, Master, alle Noten: $\omega = 1$ in 732 und $\omega = 2$ in 8 System-Takten. Benutzt werden aber in 325 System-Takten mehr Stimmenbezeichnungen als nötig (Render: 97). Das ist ein Hinweis auf Vereinfachungspotenzial, kein Fehler im strengen Sinn.
-*Herkunft:* bekannt (Intervallgraphen; Gilmore/Hoffman, Golumbic). *Status:* misst (Zeilen `VoiceDemand`).
+$$\neg\big(L_z(n)\ge4\ \land\ L_z(n)>L_0(n)\big).$$
 
-#### Technische Stimmen und Balken
+Ein Kandidat darf also keine neue oder verschärfte Belastung ab vier Hilfslinien erzeugen. Ein bereits belasteter Ausgangszustand wird nicht durch Behauptung unsichtbar. Unter den zulässigen vollständigen Kursen zählt die erste abweichende Kostenkomponente; Gleichstand erhält den Ausgang.
 
-Sei $R$ die vollständig gebundene Menge der betroffenen Noten und $F$ die Menge der Noten aus anderen ursprünglichen Balkengruppen. Für eine vorgeschlagene Zielstimme $v$ sei $E_v = \{n \in R \mid \mathrm{Stimme}(n) \ne v\}$ die Menge der tatsächlichen Stimmenänderungen. Der Schutz aus r1599 verlangt
+**Wichtige Folge:** Weniger Umschaltungen gewinnt nicht immer. Zum Beispiel kann die Vermeidung eines Vier-Hilfslinien-Kopfes einen kurzen Schlüsselwechsel rechtfertigen. Diese bewusste C3-Priorität ist nicht identisch mit der alten skalaren Druckfunktion und kein universelles Lesbarkeitsgesetz.
 
-```math
-E_v \cap F = \varnothing.
-```
+Der Suchkern trägt zusätzlich zum Registerzustand das genaue, bei einer Taktlänge gesättigte Abschnittsalter. Rationale Taktkoordinaten behandeln Takt- und Divisionswechsel. Ein Ressourcenabbruch oder eine unbekannte Abhängigkeit beweist kein Optimum. Maßgeblich ist [die vollständige C3-Policy](joint_register_dp_policy_v1.md).
 
-Eine gebundene Fortsetzung darf in $R$ liegen und ihre bisherige technische Stimme behalten. Belegungsprüfung, Importprofil und Prüfung gemeinsam beanspruchter Ressourcen gelten zusätzlich. Die Regel betrifft die technische Zuordnung in MusicXML. Die native PDF-Prüfung zeigt, wie der Renderer die betroffenen Balken zeichnet. [Vertrag zur Zielstimme](selector_derivation_contract_foreign_beam_target_preservation.md)
+### Graphzeugen der Spielformel
 
-Seit r1601 betrachtet die Balkenausrichtung für eine bestätigte Kanalzuordnung auch weitere bereits belegte Kanäle derselben Rolle. Jeder Kandidat muss die gleichen Schutzprüfungen bestehen.
+Die symbolische Struktur enthält Ungleichungen zwischen Belegungsvariablen. Der Code bildet einen Graphen, erzeugt eine Smallest-last-/Degenerationsordnung und prüft die daraus gewonnene Zuordnung gegen die tatsächlichen Kanten. Eine passende Clique kann umgekehrt einen strukturellen Konflikt belegen.
 
-Seit r1598 zählt der Abschlussbericht zusätzlich unausgeglichene Balkenmarken pro Part, Takt und technischer Stimme sowie fehlgeschlagene Kanalreservierungen im bestehenden Importmodell. Die Zähler dienen der Diagnose. Der Stimmenbedarf $\omega$ gehört zum oben beschriebenen Intervallmodell, während der Reservierungszähler das konkrete Importmodell auswertet. [Beschreibung der Zähler](beam_structure_and_channel_counts_r1598.md)
+Ein struktureller Zeuge schließt nur diese Ungleichungen. Handkonfiguration, Übergang, Wiederanschlag, Fähigkeiten und Zeitmodell bleiben zusätzliche Verpflichtungen. Weder die maximale Gleichzeitigkeit noch ein gefärbter Graph allein beweist einen ausführbaren Fingersatz.
 
-### 4. Abdeckung der Spielbarkeitsmessung
+### Audio: Pulsanalyse und Goertzel-Rekurrenz
 
-```math
-\text{gemessene Ereignisse} = \text{aktive Anschläge}
-```
+Die WAV-Pulsanalyse erzeugt Hypothesen aus Energie- und Transientenanstiegen, lokalen Spitzen sowie Tempo und Phase. Eine zeitliche Abbildung und Residuen beschreiben Abweichungen vom nominellen Raster. Die Audiohypothesen werden vor der späteren MIDI-Evaluation festgehalten; die Vergleichsquelle darf nicht unbemerkt das unabhängige Messergebnis erzeugen.
 
-Weicht das ab, meldet der Bericht den Grund. Beispiel: In Etüde 7 sah die Messung wegen eines Haltebogenfehlers 0 statt 1.042 Ereignisse. Seit r1556 sind es 1.042.
-*Herkunft:* bekannt. *Status:* misst (`src/audit_only/material_reference_coverage.rs`).
+Für ausgewählte Frequenzen verwendet die harmonische Evidenzprobe tatsächlich eine Goertzel-Rekurrenz:
 
-### 5. Gauss-Verteilung verborgener Akkordtöne
+$$s_j=x_j+2\cos(\omega)s_{j-1}-s_{j-2},\qquad \omega=2\pi f/f_s.$$
 
-Ein verborgener Akkordton $t$ wird, wenn das musikalisch günstig ist, an einen nahen sichtbaren Ankerplatz $s$ gelegt. Gewählt wird der Platz mit der kleinsten gewichteten Quadratsumme:
+Die Frequenzzuordnung der Probe verwendet $f(m)=440\cdot2^{(m-69)/12}$: gleichstufige Stimmung mit A4 = 440 Hz ist hier eine Modellannahme. Der Code normiert die berechnete Energie durch das Quadrat der Fensterlänge. Dies ist gezielte Frequenzanalyse, keine Behauptung, dass im Projekt eine allgemeine FFT-Pipeline implementiert sei. Ein hoher Wert kann auch von Obertönen oder überlagerten Klängen stammen. Basic Pitch ist zusätzlich ein fremder neuronaler Sensor; beide Beobachtungen erhalten keine automatische musikalische Schreibbefugnis.
 
-```math
-E(t,s) = 3\,\Delta t^2 + 24\,\Delta p^2 + 42^2\,[\text{System} \ne] + 12^2\,[\text{Stimme} \ne] + 2\,(\Delta t - 24k)^2 + 12\,000\,[\text{Platz in dieser Verteilung schon vergeben}]
-```
+### Systemplanung ist nicht Seitenoptimierung
 
-Dabei ist $\Delta t$ der Zeitabstand in Ticks (96 je Viertel), $\Delta p$ der Tonhöhenabstand in Halbtönen und $k$ die laufende Nummer in der Gruppe (eine Art gleichmäßiges Auffächern).
+Der vorhandene globale horizontale Reflow vergleicht endliche Systempartitionen unter seinen Kapazitätsbedingungen. Sein Vergleichsschlüssel enthält in dieser Reihenfolge Systemzahl, Einzel-Takt-Systeme, erzwungene Überkapazitäts-Einzelplätze, quadratische Restkapazität und den deterministischen Partitionsvergleich. Die Seitenzuordnung bleibt an die vorhandene Autorität gebunden.
 
-Seit r1556 gilt zusätzlich eine harte Bedingung: Ein Platz, an dem im selben System und in derselben Stimme schon dieselbe Taste klingt, ist ausgeschlossen.
+Die geometrischen Readbacks untersuchen tatsächliche Hüllen und Abstände, soweit PDF-Syntax und Zuordnung unterstützt sind. Daraus folgt weder eine vollständige Kollisionsfreiheit aller denkbaren Zeichen noch eine implementierte Schlöpfchen-Seitenoptimierung.
 
-*Herkunft:* Das Prinzip der kleinsten Quadrate ist bekannt (Gauss, Legendre). Gewichte und Strafterme sind eigene Modellierung und nicht kalibriert. *Status:* entscheidet (`src/pipeline_shards/hidden_chord_reduction_texture_rebuild_tail.rs`).
-*Bekannte Grenze:* Die Bewertung von Varianten nutzt die harte Bedingung noch nicht, die Ausführung schon. Siehe offene Fragen.
+### Exakte Beschleunigung ist keine neue Musikentscheidung
 
-### 6. Lexikografische Kandidatenwahl
+Für additive Passagenkosten können Präfixsummen dieselbe Summe liefern:
 
-Die Suche erzeugt viele Lösungskandidaten. Verglichen werden sie über einen Schlüssel, der der Reihe nach geordnet ist:
+$$\sum_{i=a}^{b-1}c_i=P_b-P_a.$$
 
-```math
-(\text{Blocker},\ \text{kritische Befunde},\ \text{max. Härte},\ \text{Warnungen},\ \text{Hinweise},\ -\text{Erhalt},\ \dots)
-```
+Die Indizes entstehen aus der exakten halboffenen Zeitbedingung, nicht aus einer geratenen Notennähe. Die Umordnung muss Kosten, Kandidaten und Gleichstandsregeln erhalten.
 
-Ein späteres Kriterium zählt nur bei Gleichstand aller früheren. So kann zum Beispiel kein Gewinn bei den Hinweisen einen Blocker aufwiegen.
-*Herkunft:* bekannt (lexikografische Ordnung, Prioritätenoptimierung). *Status:* entscheidet (`CandidateDecisionKey`).
+Die Bogenprüfung verwendet einen anderen Index: Für jede Nummer beantworten erster sichtbarer Anfang und letzter sichtbarer Schluss dieselben Existenzfragen wie die frühere Vollsuche. Das ist kein allgemeines globales Matching aller möglichen Bögen. Eine solche Erweiterung wäre eine eigene musikalische Entscheidung.
 
-### 7. Druckfunktion für Schlüsselwechsel
+### Projektion und Integrität
 
-Für einen Ton mit $l$ Hilfslinien:
+Eine Aufbewahrungsprojektion $\pi$ ist nur dann ausreichend, wenn spätere Beobachtungen tatsächlich durch sie faktorisieren. Präziser als ein bloßer Größenvergleich ist die Bedingung
 
-```math
-p(l) = l^2 + 8\,\max(l-3,\ 0)
-```
+$$\pi(D_1)=\pi(D_2)\Rightarrow O_L(D_1)=O_L(D_2)$$
 
-Der quadratische Term bestraft viele Hilfslinien stärker. Der Zusatzterm macht mehr als drei Hilfslinien deutlich teurer. Dieselbe Funktion steht an **zwei** Stellen im Code:
+für die betroffenen erreichbaren Leser $L$ und ihre Beobachtung $O_L$, einschließlich der relevanten Fortsetzungen. Eine identische aktuelle Ausgabe allein genügt nicht für künftige Mutationen. Die ausführbare Aufbewahrungspolitik bleibt der konkrete Nachweis.
 
-- im **Lesbarkeitskurs** (Nr. 8, `src/structural_write_authority/rustig_clef_planning.rs`) als Kostenanteil je Ton;
-- im **Hilfslinien-Readback** (`src/notation.rs`, `ledger_bounded_lower_staff_clef_readback`): Er fügt einen Schlüssel ein, sobald ein Ton im unteren System mehr als drei Hilfslinien bräuchte. Im Render-Pfad schlägt er außerdem ganztaktige Wechsel vor, wenn ein Takt mindestens 3 Anschläge und mindestens 2 Viertel betroffene Dauer hat und der Druck um mindestens 3 sinkt.
+Hashes sind davon getrennt: Sie binden Bytes unter ihren jeweiligen Kollisionsannahmen. FNV-1a ist kein kryptografischer Beweis; auch SHA-256 ist mathematisch nicht injektiv über beliebig lange Eingaben. Provenienz, tatsächlich mitgeführte Ereignisidentität und bytebezogene Integritätsprüfung erfüllen verschiedene Aufgaben.
 
-*Herkunft:* eigene Modellierung. *Status:* entscheidet.
-*Bekannte Grenze:* Historisch schrieben beide Stellen Schlüssel (siehe die unten ausdrücklich auf r1556 bezogenen Belege). Bei übernommenen C3-Kursen ist deren Schutzbindung maßgeblich. Die älteren Kosten und Schreiber bleiben für beibehaltene Verläufe relevant; ihre historische Einzelwirkung darf nicht als aktuelle Wirkung in E7/E8 gelesen werden.
+## Aktueller Nachweis und verbleibende Grenzen
 
-### 8. Schlüsselverlauf als kürzester Weg (dynamische Programmierung)
+Der frische r1683-Export bestätigt Annahme des ausgelieferten Kandidaten, Build und Projekt-Clippy mit Exit 0, 2.992 bestandene Tests bei vier ignorierten Tests sowie zehn formal erfolgreiche Projekte. Diese Abnahme beweist die geprüften Verträge, nicht allgemeine menschliche Spielbarkeit oder ein fehlerfreies Notenbild.
 
-**Im Produkt (Lesbarkeitskurs, Schlüssel im unteren System):** Der Zustand ist (aktiver Schlüssel, Ursprung eines kurzen Ausflugs, Anschläge im Ausflug). Entlang der Zeitachse wird eine Front optimaler Teilwege fortgeschrieben (`solve_readability_course_with_boundaries`). Kosten eines Verlaufs:
-
-```math
-C = \sum_{\text{Töne}} p(l) + 24\cdot\#\text{Wechsel} + 1\cdot\#\text{redundante Schlüssel} + 24\cdot\#\text{kurze Ausflüge}
-```
-
-Ein kurzer Ausflug umfasst höchstens 2 Anschläge.
-*Herkunft:* bekannt (Bellman; Viterbi-artige Vorwärtsrechnung). Zustandsraum und Gewichte sind eigene Modellierung. *Status:* entscheidet.
-
-**Produktives C3, gemeinsam mit Oktavierung:** Der Zustand besteht aus G- oder F-Schlüssel und einer Oktavabbildung von −2 bis +2 Oktaven, also zehn Zuständen. Verglichen werden vollständige gebundene Verläufe statt isolierter Takte. Die festgelegte lexikografische Reihenfolge lautet:
-
-```math
-(h_8,h_7,h_6,h_5,h_4,ko,uk,ks,gb,h_3,ch,h_2,h_1).
-```
-
-Die Größen $h_i$ zählen sichtbare Köpfe mit genau $i$ Hilfslinien; $h_8$ fasst acht oder mehr zusammen. Danach folgen gleichzeitige Schlüssel-/Oktavwechsel ($ko$), Köpfe in unüblichen Kombinationen ($uk$), kurze Registerabschnitte ($ks$) und aufgetrennte gebundene Gruppen ($gb$). $ch$ zählt Schlüsselwechsel und Oktav-Anfangs-/Endoperationen gemeinsam. Ein direkter Wechsel zwischen zwei unterschiedlichen Oktavierungen zählt zwei Oktavoperationen. Eine neue oder verstärkte Belastung eines sichtbaren Kopfes mit mindestens vier Hilfslinien ist zusätzlich hart ausgeschlossen. Herkunfts-, Gruppen- und Schreibschutzregeln bleiben verbindlich.
-
-Die Reihenfolge ist eine **eigene festgelegte Modellierung**, keine gemessene Lesezeit. Es gibt weder eine gewichtete Summe noch die Forderung, dass jede einzelne Kennzahl sinken muss. Insbesondere können mehr Schlüsselwechsel zulässig sein, wenn ein früheres Kriterium besser wird. Das separate Ziel „höchstens 48 Schlüsselwechsel im Render“ ist mit r1577 weiterhin nicht erreicht; Policy-Konformität und dieses Ziel sind verschiedene Prüfungen. Die vollständige Definition steht in der [C3-Policy](joint_register_dp_policy_v1.md).
-
-*Status:* entscheidet. r1576 übernimmt im Zehnerkorpus beide Systeme von E7/E8; r1577 erhält alle zwanzig XML-Dateien bytegleich. Die anderen acht Etüden behalten ihre bisherigen Verläufe, weil Eingabe-, Abhängigkeits- oder Schutzbedingungen eine Übernahme verhindern. Das ist keine vollständige Lösung des Korpus. Die Schlussprüfung bindet den übernommenen Verlauf bis zur finalen Ausgabe. Der Schattenlauf darf ausschließlich zwei noch nicht abschließbare Schlüsselbedingungen beobachtend weiterreichen; nach der Balken-Stimmenteilung muss der Live-Lauf vollständig grün schließen.
-
-**Reine Rechenwiederverwendung in r1577:** Die ältere Register-Gegenrechnung verwendet Ergebnisse nur dann erneut, wenn der gesamte typisierte Vorschlag innerhalb derselben unveränderten Eingabe exakt gleich ist. Ein Fingerabdruck allein genügt nicht. Das ist bekannte Memoisierung, keine neue musikalische Zielfunktion. Nativ entfallen 89 von 566 Berechnungen; alle zwanzig XML bleiben unverändert. Die betroffene Master-Stufe sinkt aufsummiert von 594,391 auf 532,224 Sekunden, die Korpusdauer steigt zugleich von 14:23 auf 14:34 Minuten. Ein schnellerer Gesamtlauf ist damit nicht belegt.
-
-### 9. Keine neue Koinzidenz
-
-Für zwei Anschläge $a, b$ mit Rohposition $r$ aus der Quelle und Platzierung $\pi$ in der Notation:
-
-```math
-\pi(a) = \pi(b) \ \Rightarrow\ r(a) = r(b) \qquad \text{mit } \pi, r \in (\text{Einsatz}, \text{MIDI-Taste})
-```
-
-Die Zuordnung soll also injektiv sein, **außer** wenn die Gleichheit schon in der Quelle steht (Quell-Unisono). System und Stimme spielen keine Rolle, damit ein Systemwechsel einen Fall nicht verdeckt.
-
-Stand: 16 Verletzungen in r1555, 3 in r1556, 0 neu erzeugte in r1562 (nativ angenommen). Quell-Unisoni (r1555: 6, r1556: 4) werden getrennt geführt.
-*Herkunft:* bekannt (Injektivität, Äquivalenzrelationen); die Formulierung als Abnahmeregel ist eigene Modellierung. *Status:* misst als R6-Bericht ab r1560 (`src/audit_only/material_coincidence.rs`). Seit r1562 verweigert die Gestenplatzierung neu entstehende Koinzidenzen getrennter Quellanschläge (`src/pipeline_shards/gesture_placement_occupancy.rs`); als gemeinsame Regel für alle Platzierer geplant. Der Bericht vergleicht gebundene Quellanschläge mit platzierten Anschlägen auf der typisierten Notationszeitachse. Vorschlagsnoten werden separat als ausgeschlossen gezählt; Fortsetzungen sind keine eigenen Anschläge. Erhaltene Quell-Unisoni werden getrennt gezählt. Herkunftsbeleg-Mitgliedschaften allein beweisen keinen einzelnen Verursacher. Fehlende oder mehrdeutige Eingaben ergeben unbekannt, niemals null Verletzungen.
-
-### 10. Änderungsmatrix zwischen Versionen
-
-Jede Note erhält die Identität (Takt, Einsatz, MIDI, $j$), wobei $j$ die laufende Nummer bei gleichen ersten drei Werten ist. Dann wird je Größe gezählt, wie viele Noten sich ändern: Bestand, Dauer, Sichtbarkeit, Schreibweise, System, Stimme, Register, Bogen, Balken.
-*Herkunft:* eigene Modellierung. *Status:* Prüfwerkzeug.
-*Bekannte Grenze:* Bei gleichen Tönen im gleichen Einsatz ist die Zuordnung über $j$ nicht identitätstreu. Ein Multimengenvergleich, der nur eindeutige Paare zuordnet, ist dort genauer.
-
-### 11. Untergrenze für weggelassene Töne
-
-Je Einsatzgruppe wird geprüft, ob sich die Töne monoton auf zwei Hände teilen lassen: links tiefer als rechts, je Hand höchstens eine Spannweite und höchstens fünf Töne. Was übrig bleibt, muss mindestens weggelassen werden. Sprünge zwischen den Gruppen werden ignoriert, deshalb ist es eine **Untergrenze**. Gerechnet auf r1556 liegt sie bei 99 bis 140 von 9.986 Anschlägen, also 1,0–1,4 %. Der Wert hängt von der Spannweite (12 oder 14 Halbtöne) ab und davon, ob gehaltene Töne mitzählen. Das liegt weit unter dem verborgenen Anteil von knapp 27 %. Woraus sich der Unterschied zusammensetzt (Sprünge zwischen Gruppen, Lesbarkeit, Regeln der Akkordreduktion), ist nicht weiter untersucht. Die Untergrenze ist ausdrücklich keine Aussage darüber, was spielbar ist.
-*Herkunft:* eigene Modellierung. *Status:* Prüfwerkzeug.
-
-### 12. Hashing und Identität
-
-Unveränderlichkeit wird über Prüfsummen festgestellt: FNV-1a 64 Bit für schnelle Schranken, SHA-256 für Zustände und Pakete. Identität entsteht durch Prägung beim Erzeugen eines Zustands, nicht durch Inhaltsvergleich, denn denselben Inhalt kann jeder erzeugen.
-*Herkunft:* bekannt (Fowler/Noll/Vo; FIPS 180-4). *Status:* entscheidet (Annahme und Ablehnung von Änderungen).
-
-### 13. Beobachtungsäquivalenz beim Aufbewahren
-
-Ein aufbewahrter Datensatz $D$ darf auf eine Projektion $\pi(D)$ reduziert werden, wenn jeder später noch erreichbare Leser $L$ nur über $\pi$ zugreift:
-
-```math
-L(D) = L(\pi(D)) \quad \text{für alle erreichbaren Zustände}
-```
-
-Hinreichend ist eine nach dem Einfügen unveränderliche Eigenschaft, die jeden vollen Zugriff ausschließt. Beispiel: Kandidaten mit Blockern oder Warnungen kann die spätere Auswahl nie übernehmen. Im historischen Pool von Etüde 6 erfüllen 1.833 von 1.834 Einträgen dieses Ausschlusskriterium. Das ist eine Obergrenze für reduzierbare Einträge: r1559 hält den aktuellen und alle vorherigen Gewinner vorsorglich vollständig, ebenso alle kompatiblen Kandidaten. Reihenfolge, Gleichstand und Prüfzeilen bleiben erhalten.
-*Herkunft:* bekannt (Beobachtungsäquivalenz, Lebendigkeitsanalyse). *Status:* umgesetzt seit r1559 (`src/pipeline_shards/solver_candidate_retention.rs`). Nativ bestätigt: 20 XML bytegleich, 39 PDF-Seiten pixelgleich bei 144 dpi, Kandidaten- und Auswahlzeilen unverändert. Eine quantitative Speicherersparnis wurde nicht isoliert gemessen; die beobachtete Speichernutzung wurde als ausreichend bewertet.
-
-### 14. Speichermodell (Hypothese)
-
-Spitzenbedarf je Etüde in GB, angepasst an zehn gemessene Läufe:
-
-```math
-M \approx 0{,}0054\, F S + 0{,}0061\, G S
-```
-
-$F$ ist die Zahl der aufbewahrten Kandidaten, $G$ die Zahl der neu erzeugten Master-Zustände, $S$ die Dokumentgröße in MB. $R^2 = 0{,}999$, aber nur 10 Punkte für 3 Parameter. Der $F$-Term hängt fast allein an einer Etüde, und $G S$ ist stark mit der Laufzeit korreliert. Das Modell ist eine Vorhersage, kein Ursachenbeweis.
-*Herkunft:* bekannt (kleinste Quadrate); das Modell ist eigene Auswertung. *Status:* Hypothese.
-
-### 15–20. Weitere Bestandteile (Kurzfassung)
-
-- **Exakte Zeitordnung:** Alle Dauern werden mit ggT/kgV auf eine gemeinsame Teilung gebracht, ohne Gleitkomma. Stille Intervalle werden entlang der metrischen Hierarchie des Takts zerlegt. *Ort:* `src/model/metric_rest_notation.rs`.
-- **Harmonik-Kandidaten:** Kostenvektoren und Pareto-Vergleich: Ein Kandidat schlägt einen anderen nur, wenn er in keiner Komponente schlechter und in mindestens einer besser ist. *Ort:* `src/pipeline_shards/sheaf_noether_projection_core.rs`. Dateinamen wie *sheaf* oder *noether* sind dabei **keine** Belege für einen bewiesenen Satz aus Garben- oder Symmetrietheorie. Belegbar sind nur die konkreten Operationen.
-- **Gemeinsame Spanne:** Ein neuer Registerplan ersetzt den alten nur innerhalb eines geschlossenen Konfliktbereichs, mit Pflichtabdeckung, echten Ankern und Prüfung der Haltebögen. *Ort:* `src/registernotation/gemeinsame_spanne.rs`. Mit r1512 wurden so in 7 Stücken 16 bessere Alternativen bestätigt. In Etüde 4 sank die höchste Hilfslinienzahl von 5 auf 3.
-
-## Umgesetzte Mathematik seit r1602
-
-Die folgenden Verfahren gehören zum angenommenen Quellstand r1657. Sie erweitern die bisherigen Modelle. Ein vollständiger gemeinsamer Solver und ein minimaler Unlösbarkeitskern werden damit nicht behauptet.
-
-### Getrennte Zeitachsen und überprüfbare Vergabe
-
-Geschriebene und klingende Intervalle werden an Entscheidungsgrenzen getrennt typisiert. Das entspricht der Dimensionsanalyse. Ein Klangüberhang ist dadurch als andere Evidenz erkennbar. Die Typisierung allein ändert die bestehende Vergaberegel nicht und beweist auch nicht, dass jede Entscheidung ausschließlich geschriebene Zeit verwendet.
-
-Für gebundene Notenereignisse bilden Akkord-, Haltebogen- und kanonische Balkenbeziehungen ein Bedingungsmodell. Die Herkunft der Balkenkanten stammt vom zuständigen ursprünglichen Schreiber. Bereits verteilte Voice-Labels können diese Herkunft nicht ersetzen. Rollen, technische Kanäle und Füllpausen sind keine eigenständigen Beweise musikalischer Trennung. Optionale Pausenbrücken müssen von harten Ursprungsbindungen unterschieden werden.
-
-Seit r1647 wird ein vorgeschlagener Vergabeübergang an der Kandidatenwahl gegen dieselben Erhaltungsbedingungen geprüft. Er erhält realisierte geschriebene Paare und geordnete kanonische Kanten. Neue Beziehungen und Änderungen ihrer Reihenfolge brauchen einen eigenen Nachweis. Die Prüfung gilt auch für Überlaufsuche und gemeinsame Kanalnutzung über Rollengrenzen. Seit r1650 liefern Ablehnungen typisierte Gegenbeispiele, etwa ein verlorenes Paar, fehlende Kantenabdeckung oder eine unbelegte neue Beziehung. Das erste Gegenbeispiel ist kein minimaler widersprüchlicher Teilgraph. Die Diagnostik besitzt keine Schreibautorität.
-
-Mathematisch ist das die Trennung zwischen dem Vorschlag einer Lösung und ihrer Prüfung als Zertifikat. Die vorhandenen Vergabewege bleiben bestehen. Ein austauschbarer exakter Gesamtlöser ist ein weiterer Schritt.
-
-### Exakte Wiederverwendung statt wiederholter Berechnung
-
-| Verfahren | Mathematischer Kern | Geltungsbereich und Grenze |
+| Projekte im aktuellen Korpus | Übernommener C3-Kurs nach r1683 | Einordnung |
 |---|---|---|
-| Index der Balkennachweise, r1651 | Abbildung nach Takt und ursprünglichem Akkordkopf | Systemübergreifende Konflikte werden weiter geprüft. Ungültige taktübergreifende Akkorde werden nicht übergangen. |
-| Schlüsselbewertung, r1652 | Präfixsummen und binäre Suche | Halb offene Einsatzintervalle `[a,b)`, breite ganzzahlige Summen und dieselbe Intervallbewertung für mehrere DP-Zustände. |
-| Validierung unveränderlicher Zustände, r1653 | Memoisierung einer erfolgreich bewiesenen Aussage | Wiederverwendung nur am exakt gebundenen unveränderlichen Zustand. Ein geklonter neuer Zustand verliert den Validierungsstatus. |
-| Journalabbildung, r1654 | Präfix der Byteverschiebungen und binäre Suche | Vollständige Journalprüfung bei jedem Aufruf. Danach Bereichsabbildung in O(E + N log E) statt wiederholter O(NE)-Suche, mit E Operationen und N Bereichen. |
-| Zeit- und Bindungsindex, r1655 | Einmalige Faktorisierung identischer Teilberechnungen | Zeitdaten je exaktem Quelltext und Part, Haltebogen- und Balkenströme sowie sichtbare Notenköpfe werden innerhalb ihres gültigen Kontexts wiederverwendet. |
+| 5, 9, 10 | Beide Systeme | Unteres System durch r1683 neu verfügbar. |
+| 7, 8 | Beide Systeme | Bereits vorher übernommen. |
+| 1, 2, 3, 4, 6 | Kein gemeinsamer Kurs übernommen | Systemübergreifende Gruppenabhängigkeit nicht geschlossen; Ausgang bleibt erhalten. |
 
-Für Präfixsummen gilt `P[k+1] = P[k] + c[k]`. Nach Ermittlung der Grenzen liefert `P[j] - P[i]` genau die Kosten der Ereignisse mit Einsatz in `[a,b)`. Diese Umformung bewahrt die Zielgröße des bestehenden dynamischen Programms. Sie führt keine neue musikalische Heuristik ein.
+Die Tabelle ist Evaluation, kein produktiver Selektor. r1683 führt ursprünglich vorhandene Pausenanker getrennt von klingenden Balkenköpfen bis zur gemeinsamen Entscheidung mit. Ein fehlender Fortsetzungsbeleg bleibt unbekannt; der erhaltene Akkordton darf dabei seinen negativen Abhängigkeitsbeleg nicht verlieren. Eine Pause wird dadurch weder zu einem klingenden Kopf noch zu einer positiven Balkenentscheidung.
 
-### Schlüsselentscheidungen am zuständigen Owner
+Gegenüber r1682 bleiben alle zehn Master-Notenfolgen strukturell gleich. Die Render-Noteninhalte bleiben bis auf zwei Balkengruppierungen und sieben Pausenglyphen-Positionen erhalten; Tonhöhen, Zeitwerte, Stimmen, Systeme, Sichtbarkeit und Bogeninhalte sind unverändert. Die PDF-Seitenzahl bleibt 39; 30 Seiten sind im durchgeführten Pixelvergleich bei 144 dpi identisch, neun Seiten ändern sich. Die geänderten Seiten wurden zusätzlich gesichtet. Das ist ein konkreter Artefaktvergleich und kein universeller Qualitätsbeweis.
 
-r1656 hat verbliebene Reparaturpfade erfasst. r1657 führt die frühe Schlüsselbearbeitung im Render zum bestehenden E024-Owner zurück. Die historische E052-Heuristik ist nur noch für historische Tests zugänglich. Damit entfallen im geprüften Lauf die zuvor beobachteten fehlenden Provenienznachweise am RenderBeamCustodyHandoff. Das Inventar behauptet ausdrücklich nicht, dass damit jede andere Reparaturschleife beseitigt sei.
+Historische Zahlen aus r1556 oder r1559 werden nicht als heutige Kennzahlen fortgeschrieben. Das alte Speichermodell $M\approx0{,}0054FS+0{,}0061GS$ bleibt eine historische Regressionshypothese: Die abgedruckte Form besitzt zwei Koeffizienten; die frühere Textangabe „drei Parameter“ ist ohne zusätzlichen Modellterm nicht nachvollziehbar. Ohne Rohdaten und erneute Anpassung wird daraus kein aktueller Speicherbeweis abgeleitet.
 
-`sister_feedback_beam` ist als produktiver Reparaturpfad ausgebaut. Historische Dokumentation und Sperrprüfungen gegen seine Wiedereinführung enthalten den Namen weiterhin.
+Auch die frühere Weglass-Untergrenze gilt nur unter ihrem vereinfachten Modell aus monotoner Handaufteilung, gewählter Spannweite und begrenzter Fingerzahl. Sie ist keine allgemeine Untergrenze für notwendige Notenlöschungen beim menschlichen Klavierspiel.
 
-### Messwerte und Grenzen der Abnahme
+## Was noch offen ist
 
-| Revision | Nativer Korpuslauf | Summierte Oktavierungsphase |
-|---|---:|---:|
-| r1653 | 12 min 11 s | 445,8 s |
-| r1655 | 10 min 10 s | 173,4 s |
-| r1657 | 9 min 49 s | 167,1 s |
+- Systemübergreifende Registerabhängigkeiten vollständig binden und vergleichen, bevor eine neue gekoppelte Optimierung behauptet wird.
+- Bewertungspräferenzen und Zulässigkeit getrennt begründen; symbolische Kosten nicht als empirisch kalibrierte Lesezeit ausgeben.
+- Menschliche Fähigkeiten und Tempo belastbar kalibrieren, bevor aus Anforderungsprofilen ein personenbezogenes Spielbarkeitsurteil folgt.
+- Seitenverdichtung erst nach dem zurückgestellten Mindestabstands- und Lesbarkeitsvergleich angehen.
+- Unterschiedliche Platzierungsfamilien und ihre Erhaltungs-/Belegungsbedingungen einzeln verfolgen; ein Audit-Zähler ist keine gemeinsame Schreibregel.
+- Eine künftige globale Bogen-Zuordnung von der heutigen indizierten Existenzprüfung unterscheiden.
+- Die Bestandsaufnahme bei neuen Ownern, Suchkernen oder Messverfahren aktualisieren. Neue Behauptungen erhalten einen Quellbezug und eine ausdrücklich begrenzte Beweisaussage.
 
-Der native r1659-Lauf benötigte **10 min 19 s** bei drei parallelen Projekten. Die summierten Projektlaufzeiten stiegen von 28:17 auf 29:55 Minuten. Diese Beobachtung belegt keinen Gesamtgeschwindigkeitsgewinn durch r1658/r1659. Die Oktavierungsphase für r1659 wird hier nicht beziffert, da die obenstehende Vergleichsauswertung dafür nicht erweitert wurde.
+## Herkunft und Eigenanteil
 
-Das sind beobachtete Läufe mit paralleler Projektverarbeitung. Summierte Phasenzeiten sind weder die Gesamtlaufzeit noch CPU-Zeit. Einzelne Läufe erlauben keine isolierte kausale Zuordnung jeder Differenz. r1653 brachte in Teilphasen deutliche Einsparungen, aber gegenüber r1651 noch keine Verbesserung der Gesamtlaufzeit.
+Standardverfahren bleiben Standardverfahren: dynamische Programmierung, lexikografische Ordnung, Intervallgraphen, Färbung, Nichtdominanz, rationale Arithmetik, quadratische Kosten, Spektralrekurrenzen, Deskriptivstatistik und Hashfunktionen wurden nicht für EtuSchlopf erfunden.
 
-r1653 → r1655 hielt alle 20 Master- und Render-MusicXML-Dateien bytegleich. r1657 änderte die Schlüsselbearbeitung bewusst. Gegenüber r1655 änderten sich alle zehn Render-Dateien und der Master von Etüde 10. Der Ereignisvergleich erhielt Tonhöhen, Einsätze, Dauern und klingende Haltebogenmarkierungen. Beim gerasterten PDF-Vergleich änderten sich 19 von 39 Seiten bei gleicher Seitenzahl. Diese Pixelprüfung ist kein Nachweis einer vollständig visuell abgenommenen Notation.
+Unser Eigenanteil liegt in den musikalischen Modellen, dem Zusammenspiel der Bedingungen, den gebundenen Owner-Übergängen und den gewählten Prioritäten. Die drei Projektbegriffe benennen solche Zusammenstellungen. Weder deren wissenschaftliche Neuheit noch die Behauptung „so gibt es das sonst nirgends“ ist hier nachgewiesen.
 
-### Nativ abgenommene Optimierungen r1658 und r1659
-
-Im angenommenen Quellstand vermeidet r1658 die erneute Erfassung eines bereits geprüften physischen Inventars beim nächsten Fortsetzungszustand. r1659 verwendet geliehene Schlüssel, eine Gleichheitsabkürzung bei identischen Bytes und einmalige Klassifikation identischer verbleibender Noten. Multiplizitäten bleiben erhalten. Die lokalen Prüfungen meldeten für r1658 2187 und für r1659 2188 bestandene Tests, jeweils drei ignorierte Tests, sowie erfolgreiche Take- und Clippy-Prüfungen. Die [native Abnahme r1659](evidence/r1659/README.md) bestätigt 2969 bestandene Tests, drei ignorierte Tests sowie erfolgreiche Build- und Clippy-Prüfungen. Der endgültige Lifecycle-Handover und sein hashgebundener Annahmebeleg bestätigen r1659 als angenommen. Der frühere Generierungs-Handoff beschreibt noch den laufenden Take und ist kein endgültiges Urteil.
-
-## Mathematik im Launcher
-
-Die folgenden Regeln steuern Ressourcen, Wiederverwendung und Freigabe. Die
-Notationsentscheidungen bleiben bei den oben beschriebenen Musikverfahren.
-
-### Parallelität als ganzzahliges Budget
-
-Sei $n$ die Zahl der verfügbaren logischen Threads, mindestens eins. Der
-Launcher gibt Cargo $\max(1,n-[n\ge4])$ Jobs. Für die Pipeline meldet er
-$\max(1,n-1)$ als Auto-Hinweis. Die Pipeline löst ihren eigenen Jobplan aus
-dem Aufruf und dem verfügbaren Budget. Bei acht Threads ergeben beide
-Launcher-Werte sieben, bei drei Threads ergeben sie drei beziehungsweise zwei.
-Die Schwelle vier ist eine Projektentscheidung.
-
-*Code:* [ThreadPlan](../src/bin/etuschlopf_launcher.rs) und
-[Aufrufreferenz](DEVELOPMENT.md#vollständige-aufrufreferenz).
-
-### Prüfsummen und Wiederverwendung
-
-Der Launcher sortiert und dedupliziert die ausgewählten Quellpfade und
-berechnet über ihre gerahmten Pfade und Inhalte eine FNV-1a-Signatur.
-Bei FNV-1a wird pro Byte XOR und anschließend Multiplikation modulo $2^{64}$
-angewandt. Die Build-Wiederverwendung prüft Profil, Version, Quellsignatur
-und die gespeicherte Prüfsumme der EXE. Die All-Targets-Prüfung hat eine
-breitere Quellbasis. Wiederverwendung des Builds ersetzt die aktuelle
-Clippy-Prüfung nicht. Beim visuellen Preflight bindet ein eigener
-Wiederverwendungsbeleg die Renderer-Ausgabe an den Projekteingang und
-den Stand der Verarbeitung. Mit `--force` lässt sich neu prüfen.
-
-*Code:* [Build- und Prüfbelege](../src/bin/etuschlopf_launcher/launcher_build_control.rs)
-und [Launcher](../src/bin/etuschlopf_launcher.rs).
-
-### Zustände, Priorität und Warnungsbudget
-
-`RunOutcome` bildet typisierte Beobachtungen auf eine Freigabe und eine
-Farbe ab. Die geordnete Fallunterscheidung prüft zuerst einen Panic sowie
-Build- und Clippy-Fehler, danach Renderer-Sonderfälle und anschließend
-Exitcode und Audit-Signal. Ein Exitcode von null mit einem ungelösten
-Blocker ergibt einen inkonsistenten Zustand. Die Konsolen- und Exportanzeigen
-projizieren den Laufstatus. Der Prozess-Exitcode hat eine eigene Zuständigkeit.
-
-Für Clippy zählt der Launcher Warnungsdiagnosen und lässt die zusammenfassenden
-Cargo-Warnungszeilen aus. Er führt getrennte Zähler für bestimmte Lints und
-einen Restzähler, der bei null abgeschnitten wird. Liegt ein ansonsten
-freigegebener Lauf vor und die Warnungszahl ist größer als null, setzt der
-Launcher die Anzeige auf Gelb und den Freigabestatus auf Audit-Block.
-r1601 traf dieser Fall wegen einer einzigen `collapsible_match`-Warnung.
-r1602 korrigiert den Match-Arm und lief ohne Warnung dunkelgrün durch.
-Alle 20 MusicXML-Dateien blieben bytegleich.
-
-*Code:* [RunOutcome](../src/run_outcome.rs),
-[Warnungszählung](../src/bin/etuschlopf_launcher/launcher_build_control.rs)
-und [Statusprojektion](../src/bin/etuschlopf_launcher/assistant_export.rs).
-
-### Take, Export und Pfadlängen
-
-SHA-256 bindet den akzeptierten Take an seine Annahmemetadaten. Ein
-Source-Snapshot erfasst die Dateien des ausgeführten Quellbaums. Der
-Abgleich mit dem Take vergleicht die tatsächlichen Bytes. Die Root-`Cargo.lock`
-kann zusätzlich im Snapshot liegen. Der Windows-Build vergleicht die
-Quellprüfsummen und die gesondert dokumentierten GitHub-Dateien vor dem
-Kompilieren.
-
-Beim Snapshot-Export zählt der Launcher UTF-16-Codeeinheiten. Er prüft
-Archivname, Dateiname, relativen Pfad und den gesamten relativen
-Entpackpfad. Für den letzten Wert addiert er die Längen von Archivstamm
-und relativem Pfad sowie eine Einheit für das Trennzeichen. Überschreitet
-ein Eintrag sein Budget, lehnt der Launcher den Snapshot ab.
-
-*Code:* [Take-Bootstrap](../src/bin/etuschlopf_take_bootstrap.rs) und
-[Assistant-Export](../src/bin/etuschlopf_launcher/assistant_export.rs).
-
-## Was wirkt auf das Notenbild?
-
-Die Spalte „Status“ sagt, was eine Stelle **darf**. Die folgende Tabelle sammelt historische Belege aus dem Zehnerkorpus, überwiegend aus r1556; spätere Einträge nennen ihren eigenen Stand. Sie ist keine vollständige aktuelle Wirkungsmessung unter r1577. Die historischen Einzelwirkungen wurden anhand dieser Belegarten zugeordnet:
-- Herkunftsbelege `MaterialMutationReceipt` je Owner;
-- Kennzeichnungen, die die Schreiber in die MusicXML setzen;
-- Berichtszeilen.
-
-| Mathematik | Wirkung | Beleg im Korpus |
-|---|---|---|
-| Gauss-Verteilung (5) | **sichtbar**: verschiebt Töne in Zeit, System, Stimme | GaussChain 32 Anschläge (alle 10 Etüden), ConstrainedTail 9 (5 Etüden) |
-| Gesten-Verteilung (BrokenGesture, eigene Bewertungsfunktion, wie 5) | **sichtbar**: verschiebt Töne in der Zeit | 27 Anschläge (alle 10 Etüden) |
-| Lesbarkeitskurs (8) mit $p(l)$ (7) | **sichtbar**: Schlüssel im unteren System | gekennzeichnete Stellen in 9 von 10 Etüden. **Alle** Schlüssel, die nur im Render und nicht im Master stehen, stammen von hier (Etüden 4, 5, 10) |
-| Hilfslinien-Readback mit $p(l)$ (7) | **sichtbar**: Schlüssel im unteren System | gekennzeichnete Stellen in 6 Etüden; im Render von Etüde 6 und 10 je eine zusätzlich |
-| Gemeinsame Spanne (20) | **sichtbar**: Oktavierungen und Schlüssel | 16 von 234 Vergleichen übernommen, in 7 Etüden |
-| Lexikografischer Kandidatenschlüssel (6) | **mittelbar**: wählt, welche Fassung weiterläuft | in jedem Lauf; Einzelwirkung nicht isolierbar |
-| Exakte Zeitrechnung (18) | **sichtbar**: Pausen und Dauern | in jedem Lauf |
-| Harmonik-Portfolio, Pareto (19) | **darf** Tonhöhen tauschen | **im Korpus nie übernommen**: Der Beleg deklariert Tonhöhe, System und Stimme als mögliche Wirkung, und alle drei Zähler sind in allen 10 Etüden 0 |
-| SchlopfFormel (15), Hashing (12) | **schützt**: lässt Änderungen zu oder weist sie ab; wählt selbst keine Noten | wirkt bei jeder Übernahme |
-| Bilanz (1), R1–R5 (2), ω (3), Abdeckung (4), Spielformel (17), WAV-Sensor (21) | **nur Bericht** | einziger Leser im Produkt ist der Berichtsschreiber (`final_report_projection_owner.rs` bzw. `report.rs`). Die Spielformel hat außerhalb des Audit-Bereichs keinen Leser |
-| Koinzidenz (9) | **Bericht**, seit r1562 zusätzlich **Ausschluss** in der Gestenplatzierung | r1562 nativ: 0 neu erzeugte Paare in allen 10 Etüden |
-| Änderungsmatrix (10), Untergrenze (11), Speichermodell (14) | **keine**: externe Prüfwerkzeuge | – |
-| Beobachtungsäquivalenz (13) | **Speicheraufbewahrung**: musikalische Ergebnisse unverändert | r1559 nativ angenommen |
-| Schlöpfchen-Formel (16) | Gesamtformel nicht umgesetzt; begrenzte Teilverfahren dürfen das Layout ändern | keine isolierte aktuelle Wirkungsmessung dieser Teilverfahren auf dieser Seite |
-
-**Folgerung für die historische r1556-Messung:** Sichtbar wirkten fünf Mathematik-Bausteine:
-- zwei Verteiler (Gauss und Geste);
-- zwei Schlüsselplaner, die dieselbe Druckfunktion nutzen;
-- die gemeinsame Spanne.
-
-Dazu kam mittelbar die Kandidatenwahl. Seit r1562 verhindert die Gestenplatzierung zusätzlich neue Koinzidenzen; seit r1576 ist die gemeinsame C3-Registerentscheidung in E7/E8 belegt. Die Tabelle ist keine erneute Messung aller historischen Einzelwirkungen unter r1577. Alle Schwellen, Gewichte und Prioritäten sind eigene Setzungen (siehe nächster Abschnitt).
-
-## Was ist nicht bekannte Mathematik?
-
-Ehrlich gesagt: **kein Satz und kein Verfahren auf dieser Seite ist mathematisch neu.** Neu im Sinne von „so gibt es das woanders nicht“ sind drei Dinge:
-
-1. **Die drei projekteigenen Formeln** (SchlopfFormel, Schlöpfchen-Formel, symbolische Spielformel). Ihre Bausteine sind bekannt (Boolesche Bedingungen und Zähler, lexikografische Optimierung, Erfüllbarkeit). Die Zusammensetzung für den Notensatz und für eine Entwicklung, die KI durchführt, ist unsere.
-2. **Die Abnahmeregeln für Notensatz-Änderungen:** Erhaltungsbilanz plus „keine neue Koinzidenz“ plus Invarianten R1–R5 plus Änderungsmatrix als **gemeinsamer Abnahmetest**. Jede einzelne Prüfung ist Standard. Ihr Zusammenspiel als Gegenprobe ist es nicht: Im Korpus geht die Zahl der XML-Doppeltöne exakt in Koinzidenzen, Quell-Unisoni und Fortsetzungen auf (23 = 16 + 6 + 1).
-3. **Die Gewichte und Schwellen** (Gauss-Bewertung, Druckfunktion, Schlüsselwechsel-Schwellen). Sie sind gesetzt, nicht hergeleitet und nicht kalibriert. Gerade weil sie unsere sind, sind sie die schwächste Stelle.
-
-Ob davon etwas über EtuSchlopf hinaus trägt, ist nicht extern geprüft. Wir behaupten es deshalb nicht.
-
-## Offene Fragen, an denen mehr Mathematik ansetzen kann
-
-- **Haltebögen als Zuordnungsproblem:** Bogenanfänge und Bogenenden je Taste als bipartites Matching, statt sie der Reihe nach abzuarbeiten.
-- **Eine Belegungsregel für alle Platzierer** (Nr. 9), dazu dieselbe Regel in Bewertung und Ausführung (Nr. 5).
-- **Überlappungen** gleicher Tasten: Nr. 9 von Zeitpunkten auf Intervalle erweitern.
-- **Die gemeinsame Registerentscheidung vervollständigen** (Nr. 7 und 8): verbleibende Eingabe- und Gruppenbedingungen schließen und die endgültige Balken-/Stimmenverteilung bei der Planung berücksichtigen. C3 ist in E7/E8 produktiv, aber noch kein vollständiger Ersatz aller bisherigen Verläufe.
-- **Prüfschranken als Aufrufgraph:** Erreichbarkeit statt Textsuche, ob neuer Code in eine Musikentscheidung einfließt.
-- **Kalibrierung** der Gewichte in Nr. 5 und Nr. 7 an Beispielen, die ein Mensch beurteilt hat, statt per Setzung.
-
-## Quellen
-
-- C. F. Gauss, *Theoria motus corporum coelestium* (1809); A.-M. Legendre (1805): Methode der kleinsten Quadrate.
-- R. Bellman, *Dynamic Programming* (1957); A. Viterbi (1967).
-- M. C. Golumbic, *Algorithmic Graph Theory and Perfect Graphs* (1980): Intervallgraphen.
-- C. A. R. Hoare, „An Axiomatic Basis for Computer Programming“ (1969): Invarianten.
-- FIPS 180-4 (SHA-256); Fowler/Noll/Vo, FNV-Hash.
-- R. M. Bittner et al., „A Lightweight Instrument-Agnostic Model for Polyphonic Note Transcription and Multipitch Estimation“ (ICASSP 2022): Basic Pitch, nur als WAV-Sensor; die Benchmark-Werte des Papers sind keine EtuSchlopf-Messwerte.
-- G. C. Necula, „Proof-Carrying Code“ (POPL 1997): Verwandtschaft der SchlopfFormel.
-- D. E. Knuth, M. F. Plass, „Breaking Paragraphs into Lines“ (1981): Verwandtschaft der Schlöpfchen-Formel.
-- Kontext zur Spielformel, nicht zur Kalibrierung: C. Turner et al., *Applied Ergonomics* 133 (2026), 104709; J.-Y. Chi et al., *Applied Ergonomics* 97 (2021), 103518.
-
+Historische Literaturanker der bisherigen Seite sind Bellman und Viterbi für dynamische Verfahren, Golumbic für Intervallgraphen, Gauss und Legendre für quadratische Ausgleichsverfahren, Hoare für Programm-Invarianten, Necula für beweistragenden Code sowie Knuth/Plass für die Verwandtschaft mit Umbruchproblemen. Diese Verwandtschaft ersetzt keinen konkreten EtuSchlopf-Beweis. Für den externen Basic-Pitch-Sensor bleibt Bittner et al., ICASSP 2022, der benannte Modellbezug; dessen Benchmark ist kein Messwert unseres Korpus. Die vorliegende Überarbeitung ist eine Quell- und Statusprüfung, keine erneute vollständige Literaturrecherche.

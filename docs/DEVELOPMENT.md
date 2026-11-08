@@ -1,6 +1,8 @@
 # Technische Referenz und Quellenarbeit
 
-Der angenommene Entwicklungsquellstand ist r1659. Die [nativen Prüfbelege](evidence/r1659/README.md) binden den vollständigen Korpuslauf mit zehn Etüden an seinen Take. Die Optimierungen r1658/r1659 sind damit nativ abgenommen. Historische Abschnitte und Belege behalten ihre jeweilige Revision. Die [Download-Anleitung](../README.md) gehört zur verfügbaren Windows-Testversion r1602.
+Der angenommene Entwicklungsquellstand ist **r1684 / 0.10.1839**. Die [nativen Prüfbelege](evidence/r1684/README.md) binden den vollständigen Korpuslauf mit zehn Etüden an seinen Take: Build und Strict-Clippy bestanden, 2992 Tests bestanden, vier ignoriert. r1684 aktualisiert die Mathematik-Dokumentation auf dem Laufzeitstand r1683. Historische Abschnitte und Belege behalten ihre jeweilige Revision. Die [Download-Anleitung](../README.md) gehört zur verfügbaren Windows-Testversion r1602.
+
+Seit r1659 enthält der Quellstand weitere Zuständigkeitsbereinigungen, indizierte Endpunktabfragen und Verbesserungen an Fokus, Verbindungsstatus und PDF-Sitzungsbindung der Watch-Webansicht. r1683 führt ursprüngliche Pausenanker als eigene Evidenz in die C3-Entscheidung; nicht geschlossene systemübergreifende Gruppenabhängigkeiten bleiben offen. Die [Mathematik-Seite](MATHEMATIK.md) ordnet 34 Verfahrensfamilien ihren Quellen, Wirkungen und Beweisgrenzen zu. Die native Abnahme bestätigt den geprüften Korpus; sie belegt weder allgemeine Fehlerfreiheit noch die Spielbarkeit beliebiger Eingaben.
 
 Das Projekt hat zwei eng verbundene Gegenstände:
 
@@ -21,6 +23,7 @@ Programme und bleiben Gegenstand von Gegenbeispielen und Prüfung.
 - [Aktueller fachlicher Überblick und Mathematik](MATHEMATIK.md)
 - [Historischer Architektur-Wegweiser auf Basis r1526](IMPLEMENTED_FOUNDATIONS.md)
 - [Forschungsbezüge und ihre genaue Rolle](../docs/RESEARCH_CONTEXT.md)
+- [Aktuelle native Abnahme r1684](evidence/r1684/README.md)
 - [Native Abnahme r1602](evidence/r1602/README.md)
 - [Windows-Testversion und native Abnahme r1577](evidence/r1577/README.md)
 - [Historische Abnahme r1533](evidence/r1533/README.md)
@@ -441,4 +444,5 @@ Der eigene EtuSchlopf-Code steht unter der [MIT-Lizenz](../docs/licenses/EtuSchl
 Fremdkomponenten behalten ihre jeweiligen Lizenzen. Die Zuordnung, mitgelieferte
 Lizenztexte und Grenzen der Prüfung stehen in
 [Fremdlizenzhinweise](../docs/THIRD_PARTY_NOTICES.md).
+
 

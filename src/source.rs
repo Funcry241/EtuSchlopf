@@ -254,9 +254,9 @@ mod tests {
     use super::project_file_stem;
 
     #[test]
-    fn derives_project_stem_from_etude_name() {
+    fn derives_project_stem_from_synthetic_unicode_name() {
         assert_eq!(project_file_stem("Synthetic Project Nr. 6"), "Synthetic Project Nr. 6");
-        assert_eq!(project_file_stem("  Chopin - Étude, Op. 10/1  "), "Chopin - Étude, Op. 10_1");
+        assert_eq!(project_file_stem("  Synthetisch - Überall, Teil 7/2  "), "Synthetisch - Überall, Teil 7_2");
     }
 }
 
