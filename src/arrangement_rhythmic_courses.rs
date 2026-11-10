@@ -289,6 +289,13 @@ fn without_beams(note: &str) -> String {
 }
 
 impl CourseMeasure {
+    pub(super) fn binds_distinct_sources(&self, notes: Range<usize>) -> bool {
+        self.incoming.get(notes).is_some_and(|occurrences| {
+            let mut sources = BTreeSet::new();
+            occurrences.iter().all(|note| note.source.is_some_and(|source| sources.insert(source)))
+        })
+    }
+
     fn validate_notes(&self, text: &str, occurrences: &[CourseOccurrence]) -> Result<()> {
         let raw = collect_raw_notes(text);
         let metas = collect_note_metas(text, &raw);

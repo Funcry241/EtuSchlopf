@@ -125,9 +125,60 @@ fn late_representation_must_retain_gain_without_reconstructing_identity() {
     let mut after = before.clone();
     after.gaps = vec![vec![9.0, 9.0], vec![20.0]];
     after.systems[2].page = 0;
-    assert!(fixed_page_balance_final_gain(&before, &after, 0));
+    assert!(fixed_page_balance_final_gain(&before, &after, PageBalanceObjective::PreserveSystems(0)));
     after.gaps[0][0] = 5.0;
-    assert!(!fixed_page_balance_final_gain(&before, &after, 0));
+    assert!(!fixed_page_balance_final_gain(&before, &after, PageBalanceObjective::PreserveSystems(0)));
     after.gaps[0][0] = f64::NAN;
-    assert!(!fixed_page_balance_final_gain(&before, &after, 0));
+    assert!(!fixed_page_balance_final_gain(&before, &after, PageBalanceObjective::PreserveSystems(0)));
+}
+
+#[test]
+fn geometric_gain_cannot_leave_a_larger_nonfinal_page_remainder() {
+    let (_, _, mut before) = fixture();
+    before.systems[1].ink_bottom = 45.0;
+    let mut after = before.clone();
+    after.systems[2].page = 0;
+    after.systems[2].ink_bottom = 40.0;
+    after.gaps = vec![vec![9.0, 9.0], vec![20.0]];
+    assert!(!fixed_page_balance_improves(&before, &after, 0));
+    assert!(!fixed_page_balance_final_gain(&before, &after, PageBalanceObjective::PreserveSystems(0)));
+
+    after.systems[2].ink_bottom = 50.0;
+    after.systems[4].ink_bottom = 15.0;
+    assert!(fixed_page_balance_improves(&before, &after, 0));
+    assert!(fixed_page_balance_final_gain(&before, &after, PageBalanceObjective::PreserveSystems(0)));
+}
+
+#[test]
+fn extra_system_requires_better_fill_across_the_non_title_pages() {
+    let (_, _, mut before) = fixture();
+    before.page_bottom[1] = 100.0;
+    before.systems[3].ink_bottom = 70.0;
+    before.systems[4].ink_bottom = 70.0;
+    before.page_bottom.push(100.0);
+    before.gaps.push(vec![12.0]);
+    for (start, bottom) in [(11, 20.0), (13, 30.0)] {
+        before.systems.push(PageClearanceSystem {
+            start,
+            end: start + 1,
+            page: 2,
+            ink_top: 10.0,
+            ink_bottom: bottom,
+        });
+    }
+    before.systems.last_mut().unwrap().end = 16;
+    let mut after = before.clone();
+    let mut extra = after.systems.last().unwrap().clone();
+    after.systems.last_mut().unwrap().end = 14;
+    extra.start = 15;
+    extra.ink_bottom = 80.0;
+    after.systems.push(extra);
+    after.gaps[2].push(15.0);
+    assert!(extra_system_page_fill_improves(&before, &after, 2));
+
+    after.gaps[2][1] = 0.0;
+    assert!(!extra_system_page_fill_improves(&before, &after, 2));
+    after.gaps[2][1] = 15.0;
+    after.systems[4].ink_bottom = 20.0;
+    assert!(!extra_system_page_fill_improves(&before, &after, 2));
 }

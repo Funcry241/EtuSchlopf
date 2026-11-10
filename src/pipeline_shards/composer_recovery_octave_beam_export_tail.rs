@@ -4449,6 +4449,7 @@ mod behind_bars_beam_single_owner_tests {
     fn info(index: usize, start: i64) -> PartialBeatNoteInfo {
         PartialBeatNoteInfo {
             index,
+            cursor_run: Some(0),
             start,
             duration: 24,
             staff: "1".to_string(),
@@ -4469,6 +4470,7 @@ mod behind_bars_beam_single_owner_tests {
     ) -> PartialBeatNoteInfo {
         PartialBeatNoteInfo {
             index,
+            cursor_run: Some(0),
             start,
             duration,
             staff: "1".to_string(),

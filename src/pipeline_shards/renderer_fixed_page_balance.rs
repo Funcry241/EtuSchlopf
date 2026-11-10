@@ -1,6 +1,6 @@
 struct RendererFixedPageBalanceEvidence {
     before: PageClearanceObservation,
-    pair: usize,
+    pair: PageBalanceObjective,
     consumer: render::RendererProbeIdentity,
     source_fingerprint: u64,
     selected_system_pages: Vec<usize>,
@@ -13,7 +13,7 @@ use crate::audit_only::renderer_system_break_readback::PageClearanceObservation;
 struct RendererFixedPageBalanceTrial {
     incumbent: HorizontalLayoutPlan,
     before: PageClearanceObservation,
-    pair: usize,
+    objective: PageBalanceObjective,
 }
 
 fn fixed_page_pair_clearance(observation: &PageClearanceObservation, pair: usize) -> Option<f64> {
@@ -24,6 +24,28 @@ fn fixed_page_pair_clearance(observation: &PageClearanceObservation, pair: usize
         .copied()
         .fold(f64::INFINITY, f64::min);
     gap.is_finite().then_some(gap)
+}
+
+// The ending may leave space below the last system. Earlier pages should
+// not acquire a larger worst-case remainder just to open up a system gap.
+fn max_nonfinal_page_remainder(observation: &PageClearanceObservation) -> Option<f64> {
+    let nonfinal_pages = observation.page_bottom.len().checked_sub(1)?;
+    observation.page_bottom[..nonfinal_pages].iter().enumerate().try_fold(
+        0.0_f64,
+        |worst, (page, bottom)| {
+            let system = observation.systems.iter().rev().find(|system| system.page == page)?;
+            let remainder = bottom - system.ink_bottom;
+            remainder.is_finite().then_some(worst.max(remainder))
+        },
+    )
+}
+
+fn fixed_page_balance_keeps_page_fill(
+    before: &PageClearanceObservation,
+    after: &PageClearanceObservation,
+) -> bool {
+    matches!((max_nonfinal_page_remainder(before), max_nonfinal_page_remainder(after)),
+        (Some(before), Some(after)) if after <= before)
 }
 
 fn fixed_page_balance_improves(
@@ -52,7 +74,8 @@ fn fixed_page_balance_improves(
     {
         return false;
     }
-    matches!((fixed_page_pair_clearance(before,pair),fixed_page_pair_clearance(after,pair)),(Some(a),Some(b)) if b>a)
+    fixed_page_balance_keeps_page_fill(before, after)
+        && matches!((fixed_page_pair_clearance(before,pair),fixed_page_pair_clearance(after,pair)),(Some(a),Some(b)) if b>a)
 }
 
 fn score_fixed_system_partition(
@@ -214,8 +237,12 @@ fn build_renderer_fixed_page_balance_candidate(
 fn fixed_page_balance_final_gain(
     before: &PageClearanceObservation,
     after: &PageClearanceObservation,
-    pair: usize,
+    objective: PageBalanceObjective,
 ) -> bool {
+    let pair = match objective {
+        PageBalanceObjective::PreserveSystems(pair) => pair,
+        PageBalanceObjective::AddSystem(page) => return extra_system_page_fill_improves(before, after, page),
+    };
     before.systems.len() == after.systems.len()
         && before.gaps.len() == after.gaps.len()
         && before
@@ -228,7 +255,140 @@ fn fixed_page_balance_final_gain(
             .iter()
             .flatten()
             .all(|g| g.is_finite() && *g > 0.0)
+        && fixed_page_balance_keeps_page_fill(before, after)
         && matches!((fixed_page_pair_clearance(before,pair),fixed_page_pair_clearance(after,pair)),(Some(a),Some(b)) if b>a)
+}
+
+#[derive(Clone, Copy, Debug)]
+enum PageBalanceObjective {
+    PreserveSystems(usize),
+    AddSystem(usize),
+}
+
+fn non_title_bottom_remainders(observation: &PageClearanceObservation) -> Option<Vec<f64>> {
+    observation.page_bottom.iter().enumerate().skip(1).map(|(page, bottom)| {
+        let system = observation.systems.iter().rev().find(|system| system.page == page)?;
+        let remainder = bottom - system.ink_bottom;
+        (remainder.is_finite() && remainder >= 0.0).then_some(remainder)
+    }).collect()
+}
+
+fn extra_system_page_fill_improves(
+    before: &PageClearanceObservation,
+    after: &PageClearanceObservation,
+    page: usize,
+) -> bool {
+    if before.page_bottom != after.page_bottom
+        || after.systems.len() != before.systems.len() + 1
+        || before.systems.first().map(|s| s.start) != after.systems.first().map(|s| s.start)
+        || before.systems.last().map(|s| s.end) != after.systems.last().map(|s| s.end)
+        || after.systems.iter().any(|s| {
+            !s.ink_top.is_finite() || s.ink_top < 0.0 || !s.ink_bottom.is_finite()
+                || s.ink_bottom > after.page_bottom.get(s.page).copied().unwrap_or(f64::NEG_INFINITY)
+        })
+        || after.gaps.iter().flatten().any(|g| !g.is_finite() || *g <= 0.0)
+    {
+        return false;
+    }
+
+    let (Some(before), Some(after)) = (
+        non_title_bottom_remainders(before),
+        non_title_bottom_remainders(after),
+    ) else {
+        return false;
+    };
+    let maximum = |r: &[f64]| r.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let spread = |r: &[f64]| maximum(r) - r.iter().copied().fold(f64::INFINITY, f64::min);
+    matches!((before.get(page - 1), after.get(page - 1)), (Some(a), Some(b)) if b < a)
+        && maximum(&after) < maximum(&before)
+        && spread(&after) < spread(&before)
+}
+
+fn build_extra_system_page_fill_candidate(
+    pages: &[Vec<usize>],
+    basis: &GlobalHorizontalPageSystemPlanAudit,
+    observed: &PageClearanceObservation,
+    rejected: &RendererRejectedPartitions,
+    no_goods: &std::collections::BTreeSet<(usize, usize)>,
+) -> Option<(JointPageSystemCandidate, usize)> {
+    let remainders = non_title_bottom_remainders(observed)?;
+    if remainders.len() < 2 || observed.gaps.len() != pages.len() {
+        return None;
+    }
+    let (largest, _) = remainders.iter().enumerate().max_by(|(_, a), (_, b)| a.total_cmp(b))?;
+    let page = largest + 1;
+    let mut counts = pages.iter().map(Vec::len).collect::<Vec<_>>();
+    let count = counts.get_mut(page)?;
+    if *count >= basis.vertical_max_systems_per_page {
+        return None;
+    }
+    *count += 1;
+
+    let slots = basis.slots_compared;
+    let demands = &basis.selected_measure_demand_evidence;
+    let clearance = &basis.selected_measure_clearance_edge_evidence;
+    let capacity = basis.accepted_system_capacity;
+    let max_length = basis.max_allowed_system_measures;
+    let systems = counts.iter().sum::<usize>();
+    if systems > slots / 2 || demands.len() != slots || clearance.len() != slots {
+        return None;
+    }
+
+    let mut prefixes = std::collections::BTreeMap::from([(0, JointPageSystemCandidate::empty())]);
+    let mut remaining = systems;
+    for count in counts {
+        let mut next = std::collections::BTreeMap::<usize, JointPageSystemCandidate>::new();
+        for (start, prefix) in prefixes {
+            let mut segments = std::collections::BTreeMap::from([(start, (0_u128, Vec::new()))]);
+            for index in 0..count {
+                let systems_after = remaining - index - 1;
+                let mut ends = std::collections::BTreeMap::new();
+                for (offset, (cost, lengths)) in segments {
+                    let available_slots = slots - offset - systems_after * 2;
+                    for length in 2..=max_length.min(available_slots) {
+                        let end = offset + length;
+                        let load = demands[offset..end].iter().sum::<usize>();
+                        if load > capacity {
+                            break;
+                        }
+                        if no_goods.contains(&(offset + 1, end))
+                            || !renderer_clearance_system_has_structural_slack(
+                                &clearance[offset..end], length, max_length)
+                        {
+                            continue;
+                        }
+                        let slack = (capacity - load) as u128;
+                        let mut path = lengths.clone();
+                        path.push(length);
+                        let segment = (cost + slack * slack, path);
+                        if ends.get(&end).is_none_or(|old| &segment < old) {
+                            ends.insert(end, segment);
+                        }
+                    }
+                }
+                segments = ends;
+            }
+            for (end, (cost, lengths)) in segments {
+                let mut candidate = prefix.clone();
+                let page_slots = end - start;
+                let deviation = (page_slots * pages.len()).abs_diff(slots) as u128;
+                candidate.page_slot_balance_penalty += deviation * deviation;
+                candidate.slack_square_sum += cost;
+                candidate.page_slot_lengths.push(page_slots);
+                candidate.page_system_lengths.push(lengths);
+                if next.get(&end).is_none_or(|old| candidate.is_better_than(old)) {
+                    next.insert(end, candidate);
+                }
+            }
+        }
+        remaining -= count;
+        prefixes = next;
+    }
+    let lengths = prefixes.remove(&slots)?.page_system_lengths;
+    if rejected.contains(&lengths) {
+        return None;
+    }
+    Some((score_fixed_system_partition(&lengths, basis)?, page))
 }
 
 #[cfg(test)]

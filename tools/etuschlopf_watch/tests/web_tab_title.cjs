@@ -58,13 +58,13 @@ function corpusModel(completed, total, status = 'running', outcome) {
       console.log('PASS ' + name);
     }
     await check('waiting is visible before the first observation', async () => {
-      await title('WAITING');
+      await title('Warte auf Laufdaten');
     });
     await check('running updates the browser tab and repeated ticks keep a stable title', async () => {
       await send(model('running'));
-      await title('RUNNING');
+      await title('Läuft');
       await page.evaluate(() => { tick(); tick(); });
-      await title('RUNNING');
+      await title('Läuft');
     });
     await check('unchanged observations and the real timer leave the title DOM untouched', async () => {
       await page.evaluate(() => {
@@ -78,11 +78,11 @@ function corpusModel(completed, total, status = 'running', outcome) {
         await send(unchanged);
         // Exercise the production interval, not just a direct call to tick().
         await page.waitForTimeout(1200);
-        await title('RUNNING');
+        await title('Läuft');
         assert.equal(await page.evaluate(() => window.titleMutations.length), 0,
           'clock updates and repeated snapshots must not rewrite an unchanged tab title');
         await send(model('completed'));
-        await title('COMPLETED');
+        await title('Abgeschlossen');
         assert.ok(await page.evaluate(() => window.titleMutations.length > 0),
           'an actual status change must still reach the browser title');
       } finally {
@@ -90,62 +90,123 @@ function corpusModel(completed, total, status = 'running', outcome) {
       }
     });
     await check('completion, failure and cancellation replace the running title', async () => {
-      for (const [status, label] of [['completed', 'COMPLETED'], ['failed', 'FAILED'], ['cancelled', 'CANCELLED']]) {
+      for (const [status, label] of [['completed', 'Abgeschlossen'], ['failed', 'Fehlgeschlagen'], ['cancelled', 'Abgebrochen']]) {
         await send(model('running'));
         await send(model(status));
         await title(label);
       }
     });
     await check('the reported terminal outcome stays visible instead of generic completion', async () => {
-      for (const [outcome, label] of [['dark_green', 'DUNKELGRÜN'], ['light_green', 'HELLGRÜN'], ['yellow', 'GELB'], ['red', 'ROT']]) {
+      for (const [outcome, label] of [['dark_green', 'Abgeschlossen'], ['light_green', 'Abgeschlossen · Hinweis'], ['yellow', 'Abgeschlossen · Freigabe prüfen'], ['red', 'Abgeschlossen · Fehler gemeldet']]) {
         await send(model('completed', outcome));
         await title(label);
+        assert.equal(await page.locator('#runStatus').getAttribute('data-state'), outcome);
       }
     });
     await check('a running observation does not become green from a premature outcome', async () => {
       await send(model('running', 'dark_green'));
-      await title('RUNNING');
+      await title('Läuft');
     });
     await check('only the current session supplies the title and a missing session resets it', async () => {
       const next = model('running');
       next.sessions.unshift(session('old', 'failed'));
       await send(next);
-      await title('RUNNING');
+      await title('Läuft');
       next.current_session_id = 'not-observed';
       await send(next);
-      await title('WAITING');
+      await title('Warte auf Laufdaten');
     });
     await check('transport closure preserves the last reported result', async () => {
       await send(model('completed', 'yellow'));
       await page.evaluate(() => { window.watchEvents.onerror(); tick(); });
-      await title('GELB');
+      await title('Abgeschlossen · Freigabe prüfen');
       assert.equal(await page.locator('#transport').getAttribute('data-state'), 'closed');
     });
     await check('reported corpus counts advance without changing the status and survive completion', async () => {
       await send(corpusModel(0, 7));
-      await title('RUNNING', '0/7');
+      await title('Läuft', '0/7');
       await send(corpusModel(3, 7));
-      await title('RUNNING', '3/7');
+      await title('Läuft', '3/7');
       await send(corpusModel(7, 7, 'completed', 'yellow'));
-      await title('GELB', '7/7');
+      await title('Abgeschlossen · Freigabe prüfen', '7/7');
       await page.evaluate(() => { window.watchEvents.onerror(); tick(); });
-      await title('GELB', '7/7');
+      await title('Abgeschlossen · Freigabe prüfen', '7/7');
     });
     await check('unreported totals and previous sessions cannot supply an invented count', async () => {
       const next = model('running');
       next.sessions.unshift(corpusModel(6, 9).sessions[0]);
       next.sessions[0].observation_session_id = 'old-corpus';
       await send(next);
-      await title('RUNNING');
+      await title('Läuft');
       await send(corpusModel(0, 0));
-      await title('RUNNING');
+      await title('Läuft');
       const noProgress = corpusModel(2, 7);
       delete noProgress.sessions[0].sources[1].source.progress;
       await send(noProgress);
-      await title('RUNNING');
+      await title('Läuft');
       noProgress.current_session_id = 'not-observed';
       await send(noProgress);
-      await title('WAITING');
+      await title('Warte auf Laufdaten');
+    });
+    await check('the last project waits for the launcher outcome and malformed updates leave the view intact', async () => {
+      const value = model('completed');
+      value.sessions[0].sources[0].source = {
+        source_id: 'p', source_role: 'project', status: 'completed',
+        project_label: 'Probe', stage: 'project_arrangement_solver',
+      };
+      await send(value);
+      await title('Warte auf Laufergebnis');
+      assert.equal(await page.locator('.phase.done').count(), 2);
+      await send({ current_session_id: 'broken', sessions: [{ sources: [null] }] });
+      await title('Warte auf Laufergebnis');
+      assert.equal(await page.evaluate(() => formatMillis(3661000)), '1:01:01');
+    });
+    await check('a full project bar explicitly announces finalization', async () => {
+      const value = corpusModel(7, 7);
+      value.sessions[0].sources[1].source.stage = 'corpus_finalizing_corpus_report';
+      await send(value);
+      assert.equal(await page.getByRole('progressbar').getAttribute('aria-valuenow'), '7');
+      assert.match(await page.locator('.progressnote').textContent(), /Korpusbericht wird erstellt/);
+      await page.setViewportSize({ width: 761, height: 640 });
+      value.sessions[0].sources.push({
+        source: { source_id: 'p', source_role: 'project', status: 'failed',
+          stage: 'project_initial_render_transaction' },
+      });
+      await send(value);
+      assert.equal(await page.locator('.projectcolumns').evaluate(el => getComputedStyle(el).display), 'none');
+      assert.match(await page.locator('.projectstate').textContent(), /Letzte Phase Initial Render/);
+      assert.equal(await page.locator('.projectrow .pdf-link').count(), 0);
+    });
+    await check('a failure before the first project does not announce preparation', async () => {
+      const value = corpusModel(0, 7, 'failed', 'red');
+      await send(value);
+      assert.match(await page.locator('.projectwaiting').textContent(), /vor dem ersten Projekt fehlgeschlagen/);
+    });
+    await check('an empty current session uses the waiting view without stale-data age', async () => {
+      const value = model('running');
+      value.sessions[0].sources = [];
+      value.mqtt = 'reconnecting';
+      await send(value);
+      await title('Warte auf Laufdaten');
+      assert.match(await page.locator('#shell .empty').textContent(), /Warte auf Laufdaten/);
+      assert.doesNotMatch(await page.locator('#transport').textContent(), /Stand von vor/);
+    });
+    await check('a project-only overview never borrows a project duration for the whole run', async () => {
+      const value = model('running');
+      const launcher = value.sessions[0].sources[0];
+      value.sessions[0].sources = ['a', 'b'].map(id => ({
+        source: { source_id: id, source_role: 'project', status: 'completed',
+          stage: 'project_release_report_and_exit' },
+        run_elapsed_millis: 12000,
+      }));
+      await send(value);
+      assert.equal(await page.locator('.hero .title').textContent(), 'Projektübersicht');
+      assert.equal(await page.locator('.herometric').count(), 0);
+      assert.equal(await page.locator('.projectage').count(), 2);
+      launcher.source.status = 'completed';
+      value.sessions[0].sources.push(launcher);
+      await send(value);
+      assert.match(await page.locator('.herometric').textContent(), /^Laufdauer/);
     });
     assert.deepEqual(errors, [], 'production page must not raise script errors');
     console.log(`${passed} browser scenarios passed`);

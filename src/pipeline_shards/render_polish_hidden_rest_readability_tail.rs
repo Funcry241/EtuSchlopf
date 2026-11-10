@@ -1246,28 +1246,6 @@ fn hidden_chord_carrier_group_end(
     seen.then_some(cursor)
 }
 
-#[cfg(test)]
-fn hide_rest_as_technical_carrier(fragment: &str) -> Option<String> {
-    if !fragment.contains("<rest") || fragment.contains("<pitch>") {
-        return None;
-    }
-    let normalized_print_object = fragment
-        .replace("print-object=\"yes\"", "print-object=\"no\"")
-        .replace("print-object='yes'", "print-object='no'");
-    let (hidden, receipt) = hide_note_fragment_print_object_no(&normalized_print_object);
-    let mut probe = crate::master_state_identity::RenderTransitionReceipts::new();
-    probe.push_generated_block(receipt, &normalized_print_object, &hidden, None);
-    probe.discard_unadopted(crate::master_state_identity::RenderDiscardReason::ReadOnlyProbe);
-    if hidden.contains("print-spacing=\"yes\"") {
-        Some(hidden.replace("print-spacing=\"yes\"", "print-spacing=\"no\""))
-    } else if hidden.contains("print-spacing='yes'") {
-        Some(hidden.replace("print-spacing='yes'", "print-spacing='no'"))
-    } else if hidden.contains("print-spacing=\"no\"") || hidden.contains("print-spacing='no'") {
-        Some(hidden)
-    } else {
-        Some(hidden.replacen("<note", "<note print-spacing=\"no\"", 1))
-    }
-}
 
 fn build_carrier_preserving_initial_rest_projection_candidates(
     xml: &str,
@@ -1569,26 +1547,7 @@ fn apply_pianistic_rest_consolidation(
 }
 
 
-fn hide_note_fragment_print_object_no(fragment: &str) -> (String, Option<BlockTransformationReceipt>) {
-    
-    
-    let output = (|| {
-    if fragment.contains("print-object=\"no\"") || fragment.contains("print-object='no'") {
-        return fragment.to_string();
-    }
-    let Some(note_pos) = fragment.find("<note") else { return fragment.to_string(); };
-    let Some(close_rel) = fragment[note_pos..].find('>') else { return fragment.to_string(); };
-    let open_end = note_pos + close_rel;
-    let mut out = String::new();
-    out.push_str(&fragment[..open_end]);
-    out.push_str(" print-object=\"no\"");
-    out.push_str(&fragment[open_end..]);
-    out
-})();
-    
-    let receipt = Some(output.as_str()).filter(|post| *post != fragment).map(|post| crate::master_state_identity::BlockTransformationReceipt::mint_block_receipt(RenderRow20BlockMint { _private: () }, fragment, post, Some((0, fragment.len()))).expect("frozen owner changed bytes without receipt"));
-    (output, receipt)
-}
+
 fn note_is_followed_by_chord_note(xml: &str, note_end: usize, limit: usize) -> bool {
     if note_end >= xml.len() || note_end >= limit { return false; }
     let mut i = note_end;
@@ -3215,3 +3174,5 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/structural_write_authority/re
 
 // Receipt-bearing mutation preparation belongs to the canonical structural owner.
 include!("../structural_write_authority/render_polish_hidden_rest_readability_tail_receipt_ownership.rs");
+
+

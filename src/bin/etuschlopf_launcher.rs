@@ -25,6 +25,8 @@ mod console_presentation_contract;
 mod assistant_export;
 #[path = "etuschlopf_launcher/console_live_status.rs"]
 mod console_live_status;
+#[path = "etuschlopf_launcher/console_cargo_activity.rs"]
+mod console_cargo_activity;
 #[path = "etuschlopf_launcher/neuro_evidence_export.rs"]
 mod neuro_evidence_export;
 #[path = "etuschlopf_launcher/inventory_export.rs"]
@@ -2311,6 +2313,7 @@ struct StrictTestPrewarm {
     child: Option<Child>,
     started: Instant,
     jobs: usize,
+    activity: console_cargo_activity::CargoActivityReader,
 }
 
 /// Key of the measured residual wait for the test prewarm in the last-durations file.
@@ -2347,6 +2350,7 @@ impl StrictTestPrewarm {
             child: Some(child),
             started,
             jobs,
+            activity: console_cargo_activity::CargoActivityReader::from_fresh_log(Path::new(STRICT_TEST_PREWARM_LOG)),
         })
     }
 
@@ -2375,11 +2379,17 @@ impl StrictTestPrewarm {
                 Err(error) => break Err(error),
             }
             if progress_mode == ProgressMode::Inline {
+                prewarm.activity.poll();
+                let elapsed = join_started.elapsed();
+                let base_width = animation.running_line("Test-Vorbau wartet", elapsed, previous_wait, None, glyph_mode)
+                    .plain().chars().count();
+                let budget = RUNNING_LINE_MAX_CHARS.saturating_sub(base_width + " · ".chars().count());
+                let summary = prewarm.activity.summary(SystemTime::now(), budget);
                 let running = animation.running_line(
                     "Test-Vorbau wartet",
-                    join_started.elapsed(),
+                    elapsed,
                     previous_wait,
-                    None,
+                    summary.as_deref(),
                     glyph_mode,
                 );
                 let text = running.plain();
@@ -3845,6 +3855,10 @@ fn invoke_logged_program_with_env(
     let previous_ms = console_live_status::read_last_phase_durations(durations_path)
         .get(header)
         .copied();
+    // Start before spawning, so old shared-log commands cannot supply this hint.
+    let mut cargo_activity = (matches!(&env_mode, ProcessEnvMode::NormalCargoTarget)
+        && launcher.stdout_progress_mode() == ProgressMode::Inline)
+        .then(|| console_cargo_activity::CargoActivityReader::starting_at_current_end(log_path));
     let spawn_started = Instant::now();
     let mut child = command.spawn()?;
     let spawn_us = spawn_started.elapsed().as_micros();
@@ -3861,6 +3875,7 @@ fn invoke_logged_program_with_env(
     loop {
         let elapsed = start.elapsed();
         let poll_started_us = spawn_started.elapsed().as_micros();
+        if let Some(reader) = cargo_activity.as_mut() { reader.poll(); }
         if let Some(reader) = live_status.as_mut() {
             for event in reader.poll() {
                 launcher.live_status_event(&event, progress_mode)?;
@@ -3942,7 +3957,8 @@ fn invoke_logged_program_with_env(
                 .as_ref()
                 .filter(|reader| reader.has_projects())
                 .map(|reader| reader.running_summary(summary_budget))
-                .filter(|summary| !summary.is_empty());
+                .filter(|summary| !summary.is_empty())
+                .or_else(|| cargo_activity.as_ref().and_then(|reader| reader.summary(SystemTime::now(), summary_budget)));
             let running_line = animation.running_line(
                 heartbeat,
                 elapsed,

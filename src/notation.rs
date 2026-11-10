@@ -1661,6 +1661,9 @@
         }
     
         group.sort_by_key(|info| (info.start, info.index));
+        if group.windows(2).any(|pair| pair[0].index >= pair[1].index) {
+            return false;
+        }
     
         // MetricBeamPolicy v0.10.216:
         // Balkengruppen müssen entweder direkt an einer Zählzeit beginnen oder als
@@ -2217,6 +2220,21 @@
 
             assert!(!polished.text.contains("<beam"));
             assert_eq!(polished.stats.removed_beams, 2);
+        }
+
+        #[test]
+        fn chronological_neighbors_cannot_be_beamed_in_reverse_serialization() {
+            let early = note("D", 48, "eighth", "");
+            let late = note("A", 48, "eighth", "");
+            let reversed = format!(
+                "<measure><forward><duration>48</duration></forward>{late}<backup><duration>96</duration></backup>{early}</measure>"
+            );
+            let ordered = format!("<measure>{early}{late}</measure>");
+
+            let refused = polish_measure(&reversed, 96).expect("reverse stream is readable");
+            assert_eq!(refused.text, reversed);
+            let accepted = polish_measure(&ordered, 96).expect("ordered stream is readable");
+            assert_eq!(accepted.stats.beam_groups, 1);
         }
 
         #[test]

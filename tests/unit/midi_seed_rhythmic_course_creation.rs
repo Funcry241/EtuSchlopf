@@ -8,7 +8,7 @@ fn emitted(notes: &[MidiSeedNote], measures: usize) -> (String, MidiSeedRhythmic
     let mut plan = MidiSeedRhythmicCourses::create_primary_presentations(
         notes, measures, MEASURE_DIVISIONS,
     ).unwrap();
-    let (xml, _, _) = build_musicxml("Synthetic", notes, measures, &mut plan).unwrap();
+    let (xml, _, _) = build_musicxml("Synthetic", notes, measures, &mut plan, None).unwrap();
     plan.validate_seed_binding(&xml).unwrap();
     (xml, plan)
 }
@@ -86,9 +86,9 @@ fn stale_xml_and_unrepresented_extension_refuse_binding() {
 fn source_change_or_repeated_emission_is_not_continuation() {
     let notes = [note(11, 24, 1)];
     let mut fresh = MidiSeedRhythmicCourses::create_primary_presentations(&notes, 1, 384).unwrap();
-    assert!(build_musicxml("Synthetic", &[note(11, 24, 2)], 1, &mut fresh).is_err());
+    assert!(build_musicxml("Synthetic", &[note(11, 24, 2)], 1, &mut fresh, None).is_err());
     let (_, mut used) = emitted(&notes, 1);
-    assert!(build_musicxml("Synthetic", &notes, 1, &mut used).is_err());
+    assert!(build_musicxml("Synthetic", &notes, 1, &mut used, None).is_err());
 }
 
 #[test]
@@ -146,7 +146,7 @@ fn project_renaming_and_staff_permutation_preserve_coverage() {
     let notes = [note(7, 48, 1)];
     let (_, first) = emitted(&notes, 1);
     let mut second = MidiSeedRhythmicCourses::create_primary_presentations(&notes, 1, 384).unwrap();
-    let (xml, _, _) = build_musicxml("Another project name", &notes, 1, &mut second).unwrap();
+    let (xml, _, _) = build_musicxml("Another project name", &notes, 1, &mut second, None).unwrap();
     second.validate_seed_binding(&xml).unwrap();
     assert_eq!(first.courses[0].coverage, second.courses[0].coverage);
     let (_, permuted) = emitted(&[note(7, 48, 2)], 1);
@@ -173,4 +173,62 @@ pub(crate) fn arrangement_source_lengths_fixture(rows: &[(usize, i64, i64, u8, i
     emitted(&rows.iter().map(|&(source, pos, len, staff, midi)| MidiSeedNote {
         source_ordinal: source, pos, len, staff, midi,
     }).collect::<Vec<_>>(), count)
+}
+
+#[test]
+fn exact_pair_releases_keep_their_own_source_intervals() {
+    for (staff, start, pitch, short_pitch) in [
+        (1, 96, 72, 72), (2, 192, 52, 52),
+        (1, 96, 72, 67), (2, 192, 52, 57),
+    ] {
+        let source = |id, pos, len, midi| MidiSeedNote {
+            source_ordinal: id, pos, len, staff, midi,
+        };
+        let notes = [
+            source(4, start, 96, pitch), source(9, start, 48, short_pitch),
+            source(7, start + 48, 24, pitch + 2), source(11, start + 72, 24, pitch - 2),
+            source(12, start + 96, 24, pitch + 4),
+        ];
+        let (xml, plan) = emitted(&notes, 1);
+        for (id, span, separate) in [(4, start..start + 96, true), (9, start..start + 48, false)] {
+            let planned = plan.planned.iter().find(|n| n.source == Some(id)).unwrap();
+            assert_eq!(planned.interval, span);
+            assert_eq!(planned.independent, separate);
+            assert!(!planned.chord);
+            let written = plan.occurrences.iter().find(|n| n.source == Some(id)).unwrap();
+            assert!(!xml[written.bytes.clone()].contains("<chord"));
+        }
+
+        let mut reattack = notes;
+        reattack[3].midi = pitch;
+        let (_, plan) = emitted(&reattack, 1);
+        assert!(!plan.planned.iter().any(|n| n.independent));
+    }
+}
+
+#[test]
+fn exact_independent_release_can_pass_a_beat_and_an_exact_primary_chord() {
+    for (staff, start) in [(1, 72_i64), (2, 168)] {
+        let source = |id, offset: i64, len, midi| MidiSeedNote {
+            source_ordinal: id, pos: start + offset, len, staff, midi,
+        };
+        let notes = [
+            source(0, 0, 96, 70), source(1, 0, 24, 64),
+            source(2, 24, 48, 66), source(3, 24, 48, 62),
+            source(4, 72, 24, 67), source(5, 96, 24, 68),
+        ];
+        let (_, plan) = emitted(&notes, 1);
+        let sustain = plan.planned.iter().find(|note| note.source == Some(0)).unwrap();
+        assert!(sustain.independent);
+        // The final attack delimits the independent interval.
+        for note in notes.iter().filter(|note| note.pos < start + 96) {
+            let written = plan.occurrences.iter().find(|item| item.source == Some(note.source_ordinal)).unwrap();
+            assert_eq!(written.interval, note.pos..note.pos + note.len);
+        }
+
+        let mut chord_has_own_release = notes;
+        chord_has_own_release[3].len = 24;
+        let (_, plan) = emitted(&chord_has_own_release, 1);
+        assert!(!plan.planned.iter().any(|note| note.independent));
+    }
 }

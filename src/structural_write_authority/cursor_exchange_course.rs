@@ -622,6 +622,7 @@ impl CanonicalFinalChordStructuralPlan {
             xml: output.to_owned(),
             beam_surface,
             receipt: carried,
+            ..source.clone()
         };
         verify_final_pdf_source_occurrence_continuation(
             output,

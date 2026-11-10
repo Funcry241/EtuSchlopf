@@ -16,6 +16,7 @@ struct PartialBeatRawNote {
 #[derive(Debug, Clone)]
 struct PartialBeatNoteInfo {
     index: usize,
+    cursor_run: Option<usize>,
     start: i64,
     duration: i64,
     staff: String,
@@ -67,6 +68,7 @@ fn partial_beat_raw_notes(text: &str) -> Vec<PartialBeatRawNote> {
 fn partial_beat_note_infos(measure_text: &str, raw_notes: &[PartialBeatRawNote]) -> Vec<PartialBeatNoteInfo> {
     let mut infos = Vec::new();
     let mut cursor = 0_i64;
+    let mut cursor_run = Some(0_usize);
     let mut last_non_chord_start = 0_i64;
     let mut note_pos = 0_usize;
     let mut scan = 0_usize;
@@ -83,7 +85,11 @@ fn partial_beat_note_infos(measure_text: &str, raw_notes: &[PartialBeatRawNote])
         match kind {
             "backup" => {
                 let Some(end) = measure_text[pos..].find("</backup>").map(|e| pos + e + "</backup>".len()) else { break; };
-                cursor -= partial_beat_first_i64(&measure_text[pos..end], "duration").unwrap_or(0).max(0);
+                let rewind = partial_beat_first_i64(&measure_text[pos..end], "duration").unwrap_or(0);
+                cursor_run = cursor_run.and_then(|run| {
+                    (rewind > 0 && rewind == cursor).then_some(run + 1)
+                });
+                cursor -= rewind.max(0);
                 scan = end;
             }
             "forward" => {
@@ -105,6 +111,7 @@ fn partial_beat_note_infos(measure_text: &str, raw_notes: &[PartialBeatRawNote])
                 let existing_beams = raw.text.match_indices("<beam").count();
                 infos.push(PartialBeatNoteInfo {
                     index: raw.start,
+                    cursor_run,
                     start,
                     duration,
                     staff,

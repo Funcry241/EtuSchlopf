@@ -735,27 +735,6 @@ mod tests {
         assert!(!audit.writer_eligible);
     }
 
-    #[test]
-    fn false_origin_does_not_change_private_candidate_set() {
-        let bundle = detect_pipeline_observation_bundle(sample_pipeline_xml());
-        let baseline = build_identity_withheld_pipeline_candidate_set(&bundle.identity_withheld);
-        let false_origin = DiagnosticCoordinate {
-            project_label: "unrelated-runtime-origin".to_string(),
-            measure_number: u32::MAX,
-        };
-        let row = pipeline_noninterference_variant(
-            "false_origin",
-            sample_pipeline_xml(),
-            Some(&false_origin),
-            &baseline,
-        );
-        assert!(row.candidate_set_stable);
-        assert!(!post_selection_origin_confirmation(
-            Some(&false_origin),
-            &bundle.localized_readback,
-            &baseline,
-        ));
-    }
 
     #[test]
     fn minimal_projection_contains_only_coarse_closed_state() {

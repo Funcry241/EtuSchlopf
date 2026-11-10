@@ -172,10 +172,15 @@ fn prepare_joint_clef_write(input:&JointReadingOwnerInput,proposal:&c3_adapter::
     }
     crate::structural_write_authority::RustigClefSurfaceDecision::prepare_joint_course(&octave.post,&layers).map_err(|e|anyhow!("{e}"))
 }
-fn record_joint_search_result(label:&str,proposal:&c3_adapter::C3Proposal) {
+fn record_joint_search_result(label:&str,source:&str,proposal:&c3_adapter::C3Proposal) {
     for (staff,verdict) in &proposal.staves {
                 match verdict {
-                    c3_adapter::StaffVerdict::Solved(solved)=>crate::audit_only::c3_diagnostics::record(label,staff,"solved",&format!("IncumbentCost={:?}; SearchSelectedCost={:?}; StrictlyBetter={}; Complete={}",solved.outcome.incumbent_cost,solved.outcome.selected_cost,solved.outcome.improved,solved.outcome.complete)),
+                    c3_adapter::StaffVerdict::Solved(solved)=>{
+                        crate::audit_only::c3_diagnostics::record(label,staff,"solved",&format!("IncumbentCost={:?}; SearchSelectedCost={:?}; StrictlyBetter={}; Complete={}",solved.outcome.incumbent_cost,solved.outcome.selected_cost,solved.outcome.improved,solved.outcome.complete));
+                        let anchors=solved.anchors.iter().map(|anchor|(anchor.measure,anchor.at.parts())).collect::<Vec<_>>();
+                        crate::audit_only::c3_diagnostics::record_course_excursions(label,staff,source,
+                            &solved.domain,&solved.outcome,&anchors);
+                    },
                     c3_adapter::StaffVerdict::Unknown {reason}=>crate::audit_only::c3_diagnostics::record(label,staff,"unknown",reason),
                 }
     }
@@ -208,10 +213,10 @@ impl JointReadingCandidate for SolverCandidate {
         let render_capabilities=observe_joint_capabilities(render_input.bound_source())?;
         crate::audit_only::c3_diagnostics::phase("master_search");
         let mut master_proposal=master_input.c3_proposal(&master_capabilities,None).map_err(|e|anyhow!("{e:?}"))?;
-        record_joint_search_result("Master",&master_proposal);
+        record_joint_search_result("Master",master_input.bound_source(),&master_proposal);
         crate::audit_only::c3_diagnostics::phase("render_search");
         let mut render_proposal=render_input.c3_proposal(&render_capabilities,None).map_err(|e|anyhow!("{e:?}"))?;
-        record_joint_search_result("Render",&render_proposal);
+        record_joint_search_result("Render",render_input.bound_source(),&render_proposal);
         for (label,proposal) in [("Master",&master_proposal),("Render",&render_proposal)] {
             for (staff,verdict) in &proposal.staves {
                 if let c3_adapter::StaffVerdict::Unknown {reason}=verdict {

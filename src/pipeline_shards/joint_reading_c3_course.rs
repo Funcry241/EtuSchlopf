@@ -1,4 +1,4 @@
-//! C3's pure finite-course search. This file has no parser, writer or adoption authority.
+//! Existing pure finite-course search, now using the explicit C4 policy. This file has no parser, writer or adoption authority.
 //! An eventual owner adapter must prove the supplied graph and incumbent complete.
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -172,7 +172,10 @@ pub struct Domain {
     pub exit_group_crossing: bool,
 }
 
-/// h8,h7,h6,h5,h4,ko,uk,ks,gb,h3,ch,h2,h1, exactly in policy order.
+pub const POLICY_ID: &str = "joint_register_dp_c4_v1";
+pub const COST_COMPONENTS: [&str; 13] = ["h8", "h7", "h6", "h5", "h4", "ko", "uk", "ks", "gb", "ch", "h3", "h2", "h1"];
+
+/// h8,h7,h6,h5,h4,ko,uk,ks,gb,ch,h3,h2,h1, exactly in C4 policy order.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Cost(pub [u64; 13]);
 impl Cost {
@@ -211,7 +214,7 @@ fn transition(cost: &mut Cost, from: State, to: State, group: bool) -> Result<()
         cost.count(8, 1)?;
     }
     cost.count(
-        10,
+        9,
         u64::from(clef)
             + u64::from(octave && from.octave() != 0)
             + u64::from(octave && to.octave() != 0),
@@ -229,7 +232,7 @@ fn heads(cost: &mut Cost, layer: &Layer, state: State) -> Result<bool, Error> {
             0 => None,
             1 => Some(12),
             2 => Some(11),
-            3 => Some(9),
+            3 => Some(10),
             4 => Some(4),
             5 => Some(3),
             6 => Some(2),
@@ -254,7 +257,7 @@ fn first(domain: &Domain, state: State) -> Result<Option<Label>, Error> {
         path: vec![state],
     };
     match domain.entry {
-        Entry::Initial => label.cost.count(10, u64::from(state.octave() != 0))?,
+        Entry::Initial => label.cost.count(9, u64::from(state.octave() != 0))?,
         Entry::Carry {
             state: from,
             elapsed,
@@ -337,7 +340,7 @@ fn finish(domain: &Domain, age: Time, mut label: Label) -> Result<Option<Label>,
         label.cost.count(7, 1)?;
     }
     match domain.exit {
-        Exit::End => label.cost.count(10, u64::from(last.octave() != 0))?,
+        Exit::End => label.cost.count(9, u64::from(last.octave() != 0))?,
         Exit::Carry {
             state: to,
             remaining,

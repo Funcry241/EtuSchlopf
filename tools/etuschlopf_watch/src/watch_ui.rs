@@ -84,7 +84,7 @@ fn render(
 
     if sessions.is_empty() {
         println!("Warte auf den ersten Runtime-Snapshot …");
-        println!("Die Laufansicht öffnet sich automatisch.");
+        println!("Terminalansicht aktiv.");
         let _ = io::stdout().flush();
         return;
     }

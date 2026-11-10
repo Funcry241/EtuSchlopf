@@ -209,7 +209,7 @@ fn oracle_cost(d: &Domain, path: &[State]) -> Option<Cost> {
     };
     let mut borders = Vec::new();
     match d.entry {
-        Entry::Initial => costs[10] += u64::from(octave(path[0]) != 0),
+        Entry::Initial => costs[9] += u64::from(octave(path[0]) != 0),
         Entry::Carry { state: from, .. } => {
             if !d.layers[0].incoming[from.index() as usize][path[0].index() as usize] {
                 return None;
@@ -237,7 +237,7 @@ fn oracle_cost(d: &Domain, path: &[State]) -> Option<Cost> {
                 0 => (),
                 1 => costs[12] += 1,
                 2 => costs[11] += 1,
-                3 => costs[9] += 1,
+                3 => costs[10] += 1,
                 4 => costs[4] += 1,
                 5 => costs[3] += 1,
                 6 => costs[2] += 1,
@@ -264,7 +264,7 @@ fn oracle_cost(d: &Domain, path: &[State]) -> Option<Cost> {
         return None;
     }
     match d.exit {
-        Exit::End => costs[10] += u64::from(octave(last) != 0),
+        Exit::End => costs[9] += u64::from(octave(last) != 0),
         Exit::Carry { state: to, .. } => borders.push((last, to, d.exit_group_crossing)),
     }
     for (a, b, group) in borders {
@@ -272,7 +272,7 @@ fn oracle_cost(d: &Domain, path: &[State]) -> Option<Cost> {
         let change_octave = octave(a) != octave(b);
         costs[5] += u64::from(change_clef && change_octave);
         costs[8] += u64::from(a != b && group);
-        costs[10] += u64::from(change_clef)
+        costs[9] += u64::from(change_clef)
             + u64::from(change_octave && octave(a) != 0)
             + u64::from(change_octave && octave(b) != 0);
     }
@@ -364,7 +364,7 @@ fn single_first_last_and_exact_bar_sections_have_expected_costs() {
     }
     let result = solve(&d, None).unwrap();
     assert_eq!(result.selected_cost.0[7], 2);
-    assert_eq!(result.selected_cost.0[10], 1);
+    assert_eq!(result.selected_cost.0[9], 1);
 }
 
 #[test]
@@ -411,7 +411,7 @@ fn simultaneous_component_changes_and_non_loco_returns_are_not_free() {
     let result = solve(&d, None).unwrap();
     assert_eq!(result.selected_cost.0[5], 2); // Two clef + mapping transitions.
     assert_eq!(result.selected_cost.0[8], 2);
-    assert_eq!(result.selected_cost.0[10], 4);
+    assert_eq!(result.selected_cost.0[9], 4);
     assert_eq!(
         Some(result.selected_cost),
         oracle_cost(&d, &result.selected)
@@ -423,13 +423,13 @@ fn necessary_double_octave_has_start_and_end_operations() {
     let mut d = domain(vec![layer(51, (1, 1), 3)]);
     d.layers[0].allowed = vec![state(3)];
     let result = solve(&d, None).unwrap();
-    assert_eq!(result.selected_cost.0[10], 2);
+    assert_eq!(result.selected_cost.0[9], 2);
     assert_eq!(result.selected_cost.0[6], 0);
     d.layers[0].incumbent = state(9);
     d.layers[0].allowed = vec![state(9)];
     d.layers[0].heads[0].diatonic = 10;
     let result = solve(&d, None).unwrap();
-    assert_eq!(result.selected_cost.0[10], 2);
+    assert_eq!(result.selected_cost.0[9], 2);
     assert_eq!(result.selected_cost.0[6], 0);
 }
 
@@ -618,4 +618,26 @@ fn policy_priority_is_lexicographic_and_never_a_weighted_tradeoff() {
     let mut many_short = Cost::default();
     many_short.0[7] = 1_000_000;
     assert!(many_short < unconventional);
+}
+
+#[test]
+fn versioned_sign_priority_accepts_three_ledgers_without_weakening_head_protection() {
+    assert_eq!(POLICY_ID, "joint_register_dp_c4_v1");
+    assert_eq!(COST_COMPONENTS[9..11], ["ch", "h3"]);
+    let make = |middle| {
+        let mut d = domain(vec![layer(35, (1, 1), 0), layer(middle, (1, 1), 5), layer(35, (1, 1), 0)]);
+        for l in &mut d.layers { l.allowed = vec![state(0), state(5)]; }
+        d
+    };
+    let d = make(24);
+    let result = solve(&d, None).unwrap();
+    assert_eq!(result.selected, vec![state(0); 3]);
+    assert_eq!(result.selected_cost.0[9], 0);
+    assert_eq!(result.selected_cost.0[10], 1);
+    assert_eq!((result.selected_cost, result.selected.clone()), enumerate(&d));
+    let protected = make(21);
+    let result = solve(&protected, None).unwrap();
+    assert_eq!(result.selected, vec![state(0), state(5), state(0)]);
+    assert!(evaluate_course(&protected, &[state(0); 3]).is_err());
+    assert_eq!((result.selected_cost, result.selected.clone()), enumerate(&protected));
 }

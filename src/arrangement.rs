@@ -536,7 +536,22 @@
         }
         let mut metas = collect_note_metas(text, &raw_notes);
         for meta in &mut metas { meta.metric = rhythm_context; }
-        let (hidden, support_stats) = select_hidden_notes_for_pianist_profile(&metas, profile);
+        let independent = profile.rhythmic_courses.map_or_else(BTreeSet::new, |seed| {
+            seed.independent_note_indices(measure_number - 1)
+        });
+        let mut compact_chord_members = BTreeSet::new();
+        if profile.preserve_reference && let Some(courses) = course_measure.as_deref() {
+            compact_chord_members.extend(bound_compact_chord_members(&metas, |notes| {
+                courses.binds_distinct_sources(notes)
+            }));
+        }
+        let bound_source_voices = profile.rhythmic_courses
+            .is_some_and(crate::midi_seed::MidiSeedRhythmicCourses::has_bound_source_voices);
+        let (hidden, support_stats) = if bound_source_voices {
+            (BTreeSet::new(), LeftHandSupportStats::default())
+        } else {
+            select_hidden_notes_for_pianist_profile(&metas, &independent, &compact_chord_members, profile)
+        };
         let mut stats = ArrangementStats {
             ..ArrangementStats::default()
         };
@@ -552,6 +567,7 @@
             .human_potential_structural_target
             .is_none_or(|target| target.measure_ordinal == measure_number);
         let human_potential = if profile.preserve_reference
+            && !bound_source_voices
             && profile.human_potential_enabled
             && human_potential_target_matches
         {
@@ -794,14 +810,118 @@
         }
         infos
     }
-    fn select_hidden_notes_for_pianist_profile(metas: &[NoteMeta], profile: ArrangementProfile) -> (BTreeSet<usize>, LeftHandSupportStats) {
+    fn bound_compact_chord_members(
+        metas: &[NoteMeta],
+        binds_distinct_sources: impl Fn(std::ops::Range<usize>) -> bool,
+    ) -> impl Iterator<Item = usize> {
+        let mut onsets = BTreeMap::<_, Vec<_>>::new();
+        for note in metas.iter().filter(|note| note.midi.is_some() && !note.is_rest) {
+            onsets.entry((note.staff, note.start)).or_default().push(note);
+        }
+
+        onsets.into_values().filter_map(move |notes| {
+            let head = notes.first()?;
+            // Use the same count and span bounds as the simultaneous-hand checks.
+            if !(2..=5).contains(&notes.len())
+                || head.is_chord
+                || notes.iter().enumerate().any(|(offset, note)| {
+                    head.raw_idx.checked_add(offset) != Some(note.raw_idx)
+                        || note.voice != head.voice || note.duration <= 0
+                        || (offset > 0 && !note.is_chord)
+                })
+            {
+                return None;
+            }
+            let pitches = notes.iter().filter_map(|note| note.midi).collect::<BTreeSet<_>>();
+            let span = pitches.first()?.abs_diff(*pitches.last()?);
+            let end = head.raw_idx.checked_add(notes.len())?;
+            (pitches.len() == notes.len()
+                && span <= 12
+                && binds_distinct_sources(head.raw_idx..end))
+                .then_some(head.raw_idx + 1..end)
+        }).flatten()
+    }
+    #[cfg(test)]
+    mod compact_chord_visibility_tests {
+        use super::*;
+
+        fn note(raw_idx: usize, start: i64, midi: i32, is_chord: bool) -> NoteMeta {
+            NoteMeta {
+                raw_idx, start, midi: Some(midi), is_chord, is_rest: false,
+                metric: RhythmContext::default(), duration: 24, staff: PianoStaff::Right,
+                voice: "lead".into(),
+            }
+        }
+
+        #[test]
+        fn density_counts_a_bound_dyad_as_one_onset() {
+            for (offset, root) in [(24, 54), (60, 61)] {
+                let metas = [
+                    note(0, offset, root + 7, false),
+                    note(1, offset, root, true),
+                    note(2, offset + 24, root + 8, false),
+                ];
+                let mut before = BTreeSet::new();
+                hide_excess_measure_density(&metas, &BTreeSet::new(), &mut before, PianoStaff::Right, 2);
+                assert_eq!(before, BTreeSet::from([1]));
+
+                let bound = bound_compact_chord_members(&metas, |notes| notes.len() == 2).collect();
+                assert_eq!(bound, BTreeSet::from([1]));
+                let mut after = BTreeSet::new();
+                hide_excess_measure_density(&metas, &bound, &mut after, PianoStaff::Right, 2);
+                assert!(after.is_empty());
+                assert_eq!(bound_compact_chord_members(&metas, |_| false).count(), 0);
+            }
+        }
+
+        #[test]
+        fn density_exemption_requires_a_single_compact_distinct_chord() {
+            let head = note(0, 0, 62, false);
+            for other in [note(1, 0, 62, true), note(1, 0, 75, true), note(1, 0, 67, false)] {
+                assert_eq!(bound_compact_chord_members(&[head.clone(), other], |_| true).count(), 0);
+            }
+            let six = [
+                head, note(1, 0, 63, true), note(2, 0, 64, true),
+                note(3, 0, 65, true), note(4, 0, 66, true), note(5, 0, 67, true),
+            ];
+            assert_eq!(bound_compact_chord_members(&six, |_| true).count(), 0);
+        }
+
+        #[test]
+        fn compact_chord_keeps_all_members_through_existing_visibility_passes() {
+            let profile = ArrangementProfile { preserve_reference: true, ..ArrangementProfile::default() };
+            for (offset, root) in [(24, 49), (60, 57)] {
+                let notes = [
+                    note(0, offset, root + 9, false), note(1, offset, root + 6, true),
+                    note(2, offset, root + 3, true), note(3, offset, root, true),
+                ];
+                let (old, _) = select_hidden_notes_for_pianist_profile(
+                    &notes, &BTreeSet::new(), &BTreeSet::new(), profile,
+                );
+                assert_eq!(old, BTreeSet::from([2, 3]));
+                let compact = bound_compact_chord_members(&notes, |indices| indices == (0..4)).collect();
+                assert_eq!(compact, BTreeSet::from([1, 2, 3]));
+                let (new, _) = select_hidden_notes_for_pianist_profile(
+                    &notes, &BTreeSet::new(), &compact, profile,
+                );
+                assert!(new.is_empty());
+            }
+        }
+    }
+
+    fn select_hidden_notes_for_pianist_profile(
+        metas: &[NoteMeta],
+        independent: &BTreeSet<usize>,
+        compact_chord_members: &BTreeSet<usize>,
+        profile: ArrangementProfile,
+    ) -> (BTreeSet<usize>, LeftHandSupportStats) {
         let mut hidden = BTreeSet::new();
         let mut support_stats = LeftHandSupportStats::default();
         // v0.1.30: pianistische Rekonstruktion mit zwei moeglichen Stimmen pro Hand.
         // Ziel: weg vom DAW-Import, aber nicht mehr auf eine duenne Einlinienfassung
         // zusammenschneiden. Jede Hand darf eine Haupt- und eine Nebenstimme behalten.
-        hide_dense_chord_tones(metas, &mut hidden, profile);
-        hide_parallel_import_notes(metas, &mut hidden, profile);
+        hide_dense_chord_tones(metas, compact_chord_members, &mut hidden, profile);
+        hide_parallel_import_notes(metas, compact_chord_members, &mut hidden, profile);
         hide_secondary_voice_notes(metas, &mut hidden, profile);
         hide_import_artifact_rests();
         let (right_limit, left_limit) = if profile.preserve_reference {
@@ -812,8 +932,9 @@
         } else {
             (12, 8)
         };
-        hide_excess_measure_density(metas, &mut hidden, PianoStaff::Right, right_limit);
-        hide_excess_measure_density(metas, &mut hidden, PianoStaff::Left, left_limit);
+        let outside_density_budget = independent.union(compact_chord_members).copied().collect();
+        hide_excess_measure_density(metas, &outside_density_budget, &mut hidden, PianoStaff::Right, right_limit);
+        hide_excess_measure_density(metas, &outside_density_budget, &mut hidden, PianoStaff::Left, left_limit);
         if profile.preserve_reference {
             let before = hidden.len();
             restore_left_hand_bass_continuity(metas, &mut hidden);
@@ -1598,9 +1719,9 @@
             })
             .count()
     }
-    fn hide_dense_chord_tones(metas: &[NoteMeta], hidden: &mut BTreeSet<usize>, profile: ArrangementProfile) {
+    fn hide_dense_chord_tones(metas: &[NoteMeta], compact_chord_members: &BTreeSet<usize>, hidden: &mut BTreeSet<usize>, profile: ArrangementProfile) {
         let mut by_slot: BTreeMap<(PianoStaff, i64), Vec<&NoteMeta>> = BTreeMap::new();
-        for meta in metas.iter().filter(|m| !m.is_rest && m.midi.is_some()) {
+        for meta in metas.iter().filter(|m| !m.is_rest && m.midi.is_some() && !compact_chord_members.contains(&m.raw_idx)) {
             by_slot.entry((meta.staff, meta.start)).or_default().push(meta);
         }
         for ((staff, _start), group) in by_slot {
@@ -1635,15 +1756,15 @@
             }
         }
     }
-    fn hide_parallel_import_notes(metas: &[NoteMeta], hidden: &mut BTreeSet<usize>, profile: ArrangementProfile) {
+    fn hide_parallel_import_notes(metas: &[NoteMeta], compact_chord_members: &BTreeSet<usize>, hidden: &mut BTreeSet<usize>, profile: ArrangementProfile) {
         let mut by_slot: BTreeMap<(PianoStaff, i64), Vec<&NoteMeta>> = BTreeMap::new();
         for meta in metas
             .iter()
-            .filter(|m| !m.is_rest && m.midi.is_some() && !hidden.contains(&m.raw_idx))
+            .filter(|m| !m.is_rest && m.midi.is_some() && !compact_chord_members.contains(&m.raw_idx) && !hidden.contains(&m.raw_idx))
         {
             by_slot.entry((meta.staff, meta.start)).or_default().push(meta);
         }
-        for ((staff, _start), group) in by_slot {
+        for ((staff, _start), mut group) in by_slot {
             if group.len() <= 1 {
                 continue;
             }
@@ -1653,17 +1774,18 @@
                 (PianoStaff::Right, false) => 1,
                 (PianoStaff::Left, false) => 1,
             };
-            // Bevorzugt echte Stimmenanker, keine losgelösten <chord/>-Töne.
-            let mut candidates: Vec<&NoteMeta> = group.iter().copied().filter(|m| !m.is_chord).collect();
-            if candidates.is_empty() {
-                candidates = group.clone();
-            }
-            match staff {
-                PianoStaff::Right => candidates.sort_by_key(|m| std::cmp::Reverse(m.midi.unwrap_or(0))),
-                PianoStaff::Left => candidates.sort_by_key(|m| m.midi.unwrap_or(127)),
-            }
-            let keep = candidates
-                .into_iter()
+            // Reserve slots for onset carriers first. Chord members may fill
+            // the remaining slots at this onset.
+            group.sort_by_key(|note| {
+                let pitch = note.midi.unwrap_or_default();
+                let pitch_priority = match staff {
+                    PianoStaff::Right => -pitch,
+                    PianoStaff::Left => pitch,
+                };
+                (note.is_chord, pitch_priority)
+            });
+            let keep = group
+                .iter()
                 .take(keep_count)
                 .map(|m| m.raw_idx)
                 .collect::<BTreeSet<_>>();
@@ -1755,13 +1877,16 @@
     }
     fn hide_excess_measure_density(
         metas: &[NoteMeta],
+        outside_density_budget: &BTreeSet<usize>,
         hidden: &mut BTreeSet<usize>,
         staff: PianoStaff,
         max_visible: usize,
     ) {
         let mut visible: Vec<&NoteMeta> = metas
             .iter()
-            .filter(|m| m.staff == staff && !m.is_rest && !hidden.contains(&m.raw_idx))
+            // Bound independent sustains and compact dyad members have separate admission.
+            .filter(|m| m.staff == staff && !m.is_rest
+                && !outside_density_budget.contains(&m.raw_idx) && !hidden.contains(&m.raw_idx))
             .collect();
         if visible.len() <= max_visible {
             return;
@@ -1783,7 +1908,9 @@
             }),
         }
         let remove_count = visible.len().saturating_sub(max_visible);
-        for meta in visible.into_iter().take(remove_count) {
+        // A density limit can thin chord members, but hiding an onset carrier
+        // would replace the pitched note with a rest in the arrangement.
+        for meta in visible.into_iter().take(remove_count).filter(|meta| meta.is_chord) {
             hidden.insert(meta.raw_idx);
         }
     }

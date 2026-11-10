@@ -111,6 +111,16 @@ fn plan_strict_staff_duplicate_same_pitch_suppression(
             if group.len() < 2 {
                 continue;
             }
+            let has_distinct_opposed_stems = group.iter().any(|up| {
+                !up.is_chord && up.fragment.contains("<stem>up</stem>")
+                    && group.iter().any(|down| {
+                        !down.is_chord && up.voice != down.voice
+                            && down.fragment.contains("<stem>down</stem>")
+                    })
+            });
+            if has_distinct_opposed_stems {
+                continue;
+            }
             group.sort_by_key(|span| {
                 (
                     if span.is_chord { 1 } else { 0 },

@@ -183,18 +183,22 @@ mod tests {
 
         let mut aggregator = SessionAggregator::new();
         let deadline = Instant::now() + Duration::from_millis(500);
-        let mut seen = 0;
-        while Instant::now() < deadline && seen < 2 {
+        let mut revision_transition = false;
+        while Instant::now() < deadline && !revision_transition {
             let report = receiver
                 .drain_available(&mut aggregator)
                 .expect("drain receiver");
-            seen += report.datagrams_seen;
-            if seen < 2 {
+            assert_eq!(report.malformed, 0);
+            assert_eq!(report.semantic_conflicts, 0);
+            // Revision 2 was either superseded by 3 or received after it.
+            // Reannouncements of either datagram do not prove convergence.
+            revision_transition = report.advanced > 0 || report.stale_ignored > 0;
+            if !revision_transition {
                 thread::sleep(Duration::from_millis(5));
             }
         }
 
-        assert_eq!(seen, 2);
+        assert!(revision_transition);
         assert_eq!(
             aggregator
                 .source("session-a", "project:6")
@@ -208,29 +212,44 @@ mod tests {
     #[test]
     fn malformed_datagram_is_observed_but_does_not_poison_aggregator() {
         let receiver = bind_ephemeral_receiver();
-        let target = receiver.local_addr().expect("receiver address");
+        let address = receiver.local_addr().expect("receiver address");
         let sender = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0))
             .expect("bind sender");
-        sender.send_to(b"not-a-snapshot", target).expect("send malformed");
-        send_snapshot(&sender, target, &snapshot(1));
+        sender.send_to(b"not-a-snapshot", address).expect("send malformed");
+        let expected = snapshot(1);
+        send_snapshot(&sender, address, &expected);
+        send_snapshot(&sender, address, &expected);
 
         let mut aggregator = SessionAggregator::new();
         let deadline = Instant::now() + Duration::from_millis(500);
         let mut malformed = 0;
-        let mut accepted = 0;
-        while Instant::now() < deadline && malformed + accepted < 2 {
+        let mut new_sources = 0;
+        let mut reannounced = 0;
+        while Instant::now() < deadline && (malformed == 0 || reannounced == 0) {
             let report = receiver
                 .drain_available(&mut aggregator)
                 .expect("drain receiver");
             malformed += report.malformed;
-            accepted += report.new_sources + report.advanced + report.reannounced;
-            if malformed + accepted < 2 {
+            new_sources += report.new_sources;
+            reannounced += report.reannounced;
+            assert_eq!(report.advanced, 0);
+            assert_eq!(report.stale_ignored, 0);
+            assert_eq!(report.semantic_conflicts, 0);
+            if malformed == 0 || reannounced == 0 {
                 thread::sleep(Duration::from_millis(5));
             }
         }
 
-        assert_eq!(malformed, 1);
-        assert_eq!(accepted, 1);
+        assert!(malformed > 0);
+        assert!(reannounced > 0);
+        assert_eq!(new_sources, 1);
+        assert_eq!(
+            aggregator
+                .source("session-a", "project:6")
+                .expect("stored source")
+                .snapshot(),
+            &expected
+        );
         assert_eq!(aggregator.source_count("session-a"), 1);
     }
 }

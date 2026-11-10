@@ -15,6 +15,8 @@ Der Name darf dich zum Schmunzeln bringen. Die Mathematik dahinter nehmen wir er
 
 Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI und WAV als Eingabe
 
+Der Quellstand auf `main` ist r1721. Der Windows-Lauf für BWV 847 ist [hier dokumentiert](docs/evidence/r1721/README.md).
+
 [Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1684-windows-preview) ·
 [Erstes Stück](#dein-erstes-stück) · [Grenzen der Testversion](#aktueller-stand) ·
 [Technische Dokumentation](docs/DEVELOPMENT.md) · [Mathematik dahinter](docs/MATHEMATIK.md)

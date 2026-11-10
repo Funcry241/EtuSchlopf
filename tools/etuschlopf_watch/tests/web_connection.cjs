@@ -59,30 +59,34 @@ function model() {
       const m = model(); m.sessions[0].sources.push(observation('Synthetic Failed', 'project', 'failed'));
       const f = await fixture(m);
       try {
-        await f.p.waitForFunction(() => document.querySelector('#runStatusLabel').textContent === 'FAILED');
+        await f.p.waitForFunction(() => document.querySelector('#runStatusLabel').textContent === 'Läuft · 1 Fehler');
         f.streams[0].end(); await transport(f.p, 'reconnecting');
         assert.equal(await f.p.evaluate(() => events.readyState), 0);
         await transport(f.p, 'live'); assert.ok(f.connections() >= 2);
         assert.equal(await f.p.locator('.projectrow.running').count(), 1);
-        assert.equal(await f.p.locator('#runStatusLabel').textContent(), 'FAILED');
+        assert.equal(await f.p.locator('#runStatusLabel').textContent(), 'Läuft · 1 Fehler');
       } finally { await f.close(); }
     });
     await check('an empty observation stays waiting and reconnects', async () => {
       const m = model(); m.sessions[0].sources = []; const f = await fixture(m);
-      try { assert.equal(await f.p.locator('#runStatusLabel').textContent(), 'WAITING');
+      try { assert.equal(await f.p.locator('#runStatusLabel').textContent(), 'Warte auf Laufdaten');
         f.streams[0].end(); await transport(f.p, 'reconnecting'); await transport(f.p, 'live');
-        assert.equal(await f.p.locator('#runStatusLabel').textContent(), 'WAITING');
+        assert.equal(await f.p.locator('#runStatusLabel').textContent(), 'Warte auf Laufdaten');
       } finally { await f.close(); }
     });
     await check('MQTT loss is observed while the browser stream stays open', async () => {
       const f = await fixture();
       try { const m = model(); m.mqtt = 'reconnecting'; f.send(m); await transport(f.p, 'reconnecting');
+        const before = await f.p.locator('.clock[data-age-kind="run"]').allTextContents();
+        await f.p.waitForTimeout(1100);
+        assert.deepEqual(await f.p.locator('.clock[data-age-kind="run"]').allTextContents(), before);
+        assert.match(await f.p.locator('#transport').textContent(), /Stand von vor/);
         assert.equal(await f.p.evaluate(() => events.readyState), 1);
         f.send(model()); await transport(f.p, 'live');
       } finally { await f.close(); }
     });
     await check('project completion waits for the actual launcher terminal outcome', async () => {
-      for (const [status, color, label] of [['completed', 'yellow', 'GELB'], ['failed', 'red', 'ROT'], ['cancelled', 'yellow', 'GELB']]) {
+      for (const [status, color, label] of [['completed', 'yellow', 'Abgeschlossen · Freigabe prüfen'], ['failed', 'red', 'Fehlgeschlagen'], ['cancelled', 'yellow', 'Abgebrochen']]) {
         for (const child of ['completed', 'running']) {
         const m = model(); m.sessions[0].sources[1].source.status = child; const f = await fixture(m);
         try { await transport(f.p, 'live'); assert.equal(await f.p.evaluate(() => events.readyState), 1);
@@ -90,6 +94,7 @@ function model() {
           const clocks = await f.p.locator('.clock[data-age-kind="run"]').allTextContents();
           await f.p.waitForTimeout(child === 'running' ? 1100 : 200);
           assert.deepEqual(await f.p.locator('.clock[data-age-kind="run"]').allTextContents(), clocks);
+          assert.equal(await f.p.locator('.activepulse').count(), 0);
           assert.equal(f.connections(), 1); assert.equal(await f.p.locator('#runStatusLabel').textContent(), label);
         } finally { await f.close(); }
         }
@@ -103,7 +108,7 @@ function model() {
         await terminal(f); await f.stop();
         assert.equal(await f.p.locator('.title .pdf-link').getAttribute('href'), href);
         assert.equal(await f.p.evaluate(async href => (await fetch(href)).text(), href), PDF);
-        assert.equal(await f.p.locator('#runStatusLabel').textContent(), 'GELB');
+        assert.equal(await f.p.locator('#runStatusLabel').textContent(), 'Abgeschlossen · Freigabe prüfen');
       } finally { await f.close(); }
     });
     await check('closing the observation stream does not abort an in-flight PDF', async () => {
@@ -120,9 +125,9 @@ function model() {
     });
     await check('a permanently closed transport cannot invent a completed run', async () => {
       const f = await fixture(model(), { denyReconnect: true });
-      try { f.streams[0].end(); await transport(f.p, 'closed');
+      try { f.streams[0].end(); await transport(f.p, 'lost');
         assert.equal(await f.p.evaluate(() => events.readyState), 2);
-        assert.equal(await f.p.locator('#runStatusLabel').textContent(), 'RUNNING');
+        assert.equal(await f.p.locator('#runStatusLabel').textContent(), 'Läuft');
       } finally { await f.close(); }
     });
     assert.deepEqual(errors, []); console.log(`${passed} real-network browser scenarios passed`);

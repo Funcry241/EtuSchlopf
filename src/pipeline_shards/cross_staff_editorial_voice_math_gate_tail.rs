@@ -877,6 +877,12 @@ fn run_editorial_voice_decision_pass(best: &mut SolverCandidate, options: &Check
         ..EditorialVoiceDecisionStats::default()
     };
 
+    // A declared source voice can be sparse by design. This owner may
+    // propose reductions only for voices inferred by the arranger.
+    if best.midi_seed_stats.rhythmic_courses.has_bound_source_voices() {
+        return Ok(stats);
+    }
+
     let mut iteration_seed = 780_000_usize;
     let max_normalized_accepts = 1usize;
     for _round in 0..max_normalized_accepts {

@@ -291,3 +291,22 @@ fn final_guard_composition_refuses_adoption_without_original_receipts() {
     assert!(refusal.is_err()); assert_eq!(master.document(), before);
     assert!(master.lineage().lineage_continuity_holds(&before));
 }
+
+#[test]
+fn exact_head_suppression_preserves_unequal_written_releases() {
+    let note = |duration, voice| format!(
+        "<note><pitch><step>G</step><octave>4</octave></pitch><duration>{duration}</duration><voice>{voice}</voice><staff>1</staff></note>"
+    );
+    let shorter = note(48, 1);
+    let longer = note(96, 1);
+    let cursor = "<backup><duration>48</duration></backup>";
+    let mut xml = format!(
+        "<score-partwise><part id='synthetic'><measure>{shorter}{cursor}{shorter}{cursor}{longer}</measure></part></score-partwise>"
+    );
+    let (hidden, receipts) = hide_exact_duplicate_visible_noteheads(&mut xml);
+    assert_eq!(hidden, 1);
+    assert_eq!(receipts.len(), 1);
+    let notes = parse_atomic_notes(&xml);
+    assert_eq!(notes.len(), 3);
+    assert_eq!(notes.iter().filter(|n| n.visible).map(|n| n.duration).collect::<Vec<_>>(), [48, 96]);
+}

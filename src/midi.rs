@@ -1,7 +1,7 @@
 //! Productive fail-closed Standard MIDI File decoder.
 //!
 //! Supports SMF formats 0 and 1 with PPQ time division, Running Status, Note-On/Note-Off,
-//! tempo and chronological time-signature metadata. Notes use an exact integer
+//! tempo, chronological time signatures and unambiguous opening key metadata. Notes use an exact integer
 //! time domain, retaining 96 divisions whenever possible. This isolated decoder
 //! grants no hand/staff, solver or writer policy.
 
@@ -42,8 +42,36 @@ struct ActiveNote {
     note_on: SourceEventLocator,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct MidiKeySignature {
+    pub(crate) fifths: i8,
+    pub(crate) minor: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum MidiVoiceRole {
+    Soprano,
+    Alto,
+    Tenor,
+    Bass,
+}
+
+impl MidiVoiceRole {
+    fn from_track_name(name: &[u8]) -> Option<Self> {
+        let name = std::str::from_utf8(name).ok()?.trim();
+        [
+            ("Soprano", Self::Soprano),
+            ("Alto", Self::Alto),
+            ("Tenor", Self::Tenor),
+            ("Bass", Self::Bass),
+        ].into_iter().find_map(|(label, role)| name.eq_ignore_ascii_case(label).then_some(role))
+    }
+}
+
 #[derive(Debug)]
 struct ParsedMidi {
+    key_events: Vec<(u64, Option<MidiKeySignature>)>,
+    voice_roles: Vec<Option<MidiVoiceRole>>,
     meter_changes: Vec<MeterChange>,
     format: u16,
     tracks: u16,
@@ -55,6 +83,8 @@ struct ParsedMidi {
 
 #[derive(Debug, Clone)]
 pub(crate) struct DecodedMidiSource {
+    pub(crate) opening_key_signature: Option<MidiKeySignature>,
+    pub(crate) voice_roles: Vec<Option<MidiVoiceRole>>,
     pub(crate) time_domain: SourceTimeDomain,
     pub(crate) metric_timeline: MetricTimeline,
     pub(crate) format: u16,
@@ -87,7 +117,16 @@ fn decode_standard_midi_bytes(data: &[u8]) -> anyhow::Result<DecodedMidiSource> 
         Ok::<_, anyhow::Error>(extent.max(end))
     })?;
     let metric_timeline = MetricTimeline::from_midi(time_domain, &parsed.meter_changes, extent)?;
+    // The seed can write a constant key for the whole score. Require an
+    // explicit opening event and agreement across all tracks and repeats.
+    let opening_key_signature = parsed.key_events.iter().find_map(|&(tick, key)| {
+        (tick == 0).then_some(key)
+    }).flatten().filter(|&opening| {
+        parsed.key_events.iter().all(|&(_, key)| key == Some(opening))
+    });
     Ok(DecodedMidiSource {
+        opening_key_signature,
+        voice_roles: parsed.voice_roles,
         time_domain,
         metric_timeline,
         format: parsed.format,
@@ -142,6 +181,8 @@ fn parse_midi(data: &[u8]) -> anyhow::Result<ParsedMidi> {
     let mut tempo_microseconds_per_quarter = Vec::new();
     let mut time_signatures = Vec::new();
     let mut meter_changes = Vec::new();
+    let mut key_events = Vec::new();
+    let mut voice_roles = Vec::with_capacity(usize::from(tracks));
     for track_index in 0..usize::from(tracks) {
         if data.get(pos..pos + 4) != Some(&MIDI_TRACK[..]) {
             return Err(anyhow!("MIDI-Track {track_index}: MTrk-Kennung fehlt"));
@@ -155,14 +196,16 @@ fn parse_midi(data: &[u8]) -> anyhow::Result<ParsedMidi> {
         if end > data.len() {
             return Err(anyhow!("MIDI-Track {track_index} ist abgeschnitten"));
         }
-        parse_track(
+        let role = parse_track(
             &data[body..end],
             track_index,
             &mut note_events,
             &mut tempo_microseconds_per_quarter,
             &mut time_signatures,
             &mut meter_changes,
+            &mut key_events,
         )?;
+        voice_roles.push(role);
         pos = end;
     }
     if pos != data.len() {
@@ -177,6 +220,8 @@ fn parse_midi(data: &[u8]) -> anyhow::Result<ParsedMidi> {
     time_signatures.dedup();
 
     Ok(ParsedMidi {
+        key_events,
+        voice_roles,
         meter_changes,
         format,
         tracks,
@@ -194,12 +239,14 @@ fn parse_track(
     tempos: &mut Vec<u32>,
     time_signatures: &mut Vec<(u8, u16)>,
     meter_changes: &mut Vec<MeterChange>,
-) -> anyhow::Result<()> {
+    key_events: &mut Vec<(u64, Option<MidiKeySignature>)>,
+) -> anyhow::Result<Option<MidiVoiceRole>> {
     let mut pos = 0usize;
     let mut tick = 0u64;
     let mut running_status = None;
     let mut event_index = 0usize;
     let mut end_of_track_seen = false;
+    let mut track_name = None;
 
     while pos < track.len() {
         let delta = u64::from(read_variable_length(track, &mut pos)?);
@@ -272,6 +319,14 @@ fn parse_track(
                     .map_err(|_| anyhow!("MIDI-Track {track_index}: Meta-Länge überläuft"))?;
                 let payload = take_slice(track, &mut pos, size, track_index)?;
                 match meta_type {
+                    0x03 => {
+                        let role = if track_name.is_none() && tick == 0 {
+                            MidiVoiceRole::from_track_name(payload)
+                        } else {
+                            None
+                        };
+                        track_name = Some(role);
+                    }
                     0x2f => {
                         if !payload.is_empty() {
                             return Err(anyhow!(
@@ -296,6 +351,15 @@ fn parse_track(
                                 | (u32::from(payload[1]) << 8)
                                 | u32::from(payload[2]),
                         );
+                    }
+                    0x59 => {
+                        let key = match payload {
+                            &[fifths, mode] if (-7..=7).contains(&(fifths as i8)) && mode <= 1 => {
+                                Some(MidiKeySignature { fifths: fifths as i8, minor: mode == 1 })
+                            }
+                            _ => None,
+                        };
+                        key_events.push((tick, key));
                     }
                     0x58 => {
                         if payload.len() != 4 {
@@ -330,7 +394,7 @@ fn parse_track(
     if !end_of_track_seen {
         return Err(anyhow!("MIDI-Track {track_index}: End-of-Track fehlt"));
     }
-    Ok(())
+    Ok(track_name.flatten())
 }
 
 fn pair_and_normalize_note_events(
@@ -560,6 +624,8 @@ mod tests {
     fn decoder_rejects_lossy_ppq_normalization() {
         let parsed = ParsedMidi {
             meter_changes: Vec::new(),
+            key_events: Vec::new(),
+            voice_roles: vec![None],
             format: 0,
             tracks: 1,
             ppq: 100,

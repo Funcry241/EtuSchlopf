@@ -434,6 +434,7 @@ fn real_main() -> anyhow::Result<i32> {
             no_pdf: cli.no_pdf,
             final_blockers: best.final_result.summary.blockers,
             horizontal_layout_seed: &best.horizontal_layout_seed,
+            notation_time: &best.midi_seed_stats.notation_time,
         })
     );
     stage_clock = pipeline_stage_timing(&timing_label, "MetricBeamAndFinalNotation", stage_clock);

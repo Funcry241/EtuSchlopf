@@ -711,6 +711,12 @@ fn bind_candidate_material_lineage_from_post_legacy(
     );
     let mut used_fragment_indices = BTreeSet::<usize>::new();
 
+    let mut continuation_slots = BTreeMap::<_, Vec<_>>::new();
+    for (source, measure, raw) in candidate.midi_seed_stats.rhythmic_courses.source_voice_continuation_slots() {
+        anyhow::ensure!(serialization_by_source.contains_key(&source), "Foreign source voice continuation");
+        continuation_slots.entry(source).or_default().push((measure, raw));
+    }
+
     for source_ordinal in serialization_by_source.keys().copied() {
         let source_event_id = MaterialSourceEventId(source_ordinal);
         source_events.push(source_event_id);
@@ -724,46 +730,30 @@ fn bind_candidate_material_lineage_from_post_legacy(
                 source_ordinal
             )
         })?;
-        let lineage_rows = lineage_by_pre
-            .get(&(measure, pre_raw_note_index))
-            .cloned()
-            .ok_or_else(|| {
-                anyhow!(
+        let first = (measure, pre_raw_note_index);
+        let continuation = continuation_slots.remove(&source_ordinal).unwrap_or_default();
+        let mut mapped_fragment_indices = Vec::with_capacity(1 + continuation.len());
+        for locator in std::iter::once(first).chain(continuation) {
+            let lineage_rows = lineage_by_pre.get(&locator).filter(|rows| !rows.is_empty())
+                .ok_or_else(|| anyhow!(
                     "CandidateMaterialLineageSpine: SourceOrdinal {} ohne VisibleRhythm-Forward-Carrier",
                     source_ordinal
-                )
-            })?;
-        if lineage_rows.is_empty() {
-            return Err(anyhow!(
-                "CandidateMaterialLineageSpine: SourceOrdinal {} besitzt keine RepresentationFragments",
-                source_ordinal
-            ));
-        }
-
-        let mut mapped_fragment_indices = Vec::<usize>::with_capacity(lineage_rows.len());
-        for (_fragment_ordinal, post_raw_note_index) in lineage_rows {
-            let fragment_index = fragment_index_by_raw
-                .get(&(measure, post_raw_note_index))
-                .copied()
-                .ok_or_else(|| {
-                    anyhow!(
+                ))?;
+            for &(_fragment_ordinal, post_raw_note_index) in lineage_rows {
+                let fragment_index = fragment_index_by_raw.get(&(locator.0, post_raw_note_index))
+                    .copied().ok_or_else(|| anyhow!(
                         "CandidateMaterialLineageSpine: VisibleRhythm-PostLocator Takt {} Index {} fehlt nach Polish/Layout",
-                        measure,
-                        post_raw_note_index
-                    )
-                })?;
-            if !used_fragment_indices.insert(fragment_index) {
-                return Err(anyhow!(
-                    "CandidateMaterialLineageSpine: RepresentationFragment wurde mehreren SourceEvents zugeordnet"
-                ));
+                        locator.0, post_raw_note_index
+                    ))?;
+                let fragment = &mut fragments[fragment_index];
+                if !used_fragment_indices.insert(fragment_index) || fragment.source_event_id.is_some() {
+                    return Err(anyhow!("CandidateMaterialLineageSpine: RepresentationFragment wurde mehreren SourceEvents zugeordnet"));
+                }
+                anyhow::ensure!(locator == first || fragment.tie_stop && fragment.pitch == Some(row.source_midi),
+                    "Source voice continuation lost its bound tie or pitch");
+                fragment.source_event_id = Some(source_event_id);
+                mapped_fragment_indices.push(fragment_index);
             }
-            if fragments[fragment_index].source_event_id.is_some() {
-                return Err(anyhow!(
-                    "CandidateMaterialLineageSpine: RepresentationFragment besitzt bereits SourceLineage"
-                ));
-            }
-            fragments[fragment_index].source_event_id = Some(source_event_id);
-            mapped_fragment_indices.push(fragment_index);
         }
 
         let exists = matches!(

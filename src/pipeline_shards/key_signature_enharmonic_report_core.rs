@@ -45,6 +45,7 @@ struct KeySignatureEnharmonicSpellingRenderWriteAudit {
     respelling_candidates: usize,
     diatonic_respellings: usize,
     minor_leading_respellings: usize,
+    chromatic_passing_respellings: usize,
     first_visible_pitch_before: String,
     first_visible_pitch_after: String,
     last_visible_pitch_before: String,
@@ -108,6 +109,7 @@ impl Default for KeySignatureEnharmonicSpellingRenderWriteAudit {
             respelling_candidates: 0,
             diatonic_respellings: 0,
             minor_leading_respellings: 0,
+            chromatic_passing_respellings: 0,
             first_visible_pitch_before: "unbound".to_string(),
             first_visible_pitch_after: "unbound".to_string(),
             last_visible_pitch_before: "unbound".to_string(),
@@ -178,6 +180,275 @@ fn derive_tonal_spelling_decision(xml: &str, notes: &[AtomicNote]) -> TonalSpell
     TonalSpellingDecision { decision, scorewide_scope_bound, scorewide_attempted, final_section, selected_profile, target_fifths, selected_measure }
 }
 
+// The selector here owns only spellings in one already bound, traditional
+// signature. Existing selection of a new signature keeps its separate route.
+fn bound_key_diatonic_plans(
+    xml: &str,
+    notes: &[AtomicNote],
+    material: Option<&JointReadingOwnerInput>,
+) -> Option<(Vec<FunctionalRespellingPlan>, i32)> {
+    use std::collections::{BTreeMap, BTreeSet};
+    let document = roxmltree::Document::parse(xml).ok()?;
+    let parts = document.root_element().children()
+        .filter(|node| node.has_tag_name("part")).collect::<Vec<_>>();
+    let [part] = parts.as_slice() else { return None; };
+    let first_measure = part.children().find(|node| node.has_tag_name("measure"))?;
+    let keys = part.descendants().filter(|node| node.has_tag_name("key")).collect::<Vec<_>>();
+    let [key] = keys.as_slice() else { return None; };
+    let first_cursor = first_measure.children().find(|node|
+        node.has_tag_name("note") || node.has_tag_name("backup") || node.has_tag_name("forward"));
+    if first_cursor.is_some_and(|node| node.range().start < key.range().end)
+        || key.attribute("number").is_some()
+        || !key.parent().is_some_and(|attributes| attributes.has_tag_name("attributes")
+            && attributes.parent() == Some(first_measure))
+        || key.children().any(|node| node.is_element() && !matches!(node.tag_name().name(), "fifths" | "mode"))
+    {
+        return None;
+    }
+    let fifths_nodes = key.children().filter(|node| node.has_tag_name("fifths")).collect::<Vec<_>>();
+    let [fifths] = fifths_nodes.as_slice() else { return None; };
+    let fifths = fifths.text()?.trim().parse::<i32>().ok()?;
+    let modes = key.children().filter(|node| node.has_tag_name("mode")).collect::<Vec<_>>();
+    if !(-7..=7).contains(&fifths) || modes.len() > 1
+        || modes.first().is_some_and(|node| !matches!(node.text(), Some("major" | "minor")))
+        || fifths == 0 && modes.is_empty()
+    {
+        return None;
+    }
+
+    let nodes = part.descendants().filter(|node| node.has_tag_name("note"))
+        .map(|node| (node.range().start, node)).collect::<BTreeMap<_, _>>();
+    let mut plans = functional_respelling_plans_for_tonal_frame_from_measure(xml, fifths, 0, false, None)
+        .into_iter().map(|plan| (plan.note_start, plan)).collect::<BTreeMap<_, _>>();
+    plans.extend(bound_chromatic_passing_plans(notes, &nodes, fifths, None)
+        .into_iter().map(|plan| (plan.note_start, plan)));
+    plans.retain(|start, plan| nodes.get(start).is_some_and(|note|
+        note.range().end == plan.note_end && !note.descendants().any(|node|
+            node.has_tag_name("accidental-mark") || (node.has_tag_name("accidental")
+                && node.attributes().len() != 0))));
+    let tied = |note: &AtomicNote| note.tie_start || note.tie_stop
+        || nodes.get(&note.note_start).is_some_and(|node| node.descendants().any(|child| child.has_tag_name("tied")));
+
+    let by_range = notes.iter().map(|note| ((note.note_start, note.note_end), note))
+        .collect::<BTreeMap<_, _>>();
+    let mut chain_by_start = BTreeMap::<usize, Vec<usize>>::new();
+    if let Some(material) = material.filter(|material| material.binds(xml)
+        && material.heads().iter().all(|head|
+            by_range.contains_key(&(head.source_span.start, head.source_span.end)))) {
+        let mut chains = BTreeMap::<(MaterialSourceEventId, SoundingAttackId), Vec<&AtomicNote>>::new();
+        for head in material.heads() {
+            if let Some(note) = by_range.get(&(head.source_span.start, head.source_span.end)) {
+                chains.entry((head.source_event_id, head.attack_id)).or_default().push(*note);
+            }
+        }
+        for mut chain in chains.into_values().filter(|chain| chain.len() > 1) {
+            chain.sort_by_key(|note| (functional_measure_ordinal(note), note.start, note.note_start));
+            let wanted = chain.iter().find_map(|note| plans.get(&note.note_start))
+                .map(|plan| (plan.step, plan.alter, plan.octave));
+            let Some(wanted) = wanted else { continue; };
+            if chain.iter().enumerate().all(|(index, note)| {
+                note.tie_start == (index + 1 < chain.len()) && note.tie_stop == (index != 0)
+                    && note.pitch.as_ref().is_some_and(|pitch| {
+                        plans.get(&note.note_start)
+                            .map_or((pitch.step.as_str(), pitch.alter, pitch.octave),
+                                |plan| (plan.step, plan.alter, plan.octave)) == wanted
+                    })
+            }) {
+                let starts = chain.iter().filter(|note| plans.contains_key(&note.note_start))
+                    .map(|note| note.note_start).collect::<Vec<_>>();
+                for start in &starts { chain_by_start.insert(*start, starts.clone()); }
+            }
+        }
+    }
+    for note in notes.iter().filter(|note| tied(note)) {
+        if !chain_by_start.contains_key(&note.note_start) { plans.remove(&note.note_start); }
+    }
+
+    // Test same-key spellings by the actual chord containers. Repeat only
+    // when removing a conflicted component can expose a further conflict.
+    loop {
+        let mut refused = BTreeSet::new();
+        let mut chord = BTreeMap::new();
+        for note in notes {
+            if !note.is_chord { chord.clear(); }
+            let Some(pitch) = &note.pitch else { continue; };
+            let spelling = plans.get(&note.note_start)
+                .map_or((pitch.step.as_str(), pitch.alter, pitch.octave),
+                    |plan| (plan.step, plan.alter, plan.octave));
+            let entries = chord.entry(pitch.midi).or_insert_with(Vec::new);
+            if entries.iter().any(|&(_, old)| old != spelling) {
+                refused.insert(note.note_start);
+                refused.extend(entries.iter().map(|&(start, _)| start));
+            }
+            entries.push((note.note_start, spelling));
+        }
+        let mut changed = false;
+        for start in refused {
+            if let Some(chain) = chain_by_start.get(&start) {
+                for member in chain { changed |= plans.remove(member).is_some(); }
+            }
+            changed |= plans.remove(&start).is_some();
+        }
+        if !changed { break; }
+    }
+    Some((plans.into_values().rev().collect(), fifths))
+}
+
+// The initial write scope uses one measure's unambiguous cursor geometry.
+fn bound_chromatic_passing_plans(
+    notes: &[AtomicNote],
+    nodes: &std::collections::BTreeMap<usize, roxmltree::Node<'_, '_>>,
+    fifths: i32,
+    minor_upper_approach: Option<i32>,
+) -> Vec<FunctionalRespellingPlan> {
+    use std::collections::BTreeMap;
+
+    let mut lanes = BTreeMap::<_, Vec<_>>::new();
+    for (index, note) in notes.iter().enumerate() {
+        let Some(node) = nodes.get(&note.note_start) else { continue };
+        let Some(measure) = node.parent().filter(|node| node.has_tag_name("measure")) else { continue };
+        lanes.entry((measure.range().start, &note.staff, &note.voice))
+            .or_default().push((index, note));
+    }
+
+    let mut plans = Vec::new();
+    for lane in lanes.values_mut() {
+        if lane.len() < 3 { continue; }
+        let measure = nodes[&lane[0].1.note_start].parent().expect("bound measure");
+        if measure.children().skip_while(|node| !matches!(node.tag_name().name(), "note" | "forward" | "backup"))
+            .any(|node| node.has_tag_name("attributes") && node.children().any(|child| child.has_tag_name("divisions")))
+        {
+            continue;
+        }
+
+        lane.sort_by_key(|&(_, note)| (note.start, note.note_start));
+        let mut earlier_release = 0;
+        for (index, window) in lane.windows(3).enumerate() {
+            let [(_, left), (_, middle), (_, right)] = window else { continue };
+            let prior_release = earlier_release;
+            earlier_release = earlier_release.max(left.start.saturating_add(left.duration));
+            if left.start < prior_release
+                || left.start.checked_add(left.duration) != Some(middle.start)
+                || middle.start.checked_add(middle.duration) != Some(right.start)
+                || window.iter().any(|&(index, note)| {
+                    let node = nodes[&note.note_start];
+                    !note.visible || note.duration <= 0 || note.is_chord
+                        || notes.get(index + 1).is_some_and(|next| next.is_chord)
+                        || node.descendants().any(|child| matches!(child.tag_name().name(),
+                            "tie" | "tied" | "grace"))
+                })
+                || lane.get(index + 3)
+                    .is_some_and(|&(_, note)| note.start < right.start.saturating_add(right.duration))
+            {
+                continue;
+            }
+
+            let spelling = if let Some(tonic) = minor_upper_approach {
+                minor_upper_approach_spelling(left, middle, right, fifths, tonic)
+            } else {
+                chromatic_passing_spelling(left, middle, right, fifths)
+            };
+            let Some((step, alter, octave)) = spelling else { continue };
+            plans.push(FunctionalRespellingPlan {
+                note_start: middle.note_start,
+                note_end: middle.note_end,
+                step,
+                alter,
+                octave,
+                kind: FunctionalRespellingKind::ChromaticPassing,
+            });
+        }
+    }
+    plans
+}
+
+// A chromatic attack reached by leap and resolving downward by a
+// semitone to the minor tonic is a lowered second in a flat key.
+fn minor_upper_approach_spelling(
+    left: &AtomicNote,
+    middle: &AtomicNote,
+    right: &AtomicNote,
+    fifths: i32,
+    tonic: i32,
+) -> Option<(&'static str, i32, i32)> {
+    let (left, middle, right) = (left.pitch.as_ref()?, middle.pitch.as_ref()?, right.pitch.as_ref()?);
+    if right.midi.rem_euclid(12) != tonic || middle.midi != right.midi + 1
+        || (left.midi - middle.midi).abs() < 3
+        || functional_key_diatonic_spelling(fifths, left.midi)
+            != Some((left.step.as_str(), left.alter))
+        || functional_key_diatonic_spelling(fifths, right.midi)
+            != Some((right.step.as_str(), right.alter))
+        || functional_key_diatonic_spelling(fifths, middle.midi).is_some()
+    {
+        return None;
+    }
+    let (step, natural_alter) = functional_key_diatonic_spelling(fifths, (tonic + 2).rem_euclid(12))?;
+    let alter = natural_alter - 1;
+    if alter != -1 || (middle.step == step && middle.alter == alter) { return None; }
+    let octave = functional_respelling_octave(middle.midi, step, alter, middle.octave)?;
+    Some((step, alter, octave))
+}
+
+fn bound_minor_upper_approach_plans(
+    xml: &str,
+    notes: &[AtomicNote],
+    fifths: i32,
+) -> Vec<FunctionalRespellingPlan> {
+    if fifths >= 0 { return Vec::new(); }
+    let Ok(document) = roxmltree::Document::parse(xml) else { return Vec::new(); };
+    let keys = document.descendants().filter(|node| node.has_tag_name("key")).collect::<Vec<_>>();
+    let [key] = keys.as_slice() else { return Vec::new(); };
+    if key.attribute("number").is_some()
+        || key.children().find(|node| node.has_tag_name("mode")).and_then(|node| node.text()) != Some("minor")
+        || key.children().find(|node| node.has_tag_name("fifths"))
+            .and_then(|node| node.text()).and_then(|text| text.trim().parse().ok()) != Some(fifths)
+    {
+        return Vec::new();
+    }
+    let tonic = (7 * fifths + 9).rem_euclid(12);
+    let nodes = document.descendants().filter(|node| node.has_tag_name("note"))
+        .map(|node| (node.range().start, node)).collect();
+    bound_chromatic_passing_plans(notes, &nodes, fifths, Some(tonic))
+}
+
+fn chromatic_passing_spelling(
+    left: &AtomicNote,
+    middle: &AtomicNote,
+    right: &AtomicNote,
+    fifths: i32,
+) -> Option<(&'static str, i32, i32)> {
+    const STEPS: [&str; 7] = ["C", "D", "E", "F", "G", "A", "B"];
+    let (left, middle, right) = (left.pitch.as_ref()?, middle.pitch.as_ref()?, right.pitch.as_ref()?);
+    let signature_supports = |pitch: &Pitch| {
+        functional_key_diatonic_spelling(fifths, pitch.midi)
+            == Some((pitch.step.as_str(), pitch.alter))
+    };
+    if !signature_supports(left) || !signature_supports(right)
+        || functional_key_diatonic_spelling(fifths, middle.midi).is_some()
+    {
+        return None;
+    }
+    let letter = |pitch: &Pitch| {
+        let index = STEPS.iter().position(|&step| step == pitch.step)?;
+        Some(i64::from(pitch.octave) * 7 + index as i64)
+    };
+    let left_letter = letter(left)?;
+    let right_letter = letter(right)?;
+    let direction = (right_letter - left_letter).signum();
+    if (right_letter - left_letter).abs() != 2
+        || !(1..=2).contains(&((i64::from(middle.midi) - i64::from(left.midi)) * direction))
+        || !(1..=2).contains(&((i64::from(right.midi) - i64::from(middle.midi)) * direction))
+    {
+        return None;
+    }
+    let target = left_letter + direction;
+    let step = STEPS[target.rem_euclid(7) as usize];
+    let octave = i32::try_from(target.div_euclid(7)).ok()?;
+    let alter = i64::from(middle.midi) - (i64::from(octave) + 1) * 12
+        - i64::from(functional_step_pitch_class(step));
+    (step != middle.step && (-1..=1).contains(&alter)).then_some((step, alter as i32, octave))
+}
+
 fn apply_key_signature_enharmonic_spelling_render_write(
     xml: &str,
     source_label: &str,
@@ -204,13 +475,19 @@ fn apply_key_signature_enharmonic_spelling_render_write(
         derive_tonal_spelling_decision(xml, &before_atomic);
     let selected_profile_label = selected_profile
         .map_or_else(|| "none".to_string(), |profile| profile.name.to_string());
-    let structural_scope_bound = scorewide_scope_bound || final_section.is_some();
-    let attempted = scorewide_attempted || final_section.is_some();
+    let key_rewrite = scorewide_attempted || final_section.is_some();
+    let material = joint_render_custody_context().and_then(|context| context.material.ok());
+    let bound_spelling = if key_rewrite { None } else {
+        bound_key_diatonic_plans(xml, &before_atomic, material.as_deref())
+    };
+    let spelling_attempted = bound_spelling.as_ref().is_some_and(|(plans, _)| !plans.is_empty());
+    let structural_scope_bound = scorewide_scope_bound || final_section.is_some() || spelling_attempted;
+    let attempted = key_rewrite || spelling_attempted;
 
     let mut key_edits = Vec::new();
     let key_candidate_xml = selected_measure
         .zip(target_fifths)
-        .filter(|_| attempted)
+        .filter(|_| key_rewrite)
         .inspect(|&(measure, fifths)| {
             key_edits = key_signature_for_measure_edits(xml, measure, fifths);
         })
@@ -218,7 +495,7 @@ fn apply_key_signature_enharmonic_spelling_render_write(
     let keyed_for_journal = key_candidate_xml.clone();
     let mut note_edits = Vec::new();
     let mut record_note = |range, text: &str| note_edits.push((range, text.to_owned()));
-    let (candidate_xml, respelling_stats) = if let Some(profile) = selected_profile.filter(|_| attempted) {
+    let (candidate_xml, respelling_stats) = if let Some(profile) = selected_profile.filter(|_| key_rewrite) {
         if let Some(section) = final_section.as_ref() {
             functional_enharmonic_candidate_with_edits(
                 &key_candidate_xml,
@@ -232,6 +509,10 @@ fn apply_key_signature_enharmonic_spelling_render_write(
         } else {
             scorewide_functional_enharmonic_candidate(&key_candidate_xml, profile, &mut record_note)
         }
+    } else if let Some((plans, fifths)) = bound_spelling.filter(|_| spelling_attempted) {
+        functional_enharmonic_candidate_with_edits(
+            &key_candidate_xml, fifths, 0, false, None, Some(plans), &mut record_note,
+        )
     } else {
         (key_candidate_xml, FunctionalRespellingStats::default())
     };
@@ -264,11 +545,16 @@ fn apply_key_signature_enharmonic_spelling_render_write(
         && before_atomic.len() == after_atomic.len()
         && visible_pitched_before == visible_pitched_after
         && visible_rests_before == visible_rests_after
-        && key_written;
+        && (key_written || spelling_attempted
+            && functional_explicit_key_signatures(xml) == functional_explicit_key_signatures(&candidate_xml));
     let written = invariant_green;
     let render_xml_write = written;
     let final_section_mode = final_section.is_some();
-    let verdict = if written && final_section_mode {
+    let verdict = if written && respelling_stats.chromatic_passing > 0 {
+        "bound_key_chromatic_passing_respelling_render_write_green"
+    } else if written && spelling_attempted {
+        "bound_key_diatonic_respelling_render_write_green"
+    } else if written && final_section_mode {
         "final_section_tonal_key_signature_functional_respelling_render_write_green"
     } else if written {
         "scorewide_tonal_key_signature_functional_respelling_render_write_green"
@@ -297,7 +583,9 @@ fn apply_key_signature_enharmonic_spelling_render_write(
         accidental_cost_target: decision.target_cost,
         accidental_cost_best: decision.best_cost,
         accidental_saving_percent: decision.saving_percent,
-        selection_reason: if final_section_mode {
+        selection_reason: if spelling_attempted {
+            "existing_bound_key_spelling_only".to_string()
+        } else if final_section_mode {
             "final_section_full_evidence_tail_green".to_string()
         } else {
             decision.reason.to_string()
@@ -317,6 +605,7 @@ fn apply_key_signature_enharmonic_spelling_render_write(
         respelling_candidates: respelling_stats.total,
         diatonic_respellings: respelling_stats.diatonic,
         minor_leading_respellings: respelling_stats.minor_leading,
+        chromatic_passing_respellings: respelling_stats.chromatic_passing,
         first_visible_pitch_before: first_pitch.clone(),
         first_visible_pitch_after: first_pitch_after,
         last_visible_pitch_before: last_pitch,
@@ -408,7 +697,7 @@ fn append_key_signature_enharmonic_spelling_render_write_section(
         " Keine Projekt-, Etueden- oder absolute Taktidentitaet. Der scoreweite Pfad bindet weiterhin nur den ersten realen Measure-Knoten. Der Finalabschnittspfad bindet ausschliesslich die einzige bereits sechsfaktoriell gruene relative Grenzposition; danach muessen alle nicht gehaltenen Gegenkandidaten dieselbe Tonart tragen, das Gesamtprofil des verbleibenden Abschnitts und der Schlussbass muessen sie bestaetigen, und die funktionale Schreibweise muss die Vorzeichenlast senken. Null, Rueckkehr, konkurrierendes Ziel oder Mehrdeutigkeit bedeutet fail-closed.",
     );
     out.push_format_args(format_args!(
-        "InvariantEvidence: Source {}; Output {}; Eflat {}->{}; Bflat {}->{}; Dsharp {}->{}; Asharp {}->{}; Fnatural {}->{}; Esharp {}->{}; RespellingTotal {} (diatonisch {}, Moll-Leitton {}); FirstPitch {}->{}; LastPitch {}->{}; ParseOk {}/{}; BackupForward {}/{}; NoteCount {}/{}; VisiblePitched {}/{}; VisibleRests {}/{}; SoundingStable {}.\n",
+        "InvariantEvidence: Source {}; Output {}; Eflat {}->{}; Bflat {}->{}; Dsharp {}->{}; Asharp {}->{}; Fnatural {}->{}; Esharp {}->{}; RespellingTotal {} (diatonisch {}, Moll-Leitton {}, chromatischer Durchgang {}); FirstPitch {}->{}; LastPitch {}->{}; ParseOk {}/{}; BackupForward {}/{}; NoteCount {}/{}; VisiblePitched {}/{}; VisibleRests {}/{}; SoundingStable {}.\n",
         audit.source_label,
         audit.output_path,
         audit.e_flat_before,
@@ -426,6 +715,7 @@ fn append_key_signature_enharmonic_spelling_render_write_section(
         audit.respelling_candidates,
         audit.diatonic_respellings,
         audit.minor_leading_respellings,
+        audit.chromatic_passing_respellings,
         audit.first_visible_pitch_before,
         audit.first_visible_pitch_after,
         audit.last_visible_pitch_before,
@@ -495,6 +785,7 @@ struct FunctionalRespellingStats {
     total: usize,
     diatonic: usize,
     minor_leading: usize,
+    chromatic_passing: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -511,6 +802,7 @@ struct FunctionalRespellingPlan {
 enum FunctionalRespellingKind {
     Diatonic,
     MinorLeading,
+    ChromaticPassing,
 }
 
 fn scorewide_functional_enharmonic_candidate(
@@ -645,6 +937,10 @@ fn functional_respelling_plans_for_tonal_frame_from_measure(
         }
     }
 
+    if start_measure.is_none() {
+        plans.extend(bound_minor_upper_approach_plans(xml, &notes, fifths));
+    }
+
     plans.sort_by(|left, right| {
         right
             .note_start
@@ -740,6 +1036,9 @@ fn functional_enharmonic_candidate_with_edits(
             }
             FunctionalRespellingKind::MinorLeading => {
                 stats.minor_leading = stats.minor_leading.saturating_add(1)
+            }
+            FunctionalRespellingKind::ChromaticPassing => {
+                stats.chromatic_passing = stats.chromatic_passing.saturating_add(1)
             }
         }
     }
@@ -2918,3 +3217,7 @@ mod original_respelling_course_tests;
 #[cfg(test)]
 #[path = "../../tests/unit/original_complete_tie_chain_respelling.rs"]
 mod original_complete_chain_tests;
+
+#[cfg(test)]
+#[path = "../../tests/unit/bound_key_spelling.rs"]
+mod bound_key_spelling_tests;

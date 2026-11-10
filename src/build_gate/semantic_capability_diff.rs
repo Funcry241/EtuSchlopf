@@ -2747,6 +2747,136 @@ fn read_kodex_capability_retirements(
     Ok(entries)
 }
 
+// A preexisting duplicate is not a relocation. Admit that distinction only for a
+// deletion-only test transition: fixtures, helpers, attributes and executable
+// context remain byte-identical. This proof never authorizes a retirement itself.
+fn pure_test_deletion_context(
+    current_root: &Path,
+    incoming_root: &Path,
+    current: &Inventory,
+    incoming: &Inventory,
+) -> Result<bool, String> {
+    if incoming.functions.keys().any(|key| !current.functions.contains_key(key)) {
+        return Ok(false);
+    }
+    for (key, after) in &incoming.functions {
+        let before = &current.functions[key];
+        if before.signature != after.signature || before.source_body != after.source_body
+            || before.domain != after.domain || before.public != after.public
+            || before.calls != after.calls
+        {
+            return Ok(false);
+        }
+    }
+    let mut before_files = Vec::new();
+    let mut after_files = Vec::new();
+    collect_managed_files(current_root, &mut before_files)?;
+    collect_managed_files(incoming_root, &mut after_files)?;
+    // Documentation can also be a retained test's include_str/read fixture.
+    for (root, files) in [(current_root, &mut before_files), (incoming_root, &mut after_files)] {
+        if root.join("docs").exists() {
+            collect_files_recursive(&root.join("docs"), files)?;
+        }
+    }
+    let relative_files = |root: &Path, paths: Vec<PathBuf>| -> BTreeSet<String> {
+        paths.iter().map(|path| normalize_path(path.strip_prefix(root).expect("collected below root"))).collect()
+    };
+    let before_paths = relative_files(current_root, before_files);
+    let after_paths = relative_files(incoming_root, after_files);
+    if before_paths != after_paths {
+        return Ok(false);
+    }
+    // Root configuration and build inputs can change the meaning of an unchanged test.
+    for name in ["Cargo.toml", "README.md", "build.rs", "run.cmd", "strict.cmd", "rust-toolchain.toml", "rustfmt.toml", "clippy.toml"] {
+        let before = root_file_base(current_root).join(name);
+        let after = root_file_base(incoming_root).join(name);
+        if before.exists() != after.exists()
+            || (before.exists() && fs::read(before).map_err(|e| e.to_string())? != fs::read(after).map_err(|e| e.to_string())?)
+        {
+            return Ok(false);
+        }
+    }
+    for path in before_paths {
+        if matches!(path.as_str(), CHANGE_MANIFEST_PATH | KODEX_CAPABILITY_RETIREMENTS_PATH) {
+            continue;
+        }
+        let before = fs::read(current_root.join(&path)).map_err(|e| e.to_string())?;
+        let after = fs::read(incoming_root.join(&path)).map_err(|e| e.to_string())?;
+        if before == after {
+            continue;
+        }
+        if path == "src/identity_gate_trust_anchor.rs"
+            && same_source_except_pin_literals(&before, &after)
+        {
+            continue;
+        }
+        if !path.ends_with(".rs") || path.starts_with("docs/") {
+            return Ok(false);
+        }
+        let before = String::from_utf8(before).map_err(|e| e.to_string())?;
+        let after = String::from_utf8(after).map_err(|e| e.to_string())?;
+        let mut stripped = String::new();
+        let mut cursor = 0;
+        let mut occurrences = BTreeMap::<String, usize>::new();
+        for span in function_spans(&before, &mask_non_code(&before))? {
+            let ordinal = occurrences.entry(span.name.clone()).or_default();
+            *ordinal += 1;
+            let key = format!("{path}::{}#{ordinal}", span.name);
+            if incoming.functions.contains_key(&key) {
+                continue;
+            }
+            // Only a direct #[test] on its own preceding line qualifies. Other
+            // attributes are retained by the exact remaining-source comparison.
+            let prefix = &before[..span.signature_start];
+            let attribute_end = prefix.trim_end_matches(['\r', '\n']).len();
+            let attribute_start = prefix[..attribute_end].rfind('\n').map_or(0, |i| i + 1);
+            if prefix[attribute_start..attribute_end].trim() != "#[test]" {
+                return Ok(false);
+            }
+            stripped.push_str(&before[cursor..attribute_start]);
+            cursor = span.body_end;
+            if before[cursor..].starts_with("\r\n") { cursor += 2; }
+            else if before[cursor..].starts_with('\n') { cursor += 1; }
+        }
+        stripped.push_str(&before[cursor..]);
+        if stripped != after {
+            // An obsolete leading module documentation block may disappear with
+            // its first test. This permits deletion only, never new source text.
+            let documentation_end = before.split_inclusive('\n')
+                .take_while(|line| line.trim().is_empty() || line.trim_start().starts_with("//!"))
+                .map(str::len).sum::<usize>();
+            if documentation_end == 0 || stripped[documentation_end..] != after {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(true)
+}
+
+fn same_source_except_pin_literals(before: &[u8], after: &[u8]) -> bool {
+    let (Ok(before), Ok(after)) = (std::str::from_utf8(before), std::str::from_utf8(after)) else {
+        return false;
+    };
+    let before_lines = before.split_inclusive('\n').collect::<Vec<_>>();
+    let after_lines = after.split_inclusive('\n').collect::<Vec<_>>();
+    before_lines.len() == after_lines.len() && before_lines.iter().zip(after_lines).all(|(a, b)| {
+        if *a == b { return true; }
+        let shape = |line: &str| -> Option<String> {
+            let rest = line.strip_prefix("const _: () = assert!(")?;
+            let (name, value) = rest.split_once(" == 0x")?;
+            if !name.ends_with("_FNV1A64") || !name.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_') {
+                return None;
+            }
+            let suffix = value.get(16..)?;
+            if !value.get(..16)?.bytes().all(|b| b.is_ascii_hexdigit())
+                || !matches!(suffix, ");\n" | ");\r\n" | ");")
+            { return None; }
+            Some(format!("{name}{suffix}"))
+        };
+        matches!((shape(a), shape(b)), (Some(a), Some(b)) if a == b)
+    })
+}
+
 fn validate_kodex_capability_retirement_contract(
     current_root: &Path,
     incoming_root: &Path,
@@ -2796,6 +2926,8 @@ fn validate_kodex_capability_retirement_contract(
         .map(|delta| delta.record().key())
         .collect::<BTreeSet<_>>();
 
+    let pure_test_deletions = !added.is_empty()
+        && pure_test_deletion_context(current_root, incoming_root, current, incoming)?;
     let mut authorized = BTreeSet::new();
     for retirement in added {
         let key = retirement.capability_key();
@@ -2837,7 +2969,12 @@ fn validate_kodex_capability_retirement_contract(
                 return false;
             }
             let candidate_function_key = format!("{}::{}", candidate.path, candidate.symbol);
-            incoming
+            let unchanged_preexisting = pure_test_deletions
+                && current.records.get(&candidate.key()).is_some_and(|before| {
+                    before.fingerprint == candidate.fingerprint && before.domain == candidate.domain
+                })
+                && current.functions.contains_key(&candidate_function_key);
+            !unchanged_preexisting && incoming
                 .functions
                 .get(&candidate_function_key)
                 .is_some_and(|candidate_function| {
@@ -6684,6 +6821,100 @@ fn write_musicxml(xml: &mut String) { xml.insert_str(0, "x"); }
         );
         let _ = fs::remove_dir_all(current);
         let _ = fs::remove_dir_all(incoming);
+    }
+
+    #[test]
+    fn kodex_retirement_distinguishes_preexisting_tests_from_changed_context() {
+        let path = "src/bin/etuschlopf_launcher/kodex.rs";
+        let other_path = "src/bin/etuschlopf_launcher/other.rs";
+        let removed = "#[test]\nfn old_check() { assert_eq!(helper(), \"expected\"); }\n";
+        let keeper = "#[test]\nfn keeper() { assert_eq!(helper(), \"expected\"); }\n";
+        // Masked rejection fingerprints alone cannot establish fixture equivalence.
+        for variant in ["same_file", "other_file", "new_copy", "rename", "literal", "helper", "constant", "import", "ignore", "cfg", "fixture", "documentation", "readme", "cargo", "root_build", "pin", "anchor_code", "production"] {
+            let current = root(&format!("preexisting_before_{variant}"));
+            let incoming = root(&format!("preexisting_after_{variant}"));
+            let same_file = variant == "same_file";
+            let retired = if variant == "production" { removed.trim_start_matches("#[test]\n") } else { removed };
+            let before = format!("const VALUE: usize = 1;\nfn helper() -> &'static str {{ \"expected\" }}\n{retired}{}", if same_file { keeper } else { "" });
+            let after = before.replace(retired, "");
+            for tree in [&current, &incoming] {
+                write(tree, path, &before);
+                write(tree, other_path, if same_file || variant == "new_copy" { "" } else { keeper });
+                write(tree, "tests/fixture.txt", "expected\n");
+                write(tree, "docs/fixture.md", "expected\n");
+                write(tree, "README.md", "expected\n");
+                write(tree, "build.rs", "fn main() {}\n");
+                write(tree, "src/identity_gate_trust_anchor.rs", "const _: () = assert!(EXAMPLE_FNV1A64 == 0x0123456789abcdef);\n");
+                write(tree, KODEX_CAPABILITY_RETIREMENTS_PATH, "schema_version=1\n");
+            }
+            write(&incoming, path, &after);
+            match variant {
+                "new_copy" => write(&incoming, other_path, keeper),
+                "rename" => write(&incoming, other_path, &keeper.replace("keeper", "renamed")),
+                "literal" => write(&incoming, other_path, &keeper.replace("expected", "changed")),
+                "helper" => write(&incoming, path, &after.replace("\"expected\"", "\"changed\"")),
+                "constant" => write(&incoming, path, &after.replace("usize = 1", "usize = 2")),
+                "import" => write(&incoming, path, &format!("use alternate::helper;\n{after}")),
+                "ignore" => write(&incoming, other_path, &format!("#[ignore]\n{keeper}")),
+                "cfg" => write(&incoming, other_path, &format!("#[cfg(any())]\n{keeper}")),
+                "fixture" => write(&incoming, "tests/fixture.txt", "changed\n"),
+                "documentation" => write(&incoming, "docs/fixture.md", "changed\n"),
+                "readme" => write(&incoming, "README.md", "changed\n"),
+                "cargo" => write(&incoming, "Cargo.toml", &fs::read_to_string(current.join("Cargo.toml")).unwrap().replace("anyhow=\"1\"", "anyhow=\"2\"")),
+                "root_build" => write(&incoming, "build.rs", "fn main() { println!(\"cargo:rustc-cfg=skip\"); }\n"),
+                "pin" => write(&incoming, "src/identity_gate_trust_anchor.rs", "const _: () = assert!(EXAMPLE_FNV1A64 == 0xfedcba9876543210);\n"),
+                "anchor_code" => write(&incoming, "src/identity_gate_trust_anchor.rs", "const _: () = assert!(true);\n"),
+                _ => {}
+            }
+            let before_inventory = inventory_tree(&current).unwrap();
+            let after_inventory = inventory_tree(&incoming).unwrap();
+            let key = format!("KodexNegativeCheck|{path}|old_check#1");
+            let fingerprint = before_inventory.records[&key].fingerprint;
+            write(&incoming, KODEX_CAPABILITY_RETIREMENTS_PATH, &format!("schema_version=1\nretire={key}|fnv64:{fingerprint:016x}|reason:preexisting_duplicate\n"));
+            let deltas = diff_inventories(&before_inventory.records, &after_inventory.records);
+            let result = validate_kodex_capability_retirement_contract(&current, &incoming, "KodexOnly", &before_inventory, &after_inventory, &deltas);
+            assert_eq!(result.is_ok(), matches!(variant, "same_file" | "other_file" | "pin"), "{variant}: {result:?}");
+            fs::remove_dir_all(current).unwrap();
+            fs::remove_dir_all(incoming).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_deletion_context_accepts_only_direct_tests_and_optional_leading_documentation_loss() {
+        let current = root("test_context_before");
+        let incoming = root("test_context_after");
+        let path = "src/bin/etuschlopf_launcher/kodex.rs";
+        for newline in ["\n", "\r\n"] {
+            for prefix in ["", "//! Obsolete test documentation.\n\n"] {
+                let before = format!("{prefix}#[test]\nfn old_check() {{ assert!(true); }}\n\n#[test]\nfn keeper() {{ assert!(true); }}\n").replace('\n', newline);
+                let after = "\n#[test]\nfn keeper() { assert!(true); }\n".replace('\n', newline);
+                write(&current, path, &before);
+                write(&incoming, path, &after);
+                let a = inventory_tree(&current).unwrap();
+                let b = inventory_tree(&incoming).unwrap();
+                assert!(pure_test_deletion_context(&current, &incoming, &a, &b).unwrap());
+                write(&incoming, path, &format!("// Newly added context\n{after}"));
+                let b = inventory_tree(&incoming).unwrap();
+                assert!(!pure_test_deletion_context(&current, &incoming, &a, &b).unwrap());
+            }
+        }
+        fs::remove_dir_all(current).unwrap();
+        fs::remove_dir_all(incoming).unwrap();
+    }
+
+    #[test]
+    fn retirement_pin_exception_preserves_exact_assertion_shape() {
+        let before = b"const _: () = assert!(OWNER_FNV1A64 == 0x0123456789abcdef);\n";
+        assert!(same_source_except_pin_literals(before, b"const _: () = assert!(OWNER_FNV1A64 == 0xfedcba9876543210);\n"));
+        for after in [
+            "const _: () = assert!(OTHER_FNV1A64 == 0xfedcba9876543210);\n",
+            "const _: () = assert!(OWNER_FNV1A64 != 0xfedcba9876543210);\n",
+            "const _: () = assert!(true);\n",
+            "const _: () = assert!(OWNER_FNV1A64 == 0x0123456789abcdeé);\n",
+            "const _: () = assert!(OWNER_FNV1A64 == 0xfedcba9876543210);\nfn added() {}\n",
+        ] {
+            assert!(!same_source_except_pin_literals(before, after.as_bytes()), "{after}");
+        }
     }
 
     #[test]

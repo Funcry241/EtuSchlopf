@@ -2,7 +2,9 @@ use super::*;
 use crate::midi_seed::rhythmic_course_creation_tests::arrangement_pitched_fixture;
 
 fn physical_chord_fixture(split: bool) -> String {
-    let mut rows = vec![(101, 0, 1, 60), (102, 0, 1, 64), (103, 0, 1, 67), (104, 0, 1, 71)];
+    // This span exceeds the compact-chord guard so the recovery owner
+    // receives an intentionally concealed, source-bound chord member.
+    let mut rows = vec![(101, 0, 1, 60), (102, 0, 1, 64), (103, 0, 1, 67), (104, 0, 1, 73)];
     if !split {
         rows.extend([(105, 96, 1, 72), (106, 192, 1, 74), (107, 288, 1, 76)]);
     }
@@ -130,7 +132,7 @@ fn tied_concealed_tone_is_not_shown_by_the_exchange() {
 
 #[test]
 fn unsafe_visibility_exchange_refuses_without_changing_selected_course_custody() {
-    let rows = [(101, 0, 1, 60), (102, 0, 1, 64), (103, 0, 1, 67), (104, 0, 1, 71),
+    let rows = [(101, 0, 1, 60), (102, 0, 1, 64), (103, 0, 1, 67), (104, 0, 1, 73),
         (105, 96, 1, 72), (106, 192, 1, 74), (107, 288, 1, 76)];
     let (seed_xml, courses) = arrangement_pitched_fixture(&rows, 1);
     let arranged = arrange_piano_musicxml_with_profile(&seed_xml, ArrangementProfile {

@@ -487,8 +487,8 @@ pub fn observe_clock(source: &str) -> Result<WriterClock, AdapterError> {
 
 // ---------------------------------------------------------------- adapter ----
 
-/// Builds and solves one independent domain per staff. Cross-staff dependencies
-/// and every unproved capability keep the incumbent (`Unknown`).
+/// Builds and solves one independent domain per staff. Unclosed cross-staff
+/// dependencies and every unproved capability keep the incumbent (`Unknown`).
 pub fn propose(
     source: &str,
     heads: &[AdapterHead],
@@ -540,11 +540,16 @@ pub fn propose(
         return Err(AdapterError::Binding(format!("head {i}: tie continuation without a carried tie group")));
     }
     let staves: BTreeSet<String> = heads.iter().map(|h| h.staff.clone()).collect();
-    // Cross-staff coupling of any carried group: no product state exists here.
+    // A carried chord has already proved equal exact onsets above. Its members
+    // retain their own staff, sounding spelling and onset under each existing
+    // register materializer: no equality between their display states is needed.
+    // Unlike beams and tied attacks, that point relation has no interior time
+    // boundary and adds no state-dependent coupling between staff courses.
+    // Extended cross-staff groups still need an unsupported product domain.
     let mut coupled = BTreeSet::new();
     for g in groups {
         let s: BTreeSet<&str> = g.members.iter().map(|&m| heads[m].staff.as_str()).collect();
-        if s.len() > 1 {
+        if s.len() > 1 && g.kind != AdapterGroupKind::Chord {
             coupled.extend(s.into_iter().map(str::to_string));
         }
     }

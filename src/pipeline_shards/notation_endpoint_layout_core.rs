@@ -108,13 +108,24 @@ fn hide_exact_duplicate_visible_noteheads(
     xml: &mut String,
 ) -> (usize, master_state_identity::OwnerReceipts) {
     let notes = parse_atomic_notes(xml);
-    let mut seen: BTreeSet<(String, String, i64, i32)> = BTreeSet::new();
-    let mut duplicates: Vec<(usize, usize)> = Vec::new();
+    let mut by_geometry = BTreeMap::<_, Vec<_>>::new();
     for note in notes.iter().filter(|n| n.visible && !n.is_chord && n.pitch.is_some()) {
         let midi = note.pitch.as_ref().map_or(0, |p| p.midi);
-        let key = (note.measure.clone(), note.staff.clone(), note.start, midi);
-        if !seen.insert(key) {
-            duplicates.push((note.note_start, note.note_end));
+        // The exact release distinguishes independent intervals at a shared key.
+        let key = (note.measure.as_str(), note.staff.as_str(), note.start, note.duration, midi);
+        by_geometry.entry(key).or_default().push(note);
+    }
+    let mut duplicates = Vec::new();
+    for group in by_geometry.into_values().filter(|group| group.len() > 1) {
+        let distinct_stems = group.iter().any(|up| {
+            child_text_from_block(&xml[up.note_start..up.note_end], "stem").as_deref() == Some("up")
+                && group.iter().any(|down| {
+                    up.voice != down.voice
+                        && child_text_from_block(&xml[down.note_start..down.note_end], "stem").as_deref() == Some("down")
+                })
+        });
+        if !distinct_stems {
+            duplicates.extend(group.iter().skip(1).map(|note| (note.note_start, note.note_end)));
         }
     }
     duplicates.sort_by_key(|a| std::cmp::Reverse(a.0));

@@ -10,6 +10,12 @@ const CLEF_SHA: &str = "2a84896d1203875f6095ba758acc5b5d3cc586b5433c4af96c0e8536
 // The historical C3 successor and its original digest remain unchanged.
 const REST_PRESERVING: &[u8] = include_bytes!("ssc_rest_orientation_preserving_successor_r1578.txt");
 const REST_PRESERVING_SHA: &str = "495ff638e874dfeb48f62d39033238b94c1c089b9486c589159961e2df86b440";
+// Exact future successor for independently written same-key releases.
+const UNEQUAL_UNISON: &[u8] = include_bytes!("ssc_unequal_unison_polish_successor_r1714.txt");
+const UNEQUAL_UNISON_SHA: &str = "71b768cf702ec61d0156524127f3acb8b3ed18d7145af956c8e0284432b9df1a";
+// Exact successor preserving explicitly opposed voices on the same notehead.
+const OPPOSED_UNISON: &[u8] = include_bytes!("ssc_opposed_unison_polish_successor_r1720.txt");
+const OPPOSED_UNISON_SHA: &str = "210e9259adb72ef8b934917fc43d7482837e9d0559259cd8d672092c8970e46d";
 const CLEANUP: &[u8] = include_bytes!("ssc_c3_render_cleanup_journal_r1568.txt");
 const CLEANUP_SHA: &str = "f18a62e8df8a8f40e9adb7562450283168458d229325248147e18843973f5701";
 const THROUGH_TEST: &[u8] = include_bytes!("ssc_c3_render_cleanup_test_r1568.txt");
@@ -26,7 +32,10 @@ pub(super) fn accepts_item(path: &str, kind: &str, name: &str, bytes: &[u8]) -> 
 }
 pub(super) fn accepts_file(path: &str, bytes: &[u8]) -> bool {
     match path {
-        "src/pipeline_shards/notation_endpoint_layout_core.rs" => exact(bytes, CLEF, CLEF_SHA) || exact(bytes, REST_PRESERVING, REST_PRESERVING_SHA),
+        "src/pipeline_shards/notation_endpoint_layout_core.rs" => exact(bytes, CLEF, CLEF_SHA)
+            || exact(bytes, REST_PRESERVING, REST_PRESERVING_SHA)
+            || exact(bytes, UNEQUAL_UNISON, UNEQUAL_UNISON_SHA)
+            || exact(bytes, OPPOSED_UNISON, OPPOSED_UNISON_SHA),
         "src/pipeline_shards/human_pdf_pianistic_cross_staff_ledger_tail.rs" => exact(bytes, CLEANUP, CLEANUP_SHA),
         "tests/support/render_authority/row57_local_clef_scope_through_trial.rs" => exact(bytes, THROUGH_TEST, THROUGH_TEST_SHA),
         _ => false,
@@ -108,5 +117,32 @@ mod rest_preservation_admission_tests {
         let replacement = &after[after_write_start..after_end];
         assert!(replacement.ends_with("(0, master_state_identity::OwnerReceipts::default())"));
         assert!(!replacement.contains("hide_note_print_object_range("));
+    }
+}
+
+#[cfg(test)]
+mod unequal_unison_admission_tests {
+    use super::*;
+
+    #[test]
+    fn only_the_frozen_successor_changes_the_duplicate_observer() {
+        let path = "src/pipeline_shards/notation_endpoint_layout_core.rs";
+        assert!(accepts_file(path, UNEQUAL_UNISON));
+        assert!(!accepts_file("src/structural_write_authority/remaining_layout_writer_family.rs", UNEQUAL_UNISON));
+        for bad in [UNEQUAL_UNISON[..UNEQUAL_UNISON.len()-1].to_vec(),
+            [UNEQUAL_UNISON, b"\n"].concat()] {
+            assert!(!accepts_file(path, &bad));
+        }
+
+        let previous = std::str::from_utf8(REST_PRESERVING).unwrap();
+        let successor = std::str::from_utf8(UNEQUAL_UNISON).unwrap();
+        let prefix = "fn hide_exact_duplicate_visible_noteheads(";
+        let start = previous.find(prefix).unwrap();
+        assert_eq!(successor.find(prefix), Some(start));
+        assert_eq!(&previous[..start], &successor[..start]);
+        let suffix = "    duplicates.sort_by_key";
+        let previous_suffix = previous[start..].find(suffix).unwrap() + start;
+        let successor_suffix = successor[start..].find(suffix).unwrap() + start;
+        assert_eq!(&previous[previous_suffix..], &successor[successor_suffix..]);
     }
 }

@@ -18,7 +18,13 @@ fn add_beat_scoped_beam_groups(
         }
     }
     let mut used_notes: BTreeSet<usize> = BTreeSet::new();
-    for ((staff, _, _), mut candidates) in groups {
+    let written_courses = groups.into_iter().flat_map(|((staff, _, _), candidates)| {
+        let split = independent_metric_beam_cursor_courses(&candidates);
+        let separate = split.is_some();
+        split.unwrap_or_else(|| vec![candidates]).into_iter()
+            .map(move |course| (staff.clone(), course, separate))
+    });
+    for (staff, mut candidates, separate) in written_courses {
         let boundaries = clef_boundaries.get(&staff).map_or(&[][..], Vec::as_slice);
         candidates.sort_by_key(|info| (info.start, info.index));
         let mut runs: Vec<Vec<&PartialBeatNoteInfo>> = Vec::new();
@@ -56,7 +62,7 @@ fn add_beat_scoped_beam_groups(
                 }
             }
         }
-        if !accepted_any && candidates.len() == 2 {
+        if !accepted_any && !separate && candidates.len() == 2 {
             let left = candidates[0];
             let right = candidates[1];
             if beat_group_stays_inside_one_beat(&candidates, beat_unit)
@@ -93,6 +99,29 @@ fn add_beat_scoped_beam_groups(
             }
         }
     }
+}
+
+// A full rewind gives a distinct serialized course, not a musical voice label.
+// Use it only when overlapping positive intervals prove that combining courses
+// under the provisional label would give the planner an invalid linear timeline.
+fn independent_metric_beam_cursor_courses<'a>(
+    candidates: &[&'a PartialBeatNoteInfo],
+) -> Option<Vec<Vec<&'a PartialBeatNoteInfo>>> {
+    let mut courses = BTreeMap::<usize, Vec<_>>::new();
+    for &note in candidates {
+        if note.existing_beams != 0 {
+            return None;
+        }
+        courses.entry(note.cursor_run?).or_default().push(note);
+    }
+    let overlap = candidates.iter().enumerate().any(|(index, left)| {
+        candidates[index + 1..].iter().any(|right| {
+            left.cursor_run != right.cursor_run
+                && left.start < right.start + right.duration
+                && right.start < left.start + left.duration
+        })
+    });
+    overlap.then(|| courses.into_values().collect())
 }
 
 fn crosses_metric_beam_clef_boundary(boundaries: &[i64], left: i64, right: i64) -> bool {
@@ -384,7 +413,9 @@ fn structural_metric_beam_hierarchy_plan(
     group: &[&PartialBeatNoteInfo],
     highest_owned_level: u8,
 ) -> Option<StructuralMetricBeamHierarchyDecision> {
-    if group.len() < 2 || !(1..=4).contains(&highest_owned_level) {
+    if group.len() < 2 || !(1..=4).contains(&highest_owned_level)
+        || group.windows(2).any(|pair| pair[0].index >= pair[1].index)
+    {
         return None;
     }
     let primary = (0..group.len()).collect::<Vec<_>>();
@@ -542,6 +573,7 @@ mod shared_metric_beam_hierarchy_owner_tests {
     fn sounding_16th(index: usize, start: i64) -> PartialBeatNoteInfo {
         PartialBeatNoteInfo {
             index,
+            cursor_run: Some(0),
             start,
             duration: 24,
             staff: "1".to_string(),
@@ -619,6 +651,7 @@ mod structural_lower_rest_bridge_decision_scope_tests {
     ) -> PartialBeatNoteInfo {
         PartialBeatNoteInfo {
             index,
+            cursor_run: Some(0),
             start,
             duration,
             staff: "2".to_string(),

@@ -278,14 +278,117 @@ fn tie_crossing_counts_as_group_and_forbids_clef_change_without_capability() {
 }
 
 #[test]
-fn cross_staff_group_makes_both_staves_unknown() {
+fn cross_staff_beam_keeps_both_staves_unknown() {
     let m1 = head_attrs(DIV, 4, 4, "F") + &note_xml(&n('C', 5, 4 * DIV, 1)) + &backup(4 * DIV) + &note_xml(&n('C', 3, 4 * DIV, 2));
     let xml = score(&[m1]);
     let heads = carried(&xml);
-    let groups = vec![AdapterGroup { kind: AdapterGroupKind::Chord, members: vec![0, 1] }];
+    let groups = vec![AdapterGroup { kind: AdapterGroupKind::PrimaryBeam, members: vec![0, 1] }];
     let p = propose(&xml, &heads, &groups, &caps_all(&xml), None).unwrap();
     assert!(unknown(&p, "1").contains("cross-staff"));
     assert!(unknown(&p, "2").contains("cross-staff"));
+}
+
+#[test]
+fn same_onset_cross_staff_chords_preserve_independent_complete_courses() {
+    let mut upper = n('C', 6, 2 * DIV, 1);
+    let mut lower = n('C', 3, 2 * DIV, 2);
+    lower.voice = upper.voice;
+    lower.chord = true;
+    let first = note_xml(&upper) + &note_xml(&lower);
+    upper.step = 'D';
+    lower.step = 'E';
+    lower.hidden = true;
+    let body = first + &note_xml(&upper) + &note_xml(&lower);
+    for xml in [
+        score(&[head_attrs(DIV, 4, 4, "F") + &body]),
+        score(&[head_attrs(DIV, 4, 4, "F") + &rest(4 * DIV, 1), body])
+            .replace("P1", "RenamedPart").replace("<measure number=\"", "<measure number=\"relocated-"),
+    ] {
+        let heads = carried(&xml);
+        let groups = vec![
+            AdapterGroup { kind: AdapterGroupKind::Chord, members: vec![0, 1] },
+            AdapterGroup { kind: AdapterGroupKind::Chord, members: vec![2, 3] },
+        ];
+        let independent = propose(&xml, &heads, &[], &caps_all(&xml), None).unwrap();
+        let bound = propose(&xml, &heads, &groups, &caps_all(&xml), None).unwrap();
+        for staff in ["1", "2"] {
+            assert_eq!(solved(&bound, staff).2, solved(&independent, staff).2);
+        }
+        assert!(matches!(propose(&xml, &heads, &groups, &caps_all(&xml), Some(0)).unwrap()
+            .staves["1"], StaffVerdict::Unknown { .. }));
+    }
+}
+
+#[test]
+fn cross_staff_chord_with_different_onsets_is_not_a_closed_point_relation() {
+    let xml = score(&[head_attrs(DIV, 4, 4, "F")
+        + &note_xml(&n('C', 5, 2 * DIV, 1))
+        + &note_xml(&n('C', 3, 2 * DIV, 2))]);
+    let groups = vec![AdapterGroup { kind: AdapterGroupKind::Chord, members: vec![0, 1] }];
+    assert!(matches!(propose(&xml, &carried(&xml), &groups, &caps_all(&xml), None),
+        Err(AdapterError::Binding(_))));
+}
+
+#[test]
+fn independent_cross_staff_chord_duplication_does_not_suppress_either_domain() {
+    let chord = |upper_staff, lower_staff| {
+        let upper = n('C', 6, 4 * DIV, upper_staff);
+        let mut lower = n('E', 3, 4 * DIV, lower_staff);
+        lower.voice = upper_staff;
+        lower.chord = true;
+        note_xml(&upper) + &note_xml(&lower)
+    };
+    let single = score(&[head_attrs(DIV, 4, 4, "F") + &chord(1, 2)]);
+    let group = AdapterGroup { kind: AdapterGroupKind::Chord, members: vec![0, 1] };
+    let before = propose(&single, &carried(&single), std::slice::from_ref(&group), &caps_all(&single), None).unwrap();
+    let attrs = head_attrs(DIV, 4, 4, "F").replace("<staves>2</staves>", "<staves>4</staves>")
+        .replace("</attributes>", "<clef number=\"3\"><sign>G</sign><line>2</line></clef><clef number=\"4\"><sign>F</sign><line>4</line></clef></attributes>");
+    let duplicate = score(&[attrs + &chord(1, 2) + &backup(4 * DIV) + &chord(3, 4)]);
+    let mut capabilities = caps_all(&duplicate);
+    for staff in ["3", "4"] { capabilities.staves.insert(staff.into(), cap(all_states(), &duplicate)); }
+    let groups = [group, AdapterGroup { kind: AdapterGroupKind::Chord, members: vec![2, 3] }];
+    let after = propose(&duplicate, &carried(&duplicate), &groups, &capabilities, None).unwrap();
+    for (original, copied) in [("1", "3"), ("2", "4")] {
+        assert_eq!(solved(&before, original).2, solved(&after, original).2);
+        assert_eq!(solved(&before, original).2, solved(&after, copied).2);
+    }
+}
+
+#[test]
+fn cross_staff_tied_attack_still_requires_a_coupled_domain() {
+    let mut start = n('C', 4, 2 * DIV, 1);
+    start.tie = Some("start");
+    let mut end = n('C', 4, 2 * DIV, 2);
+    end.tie = Some("stop");
+    let xml = score(&[head_attrs(DIV, 4, 4, "F") + &note_xml(&start) + &note_xml(&end)]);
+    let groups = vec![AdapterGroup { kind: AdapterGroupKind::TiedAttack, members: vec![0, 1] }];
+    let proposal = propose(&xml, &carried(&xml), &groups, &caps_all(&xml), None).unwrap();
+    for staff in ["1", "2"] { assert!(unknown(&proposal, staff).contains("cross-staff")); }
+}
+
+#[test]
+fn original_pitched_chord_capture_closes_cross_staff_point_membership() {
+    for copies in [1, 2] {
+        let mut member = n('E', 3, DIV, 2);
+        member.chord = true;
+        member.voice = 1;
+        let body = (0..copies).map(|_| note_xml(&n('C', 5, DIV, 1))
+            + &note_xml(&member)).collect::<String>();
+        let mut beam_head = n('G', 5, 1, 1);
+        beam_head.voice = 3;
+        let beam = note_xml(&beam_head).replace("</voice>", "</voice><type>eighth</type>").repeat(8);
+        let xml = score(&[head_attrs(DIV, 4, 4, "F") + &body + &rest((4-copies)*DIV, 1)
+            + &backup(4*DIV) + &beam]);
+        let (_, _, capture) = crate::pipeline::actual_beam_owner_capture_tests::execute(&xml);
+        let source = capture.current.as_ref();
+        let mut owner = fixture_owner_input(source);
+        owner.bind_original_groups(&capture).unwrap();
+        assert!(owner.unknown_groups.is_empty());
+        assert_eq!(owner.groups().iter().filter(|group|
+            group.kind == crate::pipeline::JointReadingGroupKind::Chord).count(), copies as usize);
+        let proposal = owner.c3_proposal(&caps_all(source), None).unwrap();
+        for staff in ["1", "2"] { solved(&proposal, staff); }
+    }
 }
 
 #[test]

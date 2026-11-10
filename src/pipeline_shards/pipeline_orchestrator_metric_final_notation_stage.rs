@@ -6,6 +6,7 @@ struct MetricBeamAndFinalNotationStageInputs<'a> {
     no_pdf: bool,
     final_blockers: usize,
     horizontal_layout_seed: &'a HorizontalLayoutSeedPlan,
+    notation_time: &'a crate::midi::notation_time::NotationTimePlan,
 }
 
 struct MetricBeamAndFinalNotationStageOutcome {
@@ -43,6 +44,7 @@ fn run_metric_beam_and_final_notation_stage(
         no_pdf,
         final_blockers,
         horizontal_layout_seed,
+        notation_time,
     } = inputs;
     let receipt_checkpoint_metric_entry = render_state.document()
         .unwrap_or(&initial_render.pre_preview_render_xml_for_gap).to_owned();
@@ -1077,13 +1079,20 @@ None)?;
                 .with_context(|| {
                     "FinalPdfSourceCommit selected Render source lost FinalChord occurrence continuation"
                 })?;
+            match crate::audit_only::cross_bar_source_sustain::report(render_occurrence_continuation, notation_time) {
+                Ok(line) => console_progress(line),
+                Err(error) => console_progress(format!(
+                    "CrossBarSourceSustainReadback: status=unknown authority=none reason={error}"
+                )),
+            }
+            let sustain_input = render_occurrence_continuation.with_source_sustain_inputs(notation_time);
             Some(
                 render::final_pdf_source_commit::finalize_pdf_source_before_renderer_authorized(&mut *render_state,
 pdf_source_path,
 render::final_pdf_source_commit::FinalPdfSourceDisposition::Live,
 render::final_pdf_source_commit::FinalPdfSourcePlans { chord: &render_final_chord_structural_plan, voice: &render_pdf_source_voice_plan },
 &render_pruned_final_chord_omissions,
-render_occurrence_continuation,
+&sustain_input,
 primary_beam_voice_partition_plan.as_ref())?,
             )
         } else {
@@ -1206,6 +1215,7 @@ primary_beam_voice_partition_plan.as_ref())?,
             let mut candidate_plan = initial_plan.clone();
             let mut same_system_incumbent: Option<HorizontalLayoutPlan> = None;
             let mut balance_trial: Option<RendererFixedPageBalanceTrial> = None;
+            let mut fixed_balance_attempted = false;
             let mut page_rejections = RendererPartitionRejections::new(&committed_source_xml);
             let mut no_goods = std::collections::BTreeSet::<(usize, usize)>::new();
             for round in 1..=MAX_ORACLE_ROUNDS {
@@ -1277,6 +1287,13 @@ primary_beam_voice_partition_plan.as_ref())?,
                     source.input_label, round, shadow_render.status, shadow_render.message,
                 );
                 if !matches!(shadow_render.status, RenderStatus::Written) {
+                    if let Some(trial) = balance_trial.take()
+                        && matches!(trial.objective, PageBalanceObjective::AddSystem(_))
+                    {
+                        return Ok(RendererFeasibilityOracleOutcome::Confirmed {
+                            plan: trial.incumbent, rounds: round, no_goods, source_fingerprint,
+                        });
+                    }
                     anyhow::bail!(
                         "RendererFeasibilityCommittedSourceOracle: Shadow-Renderer nicht GREEN: {}",
                         shadow_render.message
@@ -1291,7 +1308,16 @@ primary_beam_voice_partition_plan.as_ref())?,
                             "ETUSCHLOPF: RendererFeasibilityRound: Project={:?} | Round={} | Phase=readback_error | Reason={:?} | ProjectionOnly=true | Authority=none",
                             source.input_label, round, error.to_string(),
                         );
-                    })?;
+                    });
+                let shadow_observation = match shadow_observation {
+                    Err(_) if balance_trial.as_ref().is_some_and(|trial| matches!(trial.objective, PageBalanceObjective::AddSystem(_))) => {
+                        return Ok(RendererFeasibilityOracleOutcome::Confirmed {
+                            plan: balance_trial.take().expect("optional balance trial").incumbent,
+                            rounds: round, no_goods, source_fingerprint,
+                        });
+                    }
+                    observation => observation?,
+                };
                 eprintln!(
                     "ETUSCHLOPF: RendererFeasibilityRound: Project={:?} | Round={} | Phase=readback | Observation={:?} | ProjectionOnly=true | Authority=none",
                     source.input_label, round, shadow_observation,
@@ -1313,9 +1339,17 @@ primary_beam_voice_partition_plan.as_ref())?,
                     );
                     if let Some(trial) = balance_trial.take() {
                         let physical = crate::audit_only::renderer_system_break_readback::page_clearance_observation(shadow_committed_xml, &shadow_pdf);
-                        let improves = physical.as_ref().is_ok_and(|after| fixed_page_balance_improves(&trial.before, after, trial.pair));
-                        eprintln!("ETUSCHLOPF: RendererFixedPageBalance: Phase=trial_observed | GeometricGain={} | PhysicalReadback={:?}", improves, physical.as_ref().map(|p| &p.gaps).map_err(|e| e.to_string()));
+                        let improves = physical.as_ref().is_ok_and(|after| match trial.objective {
+                            PageBalanceObjective::PreserveSystems(pair) => fixed_page_balance_improves(&trial.before, after, pair),
+                            PageBalanceObjective::AddSystem(page) => extra_system_page_fill_improves(&trial.before, after, page),
+                        });
+                        eprintln!("ETUSCHLOPF: RendererFixedPageBalance: Phase=trial_observed | Objective={:?} | GeometricGain={} | PhysicalReadback={:?}", trial.objective, improves, physical.as_ref().map(|p| &p.gaps).map_err(|e| e.to_string()));
                         if !improves {
+                            if matches!(trial.objective, PageBalanceObjective::PreserveSystems(_)) && round + 1 < MAX_ORACLE_ROUNDS {
+                                candidate_plan = trial.incumbent;
+                                same_system_incumbent = None;
+                                continue;
+                            }
                             return Ok(RendererFeasibilityOracleOutcome::Confirmed {
                                 plan: trial.incumbent, rounds: round, no_goods, source_fingerprint,
                             });
@@ -1323,7 +1357,7 @@ primary_beam_voice_partition_plan.as_ref())?,
                         crate::registernotation::reader_policy::observe_probe(
                             &committed_source_xml, shadow_committed_xml, &shadow_directives, &shadow_observation.ottava_context);
                         fixed_page_balance_evidence = Some(RendererFixedPageBalanceEvidence {
-                            before: trial.before, pair: trial.pair,
+                            before: trial.before, pair: trial.objective,
                             consumer: shadow_render.probe_identity.clone().with_context(|| "PageBalance: missing consumer binding")?,
                             source_fingerprint,
                             shadow_input: shadow_musicxml.to_path_buf(),
@@ -1359,15 +1393,27 @@ primary_beam_voice_partition_plan.as_ref())?,
                         let physical = crate::audit_only::renderer_system_break_readback::page_clearance_observation(shadow_committed_xml, &shadow_pdf);
                         match physical {
                             Ok(before) => {
-                                if let Some((trial, pair)) = build_renderer_fixed_page_balance_candidate(
-                                    &confirmed_shape.page_system_lengths, &renderer_feasibility_basis, &before, &page_rejections.partitions,
-                                ) {
+                                let fixed_trial = if fixed_balance_attempted {
+                                    None
+                                } else {
+                                    build_renderer_fixed_page_balance_candidate(
+                                        &confirmed_shape.page_system_lengths, &renderer_feasibility_basis, &before, &page_rejections.partitions,
+                                    ).map(|(plan, pair)| (plan, PageBalanceObjective::PreserveSystems(pair)))
+                                };
+                                let next_trial = fixed_trial.or_else(|| {
+                                    build_extra_system_page_fill_candidate(
+                                        &confirmed_shape.page_system_lengths, &renderer_feasibility_basis, &before,
+                                        &page_rejections.partitions, &no_goods,
+                                    ).map(|(plan, page)| (plan, PageBalanceObjective::AddSystem(page)))
+                                });
+                                if let Some((trial, objective)) = next_trial {
+                                    fixed_balance_attempted = true;
                                     page_rejections.bind(&committed_source_xml, shadow_render.probe_identity.as_ref())?;
                                     same_system_incumbent = Some(candidate_plan.clone());
-                                    balance_trial = Some(RendererFixedPageBalanceTrial { incumbent: candidate_plan.clone(), before, pair });
+                                    balance_trial = Some(RendererFixedPageBalanceTrial { incumbent: candidate_plan.clone(), before, objective });
                                     candidate_plan = promote_renderer_feasibility_constraint_candidate(&initial_plan, &trial, &renderer_feasibility_basis, &no_goods)?;
                                     page_rejections.validate(&candidate_plan)?;
-                                    eprintln!("ETUSCHLOPF: RendererFixedPageBalance: Phase=trial_ready | Pair={} | SamePageCount={} | SameOrderedSystems=true | FreshPhysicalGainRequired=true", pair, trial.pages());
+                                    eprintln!("ETUSCHLOPF: RendererFixedPageBalance: Phase=trial_ready | Objective={:?} | SamePageCount={} | FreshPhysicalGainRequired=true", objective, trial.pages());
                                     continue;
                                 }
                             }
@@ -1379,6 +1425,12 @@ primary_beam_voice_partition_plan.as_ref())?,
                         rounds: round,
                         no_goods,
                         source_fingerprint,
+                    });
+                }
+                if balance_trial.as_ref().is_some_and(|trial| matches!(trial.objective, PageBalanceObjective::AddSystem(_))) {
+                    return Ok(RendererFeasibilityOracleOutcome::Confirmed {
+                        plan: balance_trial.take().expect("optional balance trial").incumbent,
+                        rounds: round, no_goods, source_fingerprint,
                     });
                 }
                 if !shadow_observation.collapsed_system_breaks.is_empty()

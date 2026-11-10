@@ -1,3 +1,13 @@
+include!("master_adoption/note_visibility_fragment.rs");
+
+// The original row-20 visibility operation is materialized here at the
+// canonical structural owner; callers supply their unchanged source fragment.
+fn hide_note_fragment_print_object_no(fragment: &str) -> (String, Option<BlockTransformationReceipt>) {
+    let output = mutate_note_visibility_fragment(fragment);
+    let receipt = Some(output.as_str()).filter(|post| *post != fragment).map(|post| crate::master_state_identity::BlockTransformationReceipt::mint_block_receipt(RenderRow20BlockMint { _private: () }, fragment, post, Some((0, fragment.len()))).expect("frozen owner changed bytes without receipt"));
+    (output, receipt)
+}
+
 // Canonical structural mutation ownership.
 // Included in the pipeline lexical namespace to retain private selection facts.
 // The complete preparation and mutation implementations live here; no forwarding facade.
@@ -174,10 +184,8 @@ fn apply_layer_balanced_single_rest_consolidation_candidate_xml(
     let mut promotions = Vec::new();
     if carrier_projection.is_some() {
         for (span, edit) in candidate.spans.iter().zip(edits.iter_mut()) {
-            let normalized = span.fragment.replace("print-object=\"yes\"", "print-object=\"no\"").replace("print-object='yes'", "print-object='no'");
-            let (hidden, receipt) = hide_note_fragment_print_object_no(&normalized);
+            let (hidden, receipt) = hide_note_fragment_print_object_no(&span.fragment);
             if let Some(receipt) = receipt {
-                assert_eq!(normalized, span.fragment, "#20 pre must be the original fragment");
                 promotions.push(DurationPromotion::new(span.start, span.end, hidden.clone(), receipt));
             }
             edit.2 = if hidden.contains("print-spacing=\"yes\"") { hidden.replace("print-spacing=\"yes\"", "print-spacing=\"no\"") }
@@ -780,4 +788,83 @@ fn build_strict_visible_rest_arithmetic_materializer_trial_prepared(
     let candidate = trial.written.then_some(candidate_xml);
     let _ = output_path;
     Ok((trial, candidate, receipts))
+}
+
+#[cfg(test)]
+fn hide_rest_as_technical_carrier(fragment: &str) -> Option<String> {
+    if !fragment.contains("<rest") || fragment.contains("<pitch>") {
+        return None;
+    }
+    let (hidden, receipt) = hide_note_fragment_print_object_no(fragment);
+    let mut probe = crate::master_state_identity::RenderTransitionReceipts::new();
+    probe.push_generated_block(receipt, fragment, &hidden, None);
+    probe.discard_unadopted(crate::master_state_identity::RenderDiscardReason::ReadOnlyProbe);
+    if hidden.contains("print-spacing=\"yes\"") {
+        Some(hidden.replace("print-spacing=\"yes\"", "print-spacing=\"no\""))
+    } else if hidden.contains("print-spacing='yes'") {
+        Some(hidden.replace("print-spacing='yes'", "print-spacing='no'"))
+    } else if hidden.contains("print-spacing=\"no\"") || hidden.contains("print-spacing='no'") {
+        Some(hidden)
+    } else {
+        Some(hidden.replacen("<note", "<note print-spacing=\"no\"", 1))
+    }
+}
+
+#[cfg(test)]
+mod note_visibility_owner_tests {
+    use super::*;
+
+    fn check(original: &str, changed: bool) {
+        let (post, receipt) = hide_note_fragment_print_object_no(original);
+        assert_eq!(receipt.is_some(), changed);
+        let before = roxmltree::Document::parse(original).unwrap();
+        let after = roxmltree::Document::parse(&post).unwrap();
+        let note = after.root_element();
+        assert_eq!(note.attribute("print-object"), Some("no"));
+        assert_eq!(note.attributes().filter(|attribute| attribute.name() == "print-object").count(), 1);
+        assert_eq!(before.root_element().children().map(|node| &original[node.range()]).collect::<Vec<_>>(),
+            note.children().map(|node| &post[node.range()]).collect::<Vec<_>>());
+        for attribute in before.root_element().attributes().filter(|attribute| attribute.name() != "print-object") {
+            assert_eq!(note.attribute(attribute.name()), Some(attribute.value()));
+        }
+        let mut chain = crate::master_state_identity::RenderTransitionReceipts::new();
+        chain.push_generated_block(receipt, original, &post, None);
+        chain.discard_unadopted(crate::master_state_identity::RenderDiscardReason::ReadOnlyProbe);
+        let (again, receipt) = hide_note_fragment_print_object_no(&post);
+        assert_eq!(again, post);
+        assert!(receipt.is_none());
+    }
+
+    #[test]
+    fn original_visibility_spelling_is_bound_to_the_original_owner_receipt() {
+        for (attributes, changed) in [
+            ("", true), ("print-object=\"yes\"", true), ("print-object='yes'", true),
+            ("print-object = 'yes'", true), ("print-object=\"y&#101;s\"", true),
+            ("print-object=\"no\"", false), ("print-object = 'no'", false),
+        ] {
+            for body in ["<rest/>", "<pitch><step>C</step><octave>4</octave></pitch>"] {
+                check(&format!("<note {attributes} print-spacing='yes'>{body}<duration>24</duration><voice>arbitrary</voice><type>16th</type><staff>2</staff></note>"), changed);
+            }
+        }
+    }
+
+    #[test]
+    fn attribute_whitespace_and_multibyte_prefix_keep_exact_child_bytes() {
+        for length in [0, 1, 255, 256, 1024] {
+            let spacing = " ".repeat(length);
+            check(&format!("<!-- Grüßé --><note data-label='größer > kleiner' print-object{spacing}={spacing}'yes'><rest/><duration>24</duration><voice>frei</voice><type>16th</type><staff>2</staff></note>"), true);
+        }
+    }
+
+    #[test]
+    fn only_the_note_opening_controls_visibility_and_invalid_inputs_are_unchanged() {
+        check("<!-- print-object=\"no\" --><note data-label='a > b'><rest/><notations><other-notation print-object='no'>kept</other-notation></notations></note>", true);
+        check("<note/>", true);
+        for input in ["<note print-object='yes'", "<other/>", "<note print-object='invalid'><rest/></note>"] {
+            let (post, receipt) = hide_note_fragment_print_object_no(input);
+            assert_eq!(post, input);
+            assert!(receipt.is_none());
+        }
+        assert!(hide_rest_as_technical_carrier("<note print-object='yes'><rest/><duration>24</duration><voice>any</voice><type>16th</type><staff>1</staff></note>").is_some());
+    }
 }

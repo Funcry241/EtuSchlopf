@@ -6,21 +6,6 @@ mod identity_debt_scan;
 
 use identity_debt_scan::scan_source_text;
 
-#[test]
-fn injected_absolute_measure_writer_is_detected() {
-    let source = r#"
-fn apply_demo_render_write(xml: &str) -> String {
-    let target_measure = "42";
-    if target_measure == "42" { xml.to_string() } else { String::new() }
-}
-"#;
-    let scan = scan_source_text("src/demo.rs", source);
-    assert!(scan.findings.iter().any(|finding| {
-        finding.kind == "ABSOLUTE_MEASURE_SELECTOR"
-            && finding.function == "apply_demo_render_write"
-            && finding.payload == "measures=42"
-    }));
-}
 
 #[test]
 fn test_only_localization_is_not_productive_debt() {

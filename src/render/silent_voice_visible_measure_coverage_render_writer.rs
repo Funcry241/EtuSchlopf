@@ -2078,6 +2078,20 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
     let cursor_exchange_written = exchange_stats.written;
     final_candidate = exchange_post;
     candidate_occurrence_continuation = exchanged;
+    let mut source_sustain_written = false;
+    if let Ok(course) = &candidate_occurrence_continuation {
+        match course.project_source_sustain(occurrence_continuation, final_chord_structural_plan,
+            &effective_voice_plan, render_pruned_final_chord_omissions) {
+            Ok(Some((next, receipt))) => {
+                receipts.push_exact(Some(receipt));
+                final_candidate = next.xml().to_owned();
+                candidate_occurrence_continuation = Ok(next);
+                source_sustain_written = true;
+            }
+            Ok(None) => {}
+            Err(error) => eprintln!("CrossBarSourceSustain: projection refused: {error}"),
+        }
+    }
 
     crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
         "FinalPdfPrecommit",
@@ -2091,7 +2105,8 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
         || same_lane_strict_interior_split_accepted
         || primary_clef_projection_changed
         || primary_beam_voice_partition_changed_voice_elements > 0
-        || cursor_exchange_written;
+        || cursor_exchange_written
+        || source_sustain_written;
     if candidate_occurrence_continuation.is_err() { return rejected_pdf_preparation(receipts); }
     let prepared_candidate = final_candidate.clone();
     let final_chord_structural_plan = final_chord_structural_plan.clone();

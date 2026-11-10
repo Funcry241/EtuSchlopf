@@ -1658,9 +1658,11 @@ pub(super) fn renderer_staff_cells(
                     && candidate.page_index == anchor.page_index
                     && (candidate.x_left - anchor.x_left).abs() <= 1.0
                     && (candidate.x_right - anchor.x_right).abs() <= 1.0
-                    && (25.0..=80.0).contains(
-                        &(renderer_staff_center(candidate) - anchor_center).abs(),
-                    )
+                    && {
+                        let distance = (renderer_staff_center(candidate) - anchor_center).abs();
+                        distance >= 25.0 && (distance <= 80.0
+                            || renderer_staff_cells_share_barline(anchor, candidate, segments))
+                    }
             })
             .min_by(|left, right| {
                 (renderer_staff_center(left.1) - anchor_center)
@@ -1703,6 +1705,57 @@ pub(super) fn renderer_staff_cells(
         out.push(lower);
     }
     Ok(out)
+}
+
+// For a wider system, bind the pair to a vertical barline joining its
+// staff tops at a shared measure edge. Distance alone cannot prove a pair.
+fn renderer_staff_cells_share_barline(
+    first: &RendererStaffCell,
+    second: &RendererStaffCell,
+    segments: &[PdfStrokeSegment],
+) -> bool {
+    let first_top = first.line_y_top[0];
+    let second_top = second.line_y_top[0];
+    let top = first_top.min(second_top);
+    let bottom = first_top.max(second_top);
+    let lower = if first_top < second_top { second } else { first };
+    let lower_bottom = *lower.line_y_top.last().expect("five staff lines");
+    segments.iter().any(|stroke| {
+        if stroke.page_index != first.page_index || (stroke.x1 - stroke.x2).abs() > 0.2
+            || !(0.75..=1.5).contains(&stroke.width)
+        {
+            return false;
+        }
+        let x = (stroke.x1 + stroke.x2) / 2.0;
+        let at_edge = (x - first.x_left).abs() <= 1.0 || (x - first.x_right).abs() <= 1.0;
+        let stroke_top = stroke.y1_top.min(stroke.y2_top);
+        let stroke_bottom = stroke.y1_top.max(stroke.y2_top);
+        at_edge && (stroke_top - top).abs() <= 1.0
+            && ((stroke_bottom - bottom).abs() <= 1.0 || (stroke_bottom - lower_bottom).abs() <= 1.0)
+    })
+}
+
+#[cfg(test)]
+mod extended_staff_distance_tests {
+    use super::{PdfStrokeSegment, renderer_staff_cells};
+
+    #[test]
+    fn wide_staff_pair_requires_barline_at_the_measure_edge() {
+        let mut segments = Vec::new();
+        for top in [100.0, 181.0] {
+            for line in 0..5 {
+                let y = top + f64::from(line) * 5.0;
+                segments.push(PdfStrokeSegment {
+                    page_index: 1, x1: 50.0, x2: 200.0, y1_top: y, y2_top: y, width: 0.5,
+                });
+            }
+        }
+        assert!(renderer_staff_cells(&segments, 1).is_err());
+        segments.push(PdfStrokeSegment {
+            page_index: 1, x1: 200.0, x2: 200.0, y1_top: 100.0, y2_top: 181.0, width: 0.9,
+        });
+        assert_eq!(renderer_staff_cells(&segments, 1).unwrap().len(), 2);
+    }
 }
 
 fn renderer_staff_center(cell: &RendererStaffCell) -> f64 {

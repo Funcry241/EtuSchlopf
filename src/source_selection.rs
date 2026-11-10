@@ -69,6 +69,7 @@ pub(crate) struct RemovedSourceSelectionReason {
 pub(crate) enum SourceSelectionDecisionPass {
     InitialPitchStaff,
     GraceHostStaff,
+    BoundSourceVoiceStaff,
     PianoHandSplit,
     SmoothFastStaffJump,
     SmoothWideSimultaneity,
@@ -88,6 +89,7 @@ impl SourceSelectionDecisionPass {
         match self {
             Self::InitialPitchStaff => "initial_pitch_staff",
             Self::GraceHostStaff => "grace_host_staff",
+            Self::BoundSourceVoiceStaff => "bound_source_voice_staff",
             Self::PianoHandSplit => "piano_hand_split",
             Self::SmoothFastStaffJump => "smooth_fast_staff_jump",
             Self::SmoothWideSimultaneity => "smooth_wide_simultaneity",
@@ -107,6 +109,7 @@ impl SourceSelectionDecisionPass {
         match self {
             Self::InitialPitchStaff => 1,
             Self::GraceHostStaff => 15,
+            Self::BoundSourceVoiceStaff => 16,
             Self::PianoHandSplit => 2,
             Self::SmoothFastStaffJump => 3,
             Self::SmoothWideSimultaneity => 4,

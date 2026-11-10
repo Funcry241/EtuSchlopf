@@ -1,3 +1,5 @@
+#[path = "cross_bar_source_sustain.rs"]
+mod cross_bar_source_sustain;
 #[path = "ordered_received_beam_readback.rs"]
 mod ordered_received_beam_readback;
 #[path = "written_assignment_graph.rs"]
@@ -1143,6 +1145,8 @@ impl CanonicalFinalChordRenderOccurrenceContinuation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FinalPdfSourceOccurrenceContinuation {
     xml: String,
+    sustain_inputs: Option<cross_bar_source_sustain::SustainInputs>,
+    sustain_proof: Option<cross_bar_source_sustain::SustainProof>,
     // Exact current beam surface carried by the actual private occurrence
     // transports. It is a drift guard, never group identity or music authority.
     beam_surface: OccurrenceBeamSurface,
@@ -1205,7 +1209,7 @@ impl FinalPdfSourceOccurrenceContinuation {
             course.through(&before, &xml)?;
         }
         let beam_surface = current_occurrence_beam_surface(&xml)?;
-        Ok(Self { xml, beam_surface, receipt })
+        Ok(Self { xml, beam_surface, receipt, sustain_inputs: None, sustain_proof: None })
     }
 
     fn has_authentic_beam_surface(&self) -> io::Result<bool> {
@@ -1232,6 +1236,10 @@ impl FinalPdfSourceOccurrenceContinuation {
         Ok(matching[0].1.clone())
     }
 
+    fn current_occurrences(&self) -> &[FinalChordTransactionOutputOccurrenceWitness] {
+        self.sustain_proof.as_ref().map_or(self.receipt.occurrences.as_slice(), |proof| proof.occurrences())
+    }
+
     fn phrase_occurrence_positions(&self) -> anyhow::Result<Vec<(PhraseEndpointOccurrence, std::ops::Range<usize>)>> {
         let document = roxmltree::Document::parse(&self.xml)?;
         let parts = document.root_element().children().filter(|n| n.has_tag_name("part")).collect::<Vec<_>>();
@@ -1243,7 +1251,7 @@ impl FinalPdfSourceOccurrenceContinuation {
             let mut pitched_ordinal = 0;
             for note in &measure.notes {
                 if note.rest_like || note.pitch_midi.is_none() { continue; }
-                let rows = self.receipt.occurrences.iter().filter(|row|
+                let rows = self.current_occurrences().iter().filter(|row|
                     row.measure == measure.measure && row.pitched_ordinal == pitched_ordinal).collect::<Vec<_>>();
                 anyhow::ensure!(rows.len() == 1, "phrase endpoint receipt coverage is not unique");
                 let row = rows[0];
@@ -1268,10 +1276,7 @@ impl FinalPdfSourceOccurrenceContinuation {
     pub(crate) fn declassified_occurrence_identity_rows(
         &self,
     ) -> Vec<(usize, usize, usize, usize, u8, usize)> {
-        let mut rows = self
-            .receipt
-            .occurrences
-            .iter()
+        let mut rows = self.current_occurrences().iter()
             .map(|row| (
                 row.source_event_id,
                 row.attack_id,
@@ -9410,8 +9415,14 @@ pub(crate) fn verify_final_pdf_source_occurrence_continuation(
     if continuation.receipt.original_beam_voice_groups != canonical.original_beam_voice_groups {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "FinalChord original beam origin carrier differs from its canonical epoch"));
     }
+    let original_xml = if let Some(proof) = &continuation.sustain_proof {
+        proof.verify(candidate_xml)?;
+        proof.original_xml()
+    } else {
+        candidate_xml
+    };
     verify_canonical_final_chord_occurrence_receipt(
-        candidate_xml,
+        original_xml,
         canonical,
         voice_plan,
         render_omissions,
@@ -10027,6 +10038,12 @@ fn transport_final_pdf_source_occurrence_continuation_through_pitched_topology_n
             ),
         )
     })?;
+    if source.sustain_proof.is_some() {
+        let mut next = source.clone();
+        next.xml = target_xml.to_owned();
+        next.beam_surface = current_occurrence_beam_surface(target_xml)?;
+        return Ok(next);
+    }
     FinalPdfSourceOccurrenceContinuation::from_original_transport(target_xml.to_string(), source.receipt.clone())
 }
 
