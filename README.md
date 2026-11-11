@@ -25,9 +25,9 @@ Der Quellstand auf `main` ist **r1740**. Die [Windows-Abnahme für BWV 847](docs
 
 ## Ein Blick auf die Noten
 
-[![Erstes Klaviersystem der Etüde Nr. 1 aus r1684](docs/images/etude-1-r1684-ausschnitt.png)](docs/examples/etude-1-r1684.pdf)
+[![Bachs Fuge BWV 847, Takt 4 bis 6, aus EtuSchlopf r1740](docs/images/bwv847-fuge-r1740-ausschnitt.png)](docs/examples/bwv847-fuge-r1740.pdf)
 
-*Etüde Nr. 1 aus dem nativen r1684-Lauf. Bild anklicken für die vollständige PDF.*
+*Johann Sebastian Bach, Fuge c-Moll BWV 847, Takt 4 bis 6 aus dem Windows-Lauf von r1740. Das Bild öffnet die vollständige vierseitige PDF.*
 
 Das Projekt ist experimentell und privat gepflegt. Prüfe am eigenen Stück,
 ob dir die Fassung bei der weiteren Arbeit hilft. Musikalische Nachbearbeitung
