@@ -1,0 +1,26 @@
+# Assign concurrent original beams and source-owned rest height
+
+SelectorDerivationContract: causal_class_first_v1
+SelectorChange: yes
+SelectorRole: repair_scope
+KnownWitnessUsedForFeatureDerivation: no
+TargetConditionedFeatureNarrowing: no
+ClassDefinitionPrecedesCorpusDistribution: yes
+UniquenessIsOutcomeNotGoal: yes
+RepairSelectorSeparatedFromErrorClass: yes
+CausalFeatureNecessityReview: complete
+CorpusDistributionPurpose: measurement_only
+CorpusDistributionMayRefineClassToKnownWitness: no
+ParentErrorClassContract: docs/selector_derivation_contract_visible_rest_elision_rhythmic_obligation.md
+ScopeNarrowingBasis: authority_or_safety_only
+DiscriminativeContextOnlyNarrowing: forbidden
+MultiplicityInvarianceContract: candidate_duplication_v1
+IndependentCandidateDuplicationInvariant: yes
+ScorewideMultiplicityAsWriteAuthority: forbidden
+GlobalRankingOfIndependentCandidates: forbidden
+MultiplicityDecisionScope: local_candidate_or_explicit_conflict_group
+CandidateDuplicationProbe: required_before_productive_write
+CausalFeature: positively sealed original beam components share provisional channels and sound concurrently on the same staff
+CausalFeature: the complete connected assignment retains written and sounding compatibility, and has a unique best preservation rank
+CausalFeature: exact source-gap endpoints confirm an upper voice on the bass staff and a unique visible rest carrier covers the gap
+NonCausalContextExcluded: project, printed measure label, pitch, numerical voice label, scorewide count and discovery order

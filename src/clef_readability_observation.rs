@@ -112,6 +112,14 @@ pub(crate) enum PianoClef {
 }
 
 impl PianoClef {
+    pub(crate) fn distance_from_middle_line(self, pitch: ClefPitchObservation) -> i64 {
+        let middle = match self {
+            Self::TrebleG2 => 34, // B4
+            Self::BassF4 => 22,   // D3
+        };
+        pitch.diatonic_position - middle
+    }
+
     pub(crate) fn ledger_lines(self, pitch: ClefPitchObservation) -> i64 {
         let (bottom_line, top_line) = match self {
             Self::TrebleG2 => (4 * 7 + 2, 5 * 7 + 3), // E4 .. F5

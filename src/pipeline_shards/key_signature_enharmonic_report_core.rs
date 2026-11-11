@@ -1376,10 +1376,22 @@ fn canonical_master_functional_respelling_from_render(
             let minor = tonal_frame.scorewide_final_bass == Some(relative_minor_tonic);
             let major_tonic = (7 * render_fifths).rem_euclid(12);
             let tonic = if minor { relative_minor_tonic } else { major_tonic };
+            let mut spelling_plans = functional_respelling_plans_for_tonal_frame_from_measure(
+                master_xml, render_fifths, tonic, minor, None,
+            );
+            if master_keys == render_keys
+                && let Some((chromatic_candidates, _)) = bound_key_diatonic_plans(
+                    master_xml, &parse_atomic_notes(master_xml), None,
+                )
+            {
+                spelling_plans.extend(chromatic_candidates.into_iter()
+                    .filter(|plan| plan.kind == FunctionalRespellingKind::ChromaticPassing));
+                // The existing functional plan keeps precedence at a shared note.
+                spelling_plans.sort_by_key(|plan| std::cmp::Reverse(plan.note_start));
+                spelling_plans.dedup_by_key(|plan| plan.note_start);
+            }
             let plans = original_chain_functional_respelling_plans(
-                master_xml, master_xml, &[], original_chains,
-                functional_respelling_plans_for_tonal_frame_from_measure(
-                    master_xml, render_fifths, tonic, minor, None), None,
+                master_xml, master_xml, &[], original_chains, spelling_plans, None,
             )?;
             edit_script = Some(
                 crate::master_state_identity::exact_script_from_descending_application(

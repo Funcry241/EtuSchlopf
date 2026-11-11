@@ -229,9 +229,20 @@ fn validate_sink(path: &str, source: &str) -> Result<(), String> {
     };
     validate_exports(source, allowed)
 }
-pub(crate) fn validate_current_tree(root: &Path) -> Result<(), String> {
+#[derive(Debug)]
+pub(crate) struct ValidatedSscTree {
+    positive_k2_root: Option<std::path::PathBuf>,
+}
+
+impl ValidatedSscTree {
+    pub(crate) fn proves_positive_k2(&self, root: &Path) -> bool {
+        self.positive_k2_root.as_deref() == Some(root)
+    }
+}
+
+pub(crate) fn validate_current_tree(root: &Path) -> Result<ValidatedSscTree, String> {
     if !root.join(CONTRACT_PATH).exists() {
-        return Ok(());
+        return Ok(ValidatedSscTree { positive_k2_root: None });
     }
     if read(root, CONTRACT_PATH)? != CONTRACT {
         return Err(fail("closed evidence/proof/shadow contract changed"));
@@ -258,7 +269,9 @@ pub(crate) fn validate_current_tree(root: &Path) -> Result<(), String> {
             validate_sink(&path, &source)?;
         }
     }
-    Ok(())
+    Ok(ValidatedSscTree {
+        positive_k2_root: k2::installed(root).then(|| root.to_owned()),
+    })
 }
 pub(crate) fn validate_transition(parent: &Path, child: &Path, class: &str) -> Result<(), String> {
     k2::validate_transition(parent, child, class)?;

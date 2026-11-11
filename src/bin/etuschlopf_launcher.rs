@@ -2109,9 +2109,11 @@ fn execute_normal_run(
     let test_prewarm = StrictTestPrewarm::start(launcher, &state, request.launcher_tests);
     materialize_launcher_build(launcher, &mut state, request, plan.build)?;
     let prewarm_wait_timing = LauncherPhaseTimer::new("TestPrewarmResidualWait");
-    StrictTestPrewarm::finish(test_prewarm, launcher);
+    let prewarm_timing_report = StrictTestPrewarm::finish(test_prewarm, launcher);
     drop(prewarm_wait_timing);
-    run_integrated_launcher_tests(launcher, &mut state, request.launcher_tests)?;
+    run_integrated_launcher_tests(
+        launcher, &mut state, request.launcher_tests, prewarm_timing_report.as_deref(),
+    )?;
 
     match &request.target {
         RunTarget::Missing => reject_missing_run_target(launcher),
@@ -2202,6 +2204,7 @@ fn run_integrated_launcher_tests(
     launcher: &mut Launcher,
     state: &mut RunState,
     launcher_tests: LauncherTestPlan,
+    prewarm_timing_report: Option<&Path>,
 ) -> AppResult<()> {
     let _timing = LauncherPhaseTimer::new("IntegratedTestsControl");
     if !should_run_integrated_launcher_tests(state.validation, launcher_tests) {
@@ -2234,7 +2237,11 @@ fn run_integrated_launcher_tests(
         strict_test_validation_receipt_material(&launcher.version, &state.target_exe)?;
     prepare_current_run_test_log(&strict_test_log)?;
     state.strict_test_log = Some(strict_test_log.clone());
-    let test_args = strict_test_cargo_args(launcher.thread_plan.cargo_jobs);
+    let mut test_args = strict_test_cargo_args(launcher.thread_plan.cargo_jobs);
+    if prewarm_timing_report.is_none() {
+        test_args.extend(["--timings".to_string(), "--color".to_string(), "never".to_string()]);
+    }
+    test_args.extend(["--".to_string(), "--show-output".to_string()]);
     let os_args: Vec<OsString> = test_args.iter().map(OsString::from).collect();
     let test_result = invoke_logged_program_with_env(
         launcher,
@@ -2249,6 +2256,16 @@ fn run_integrated_launcher_tests(
         },
         ProcessEnvMode::NormalCargoTarget,
     )?;
+    let authoritative_timing_report = prewarm_timing_report.is_none().then(|| {
+        fs::read_to_string(&strict_test_log).ok()
+            .and_then(|log| strict_test_timing_report_path(&log))
+    }).flatten();
+    if let Some(report) = prewarm_timing_report.or(authoritative_timing_report.as_deref())
+        && fs::copy(report, STRICT_TEST_BUILD_TIMING).is_ok()
+        && let Ok(mut log) = OpenOptions::new().append(true).open(&strict_test_log)
+    {
+        let _ = writeln!(log, "{STRICT_TEST_BUILD_TIMING_MARKER}");
+    }
     state.strict_test_exit = test_result.exit_code.to_string();
     state.strict_test_ms = test_result.elapsed_ms.to_string();
     state.strict_test_summary = cargo_test_summary_from_log(&strict_test_log);
@@ -2294,6 +2311,25 @@ fn strict_test_cargo_args(cargo_jobs: usize) -> Vec<String> {
 }
 
 const STRICT_TEST_PREWARM_LOG: &str = "target/etuschlopf_logs/strict_test_prewarm.log";
+const STRICT_TEST_BUILD_TIMING: &str =
+    "target/etuschlopf_logs/strict-test-build-timing.html";
+const STRICT_TEST_BUILD_TIMING_MARKER: &str = "StrictTestBuildTimingReport: current";
+
+fn strict_test_timing_report_path(log: &str) -> Option<PathBuf> {
+    let directory = fs::canonicalize("target/bc/cargo-timings").ok()?;
+    for line in log.lines().rev() {
+        let Some(path) = line.trim().strip_prefix("Timing report saved to ") else { continue; };
+        let report = fs::canonicalize(path).ok()?;
+        let name = report.file_name()?.to_str()?;
+        if report.parent() == Some(directory.as_path())
+            && name.starts_with("cargo-timing-") && name.ends_with(".html") && report.is_file()
+        {
+            return Some(report);
+        }
+        return None;
+    }
+    None
+}
 
 /// The prewarm runs beside Clippy and the productive build. With the full job
 /// count both Cargo invocations started up to twice as many compilers as the
@@ -2335,7 +2371,7 @@ impl StrictTestPrewarm {
         let log_err = log.try_clone().ok()?;
         let jobs = test_prewarm_cargo_jobs(launcher.thread_plan.cargo_jobs);
         let mut args = strict_test_cargo_args(jobs);
-        args.push("--no-run".to_string());
+        args.extend(["--no-run", "--timings", "--color", "never"].map(str::to_string));
         let started = Instant::now();
         let child = Command::new("cargo")
             .args(&args)
@@ -2354,13 +2390,9 @@ impl StrictTestPrewarm {
         })
     }
 
-    fn finish(prewarm: Option<Self>, launcher: &mut Launcher) {
-        let Some(mut prewarm) = prewarm else {
-            return;
-        };
-        let Some(mut child) = prewarm.child.take() else {
-            return;
-        };
+    fn finish(prewarm: Option<Self>, launcher: &mut Launcher) -> Option<PathBuf> {
+        let mut prewarm = prewarm?;
+        let mut child = prewarm.child.take()?;
         let join_started = Instant::now();
         let durations_path = Path::new(console_live_status::LAST_PHASE_DURATIONS_FILE);
         let previous_wait = console_live_status::read_last_phase_durations(durations_path)
@@ -2434,6 +2466,12 @@ impl StrictTestPrewarm {
                 &format!("beendet: {status} · Tests laufen trotzdem vollständig"),
                 Emphasis::Muted,
             );
+        }
+        if status_ok {
+            let log = fs::read_to_string(STRICT_TEST_PREWARM_LOG).ok()?;
+            strict_test_timing_report_path(&log)
+        } else {
+            None
         }
     }
 }

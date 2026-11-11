@@ -647,6 +647,18 @@ fn run_arrangement_solver_stage(
     let mut stage_clock = std::time::Instant::now();
     let mut search_state = select_initial_arrangement_solver_search_state(&inputs)?;
     stage_clock = pipeline_stage_timing(&timing_label, "ArrangementSolver/InitialSearchState", stage_clock);
+
+    // A qualified source has already assigned every occurrence to a written
+    // staff and voice. Arrangement search may only infer those assignments
+    // for sources that leave them open.
+    let selected_seed = &search_state.best.midi_seed_stats;
+    if selected_seed.rhythmic_courses.has_bound_source_voices() {
+        console_progress(
+            "ArrangementSolver: Deklarierte MIDI-Stimmen werden aus der Quellfassung übernommen.",
+        );
+        return finish_arrangement_solver_stage(search_state, &inputs.source.input_label);
+    }
+
     run_arrangement_solver_guided_search_stage(&inputs, &mut search_state)?;
     reconcile_candidate_material_lineage(
         &mut search_state.best,

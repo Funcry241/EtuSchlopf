@@ -4550,6 +4550,24 @@ fn copy_dir_recursive(source: &Path, destination: &Path) -> AppResult<()> {
 
 #[cfg(test)]
 mod tests {
+    struct BootstrapTestTiming {
+        name: &'static str,
+        started: std::time::Instant,
+    }
+
+    impl BootstrapTestTiming {
+        fn start(name: &'static str) -> Self {
+            Self { name, started: std::time::Instant::now() }
+        }
+    }
+
+    impl Drop for BootstrapTestTiming {
+        fn drop(&mut self) {
+            eprintln!("BootstrapTestTiming: Test={}; WallMs={}",
+                self.name, self.started.elapsed().as_millis());
+        }
+    }
+
     use super::*;
 
     #[test]
@@ -5080,6 +5098,7 @@ mod tests {
 
     #[test]
     fn failed_bootstrap_clean_preserves_exact_output_and_refuses_success() {
+        let _timing = BootstrapTestTiming::start("failed_bootstrap_clean_preserves_exact_output_and_refuses_success");
         const ROOT_ENV: &str = "ETUSCHLOPF_SYNTHETIC_CLEAN_TEST_ROOT";
         if let Some(root) = env::var_os(ROOT_ENV) {
             let root = PathBuf::from(root);
@@ -5109,6 +5128,7 @@ mod tests {
 
     #[test]
     fn pending_reexec_rollback_cleans_child_bootstrap_cache_and_parent_rebuilds() {
+        let _timing = BootstrapTestTiming::start("pending_reexec_rollback_cleans_child_bootstrap_cache_and_parent_rebuilds");
         let current = temp_project("restart_current", "old");
         let incoming = temp_project("restart_incoming", "new");
         write_bootstrap_restart_fixture(&current, "old");
@@ -5974,6 +5994,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn incoming_run_cmd_preserves_early_compiler_failure_through_legacy_collector() {
+        let _timing = BootstrapTestTiming::start("incoming_run_cmd_preserves_early_compiler_failure_through_legacy_collector");
         let root = temp_project("batch_early_failure", "old");
         let bin = root.join("stub bin");
         fs::create_dir_all(&bin).unwrap();

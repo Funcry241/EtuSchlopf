@@ -92,8 +92,9 @@ fn run_rest_and_articulation_render_stage(
         let root = render_state.require_state_root("RestArticulation current State");
         let (piano_final_rest_after_xml, audit, receipts) = build_piano_final_rest_glyph_canonical_height_write(
             &piano_final_rest_source_xml,
-            "finale Render-MusicXML nach FragmentedRestChainTransactionalWrite; Klavierfassung eine sichtbare Pausenhoehe je Glyph",
+            "finale Render-MusicXML nach FragmentedRestChainTransactionalWrite; Pausenhoehe nach Glyph und belegter Stimme",
             render_xml_trial_path,
+            Some(frozen_serialized_voice_plan),
         )?;
         if audit.written {
             render_state.adopt_transition(root, &piano_final_rest_after_xml, receipts,

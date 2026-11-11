@@ -2239,6 +2239,7 @@ fn create_normal_run_assistant_export_bundle(
         let src = project_root_bound_path(project_root, strict_test_log);
         if src.exists() {
             copy_export_file(&src, &latest_dir.join(file_name_string(&src)), &mut included)?;
+            copy_current_test_build_timing(project_root, &latest_dir, &src, &mut included);
         } else {
             omitted.push(format!("{} | current_launcher_test_log_missing", strict_test_log.display()));
         }
@@ -2616,6 +2617,7 @@ fn create_corpus_run_assistant_export_bundle(
         let src = project_root_bound_path(project_root, strict_test_log);
         if src.exists() {
             copy_export_file(&src, &latest_dir.join(file_name_string(&src)), &mut included)?;
+            copy_current_test_build_timing(project_root, &latest_dir, &src, &mut included);
         } else {
             omitted.push(format!("{} | current_launcher_test_log_missing", strict_test_log.display()));
         }
@@ -4071,6 +4073,17 @@ fn first_line_starting_with_any(text: &str, prefixes: &[&str]) -> Option<String>
         .map(ToOwned::to_owned)
 }
 
+
+fn copy_current_test_build_timing(
+    project_root: &Path, latest_dir: &Path, test_log: &Path, included: &mut Vec<String>,
+) {
+    if fs::read_to_string(test_log)
+        .is_ok_and(|log| log.lines().any(|line| line == STRICT_TEST_BUILD_TIMING_MARKER))
+    {
+        let timing = project_root.join(STRICT_TEST_BUILD_TIMING);
+        let _ = copy_export_file(&timing, &latest_dir.join(file_name_string(&timing)), included);
+    }
+}
 
 fn copy_export_file(src: &Path, dest: &Path, included: &mut Vec<String>) -> AppResult<()> {
     if let Some(parent) = dest.parent() {

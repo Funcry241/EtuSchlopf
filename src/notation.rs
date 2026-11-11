@@ -133,6 +133,7 @@
 
         let xml = clef_readback_xml.as_str();
         let spans = find_measure_spans(xml);
+        let lower_stem_clefs = lower_stem_clef_by_measure(xml);
         if spans.is_empty() {
             let preserving_receipt =
                 crate::master_state_identity::PreservingTransformationReceipt::mint_preserving_receipt(
@@ -161,7 +162,9 @@
         for span in spans {
             out.push_str(&xml[last..span.start]);
             let measure_text = &xml[span.start..span.end];
-            let polished = polish_measure(measure_text, divisions)
+            let polished = polish_measure_with_stems(
+                measure_text, divisions, lower_stem_clefs.get(&span.start).copied(),
+            )
                 .with_context(|| "Takt konnte für Notensatz-Politur nicht verarbeitet werden")?;
             divisions = polished.divisions;
             total.beam_groups += polished.stats.beam_groups;
@@ -181,7 +184,7 @@
         out.push_str(&xml[last..]);
     
         // Clef decisions are complete before beam polishing. polish_measure
-        // changes only beam tags inside notes and copies all intervening bytes.
+        // changes owned beam tags and plain stems inside notes, copying intervening bytes.
         // Preserve that course directly; no post-polish clef repair is needed.
         let preserving_receipt =
             crate::master_state_identity::PreservingTransformationReceipt::mint_preserving_receipt(
@@ -965,7 +968,96 @@
         spans
     }
     
+    fn lower_stem_clef_by_measure(xml: &str) -> BTreeMap<usize, PianoClef> {
+        let mut by_measure = BTreeMap::new();
+        let Ok(document) = roxmltree::Document::parse(xml) else { return by_measure; };
+        for part in document.root_element().children().filter(|node| node.has_tag_name("part")) {
+            let lower_octave = part.descendants().any(|node| {
+                node.has_tag_name("direction")
+                    && node.descendants().any(|child| child.has_tag_name("octave-shift"))
+                    && node.children().find(|child| child.has_tag_name("staff"))
+                        .and_then(|child| child.text()).map(str::trim) != Some("1")
+            });
+            if lower_octave {
+                continue;
+            }
+            let mut clef = None;
+            for measure in part.children().filter(|node| node.has_tag_name("measure")) {
+                let cursor = measure.children().find(|node| {
+                    matches!(node.tag_name().name(), "note" | "backup" | "forward")
+                });
+                let mut explicit = measure.children().filter(|node| node.has_tag_name("attributes"))
+                    .flat_map(|node| node.children())
+                    .filter(|node| node.has_tag_name("clef") && node.attribute("number") == Some("2"));
+                if let Some(first) = explicit.next() {
+                    clef = if explicit.next().is_none()
+                        && cursor.is_none_or(|node| first.range().end <= node.range().start)
+                    {
+                        lower_stem_clef(first)
+                    } else {
+                        None
+                    };
+                }
+                if let Some(clef) = clef {
+                    by_measure.insert(measure.range().start, clef);
+                }
+            }
+        }
+        by_measure
+    }
+
+    fn lower_stem_clef(node: roxmltree::Node<'_, '_>) -> Option<PianoClef> {
+        let field = |name: &str| node.children().find(|child| child.has_tag_name(name))
+            .and_then(|child| child.text()).map(str::trim);
+        match (field("sign"), field("line"), field("clef-octave-change")) {
+            (Some("F"), Some("4"), None | Some("0")) => Some(PianoClef::BassF4),
+            (Some("G"), Some("2"), None | Some("0")) => Some(PianoClef::TrebleG2),
+            _ => None,
+        }
+    }
+
+    fn lower_monophonic_voice(notes: &[NoteInfo]) -> Option<&str> {
+        let mut lower = notes.iter()
+            .filter(|info| info.staff.trim() == "2" && !info.is_rest && !info.is_hidden);
+        let first = lower.next()?;
+        (!first.is_chord && lower.all(|info| !info.is_chord && info.voice == first.voice))
+            .then_some(first.voice.as_str())
+    }
+
+    fn lower_group_stem(clef: PianoClef, raw: &[RawNote], group: &[usize]) -> Option<&'static str> {
+        let (mut low, mut high) = (0, 0);
+        for index in group {
+            let position = raw.binary_search_by_key(index, |note| note.start).ok()?;
+            let note = &raw[position].text;
+            if note.matches("<stem>").count() != 1
+                || !(note.contains("<stem>up</stem>") || note.contains("<stem>down</stem>"))
+            {
+                return None;
+            }
+            let distance = clef.distance_from_middle_line(observe_pitch(note)?);
+            low = low.min(distance);
+            high = high.max(distance);
+        }
+        // The farthest head fixes the direction. A balanced bass-clef group
+        // straddling the middle line uses the upward stem convention.
+        match (-low).cmp(&high) {
+            std::cmp::Ordering::Greater => Some("<stem>up</stem>"),
+            std::cmp::Ordering::Less => Some("<stem>down</stem>"),
+            std::cmp::Ordering::Equal if clef == PianoClef::BassF4 && low < 0 => {
+                Some("<stem>up</stem>")
+            }
+            std::cmp::Ordering::Equal => None,
+        }
+    }
+
+    #[cfg(test)]
     fn polish_measure(text: &str, inherited_divisions: i64) -> anyhow::Result<MeasurePolish> {
+        polish_measure_with_stems(text, inherited_divisions, None)
+    }
+
+    fn polish_measure_with_stems(
+        text: &str, inherited_divisions: i64, lower_clef: Option<PianoClef>,
+    ) -> anyhow::Result<MeasurePolish> {
         let divisions = extract_first_i64(text, "divisions").unwrap_or(inherited_divisions).max(1);
         let raw_notes = collect_raw_notes(text);
         if raw_notes.is_empty() {
@@ -980,6 +1072,8 @@
         let note_infos = collect_note_infos(text, &raw_notes);
         let lower_staff_clef_boundaries = collect_lower_staff_clef_boundaries(text);
         let mut beam_state_by_note: BTreeMap<usize, Vec<(usize, &'static str)>> = BTreeMap::new();
+        let lower_voice = lower_monophonic_voice(&note_infos);
+        let mut stem_by_note = BTreeMap::new();
         let mut stats = PolishStats::default();
     
         let mut natural_group_counts: BTreeMap<(String, String, i64), usize> = BTreeMap::new();
@@ -1012,7 +1106,7 @@
             }
         }
     
-        for (_key, mut indices) in groups {
+        for ((staff, voice, _, _), mut indices) in groups {
             indices.sort_by_key(|idx| {
                 note_infos
                     .iter()
@@ -1055,6 +1149,14 @@
                 let Some(planned_states) = planned_states else {
                     continue;
                 };
+                if staff.trim() == "2" && lower_voice == Some(voice.as_str())
+                    && let Some(clef) = lower_clef
+                    && let Some(direction) = lower_group_stem(clef, &raw_notes, &ordered_note_indices)
+                {
+                    for index in &ordered_note_indices {
+                        stem_by_note.insert(*index, direction);
+                    }
+                }
                 for (note_index, level, state) in planned_states {
                     beam_state_by_note.entry(note_index).or_default().push((level, state));
                 }
@@ -1083,7 +1185,11 @@
             let output_start = rebuilt.len();
             if let Some(states) = beam_state_by_note.get(&note.start) {
                 stats.removed_beams += count_beam_tags(&note.text);
-                let cleaned = strip_beam_tags(&note.text);
+                let mut cleaned = strip_beam_tags(&note.text);
+                if let Some(&direction) = stem_by_note.get(&note.start) {
+                    cleaned = cleaned.replace("<stem>up</stem>", direction)
+                        .replace("<stem>down</stem>", direction);
+                }
                 rebuilt.push_str(&insert_beam_tags(&cleaned, states));
             } else {
                 let (retained, removed) = retain_only_structurally_bound_external_beams(
@@ -2091,6 +2197,29 @@
 
         fn note(step: &str, duration: i64, note_type: &str, beams: &str) -> String {
             note_on_staff(step, duration, note_type, "1", beams)
+        }
+
+        #[test]
+        fn lower_beam_stems_follow_the_bound_clef_and_preserve_polyphony() {
+            let event = |step, octave, voice| format!(
+                "<note><pitch><step>{step}</step><octave>{octave}</octave></pitch><duration>24</duration><voice>{voice}</voice><type>16th</type><stem>down</stem><staff>2</staff></note>"
+            );
+            let lower = format!("{}{}{}{}", event("C", 3, 2), event("B", 2, 2),
+                event("A", 2, 2), event("G", 2, 2));
+            let document = |extra: &str| format!(
+                "<score-partwise><part id=\"P1\"><measure number=\"SyntheticBeam\"><attributes><divisions>96</divisions><clef number=\"2\"><sign>F</sign><line>4</line></clef></attributes>{lower}{extra}</measure></part></score-partwise>"
+            );
+            let single = super::polish_musicxml(&document("")).unwrap();
+            assert_eq!(single.xml.matches("<stem>up</stem>").count(), 4);
+            assert_eq!(single.xml.matches("<beam number=\"1\">").count(), 4);
+            let extra = format!("<backup><duration>96</duration></backup>{}", event("E", 3, 4));
+            let polyphonic = super::polish_musicxml(&document(&extra)).unwrap();
+            assert_eq!(polyphonic.xml.matches("<stem>down</stem>").count(), 5);
+            let balanced = document("").replace("<step>B</step><octave>2</octave>", "<step>D</step><octave>3</octave>")
+                .replace("<step>A</step><octave>2</octave>", "<step>E</step><octave>3</octave>")
+                .replace("<step>G</step><octave>2</octave>", "<step>D</step><octave>3</octave>");
+            let balanced = super::polish_musicxml(&balanced).unwrap();
+            assert_eq!(balanced.xml.matches("<stem>up</stem>").count(), 4);
         }
 
         #[test]

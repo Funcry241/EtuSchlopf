@@ -1,3 +1,5 @@
+use crate::take_change_control::ssc_evidence_proof_shadow_permit_kodex::ValidatedSscTree;
+use crate::take_change_control::receipt_surface_normalization_kodex::{self, ValidatedMacroOwners};
 use super::productive_write_path_scan::ProductiveWriteSurface;
 use super::rust_source_scan_primitives::{
     mask_non_code, token_boundary_after, token_boundary_before,
@@ -66,10 +68,9 @@ struct CurrentSurfaceGroup {
 pub(super) fn validate_destructive_population_freeze(
     manifest_dir: &Path,
     surfaces: &[ProductiveWriteSurface],
+    validated_ssc: &ValidatedSscTree,
 ) -> Result<(), String> {
-    crate::take_change_control::receipt_surface_normalization_kodex::validate_current_tree(
-        manifest_dir,
-    )?;
+    let macro_owners = receipt_surface_normalization_kodex::validate_current_tree(manifest_dir)?;
     let population_text = fs::read_to_string(manifest_dir.join(POPULATION_PATH))
         .map_err(|error| format!("POPULATION FREEZE: cannot read {POPULATION_PATH}: {error}"))?;
     let exclusions_text = fs::read_to_string(manifest_dir.join(EXCLUSIONS_PATH))
@@ -88,7 +89,9 @@ pub(super) fn validate_destructive_population_freeze(
     let population = parse_population(&population_text)?;
     let render_row67_state =
         super::take_change_control::render_sovereignty_kodex::validate_current_tree(manifest_dir)?;
-    validate_population_shape_with_positive_k2(manifest_dir, &population, render_row67_state)?;
+    validate_population_shape_with_positive_k2(
+        manifest_dir, &population, render_row67_state, Some(validated_ssc),
+    )?;
     let nested_owner_receipt_transports =
         parse_nested_owner_receipt_transports(&nested_owner_receipt_transport_text)?;
     validate_nested_owner_receipt_transports(
@@ -98,6 +101,7 @@ pub(super) fn validate_destructive_population_freeze(
     )?;
     validate_current_owner_signatures(
         manifest_dir,
+        &macro_owners,
         &population,
         &nested_owner_receipt_transports,
         render_row67_state,
@@ -118,6 +122,7 @@ pub(super) fn validate_destructive_population_freeze(
     validate_baseline_references(&surface_baseline, &population, &exclusions)?;
     validate_current_surfaces(
         manifest_dir,
+        &macro_owners,
         surfaces,
         &surface_baseline,
         &population,
@@ -197,6 +202,7 @@ fn validate_population_shape_with_positive_k2(
     root: &Path,
     rows: &[PopulationRow],
     row67: crate::take_change_control::render_sovereignty_kodex::Row67State,
+    validated_ssc: Option<&ValidatedSscTree>,
 ) -> Result<(), String> {
     let mut projected = rows.to_vec();
     if let Some(row) = projected.iter_mut().find(|row| row.id == 57)
@@ -211,7 +217,9 @@ fn validate_population_shape_with_positive_k2(
         if !installed.iter().any(|row| row.id == 57 && row.prerequisite_state == "READY") {
             return Err("POPULATION FREEZE: row 57 READY lacks matching installed population".into());
         }
-        crate::take_change_control::ssc_evidence_proof_shadow_permit_kodex::k2::validate_tree(root)?;
+        if !validated_ssc.is_some_and(|proof| proof.proves_positive_k2(root)) {
+            crate::take_change_control::ssc_evidence_proof_shadow_permit_kodex::k2::validate_tree(root)?;
+        }
         row.prerequisite_state = "DEFERRED_RENDER_PREREQUISITE".into();
     }
     validate_population_shape_in_context(&projected,
@@ -916,6 +924,7 @@ fn split_function_signature(signature: &str) -> Result<ParsedFunctionSignature<'
 
 fn validate_current_owner_signatures(
     manifest_dir: &Path,
+    macro_owners: &ValidatedMacroOwners,
     rows: &[PopulationRow],
     nested_owner_receipt_transports: &[NestedOwnerReceiptTransportRow],
     render_row67_state: super::take_change_control::render_sovereignty_kodex::Row67State,
@@ -934,6 +943,7 @@ fn validate_current_owner_signatures(
                 );
             validate_owner_signature_if_present(
                 manifest_dir,
+                macro_owners,
                 &format!("{path}::{function}"),
                 super::take_change_control::render_sovereignty_kodex::TARGET_SIGNATURE,
                 Some("EXACT"),
@@ -952,6 +962,7 @@ fn validate_current_owner_signatures(
             });
         validate_owner_signature_if_present(
             manifest_dir,
+            macro_owners,
             &row.owner,
             &row.owner_signature,
             (row.id != 67).then_some(row.identity_kind.as_str()),
@@ -963,6 +974,7 @@ fn validate_current_owner_signatures(
         super::take_change_control::render_sovereignty_kodex::direction_owner();
     validate_owner_signature_if_present(
         manifest_dir,
+        macro_owners,
         owner,
         signature,
         Some("EXACT"),
@@ -1105,6 +1117,7 @@ fn validate_exclusion_owner_signature_if_present(
 
 fn validate_owner_signature_if_present(
     manifest_dir: &Path,
+    macro_owners: &ValidatedMacroOwners,
     owner: &str,
     expected_signature: &str,
     receipt_migration_identity_kind: Option<&str>,
@@ -1126,11 +1139,7 @@ fn validate_owner_signature_if_present(
     })?;
 
     if expected_signature.starts_with("macro:fn ") {
-        if crate::take_change_control::receipt_surface_normalization_kodex::admits_macro_owner(
-            manifest_dir,
-            owner,
-            expected_signature,
-        )? {
+        if macro_owners.admits(owner, expected_signature) {
             return Ok(());
         }
         let compact = source.split_whitespace().collect::<String>();
@@ -1200,6 +1209,7 @@ fn validate_owner_signature_if_present(
 
 fn validate_current_surfaces(
     manifest_dir: &Path,
+    macro_owners: &ValidatedMacroOwners,
     surfaces: &[ProductiveWriteSurface],
     baseline: &[SurfaceBaselineRow],
     population: &[PopulationRow],
@@ -1239,11 +1249,7 @@ fn validate_current_surfaces(
         let signature = surface_signature(manifest_dir, surface)?;
         let owner = format!("{}::{}", surface.path, surface.function);
         let macro_receipt_migration = if let Some(row) = population_by_owner.get(owner.as_str()) {
-            crate::take_change_control::receipt_surface_normalization_kodex::admits_macro_owner(
-                manifest_dir,
-                &owner,
-                &row.owner_signature,
-            )?
+            macro_owners.admits(&owner, &row.owner_signature)
         } else {
             false
         };
@@ -1512,22 +1518,23 @@ mod tests {
             direct_from_real_main: false, authority_boundary: false,
             class: "synthetic".into(), evidence: "synthetic".into(),
         };
+        let macro_owners = receipt_surface_normalization_kodex::validate_current_tree(&root).unwrap();
         validate_owner_signature_if_present(
-            &root, RESPELLING_CHAIN_OWNER, RESPELLING_CHAIN_FROZEN_SIGNATURE,
+            &root, &macro_owners, RESPELLING_CHAIN_OWNER, RESPELLING_CHAIN_FROZEN_SIGNATURE,
             Some("EXACT"), None, "population",
         ).expect("closed original-chain owner input");
-        validate_current_surfaces(&root, std::slice::from_ref(&surface), &baseline, &population, &[], &[])
+        validate_current_surfaces(&root, &macro_owners, std::slice::from_ref(&surface), &baseline, &population, &[], &[])
             .expect("same original physical surface budget");
         let mut more_buffers = surface.clone(); more_buffers.xml_buffer_mutations += 1;
-        assert!(validate_current_surfaces(&root, &[more_buffers], &baseline, &population, &[], &[]).is_err());
+        assert!(validate_current_surfaces(&root, &macro_owners, &[more_buffers], &baseline, &population, &[], &[]).is_err());
         let mut file_write = surface.clone(); file_write.xml_file_writes = 1;
-        assert!(validate_current_surfaces(&root, &[file_write], &baseline, &population, &[], &[]).is_err());
-        assert!(validate_current_surfaces(&root, &[surface.clone(), surface], &baseline, &population, &[], &[]).is_err());
+        assert!(validate_current_surfaces(&root, &macro_owners, &[file_write], &baseline, &population, &[], &[]).is_err());
+        assert!(validate_current_surfaces(&root, &macro_owners, &[surface.clone(), surface], &baseline, &population, &[], &[]).is_err());
         fs::write(&file, format!("{} {{ unreachable!() }}\n",
             RESPELLING_CHAIN_INPUT_SIGNATURE.replace("original_chains: &", "original_chains: &mut ")))
             .expect("synthetic invalid signature");
         assert!(validate_owner_signature_if_present(
-            &root, RESPELLING_CHAIN_OWNER, RESPELLING_CHAIN_FROZEN_SIGNATURE,
+            &root, &macro_owners, RESPELLING_CHAIN_OWNER, RESPELLING_CHAIN_FROZEN_SIGNATURE,
             Some("EXACT"), None, "population",
         ).is_err());
         fs::remove_dir_all(&root).expect("remove synthetic fixture");
@@ -1829,10 +1836,20 @@ mod tests {
         use crate::take_change_control::render_sovereignty_kodex::Row67State;
         let rows = parse_population(include_str!("destructive_transformation_population_v1.tsv")).unwrap();
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        validate_population_shape_with_positive_k2(root, &rows, Row67State::Relocated).unwrap();
+        validate_population_shape_with_positive_k2(root, &rows, Row67State::Relocated, None).unwrap();
+        let validated = crate::take_change_control::ssc_evidence_proof_shadow_permit_kodex::validate_current_tree(root).unwrap();
+        assert!(validated.proves_positive_k2(root));
         let missing = root.join("synthetic_missing_positive_k2_tree");
-        assert!(validate_population_shape_with_positive_k2(&missing, &rows, Row67State::Relocated).is_err());
-        assert!(validate_population_shape_with_positive_k2(root, &rows, Row67State::Legacy).is_err());
+        assert!(!validated.proves_positive_k2(&missing));
+        assert!(validate_population_shape_with_positive_k2(
+            &missing, &rows, Row67State::Relocated, Some(&validated),
+        ).is_err());
+        validate_population_shape_with_positive_k2(
+            root, &rows, Row67State::Relocated, Some(&validated),
+        ).unwrap();
+        assert!(validate_population_shape_with_positive_k2(
+            root, &rows, Row67State::Legacy, Some(&validated),
+        ).is_err());
     }
 
 }
@@ -1887,7 +1904,8 @@ mod beam_companion_tests {
         fs::write(&owner_path, format!("{} {{ unreachable!() }}", migrated())).unwrap();
         fs::write(root.join(BEAM_COMPANION_FIXTURE_PATH), BEAM_COMPANION_FIXTURE).unwrap();
         fs::write(root.join("src/master_state_identity.rs"), BEAM_COMPANION_FIXTURE).unwrap();
-        let check = || validate_owner_signature_if_present(&root, BEAM_COMPANION_OWNER, OLD,
+        let macro_owners = receipt_surface_normalization_kodex::validate_current_tree(&root).unwrap();
+        let check = || validate_owner_signature_if_present(&root, &macro_owners, BEAM_COMPANION_OWNER, OLD,
             Some("BLOCK_DOCUMENT"), None, "population");
         assert!(check().is_ok());
         fs::write(root.join("src/master_state_identity.rs"), BEAM_COMPANION_FIXTURE.replace("receipt:Some(receipt)", "receipt:None")).unwrap();
@@ -1981,8 +1999,9 @@ mod bridge_voice_input_tests {
         let surface=ProductiveWriteSurface { path:path.into(),function:function.into(),line:1,
             xml_buffer_mutations:1,xml_file_writes:0,direct_from_real_main:false,
             authority_boundary:false,class:"synthetic".into(),evidence:"synthetic".into() };
+        let macro_owners = receipt_surface_normalization_kodex::validate_current_tree(&root).unwrap();
         let check=|surfaces: &[ProductiveWriteSurface]| validate_current_surfaces(
-            &root,surfaces,&baseline,&[],&[row()],&[]);
+            &root, &macro_owners,surfaces,&baseline,&[],&[row()],&[]);
         assert!(check(std::slice::from_ref(&surface)).is_ok());
         let mut more=surface.clone();more.xml_buffer_mutations+=1;assert!(check(&[more]).is_err());
         let mut file_write=surface.clone();file_write.xml_file_writes=1;assert!(check(&[file_write]).is_err());
@@ -2079,8 +2098,9 @@ mod bridge_voice_input_tests {
         let surface = ProductiveWriteSurface { path: path.into(), function: function.into(), line: 1,
             xml_buffer_mutations: 1, xml_file_writes: 0, direct_from_real_main: false,
             authority_boundary: false, class: "synthetic".into(), evidence: "synthetic".into() };
+        let macro_owners = receipt_surface_normalization_kodex::validate_current_tree(&root).unwrap();
         let check = |surfaces: &[ProductiveWriteSurface]| validate_current_surfaces(
-            &root, surfaces, &baseline, &[], &[row()], &[]);
+            &root, &macro_owners, surfaces, &baseline, &[], &[row()], &[]);
         assert!(check(std::slice::from_ref(&surface)).is_ok());
         let mut extra_buffer = surface.clone(); extra_buffer.xml_buffer_mutations += 1;
         assert!(check(&[extra_buffer]).is_err());
@@ -2185,8 +2205,9 @@ mod cursor_exchange_input_tests {
         let surface = ProductiveWriteSurface { path: path.into(), function: function.into(), line: 1,
             xml_buffer_mutations: 1, xml_file_writes: 0, direct_from_real_main: false,
             authority_boundary: false, class: "synthetic".into(), evidence: "synthetic".into() };
+        let macro_owners = receipt_surface_normalization_kodex::validate_current_tree(&root).unwrap();
         let check = |surfaces: &[ProductiveWriteSurface]| validate_current_surfaces(
-            &root, surfaces, &baseline, &[], &[row()], &[]);
+            &root, &macro_owners, surfaces, &baseline, &[], &[row()], &[]);
         assert!(check(std::slice::from_ref(&surface)).is_ok());
         let mut more = surface.clone(); more.xml_buffer_mutations += 1;
         assert!(check(&[more]).is_err());

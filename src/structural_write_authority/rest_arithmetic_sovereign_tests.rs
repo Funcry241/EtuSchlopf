@@ -233,7 +233,7 @@ mod r1230_ra1_sovereign_tests {
     fn r1230_ra2_real_height_owner_checkpoint_commits() {
         let xml=balance(); let path=path(); let mut state=state(&xml,&path);
         let root=state.require_state_root("RA2 test");
-        let (post,audit,receipts)=build_piano_final_rest_glyph_canonical_height_write(root.document(),"RA2 real owner",&path).expect("prepare");
+        let (post,audit,receipts)=build_piano_final_rest_glyph_canonical_height_write(root.document(),"RA2 real owner",&path,None).expect("prepare");
         assert!(audit.written && post!=xml);
         state.adopt_transition(root,&post,receipts,RenderSinkKind::Checkpoint(RenderCheckpointSink::FinalPianoRestGlyph),|path,_,candidate|crate::structural_write_authority::write_final_piano_rest_glyph_checkpoint_authorized(path,candidate)).expect("checkpoint");
         assert_eq!(state.document(),Some(post.as_str())); assert_eq!(std::fs::read_to_string(&path).expect("readback"),post);
@@ -242,9 +242,9 @@ mod r1230_ra1_sovereign_tests {
     #[test]
     fn r1230_ra2_second_height_prepare_is_noop() {
         let xml=balance(); let path=path();
-        let (post,audit,receipts)=build_piano_final_rest_glyph_canonical_height_write(&xml,"first",&path).expect("prepare");
+        let (post,audit,receipts)=build_piano_final_rest_glyph_canonical_height_write(&xml,"first",&path,None).expect("prepare");
         assert!(audit.written); receipts.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
-        let (again,audit,receipts)=build_piano_final_rest_glyph_canonical_height_write(&post,"second",&path).expect("prepare noop");
+        let (again,audit,receipts)=build_piano_final_rest_glyph_canonical_height_write(&post,"second",&path,None).expect("prepare noop");
         assert_eq!(again,post); assert!(!audit.written); assert!(!path.exists()); receipts.discard_unadopted(RenderDiscardReason::LosingCandidate);
     }
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/support/render_authority/r1230_ra3_real_probe_is_never_a_physical_write.rs"));

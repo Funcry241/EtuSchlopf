@@ -118,7 +118,11 @@ impl ArrangementRhythmicCourses {
         for (((occurrence, original), destination), note) in next.occurrences.iter_mut()
             .zip(input).zip(carried).zip(output) {
             ensure!(destination == (note.start..note.end), "Owner transport does not identify the physical occurrence");
-            ensure!(without_beams(&original.text) == without_beams(&note.text),
+            let before = without_beams(&original.text);
+            let after = without_beams(&note.text);
+            ensure!(before == after || transport.permits_plain_stem_change()
+                && before.matches("<stem>").count() == 1 && after.matches("<stem>").count() == 1
+                && stem_neutral(&before) == stem_neutral(&after),
                 "Representation changed a conserved occurrence obligation");
             occurrence.note = note.text;
         }
@@ -254,6 +258,7 @@ impl ArrangementRhythmicCourses {
         let by_onset = self.occurrences.iter().enumerate()
             .map(|(ordinal, occurrence)| ((occurrence.interval.start, ordinal), occurrence))
             .collect::<BTreeMap<_, _>>();
+        let mut measure_boundaries = BTreeSet::from([0]);
         for span in find_measure_spans(xml) {
             let text = &xml[span.start..span.end];
             context = context.update_from_measure(text);
@@ -266,13 +271,23 @@ impl ArrangementRhythmicCourses {
                 incoming.into_iter().map(|(_, occurrence)| occurrence.clone()).collect())?;
             count += measure.incoming.len();
             offset += context.expected_duration();
+            measure_boundaries.insert(offset);
         }
         ensure!(count == self.occurrences.len(), "Unbound occurrence outside the metric domain");
-        ensure!(self.coverage.iter().all(|c| c.coverage.start == 0 && c.coverage.end == offset),
+        ensure!(self.coverage.iter().any(|c| c.coverage == (0..offset))
+            && self.coverage.iter().all(|c| {
+                !c.coverage.is_empty()
+                    && measure_boundaries.contains(&c.coverage.start)
+                    && measure_boundaries.contains(&c.coverage.end)
+            }),
             "Arrangement implicitly changed the declared lifetime");
         self.validated.record_proof();
         Ok(())
     }
+}
+
+fn stem_neutral(note: &str) -> String {
+    note.replace("<stem>down</stem>", "<stem>up</stem>")
 }
 
 fn without_beams(note: &str) -> String {

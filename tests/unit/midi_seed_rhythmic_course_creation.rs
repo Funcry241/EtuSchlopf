@@ -232,3 +232,51 @@ fn exact_independent_release_can_pass_a_beat_and_an_exact_primary_chord() {
         assert!(!plan.planned.iter().any(|note| note.independent));
     }
 }
+
+#[test]
+fn aligned_tied_octave_keeps_long_values_through_arrangement() {
+    let metric = MidiSeedRhythmicCourses::create_primary_presentations(&[], 3, 384)
+        .unwrap().metric;
+    let notes = [
+        MidiSeedNote { source_ordinal: 0, pos: 192, len: 960, midi: 36, staff: 2 },
+        MidiSeedNote { source_ordinal: 1, pos: 192, len: 960, midi: 48, staff: 2 },
+    ];
+    let voices = BTreeMap::from([
+        (0, SourceVoice { staff: 2, voice: 2, opposite_stem: false }),
+        (1, SourceVoice { staff: 2, voice: 2, opposite_stem: false }),
+    ]);
+    let mut plan = MidiSeedRhythmicCourses::create_metric_presentations(&notes, &metric, Some(&voices))
+        .unwrap();
+    let (xml, _, _) = build_musicxml("Synthetic tied octave", &notes, 3, &mut plan, None).unwrap();
+    let arrangement = crate::arrangement::arrange_piano_musicxml_with_profile(
+        &xml,
+        crate::arrangement::ArrangementProfile {
+            rhythmic_courses: Some(&plan),
+            ..Default::default()
+        },
+    );
+
+    for document in [&xml, &arrangement.xml] {
+        let doc = roxmltree::Document::parse(document).unwrap();
+        for (index, measure) in doc.descendants().filter(|node| node.has_tag_name("measure")).enumerate() {
+            let pitches: Vec<_> = measure.children().filter(|node| {
+                node.has_tag_name("note") && node.children().any(|child| child.has_tag_name("pitch"))
+            }).collect();
+            let expected_type = if index == 0 { "half" } else { "whole" };
+            assert_eq!(pitches.len(), 2);
+            for (member, pitch) in pitches.iter().enumerate() {
+                let tie = |kind| pitch.children().any(|child| {
+                    child.has_tag_name("tie") && child.attribute("type") == Some(kind)
+                });
+                assert_eq!(pitch.children().any(|child| child.has_tag_name("chord")), member == 1);
+                assert_eq!(tie("stop"), index > 0);
+                assert_eq!(tie("start"), index < 2);
+                assert!(pitch.children().any(|child| {
+                    child.has_tag_name("type") && child.text() == Some(expected_type)
+                }));
+            }
+        }
+    }
+    assert!(!aligned_long_tie_value(96, 192, 384, 96));
+    assert!(!aligned_long_tie_value(0, 192, 288, 96));
+}

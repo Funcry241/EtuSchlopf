@@ -31,7 +31,8 @@ fn joint_clef_materialization_removes_redundancy_and_refuses_stale_bytes() {
 fn joint_replacement_uses_original_writers_and_coupled_origin_commit() {
     let _lock = crate::registernotation::sperre_fuer_tests();
     crate::registernotation::loesche();
-    let notes = (0..8).map(|_| "<note><pitch><step>F</step><alter>1</alter><octave>6</octave></pitch><duration>24</duration><voice>1</voice><type>16th</type><staff>1</staff></note>").collect::<String>();
+    // G-sharp 6 needs four treble ledger lines before the octave shift.
+    let notes = (0..8).map(|_| "<note><pitch><step>G</step><alter>1</alter><octave>6</octave></pitch><duration>24</duration><voice>1</voice><type>16th</type><staff>1</staff></note>").collect::<String>();
     let initial = format!("<score-partwise version=\"4.0\"><part-list><score-part id=\"P\"><part-name>Probe</part-name></score-part></part-list><part id=\"P\"><measure number=\"SyntheticC3\"><attributes><divisions>96</divisions><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>{notes}<note><rest/><duration>192</duration><voice>1</voice><type>half</type><staff>1</staff></note></measure></part></score-partwise>");
     crate::registernotation::beobachte_vor_k00(&initial);
     let lineage = master_state_identity::MasterLineage::lineage_from_genesis(

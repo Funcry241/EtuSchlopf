@@ -53,7 +53,9 @@ fn apply_final_visible_rest_role_purge_and_vertical_placement_write_with_receipt
         }
 
         let is_shadow_candidate =
-            atomic_visible_rest_is_shadow_bookkeeping_candidate(rest, role_observation);
+            atomic_visible_rest_is_shadow_bookkeeping_candidate(rest, role_observation)
+            && !(role_observation.same_voice_pitched_overlap_count == 0
+                && atomic_rest_connects_written_voice_course(xml, rest, &notes));
         if !is_shadow_candidate {
             audit.protected_only_rows = audit.protected_only_rows.saturating_add(1);
             mixed_review_rows = mixed_review_rows.saturating_add(1);

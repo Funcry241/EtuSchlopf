@@ -8,15 +8,28 @@ use crate::central_rulebook::rule_by_id;
 use crate::rule_id::{runtime_severity_for_issue_kind, validator_issue_authority, ValidatorIssueKind};
 use std::collections::{BTreeMap, BTreeSet};
 
+const PIANO_HAND_MAX_SPAN: u32 = 12;
+const PIANO_HAND_MAX_KEYS: usize = 5;
+const PIANO_FAST_JUMP_MIN_INTERVAL: u32 = 19;
+
 #[derive(Debug, Clone)]
 pub struct CheckOptions {
     pub strict: bool,
 }
 
 pub fn run_checks(score: &Score, options: &CheckOptions) -> CheckReport {
+    run_checks_with_hand_geometry(score, options, false)
+}
+
+pub(crate) fn run_checks_with_hand_geometry(
+    score: &Score,
+    options: &CheckOptions,
+    has_declared_source_voices: bool,
+) -> CheckReport {
     let mut issues = Vec::new();
 
     for part in &score.parts {
+        let hand_geometry_confirmed = has_declared_source_voices && two_hand_geometry_fits(part);
         for measure in &part.measures {
             check_measure_cursor(part, measure, &mut issues);
             check_voice_durations(part, measure, options, &mut issues);
@@ -30,8 +43,10 @@ pub fn run_checks(score: &Score, options: &CheckOptions) -> CheckReport {
             // Hand-/Sprunglogik nachvollziehbarer.
             let visible_measure_note_events: Vec<&Event> = visible_note_events(measure).collect();
             check_piano_range(part, measure, &visible_measure_note_events, &mut issues);
-            check_piano_chords(part, measure, &visible_measure_note_events, &mut issues);
-            check_piano_jumps(part, measure, &visible_measure_note_events, &mut issues);
+            check_piano_chords(part, measure, &visible_measure_note_events, hand_geometry_confirmed, &mut issues);
+            if !hand_geometry_confirmed {
+                check_piano_jumps(part, measure, &visible_measure_note_events, &mut issues);
+            }
             check_staff_register(part, measure, &visible_measure_note_events, &mut issues);
         }
     }
@@ -582,7 +597,115 @@ fn check_piano_range(part: &Part, measure: &crate::model::Measure, note_events: 
     }
 }
 
-fn check_piano_chords(part: &Part, measure: &crate::model::Measure, note_events: &[&Event], issues: &mut Vec<Issue>) {
+// Build a continuous two-hand assignment to the printed key demands. Repeated
+// and tied intervals on the same key share custody while that key is occupied.
+fn two_hand_geometry_fits(part: &Part) -> bool {
+    let mut intervals = BTreeMap::<i32, Vec<(i64, i64, bool)>>::new();
+    let mut measure_start = 0_i64;
+    let Some(first) = part.measures.first() else { return false };
+    for measure in &part.measures {
+        if measure.divisions <= 0
+            || measure.divisions != first.divisions
+            || measure.expected.denominator <= 0
+            || measure.expected.numerator % measure.expected.denominator != 0
+        {
+            return false;
+        }
+        let measure_length = measure.expected.numerator / measure.expected.denominator;
+        let Some(measure_end) = measure_start.checked_add(measure_length) else { return false };
+        for event in visible_note_events(measure) {
+            let Some(pitch) = &event.pitch else { return false };
+            let Some(start) = measure_start.checked_add(event.start) else { return false };
+            let Some(end) = start.checked_add(event.duration) else { return false };
+            if start < measure_start || start >= end || end > measure_end {
+                return false;
+            }
+            intervals.entry(pitch.midi).or_default().push((start, end, event.tie_stop));
+        }
+        measure_start = measure_end;
+    }
+    if intervals.is_empty() {
+        return false;
+    }
+
+    let mut boundaries = BTreeMap::<i64, (Vec<i32>, Vec<i32>)>::new();
+    for (key, mut spans) in intervals {
+        // At the same start, a continuation keeps custody before any reattack.
+        spans.sort_unstable_by_key(|&(start, end, tied)| (start, !tied, end));
+        let mut merged: Vec<(i64, i64)> = Vec::new();
+        for (start, end, tied) in spans {
+            if let Some(last) = merged.last_mut()
+                && (start < last.1 || (tied && start == last.1))
+            {
+                last.1 = last.1.max(end);
+            } else {
+                merged.push((start, end));
+            }
+        }
+        for (start, end) in merged {
+            boundaries.entry(start).or_default().0.push(key);
+            boundaries.entry(end).or_default().1.push(key);
+        }
+    }
+    continuous_hand_geometry_fits(boundaries)
+}
+
+fn continuous_hand_geometry_fits(boundaries: BTreeMap<i64, (Vec<i32>, Vec<i32>)>) -> bool {
+    let mut states = BTreeSet::from([[Vec::<i32>::new(), Vec::<i32>::new()]]);
+    let mut active = 0_usize;
+    for (starting, ending) in boundaries.into_values() {
+        active = active - ending.len() + starting.len();
+        if active > 2 * PIANO_HAND_MAX_KEYS {
+            return false;
+        }
+        let mut next = BTreeSet::new();
+        for previous in &states {
+            let retained = (*previous).clone().map(|mut keys| {
+                keys.retain(|key| !ending.contains(key));
+                keys
+            });
+            for mask in 0..(1_usize << starting.len()) {
+                let mut hands = retained.clone();
+                for (index, key) in starting.iter().copied().enumerate() {
+                    hands[(mask >> index) & 1].push(key);
+                }
+                for keys in &mut hands {
+                    keys.sort_unstable();
+                }
+                if previous.iter().zip(&hands).all(|(before, after)| hand_geometry_fits(before, after)) {
+                    next.insert(hands);
+                }
+            }
+        }
+        if next.is_empty() {
+            return false;
+        }
+        states = next;
+    }
+    true
+}
+
+fn hand_geometry_fits(before: &[i32], after: &[i32]) -> bool {
+    let (Some(&low), Some(&high)) = (after.first(), after.last()) else { return true };
+    if after.len() > PIANO_HAND_MAX_KEYS || high.abs_diff(low) > PIANO_HAND_MAX_SPAN {
+        return false;
+    }
+    match (before.first(), before.last()) {
+        (Some(&old_low), Some(&old_high)) => {
+            low.abs_diff(old_low) < PIANO_FAST_JUMP_MIN_INTERVAL
+                && high.abs_diff(old_high) < PIANO_FAST_JUMP_MIN_INTERVAL
+        }
+        _ => true,
+    }
+}
+
+fn check_piano_chords(
+    part: &Part,
+    measure: &crate::model::Measure,
+    note_events: &[&Event],
+    hand_geometry_confirmed: bool,
+    issues: &mut Vec<Issue>,
+) {
     let mut by_staff_time: BTreeMap<(String, i64), Vec<&Event>> = BTreeMap::new();
     for event in note_events.iter().copied() {
         by_staff_time
@@ -598,11 +721,11 @@ fn check_piano_chords(part: &Part, measure: &crate::model::Measure, note_events:
         }
         let min = pitches.iter().map(|p| p.midi).min().unwrap();
         let max = pitches.iter().map(|p| p.midi).max().unwrap();
-        let span = max - min;
+        let span = max.abs_diff(min);
         let low = pitches.iter().min_by_key(|p| p.midi).unwrap();
         let high = pitches.iter().max_by_key(|p| p.midi).unwrap();
 
-        if span > 12 {
+        if span > PIANO_HAND_MAX_SPAN && !hand_geometry_confirmed {
             issues.push(issue(
                 false,
                 ValidatorIssueKind::PianoHandSpanLarge,
@@ -611,7 +734,7 @@ fn check_piano_chords(part: &Part, measure: &crate::model::Measure, note_events:
                 Some(staff.clone()),
                 None,
                 None,
-                Some(span as i64),
+                Some(i64::from(span)),
                 None,
                 format!(
                     "Gleichzeitigkeit auf Staff {} bei Start {}: Spannweite {}-{} = {} Halbtöne. Für normale Spielbarkeit kritisch.",
@@ -624,7 +747,7 @@ fn check_piano_chords(part: &Part, measure: &crate::model::Measure, note_events:
             ));
         }
 
-        if pitches.len() > 5 {
+        if pitches.len() > PIANO_HAND_MAX_KEYS {
             issues.push(issue(
                 false,
                 ValidatorIssueKind::PianoTooManySimultaneousNotesOneStaff,
@@ -798,7 +921,7 @@ fn check_jump_line(
         let a = pair[0];
         let b = pair[1];
         let (Some(pa), Some(pb)) = (a.event.pitch.as_ref(), b.event.pitch.as_ref()) else { continue; };
-        let interval = (pb.midi - pa.midi).abs();
+        let interval = pb.midi.abs_diff(pa.midi);
         let temporal_edge = canonical_han03_temporal_edge(a.event, b.event);
         let time_gap = temporal_edge.onset_delta.abs();
         // HAN03 owns only large jumps whose source endpoint leaves no positive
@@ -808,7 +931,7 @@ fn check_jump_line(
         // score-only warning. This does not claim whole-hand freedom or playability.
         // Overlap and contiguous attacks stay
         // in HAN03 because release_to_attack_gap <= 0.
-        if interval < 19
+        if interval < PIANO_FAST_JUMP_MIN_INTERVAL
             || time_gap > measure.divisions.max(1)
             || temporal_edge.release_to_attack_gap > 0
         {
@@ -835,7 +958,7 @@ fn check_jump_line(
             Some(staff.to_string()),
             voice.map(str::to_string),
             None,
-            Some(interval as i64),
+            Some(i64::from(interval)),
             None,
             format!(
                 "Schneller Sprung auf Staff {} Voice {} Linie {}: {} -> {}. Sprungweite: {} Halbtöne; Zeitabstand: {} divisions.",
@@ -1008,6 +1131,36 @@ fn format_scaled(scaled: i64, denominator: i64) -> String {
 #[cfg(test)]
 mod han03_attack_semantics_tests {
     use super::*;
+
+    #[test]
+    fn sustained_low_key_and_continuous_upper_motion_fit_two_hands() {
+        let boundaries = BTreeMap::from([
+            (0, (vec![52, 76], vec![])),
+            (24, (vec![77], vec![76])),
+            (48, (vec![79], vec![77])),
+            (96, (vec![], vec![52, 79])),
+        ]);
+        assert!(continuous_hand_geometry_fits(boundaries));
+    }
+
+    #[test]
+    fn three_separated_simultaneous_keys_do_not_fit_two_hands() {
+        let boundaries = BTreeMap::from([
+            (0, (vec![40, 60, 80], vec![])),
+            (96, (vec![], vec![40, 60, 80])),
+        ]);
+        assert!(!continuous_hand_geometry_fits(boundaries));
+    }
+
+    #[test]
+    fn occupied_hand_cannot_be_reassigned_to_cover_an_immediate_large_jump() {
+        let boundaries = BTreeMap::from([
+            (0, (vec![48, 72], vec![])),
+            (24, (vec![92], vec![72])),
+            (96, (vec![], vec![48, 92])),
+        ]);
+        assert!(!continuous_hand_geometry_fits(boundaries));
+    }
 
     fn event(start: i64, midi: i32, tie_stop: bool) -> Event {
         Event {

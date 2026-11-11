@@ -275,22 +275,13 @@ fn additive_geometry_body_and_write_receipt_requirement_frozen() {
 fn only_eight_same_path_macro_owners_receive_exception() {
     let t = Tree::new();
     t.consume();
+    let owners = validate_current_tree(&t.0).unwrap();
     for name in MACROS {
-        assert!(
-            admits_macro_owner(&t.0, &format!("{MACRO_PATH}::{name}"), "macro:fn frozen").unwrap()
-        );
+        assert!(owners.admits(&format!("{MACRO_PATH}::{name}"), "macro:fn frozen"));
     }
-    assert!(
-        !admits_macro_owner(
-            &t.0,
-            &format!("{MACRO_PATH}::apply_same_pitch_tie_merge_authorized"),
-            "macro:fn frozen"
-        )
-        .unwrap()
-    );
-    assert!(
-        !admits_macro_owner(&t.0, &format!("other.rs::{}", MACROS[0]), "macro:fn frozen").unwrap()
-    );
+    assert!(!owners.admits(
+        &format!("{MACRO_PATH}::apply_same_pitch_tie_merge_authorized"), "macro:fn frozen"));
+    assert!(!owners.admits(&format!("other.rs::{}", MACROS[0]), "macro:fn frozen"));
 }
 #[test]
 fn shared_guard_change_rejected_during_consumption() {

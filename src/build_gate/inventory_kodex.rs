@@ -179,6 +179,7 @@ fn render_generated_write_path_inventory(
 }
 
 pub(super) struct InventoryKodexInputs<'a> {
+    pub(super) validated_ssc: &'a crate::take_change_control::ssc_evidence_proof_shadow_permit_kodex::ValidatedSscTree,
     pub(super) manifest_dir: &'a Path,
     pub(super) source_root: &'a Path,
     pub(super) kodex_gate_core_source_root: &'a Path,
@@ -195,6 +196,7 @@ pub(super) fn validate_and_emit_inventory_kodex(
     inputs: InventoryKodexInputs<'_>,
 ) -> Result<(), String> {
     let InventoryKodexInputs {
+        validated_ssc,
         manifest_dir,
         source_root,
         kodex_gate_core_source_root,
@@ -268,6 +270,7 @@ pub(super) fn validate_and_emit_inventory_kodex(
     super::destructive_population_freeze_gate::validate_destructive_population_freeze(
         manifest_dir,
         &write_scan.surfaces,
+        validated_ssc,
     )?;
     let write_bypass_baseline_text =
         fs::read_to_string(write_bypass_baseline_path).map_err(|error| error.to_string())?;

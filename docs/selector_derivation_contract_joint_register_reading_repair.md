@@ -29,8 +29,7 @@ NonCausalContextExcluded: project name, printed measure/page address, pitch iden
 ## Closed scope and existing authority
 
 The supported piano lower domain is the existing staff-2 domain, not a learned
-identity selector. Complete unchanged upper proposals and all surrounding lower
-notes are retained. The original register owner retains its complete event IDs,
+identity selector. The lower-domain comparison retains the upper proposals and surrounding lower notes. The original register owner retains its complete event IDs,
 source bytes and semantic proposal; the original creator invokes the comparison
 before materializing any direction. No source identity is reconstructed from a
 later score, approximate pitch matching or output geometry.
@@ -62,3 +61,13 @@ receipts and final artifact checks remain required. Synthetic positive/negative,
 necessary high/double-octave, complete margins, ties, chords, hidden notes,
 renaming, time/measure relocation and independent duplication are required.
 Full current corpus and final rendered quality are evaluation, not class inputs.
+
+## Upper treble course
+
+CausalFeature: the same-epoch register plan supplies every affected event of a complete octave span within an explicitly established constant treble course
+CausalFeature: both versions use the actual written diatonic positions of those same retained events, and compare the existing C3 severe ledger tiers before introducing a reading-state transition
+
+An existing upper span can be omitted in its entirety when it has no
+advantage in the severe ledger tiers. This does not change the lower-clef
+comparison. An unbound or variable clef, an unresolved event, or an
+unavailable spelling leaves the original upper proposal in place.

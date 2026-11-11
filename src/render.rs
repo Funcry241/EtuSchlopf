@@ -103,6 +103,7 @@ pub(super) mod rest_placement {
     pub enum RestPlacementMode {
         Canonical,
         PolyphonicWholeRest,
+        UpperVoiceShortRest,
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,6 +124,7 @@ pub(super) mod rest_placement {
         Middle,
         Upper,
         Top,
+        Above,
     }
 
     impl RestStaffSlot {
@@ -152,7 +154,12 @@ pub(super) mod rest_placement {
                     step: "A",
                     octave: 3,
                 }),
-                (_, RestClef::C | RestClef::Other) => None,
+                (Self::Above, RestClef::Bass) => Some(RestDisplayAnchor {
+                    step: "C",
+                    octave: 4,
+                }),
+                (Self::Above, RestClef::Treble)
+                | (_, RestClef::C | RestClef::Other) => None,
             }
         }
     }
@@ -183,6 +190,7 @@ pub(super) mod rest_placement {
     ) -> RestPlacementDecision {
         let slot = match context.mode {
             RestPlacementMode::PolyphonicWholeRest => RestStaffSlot::Top,
+            RestPlacementMode::UpperVoiceShortRest => RestStaffSlot::Above,
             RestPlacementMode::Canonical if context.glyph.is_extended_whole() => {
                 RestStaffSlot::Upper
             }

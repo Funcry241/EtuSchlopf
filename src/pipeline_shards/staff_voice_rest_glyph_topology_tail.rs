@@ -356,10 +356,71 @@ fn atomic_rest_has_physical_chord_member_dependency(
     })
 }
 
-fn atomic_visible_rest_is_shadow_bookkeeping_candidate_with_voice_binding(
+// A contiguous physical voice course with pitched endpoints accounts for
+// every rest in the intervening silence, even when meter splits the glyphs.
+fn atomic_rest_connects_written_voice_course(xml: &str, rest: &AtomicNote, notes: &[AtomicNote]) -> bool {
+    let Ok(index) = notes.binary_search_by_key(&rest.note_start, |note| note.note_start) else {
+        return false;
+    };
+    let connected = |left: &AtomicNote, right: &AtomicNote| {
+        left.visible && right.visible && !left.is_chord && !right.is_chord
+            && left.duration > 0 && right.duration > 0
+            && left.measure == right.measure && left.staff == right.staff && left.voice == right.voice
+            && left.start.checked_add(left.duration) == Some(right.start)
+            && xml.get(left.note_end..right.note_start).is_some_and(|gap|
+                !["<measure", "</measure", "<backup", "<forward"].iter().any(|tag| gap.contains(tag)))
+    };
+    let adjacent_rest = index.checked_sub(1).and_then(|index| notes.get(index))
+        .is_some_and(|note| note.pitch.is_none() && connected(note, rest))
+        || notes.get(index + 1).is_some_and(|note| note.pitch.is_none() && connected(rest, note));
+    if !adjacent_rest { return false; }
+    let left = notes[..index].iter().rev().scan(rest, |last, note| {
+        if !connected(note, last) { return None; }
+        *last = note;
+        Some(note)
+    }).any(|note| note.pitch.is_some());
+    let right = notes[index + 1..].iter().scan(rest, |last, note| {
+        if !connected(last, note) { return None; }
+        *last = note;
+        Some(note)
+    }).any(|note| note.pitch.is_some());
+    left && right
+}
+
+fn atomic_rest_connects_bound_voice_fragments(
+    xml: &str,
     rest: &AtomicNote,
     notes: &[AtomicNote],
     voice_plan: &crate::structural_write_authority::FrozenSerializedVoicePlan,
+    channel: usize,
+) -> bool {
+    let Ok(index) = notes.binary_search_by_key(&rest.note_start, |note| note.note_start) else {
+        return false;
+    };
+    let Some(left) = index.checked_sub(1).and_then(|i| notes.get(i)) else {
+        return false;
+    };
+    let Some(right) = notes.get(index + 1) else {
+        return false;
+    };
+    [left, right].into_iter().all(|note| {
+        note.visible && note.pitch.is_some() && !note.is_chord && note.duration > 0
+            && note.measure == rest.measure && note.staff == rest.staff
+            && voice_plan.channel_for_label(note.voice.trim()) == Some(channel)
+    }) && left.start.checked_add(left.duration) == Some(rest.start)
+        && rest.start.checked_add(rest.duration) == Some(right.start)
+        && [left.note_end..rest.note_start, rest.note_end..right.note_start]
+            .into_iter().all(|gap| xml.get(gap).is_some_and(|text|
+                !["<measure", "</measure", "<backup", "<forward"].iter()
+                    .any(|tag| text.contains(tag))))
+}
+
+fn atomic_visible_rest_is_shadow_bookkeeping_candidate_with_voice_binding(
+    xml: &str,
+    rest: &AtomicNote,
+    notes: &[AtomicNote],
+    voice_plan: &crate::structural_write_authority::FrozenSerializedVoicePlan,
+    original_gap: bool,
 ) -> bool {
     let Some(rest_role) = voice_plan.role_for_label(rest.voice.trim()) else {
         return false;
@@ -417,6 +478,11 @@ fn atomic_visible_rest_is_shadow_bookkeeping_candidate_with_voice_binding(
         && !pitched_overlaps.is_empty()
         && pitched_overlap_coverage.saturating_mul(2) >= rest.duration.max(1)
         && (same_channel_pitched_overlap_count == 0 || has_real_primary_rest_overlap)
+        // A continuous physical voice run carries its own rhythmic gap even
+        // when another voice sounds throughout that interval.
+        && !(same_channel_pitched_overlap_count == 0
+            && (original_gap
+                || atomic_rest_connects_bound_voice_fragments(xml, rest, notes, voice_plan, rest_channel)))
 }
 
 pub(crate) fn final_visible_shadow_bookkeeping_regression_candidates_with_voice_binding(
@@ -427,14 +493,17 @@ pub(crate) fn final_visible_shadow_bookkeeping_regression_candidates_with_voice_
         return None;
     }
     let notes = parse_atomic_notes(xml);
+    let original_gap_starts = voice_plan.source_voice_gap_rest_starts(xml);
     Some(
         notes
             .iter()
             .filter(|rest| {
                 atomic_visible_rest_is_shadow_bookkeeping_candidate_with_voice_binding(
+                    xml,
                     rest,
                     &notes,
                     voice_plan,
+                    original_gap_starts.contains(&rest.note_start),
                 )
             })
             .count(),
@@ -450,12 +519,15 @@ pub(crate) fn final_visible_shadow_bookkeeping_replacements_with_voice_binding(
         return None;
     }
     let notes = parse_atomic_notes(xml);
+    let original_gap_starts = voice_plan.source_voice_gap_rest_starts(xml);
     let mut replacements = Vec::<(usize, usize, String)>::new();
     for rest in notes.iter().filter(|rest| {
         atomic_visible_rest_is_shadow_bookkeeping_candidate_with_voice_binding(
+            xml,
             rest,
             &notes,
             voice_plan,
+            original_gap_starts.contains(&rest.note_start),
         )
     }) {
         replacements.push((
@@ -900,15 +972,18 @@ pub(crate) fn final_visible_shadow_bookkeeping_regression_candidate_rows(
         return None;
     }
     let notes = parse_atomic_notes(xml);
+    let original_gap_starts = voice_plan.source_voice_gap_rest_starts(xml);
     let mut rows = Vec::new();
     for rest in notes
         .iter()
         .filter(|rest| rest.visible && rest.pitch.is_none() && rest.duration > 0 && !rest.is_chord)
     {
         if !atomic_visible_rest_is_shadow_bookkeeping_candidate_with_voice_binding(
+            xml,
             rest,
             &notes,
             voice_plan,
+            original_gap_starts.contains(&rest.note_start),
         ) {
             continue;
         }
@@ -1193,6 +1268,7 @@ fn build_piano_final_rest_glyph_canonical_height_write(
     xml: &str,
     source_label: &str,
     output_path: &Path,
+    voice_plan: Option<&crate::structural_write_authority::FrozenSerializedVoicePlan>,
 ) -> anyhow::Result<(String, PianoFinalRestGlyphCanonicalHeightWriteAudit, crate::master_state_identity::RenderTransitionReceipts)> {
     let mut audit = PianoFinalRestGlyphCanonicalHeightWriteAudit {
         source_label: source_label.to_string(),
@@ -1207,6 +1283,8 @@ fn build_piano_final_rest_glyph_canonical_height_write(
     audit.hidden_pitched_before = before_events.iter().filter(|event| event.is_hidden && event.midi.is_some()).count();
     audit.hidden_rests_before = before_events.iter().filter(|event| event.is_hidden && event.is_rest).count();
 
+    let upper_voice_rests = voice_plan.map(|plan| plan.source_upper_voice_rest_starts(xml))
+        .unwrap_or_default();
     let mut replacements = Vec::<(usize, usize, String)>::new();
     let mut occupied = Vec::<(usize, usize)>::new();
     for rest in notes.iter().filter(|note| note.visible && note.pitch.is_none() && note.duration > 0 && !note.is_chord) {
@@ -1236,8 +1314,24 @@ fn build_piano_final_rest_glyph_canonical_height_write(
         if current_position != "auto_renderer_or_voice_default" {
             audit.coordinates_before = audit.coordinates_before.saturating_add(1);
         }
-        let (expected_step, expected_octave, _) =
-            standard_rest_display_pitch_for_atomic_context(xml, rest);
+        let upper_anchor = if upper_voice_rests.contains(&rest.note_start)
+            && matches!(rest_type_trimmed, "eighth" | "16th" | "32nd" | "64th")
+        {
+            render::rest_placement::anchor_from_musicxml(
+                &infer_current_clef_sign_for_staff_at(xml, rest.note_start, &rest.staff),
+                rest_type_trimmed,
+                render::rest_placement::RestPlacementMode::UpperVoiceShortRest,
+            )
+        } else {
+            None
+        };
+        let (expected_step, expected_octave) = upper_anchor.map_or_else(
+            || {
+                let (step, octave, _) = standard_rest_display_pitch_for_atomic_context(xml, rest);
+                (step, octave)
+            },
+            |anchor| (anchor.step.to_string(), anchor.octave),
+        );
         let expected_position = format!("{expected_step}{expected_octave}");
         if current_position == expected_position {
             audit.already_canonical_rows = audit.already_canonical_rows.saturating_add(1);
@@ -1482,6 +1576,62 @@ mod final_visible_shadow_bookkeeping_regression_tests {
             )
             .expect("synthetic chord-anchored bound plan must parse");
         assert!(anchored_replacements.is_empty());
+    }
+
+    #[test]
+    fn a_bounded_inner_rest_survives_parallel_sound_in_another_channel() {
+        for (unit, primary, secondary) in [(24, "7", "9"), (48, "17", "19")] {
+            let duration = unit * 4;
+            let note = |pitch, voice, length| format!(
+                "<note><pitch><step>{pitch}</step><octave>5</octave></pitch><duration>{length}</duration><voice>{voice}</voice><staff>1</staff></note>"
+            );
+            let xml = format!(
+                "<score-partwise><part id=\"P\"><measure number=\"synthetic\"><attributes><divisions>{unit}</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>{}<note><rest/><duration>{unit}</duration><voice>{secondary}</voice><staff>1</staff></note>{}<backup><duration>{duration}</duration></backup>{}</measure></part></score-partwise>",
+                note("C", secondary, unit), note("D", secondary, unit * 2),
+                note("G", primary, duration),
+            );
+            let voices =
+                crate::structural_write_authority::frozen_serialized_voice_plan_for_rest_role_replay_test(
+                    primary, secondary,
+                );
+            assert!(final_visible_shadow_bookkeeping_replacements_with_voice_binding(&xml, &voices)
+                .unwrap().is_empty());
+            let broken = xml.replace(&note("D", secondary, unit * 2),
+                &format!("<forward><duration>{}</duration></forward>", unit * 2));
+            assert_eq!(
+                final_visible_shadow_bookkeeping_replacements_with_voice_binding(&broken, &voices)
+                    .unwrap().len(), 1,
+            );
+        }
+    }
+
+    #[test]
+    fn original_voice_gap_is_bound_to_one_physical_rest_and_has_no_channel_conflict() {
+        let rest = "<note><rest/><duration>48</duration><voice>9</voice><staff>1</staff></note>";
+        let primary_rest = rest.replace(">9<", ">7<");
+        let pitch = "<note><pitch><step>D</step><octave>5</octave></pitch><duration>48</duration><voice>7</voice><staff>1</staff></note>";
+        let backup = "<backup><duration>48</duration></backup>";
+        for printed_label in [1, 47] {
+            let score = |body: &str| format!(
+                r#"<score-partwise><part id="P"><measure number="{printed_label}"><attributes><divisions>48</divisions><time><beats>1</beats><beat-type>4</beat-type></time></attributes>{body}</measure></part></score-partwise>"#
+            );
+            let xml = score(&format!("{rest}{backup}{pitch}"));
+            let mut voices =
+                crate::structural_write_authority::frozen_serialized_voice_plan_for_rest_role_replay_test("7", "9");
+            let candidates = |xml: &str, voices: &crate::structural_write_authority::FrozenSerializedVoicePlan| {
+                final_visible_shadow_bookkeeping_replacements_with_voice_binding(xml, voices).unwrap().len()
+            };
+            assert_eq!(candidates(&xml, &voices), 1);
+            voices.bind_source_voice_gaps(vec![crate::midi_seed::SourceVoiceGap {
+                measure: 0, divisions: 48, start: 0, duration: 48, staff: 1, seed_voice: 9, above_lower_staff: false,
+            }]);
+            assert_eq!(candidates(&xml, &voices), 0);
+            let duplicate = score(&format!("{rest}{backup}{rest}{backup}{pitch}"));
+            assert_eq!(candidates(&duplicate, &voices), 2);
+            let same_channel_pitch = pitch.replace(">7<", ">9<");
+            let occupied = score(&format!("{rest}{backup}{primary_rest}{backup}{same_channel_pitch}"));
+            assert_eq!(candidates(&occupied, &voices), 1);
+        }
     }
 
     #[test]

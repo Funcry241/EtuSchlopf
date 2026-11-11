@@ -438,11 +438,22 @@ fn state(root: &Path) -> Result<State, String> {
     }
     Ok(macro_status)
 }
-pub(crate) fn validate_current_tree(root: &Path) -> Result<(), String> {
-    if !root.join(PERMIT).exists() {
-        return Ok(());
+/// The macro-owner admission established by one validation of the current source tree.
+pub(crate) struct ValidatedMacroOwners(bool);
+
+impl ValidatedMacroOwners {
+    pub(crate) fn admits(&self, owner: &str, frozen: &str) -> bool {
+        self.0 && frozen.starts_with("macro:fn ")
+            && owner.rsplit_once("::").is_some_and(|(path, name)|
+                path == MACRO_PATH && MACROS.contains(&name))
     }
-    state(root).map(|_| ())
+}
+
+pub(crate) fn validate_current_tree(root: &Path) -> Result<ValidatedMacroOwners, String> {
+    if !root.join(PERMIT).exists() {
+        return Ok(ValidatedMacroOwners(false));
+    }
+    state(root).map(|state| ValidatedMacroOwners(state == State::Consumed))
 }
 fn metadata(root: &Path) -> Result<std::collections::BTreeMap<String, String>, String> {
     let path = if root.join("ZIP_KIND.txt").is_file() {
@@ -608,19 +619,6 @@ pub(crate) fn validate_transition(parent: &Path, child: &Path, class: &str) -> R
             }
         }
     }
-}
-pub(crate) fn admits_macro_owner(root: &Path, owner: &str, frozen: &str) -> Result<bool, String> {
-    let Some((path, name)) = owner.rsplit_once("::") else {
-        return Ok(false);
-    };
-    if !root.join(PERMIT).exists()
-        || path != MACRO_PATH
-        || !MACROS.contains(&name)
-        || !frozen.starts_with("macro:fn ")
-    {
-        return Ok(false);
-    }
-    Ok(state(root)? == State::Consumed)
 }
 #[cfg(test)]
 #[path = "receipt_surface_normalization_kodex_tests.rs"]

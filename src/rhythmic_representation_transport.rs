@@ -196,6 +196,7 @@ impl RepresentationStep {
 #[derive(Debug, Clone)]
 pub(crate) struct RhythmicRepresentationTransport {
     steps: Vec<RepresentationStep>,
+    permits_plain_stem_change: bool,
 }
 
 impl RhythmicRepresentationTransport {
@@ -204,7 +205,7 @@ impl RhythmicRepresentationTransport {
     pub(crate) fn render_cleanup(_: &crate::pipeline::RenderRow57BlockMint,
         receipt: &crate::master_state_identity::BlockTransformationReceipt,
         steps: Vec<RepresentationStep>) -> Result<Self> {
-        let transport = Self { steps };
+        let transport = Self { steps, permits_plain_stem_change: false };
         let (before, after) = transport.recorded_documents()?;
         receipt.validate_block_transition::<crate::pipeline::RenderRow57BlockMint>(before, after)?;
         for step in &transport.steps {
@@ -223,7 +224,7 @@ impl RhythmicRepresentationTransport {
         receipt: &crate::master_state_identity::BlockTransformationReceipt,
         steps: Vec<RepresentationStep>,
     ) -> Result<Self> {
-        let transport = Self { steps };
+        let transport = Self { steps, permits_plain_stem_change: false };
         let (before, after) = transport.recorded_documents()?;
         receipt.validate_block_transition::<crate::pipeline::RenderRow66BlockMint>(before, after)?;
         let [_, notes] = transport.steps.as_slice() else {
@@ -256,7 +257,7 @@ impl RhythmicRepresentationTransport {
                     && matches!(n.tag_name().name(), "note" | "backup" | "forward")),
                 "Octave journal contains a rhythmic operation");
         }
-        Ok(Self { steps: vec![step] })
+        Ok(Self { steps: vec![step], permits_plain_stem_change: false })
     }
 
     /// Owner-recorded journal of a frozen PRESERVING layout write (E044/E013).
@@ -273,7 +274,7 @@ impl RhythmicRepresentationTransport {
                 !["<note", "<backup", "<forward", "<measure", "</measure"].iter().any(|token| fragment.contains(token))),
                 "Layout journal touches a rhythmic element");
         }
-        Ok(Self { steps: vec![step] })
+        Ok(Self { steps: vec![step], permits_plain_stem_change: false })
     }
 
     /// Split the already emitted clef journal at the original receipt boundaries.
@@ -286,7 +287,7 @@ impl RhythmicRepresentationTransport {
             step.validate()?;
             receipt.validate_block_transition::<crate::structural_write_authority::ClefMeasureBlockMint>(
                 &step.before, &step.after)?;
-            output.push(Self { steps: vec![step.clone()] });
+            output.push(Self { steps: vec![step.clone()], permits_plain_stem_change: false });
         }
         Ok(output)
     }
@@ -315,7 +316,7 @@ impl RhythmicRepresentationTransport {
     }
 
     pub(crate) fn partial_beam(_: &crate::pipeline::PartialBeatBeamPreservingMint,
-        step: RepresentationStep) -> Self { Self { steps: vec![step] } }
+        step: RepresentationStep) -> Self { Self { steps: vec![step], permits_plain_stem_change: false } }
 
     /// Owner-recorded journal of the PRESERVING Rustig clef course (E024).
     /// Every removed and inserted fragment must be free of rhythmic elements.
@@ -330,11 +331,11 @@ impl RhythmicRepresentationTransport {
                 !["<note", "<backup", "<forward", "<measure", "</measure"].iter().any(|token| fragment.contains(token))),
                 "Clef course journal touches a rhythmic element");
         }
-        Ok(Self { steps: vec![step] })
+        Ok(Self { steps: vec![step], permits_plain_stem_change: false })
     }
 
     pub(crate) fn ledger_clef(_: &crate::pipeline::LedgerBoundedLowerStaffClefReadbackPreservingMint,
-        step: RepresentationStep) -> Self { Self { steps: vec![step] } }
+        step: RepresentationStep) -> Self { Self { steps: vec![step], permits_plain_stem_change: false } }
 
     pub(crate) fn single_step_documents(&self) -> Result<(&str, &str)> {
         ensure!(self.steps.len() == 1, "Recorded block transport is not one original step");
@@ -353,17 +354,21 @@ impl RhythmicRepresentationTransport {
             }
         }
         ensure!(receipts.next().is_none(), "Unconsumed clef owner receipt");
-        Ok(Self { steps })
+        Ok(Self { steps, permits_plain_stem_change: false })
     }
 
     pub(crate) fn polish(_: &crate::pipeline::NotationPolishPreservingMint,
         steps: Vec<RepresentationStep>) -> Self {
-        Self { steps }
+        Self { steps, permits_plain_stem_change: true }
+    }
+
+    pub(super) fn permits_plain_stem_change(&self) -> bool {
+        self.permits_plain_stem_change
     }
 
     pub(crate) fn layout(_: &crate::layout::PianistLayoutPreservingMint,
         steps: Vec<RepresentationStep>) -> Self {
-        Self { steps }
+        Self { steps, permits_plain_stem_change: false }
     }
 
     /// Preserve each independently mapped observation after validating the

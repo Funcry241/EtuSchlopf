@@ -50,7 +50,7 @@ fn preserving_evidence_remains_independent_of_duplicate_observations_and_labels(
 }
 
 fn transport(before: &str, after: &str, edits: Vec<(Range<usize>, String)>) -> RhythmicRepresentationTransport {
-    RhythmicRepresentationTransport { steps: vec![RepresentationStep::recorded(before, after, edits)] }
+    RhythmicRepresentationTransport { permits_plain_stem_change: false, steps: vec![RepresentationStep::recorded(before, after, edits)] }
 }
 
 #[test]
@@ -70,7 +70,7 @@ fn occurrence_boundary_crossing_is_not_a_note_replacement() {
 fn overlapping_operations_and_stale_intermediate_states_fail_closed() {
     assert!(transport("abcd", "xd", vec![(0..2, "x".into()), (1..3, String::new())])
         .carry("abcd", "xd", std::iter::once(3..4).collect()).is_err());
-    let chain = RhythmicRepresentationTransport { steps: vec![
+    let chain = RhythmicRepresentationTransport { permits_plain_stem_change: false, steps: vec![
         RepresentationStep::recorded("abc", "xabc", vec![(0..0, "x".into())]),
         RepresentationStep::recorded("yabc", "yabc", vec![])] };
     assert!(chain.carry("abc", "yabc", std::iter::once(1..2).collect()).is_err());
@@ -144,7 +144,7 @@ fn recorded_block_cannot_change_complete_note_notation_even_with_equal_duration(
 
 #[test]
 fn original_multistep_endpoints_require_every_intermediate_operation() {
-    let valid = RhythmicRepresentationTransport { steps: vec![
+    let valid = RhythmicRepresentationTransport { permits_plain_stem_change: false, steps: vec![
         RepresentationStep::recorded("abcd", "axbcd", vec![(1..1, "x".into())]),
         RepresentationStep::recorded("axbcd", "axbCcd", vec![(3..3, "C".into())])] };
     assert_eq!(valid.recorded_documents().unwrap(), ("abcd", "axbCcd"));
@@ -154,7 +154,7 @@ fn original_multistep_endpoints_require_every_intermediate_operation() {
     let mut missing = valid;
     missing.steps[1].edits.clear();
     assert!(missing.recorded_documents().unwrap_err().to_string().contains("do not reproduce"));
-    assert!(RhythmicRepresentationTransport { steps: vec![] }.recorded_documents().is_err());
+    assert!(RhythmicRepresentationTransport { permits_plain_stem_change: false, steps: vec![] }.recorded_documents().is_err());
 }
 
 

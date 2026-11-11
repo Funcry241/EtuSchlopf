@@ -15,7 +15,7 @@ Der Name darf dich zum Schmunzeln bringen. Die Mathematik dahinter nehmen wir er
 
 Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI und WAV als Eingabe
 
-Der Quellstand auf `main` ist r1721. Der Windows-Lauf für BWV 847 ist [hier dokumentiert](docs/evidence/r1721/README.md).
+Der Quellstand auf `main` ist **r1740**. Die [Windows-Abnahme für BWV 847](docs/evidence/r1740/README.md) dokumentiert Build, Tests und Notensatz.
 
 [Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1684-windows-preview) ·
 [Erstes Stück](#dein-erstes-stück) · [Grenzen der Testversion](#aktueller-stand) ·
@@ -93,7 +93,7 @@ du am eigenen Ergebnis.
 
 ## Quellstand und Beiträge
 
-Der Entwicklungsquellstand ist **r1684 / 0.10.1839**. Der vollständige native Korpuslauf mit zehn Etüden wurde angenommen: Build und Strict-Clippy bestanden, 2992 Tests bestanden, vier ignoriert. [Native Abnahme r1684](docs/evidence/r1684/README.md). Dieser Stand enthält die Weiterentwicklung seit r1659 einschließlich der C3-Behandlung ursprünglicher Pausenanker und der Verbesserungen an der Watch-Webansicht. Die [Mathematik-Seite](docs/MATHEMATIK.md) beschreibt 34 Verfahrensfamilien und trennt produktive Entscheidungen, Audits, historische Modelle und offene Grenzen. r1684 selbst aktualisiert die Dokumentation auf dem Laufzeitstand r1683. Die Windows-Testversion und das herunterladbare Startbeispiel verwenden ebenfalls r1684. Der oben abgebildete Korpusausschnitt stammt ebenfalls aus dem angenommenen nativen r1684-Lauf.
+Der Entwicklungsquellstand ist **r1740 / 0.10.1839**. Im nativen Windows-Lauf für BWV 847 bestanden Build, Strict-Clippy und 3039 Tests. Der PDF-Export wurde freigegeben. [Native Abnahme r1740](docs/evidence/r1740/README.md). Der vollständige Korpuslauf mit zehn Etüden ist für [r1684](docs/evidence/r1684/README.md) dokumentiert.
 
 Die Download-Engine wurde aus dem angenommenen nativen Stand **r1684** gebaut.
 Der [zum geprüften Build gehörende r1684-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1684-windows-preview/EtuSchlopf-r1684-source.zip)

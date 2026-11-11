@@ -3046,8 +3046,16 @@ fn freeze_final_sounding_material(
         &legacy_label_preferences,
         &frozen_serialized_voice_plan,
     );
-    let (frozen_channels, frozen_serialized_voice_plan) =
+    let (frozen_channels, mut frozen_serialized_voice_plan) =
         replacement.unwrap_or((frozen_channels, frozen_serialized_voice_plan));
+    let active_spans = lane_plan.rows.iter().flat_map(|lane| {
+        lane.members.iter().map(move |member| {
+            (member.source_event_id.0, (lane.staff, lane.absolute_start, lane.absolute_end))
+        })
+    }).collect();
+    frozen_serialized_voice_plan.bind_source_voice_gaps(
+        candidate.midi_seed_stats.rhythmic_courses.bounded_source_voice_gaps(&active_spans),
+    );
     // Report the channel plan selected by the existing canonical serialization authority.
     eprintln!(
         "FrozenChannelConsumerAllocation: {} channels={} evidence={:?}",

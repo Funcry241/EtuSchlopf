@@ -1123,6 +1123,7 @@ struct FinalChordTransactionLocalOutputAlphaReceipt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CanonicalProjectedFinalChord {
     xml: String,
+    non_pitched_continuations: Vec<FinalChordNonPitchedContinuation>,
     receipt: FinalChordTransactionLocalOutputAlphaReceipt,
 }
 
@@ -1968,9 +1969,116 @@ impl FrozenSerializationVoiceChannelPlan {
                     let _ = writeln!(out, "OriginalNotationBeamAllocation: admitted; scope=sealed_source_component; authority=original_owner_and_pre_lane_relation");
                 }
                 Err(error) => {
-                    let _ = writeln!(out, "OriginalNotationBeamAllocation: retained_baseline; reason={error}");
+                    let (current, current_voices) = accepted.as_ref()
+                        .map_or((self, production), |(channels, voices)| (channels, voices));
+                    if let Some(pair) = current.checked_split_original_component(
+                        canonical, attacks, original_beams, current_voices, &sources, &projection_reuse,
+                    ) {
+                        accepted_sources = proposed_sources;
+                        accepted = Some(pair);
+                        let _ = writeln!(out, "OriginalNotationBeamAllocation: admitted via a compatible member channel");
+                    } else {
+                        let _ = writeln!(out, "OriginalNotationBeamAllocation: retained_baseline; reason={error}");
+                    }
                 }
             }
+        }
+        // Beam components can share provisional channels with several
+        // concurrent components. Close the entire conflict before checking
+        // any assignment against the unchanged notes and rests.
+        let attacks_by_source = attacks.iter().map(|row| (row.source_event_id, row))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let original_labels = legacy_preferences.iter().map(|row| (row.source_event_id, row.label.trim()))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let groups: Vec<_> = canonical.original_beam_voice_groups.iter()
+            .map(|group| group.allocation_sources())
+            .filter(|sources| !sources.is_subset(&accepted_sources))
+            .collect();
+        let (current, _) = accepted.as_ref()
+            .map_or((self, production), |(channels, voices)| (channels, voices));
+        let member_channels: Vec<std::collections::BTreeSet<_>> = groups.iter()
+            .map(|sources| sources.iter().filter_map(|source| current.source_to_channel.get(source).copied()).collect())
+            .collect();
+        let mut neighbors = vec![Vec::new(); groups.len()];
+        for (left, sources) in groups.iter().enumerate() {
+            for (right, other) in groups.iter().enumerate().skip(left + 1) {
+                if member_channels[left].len() < 2 || member_channels[right].len() < 2
+                    || member_channels[left].is_disjoint(&member_channels[right])
+                    || !sources.is_disjoint(other)
+                { continue; }
+                if sources.iter().filter_map(|source| attacks_by_source.get(source)).any(|a|
+                    other.iter().filter_map(|source| attacks_by_source.get(source)).any(|b|
+                        a.sounding_interval().overlaps(b.sounding_interval())))
+                {
+                    neighbors[left].push(right);
+                    neighbors[right].push(left);
+                }
+            }
+        }
+        let mut visited = std::collections::BTreeSet::new();
+        for (first, edges) in neighbors.iter().enumerate() {
+            if edges.is_empty() || !visited.insert(first) { continue; }
+            let mut connected = vec![first];
+            let mut cursor = 0;
+            while cursor < connected.len() {
+                connected.extend(neighbors[connected[cursor]].iter().copied()
+                    .filter(|next| visited.insert(*next)));
+                cursor += 1;
+            }
+            let sources = connected.iter().flat_map(|&index| groups[index].iter().copied())
+                .collect::<std::collections::BTreeSet<_>>();
+            if sources.len() != connected.iter().map(|&index| groups[index].len()).sum::<usize>() {
+                continue;
+            }
+            let (current, current_voices) = accepted.as_ref()
+                .map_or((self, production), |(channels, voices)| (channels, voices));
+            let mut options = vec![std::collections::BTreeMap::<usize, usize>::new()];
+            for &index in &connected {
+                let conflicts = &neighbors[index];
+                options = options.into_iter().flat_map(|selected| {
+                    member_channels[index].iter().filter_map(move |&channel| {
+                        if conflicts.iter().any(|neighbor| selected.get(neighbor) == Some(&channel)) {
+                            return None;
+                        }
+                        let mut extended = selected.clone();
+                        extended.insert(index, channel);
+                        Some(extended)
+                    })
+                }).collect();
+            }
+            let trace = canonical.source_locators.iter().any(|row|
+                sources.contains(&row.source_event_id)
+                    && crate::audit_only::original_beam_diagnostics::detail_requested_for_measure(row.measure));
+            let mut candidates: Vec<_> = options.into_iter().filter_map(|assignment| {
+                let allocation = assignment.into_iter().flat_map(|(index, channel)|
+                    groups[index].iter().map(move |&source| (source, channel))).collect();
+                let attempt = current.checked_original_component_channel_assignment(
+                    canonical, attacks, original_beams, current_voices, allocation, &projection_reuse,
+                );
+                if trace {
+                    eprintln!("ConcurrentOriginalBeamAllocation: groups={:?}; outcome={:?}",
+                        connected.iter().map(|&index| &groups[index]).collect::<Vec<_>>(),
+                        attempt.as_ref().map(|_| ()).map_err(|error| error.to_string()));
+                }
+                let (channels, voices) = attempt.ok()?;
+                let mut source_label_changes = 0;
+                let mut channel_changes = 0;
+                for source in &sources {
+                    let label = original_labels.get(source)?;
+                    source_label_changes += usize::from(voices.label_for_source(*source) != Some(*label));
+                    channel_changes += usize::from(channels.source_to_channel.get(source)
+                        != current.source_to_channel.get(source));
+                }
+                Some(((source_label_changes, channel_changes), (channels, voices)))
+            }).collect();
+            candidates.sort_unstable_by_key(|(rank, _)| *rank);
+            if candidates.is_empty()
+                || candidates.get(1).is_some_and(|(rank, _)| *rank == candidates[0].0)
+            { continue; }
+            let (_, pair) = candidates.remove(0);
+            accepted_sources.extend(sources);
+            accepted = Some(pair);
+            let _ = writeln!(out, "OriginalNotationBeamAllocation: admitted concurrent original components together");
         }
         // Compose the admitted original-source quotient with written-time
         // compatibility before materialization. Technical channels may contain
@@ -2000,6 +2108,97 @@ impl FrozenSerializationVoiceChannelPlan {
         projection_reuse.append_diagnostics(out);
         crate::audit_only::voice_allocation_timing::summary();
         accepted
+    }
+
+    /// Try only the existing channels of the complete original beam group.
+    /// The original allocation and projection checks still decide admission.
+    fn checked_split_original_component(
+        &self,
+        canonical: &CanonicalFinalChordStructuralPlan,
+        attacks: &[FrozenVoiceAttackEvidenceRow],
+        original_beams: &ActualSourceBeamBindingObservation,
+        before: &FrozenSerializedVoicePlan,
+        sources: &std::collections::BTreeSet<usize>,
+        reuse: &cross_role_channel_sharing::ProjectionReuse<'_>,
+    ) -> Option<(Self, FrozenSerializedVoicePlan)> {
+        if !reuse.component_overlaps_replaced_entry_rest(before, sources).ok()? {
+            return None;
+        }
+        let trace = canonical.source_locators.iter().any(|row|
+            sources.contains(&row.source_event_id)
+                && crate::audit_only::original_beam_diagnostics::detail_requested_for_measure(row.measure));
+        let targets = sources.iter().map(|source| self.source_to_channel.get(source).copied())
+            .collect::<Option<std::collections::BTreeSet<_>>>()?;
+        if targets.len() < 2 { return None; }
+        let mut result = None;
+        for target in targets {
+            let allocation = sources.iter().map(|&source| (source, target)).collect();
+            let attempt = self.checked_original_component_channel_assignment(
+                canonical, attacks, original_beams, before, allocation, reuse,
+            );
+            if trace {
+                eprintln!("OriginalBeamAndEntryRest: sources={sources:?}; target={target}; outcome={:?}",
+                    attempt.as_ref().map(|_| ()).map_err(|error| error.to_string()));
+            }
+            if let Ok(pair) = attempt {
+                if result.is_some() { return None; }
+                result = Some(pair);
+            }
+        }
+        result
+    }
+
+    fn checked_original_component_channel_assignment(
+        &self,
+        canonical: &CanonicalFinalChordStructuralPlan,
+        attacks: &[FrozenVoiceAttackEvidenceRow],
+        original_beams: &ActualSourceBeamBindingObservation,
+        before: &FrozenSerializedVoicePlan,
+        allocation: std::collections::BTreeMap<usize, usize>,
+        reuse: &cross_role_channel_sharing::ProjectionReuse<'_>,
+    ) -> io::Result<(Self, FrozenSerializedVoicePlan)> {
+        let written = canonical.written_projection.as_ref().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "original_component_missing_written_projection")
+        })?;
+        let target = |source: usize| allocation.get(&source).or_else(|| self.source_to_channel.get(&source));
+        let moves = |source: usize| target(source) != self.source_to_channel.get(&source);
+        let collision = |left: usize, right: usize| left != right && target(left) == target(right);
+        if written.occurrences.iter().filter(|row| moves(row.source_event_id)).any(|left|
+            written.occurrences.iter().any(|right| collision(left.source_event_id, right.source_event_id)
+                && left.written_interval().overlaps(right.written_interval())))
+            || attacks.iter().filter(|row| moves(row.source_event_id)).any(|left|
+                attacks.iter().any(|right| collision(left.source_event_id, right.source_event_id)
+                    && left.absolute_start < right.absolute_end
+                    && right.absolute_start < left.absolute_end))
+        {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "original_component_channel_collision"));
+        }
+        let sources = allocation.keys().copied().collect::<std::collections::BTreeSet<_>>();
+        let mut proposed = self.clone();
+        for (&source, &channel) in &allocation {
+            proposed.source_to_channel.insert(source, channel);
+            proposed.source_to_role.insert(source, proposed.channel_to_role[&channel]);
+        }
+        proposed.channel_to_role.retain(|channel, _|
+            proposed.source_to_channel.values().any(|current| current == channel));
+        proposed.channel_count = proposed.channel_to_role.len();
+        proposed.label_continuation = None;
+        proposed.semantic_fingerprint_fnv64 = fingerprint(&format!(
+            "ETUSCHLOPF_ORIGINAL_SPLIT_COMPONENT_V1|{:016x}|{allocation:?}",
+            self.semantic_fingerprint_fnv64));
+        proposed.consumer_allocation = ChannelConsumerAllocation::AdmittedAfterOriginalWrittenReuse;
+        let voices = proposed.bind_original_component_labels(canonical, before, &sources)?;
+        proposed.require_consumer_admission(canonical, &voices)?;
+        if reuse.component_overlaps_replaced_entry_rest(before, &sources)? {
+            cross_role_channel_sharing::check_original_component_and_rest_projection(
+                canonical, before, &voices, original_beams, &sources, reuse,
+            )?;
+        } else {
+            cross_role_channel_sharing::check_original_notation_component_projection(
+                canonical, before, &voices, original_beams, &sources, reuse,
+            )?;
+        }
+        Ok((proposed, voices))
     }
 
     fn bind_original_component_labels(
@@ -2205,6 +2404,7 @@ struct CanonicalFrozenRoleAllocation {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct FrozenSerializedVoicePlan {
+    source_voice_gaps: std::sync::Arc<[(usize, crate::midi_seed::SourceVoiceGap)]>,
     canonical_role_allocation: Option<std::sync::Arc<CanonicalFrozenRoleAllocation>>,
     authority_bound: bool,
     source_to_role: std::collections::BTreeMap<usize, SerializedVoicePresentationRole>,
@@ -2623,6 +2823,7 @@ pub(crate) fn frozen_serialized_voice_plan_for_rest_role_replay_test(
     .into_iter()
     .collect::<std::collections::BTreeMap<_, _>>();
     FrozenSerializedVoicePlan {
+        source_voice_gaps: Default::default(),
         canonical_role_allocation: None,
         source_to_role: std::collections::BTreeMap::new(),
         authority_bound: true,
@@ -2636,6 +2837,53 @@ pub(crate) fn frozen_serialized_voice_plan_for_rest_role_replay_test(
 }
 
 impl FrozenSerializedVoicePlan {
+    pub(crate) fn bind_source_voice_gaps(&mut self, gaps: Vec<crate::midi_seed::SourceVoiceGap>) {
+        self.source_voice_gaps = gaps.into_iter()
+            .filter_map(|gap| self.channel_for_label(&gap.seed_voice.to_string()).map(|channel| (channel, gap)))
+            .collect();
+    }
+
+    pub(crate) fn source_voice_gap_rest_starts(&self, xml: &str) -> std::collections::BTreeSet<usize> {
+        self.selected_source_voice_gap_rest_starts(xml, |_| true)
+    }
+
+    pub(crate) fn source_upper_voice_rest_starts(&self, xml: &str) -> std::collections::BTreeSet<usize> {
+        self.selected_source_voice_gap_rest_starts(xml, |gap| gap.above_lower_staff)
+    }
+
+    fn selected_source_voice_gap_rest_starts(
+        &self,
+        xml: &str,
+        select: impl Fn(&crate::midi_seed::SourceVoiceGap) -> bool,
+    ) -> std::collections::BTreeSet<usize> {
+        if !self.source_voice_gaps.iter().any(|(_, gap)| select(gap)) { return Default::default(); }
+        let Ok(document) = validate_final_chord_musicxml(xml) else { return Default::default(); };
+        if document.root_element().children().filter(|node| node.has_tag_name("part")).count() != 1 {
+            return Default::default();
+        }
+        let Ok(measures) = final_chord_parse_binding_measures(xml) else { return Default::default(); };
+        self.source_voice_gaps.iter().filter(|(_, gap)| select(gap)).filter_map(|(channel, gap)| {
+            let measure = measures.get(gap.measure)?;
+            if measure.divisions != gap.divisions { return None; }
+            let end = gap.start.checked_add(gap.duration)?;
+            let mut carriers: Vec<_> = measure.notes.iter().filter(|note| {
+                note.rest_like && !note.chord_member && note.duration > 0
+                    && note.onset < end && note.onset.saturating_add(note.duration) > gap.start
+                    && note.staff.parse::<u8>().ok() == Some(gap.staff)
+                    && self.channel_for_label(note.voice.trim()) == Some(*channel)
+            }).collect();
+            carriers.sort_unstable_by_key(|note| note.onset);
+            let mut cursor = gap.start;
+            for note in &carriers {
+                if note.onset != cursor
+                    || !final_chord_note_fragment_is_visible(xml.get(note.range.clone())?)
+                { return None; }
+                cursor = cursor.checked_add(note.duration)?;
+            }
+            (cursor == end).then_some(carriers)
+        }).flatten().map(|note| note.range.start).collect()
+    }
+
     fn check_canonical_channel_bindings(
         &self, canonical: &CanonicalFinalChordStructuralPlan,
     ) -> io::Result<()> {
@@ -6253,6 +6501,7 @@ pub(crate) fn bind_musicxml_voice_labels(
             channel_to_label.get(channel).cloned().map(|label| (source, label)).ok_or_else(invalid)
         }).collect::<io::Result<std::collections::BTreeMap<_, _>>>()?;
         return Ok(FrozenSerializedVoicePlan {
+            source_voice_gaps: before.source_voice_gaps.clone(),
             canonical_role_allocation: Some(std::sync::Arc::new(CanonicalFrozenRoleAllocation {
                 source_roles: channels.source_to_role.clone(), channel_roles: channels.channel_to_role.clone(),
             })),
@@ -6336,6 +6585,7 @@ pub(crate) fn bind_musicxml_voice_labels(
         label_to_role.insert(label.clone(), channels.channel_to_role[&channel]);
     }
     Ok(FrozenSerializedVoicePlan {
+        source_voice_gaps: Default::default(),
         canonical_role_allocation: Some(std::sync::Arc::new(CanonicalFrozenRoleAllocation {
             source_roles: channels.source_to_role.clone(), channel_roles: channels.channel_to_role.clone(),
         })),
@@ -6391,6 +6641,7 @@ fn final_chord_permute_sealed_voice_labels(
         label_to_role.insert(permuted, voice_plan.channel_to_role[&channel]);
     }
     Ok(FrozenSerializedVoicePlan {
+        source_voice_gaps: voice_plan.source_voice_gaps.clone(),
         canonical_role_allocation: voice_plan.canonical_role_allocation.clone(),
         source_to_role: voice_plan.source_to_role.clone(),
         authority_bound: true,
@@ -8640,6 +8891,7 @@ fn project_canonical_bound_final_chord_encoding_plan_for_transaction_output_alph
         .map(|course| course.projected(candidate_xml, &projection.xml, &occurrences)).transpose()?;
     Ok(CanonicalProjectedFinalChord {
         xml: projection.xml,
+        non_pitched_continuations: projection.non_pitched_continuations,
         receipt: FinalChordTransactionLocalOutputAlphaReceipt {
             rest_bridge_extension_course,
             phrase_origin: std::sync::Arc::new(()),
@@ -8740,6 +8992,7 @@ fn final_chord_transaction_output_alpha_map(
 ) -> io::Result<CanonicalProjectedFinalChord> {
     Ok(CanonicalProjectedFinalChord {
         xml: final_chord_map_all_voice_elements(&projected.xml, mapping)?,
+        non_pitched_continuations: Vec::new(),
         receipt: projected.receipt.clone(),
     })
 }
@@ -11330,6 +11583,7 @@ mod tests {
         .into_iter()
         .collect::<std::collections::BTreeMap<_, _>>();
         FrozenSerializedVoicePlan {
+            source_voice_gaps: Default::default(),
             canonical_role_allocation: None,
             source_to_role: std::collections::BTreeMap::new(),
             authority_bound: true,
@@ -11921,6 +12175,7 @@ mod tests {
             unresolved_constraint_edges: 0,
         };
         let voice_plan = FrozenSerializedVoicePlan {
+            source_voice_gaps: Default::default(),
             canonical_role_allocation: None,
             source_to_role: std::collections::BTreeMap::new(),
             authority_bound: true,
@@ -12181,6 +12436,7 @@ mod tests {
             unresolved_constraint_edges: 0,
         };
         let voice_plan = FrozenSerializedVoicePlan {
+            source_voice_gaps: Default::default(),
             canonical_role_allocation: None,
             source_to_role: std::collections::BTreeMap::new(),
             authority_bound: true,
@@ -12408,6 +12664,7 @@ mod tests {
             unresolved_constraint_edges: 0,
         };
         let voice_plan = FrozenSerializedVoicePlan {
+            source_voice_gaps: Default::default(),
             canonical_role_allocation: None,
             source_to_role: std::collections::BTreeMap::new(),
             authority_bound: true,
@@ -12499,6 +12756,7 @@ mod tests {
             unresolved_constraint_edges: 0,
         };
         let voice_plan = FrozenSerializedVoicePlan {
+            source_voice_gaps: Default::default(),
             canonical_role_allocation: None,
             source_to_role: std::collections::BTreeMap::new(),
             authority_bound: true,
@@ -12632,6 +12890,7 @@ mod tests {
             unresolved_constraint_edges: 0,
         };
         let voice_plan = FrozenSerializedVoicePlan {
+            source_voice_gaps: Default::default(),
             canonical_role_allocation: None,
             source_to_role: std::collections::BTreeMap::new(),
             authority_bound: true,
@@ -12920,6 +13179,7 @@ mod tests {
             unresolved_constraint_edges: 0,
         };
         let voice_plan = FrozenSerializedVoicePlan {
+            source_voice_gaps: Default::default(),
             canonical_role_allocation: None,
             source_to_role: std::collections::BTreeMap::new(),
             authority_bound: true,
@@ -13491,6 +13751,7 @@ mod tests {
             unresolved_constraint_edges: 0,
         };
         let voice_plan = FrozenSerializedVoicePlan {
+            source_voice_gaps: Default::default(),
             canonical_role_allocation: None,
             source_to_role: [
                 (1, SerializedVoicePresentationRole::LowerPrimary),

@@ -268,7 +268,7 @@ pub const FORMAL_GREEN_CONTRACT_FNV1A64: u64 =
     fnv1a64(FORMAL_GREEN_CONTRACT_BYTES);
 pub const RUN_CMD_FNV1A64: u64 = fnv1a64(RUN_CMD_BYTES);
 
-const _: () = assert!(IDENTITY_BUILD_POLICY_FNV1A64 == 0x24656c74cf65dc62);
+const _: () = assert!(IDENTITY_BUILD_POLICY_FNV1A64 == 0x19fcc65dd675a150);
 const _: () = assert!(IDENTITY_SCANNER_FNV1A64 == 0x75f817fb6b15e9fa);
 const _: () = assert!(IDENTITY_ZERO_BASELINE_FNV1A64 == 0xf2abe660ce4dd29c);
 const _: () = assert!(FEEDBACK_STRUCTURALIZATION_GATE_FNV1A64 == 0x56a542ccb94aac1b);
@@ -280,7 +280,7 @@ const _: () = assert!(KODEX_BOUNDARY_ADVERSARIAL_KODEX_FNV1A64 == 0x32cbb4f7a7a1
 const _: () = assert!(SOURCE_INTEGRITY_KODEX_FNV1A64 == 0x7d97e8d3fe4c7b85);
 const _: () = assert!(RECOVERY_TRANSACTION_ORDER_KODEX_FNV1A64 == 0x2a4c0068a8abb46b);
 const _: () = assert!(PINNED_POLICY_KODEX_FNV1A64 == 0xd7fc8835bbd91322);
-const _: () = assert!(INVENTORY_KODEX_FNV1A64 == 0x6d24e2613533d8ec);
+const _: () = assert!(INVENTORY_KODEX_FNV1A64 == 0xf90e1f045f4f3ede);
 const _: () = assert!(KODEX_BUILD_CONTEXT_FNV1A64 == 0x86aa959ba24f5b78);
 const _: () = assert!(KODEX_BOUNDARY_ADVERSARIAL_MATRIX_FNV1A64 == 0xd2be3ea82578cb94);
 const _: () = assert!(DEAD_CODE_DETECTION_INTEGRITY_FNV1A64 == 0x3bb4846591cc67d3);
@@ -294,7 +294,7 @@ const _: () = assert!(RUST_SOURCE_FACT_PRIMITIVES_FNV1A64 == 0x779750c64c86fb48)
 const _: () = assert!(SEMANTIC_CAPABILITY_DIFF_FNV1A64 == 0x2a7f6989a19d2aae);
 const _: () = assert!(KODEX_CAPABILITY_RETIREMENTS_FNV1A64 == 0xcda2b722929047a7);
 const _: () = assert!(PRODUCTIVE_WRITE_PATH_SCANNER_FNV1A64 == 0x933947523b68dee2);
-const _: () = assert!(DESTRUCTIVE_POPULATION_FREEZE_GATE_FNV1A64 == 0xee5dd699210dffce);
+const _: () = assert!(DESTRUCTIVE_POPULATION_FREEZE_GATE_FNV1A64 == 0x77035e9a18ac0a56);
 const _: () = assert!(RENDER_SOVEREIGNTY_KODEX_FNV1A64 == 0x012efd7d50fc2a79);
 const _: () = assert!(RENDER_SOVEREIGNTY_KODEX_TESTS_FNV1A64 == 0xb8aebae15b99ca62);
 const _: () = assert!(RENDER_OWNER_RELOCATION_V1_FNV1A64 == 0xa81555efafe33a17);
@@ -307,9 +307,9 @@ const _: () = assert!(DESTRUCTIVE_TRANSFORMATION_EXCLUSIONS_V1_FNV1A64 == 0x2fa1
 const _: () = assert!(DESTRUCTIVE_TRANSFORMATION_SURFACE_BASELINE_V1_FNV1A64 == 0xcc02d2ddd91aa3dc);
 const _: () = assert!(THIRTY_SURFACE_BATCH_SCAN_FNV1A64 == 0xf7cb74bb1ed893ec);
 const _: () = assert!(KODEX_GATE_CORE_OWNERSHIP_FNV1A64 == 0xa928770e3293682a);
-const _: () = assert!(TAKE_BOOTSTRAP_FNV1A64 == 0x74d6f5ad70f0a202);
-const _: () = assert!(LAUNCHER_FNV1A64 == 0xd9bc5bff65d894c1);
-const _: () = assert!(LAUNCHER_ASSISTANT_EXPORT_FNV1A64 == 0x7cda8153ff46fbbb);
+const _: () = assert!(TAKE_BOOTSTRAP_FNV1A64 == 0x551fe3aa39feaa1a);
+const _: () = assert!(LAUNCHER_FNV1A64 == 0x6ed59e5b928f8d8c);
+const _: () = assert!(LAUNCHER_ASSISTANT_EXPORT_FNV1A64 == 0xab2690e552cd2391);
 const _: () = assert!(LAUNCHER_INVENTORY_EXPORT_FNV1A64 == 0x633282e2d752a97e);
 const _: () = assert!(LAUNCHER_NEURO_EVIDENCE_EXPORT_FNV1A64 == 0x15ccc748a3a502bd);
 const _: () = assert!(PUBLIC_ARTIFACT_RECOVERY_FNV1A64 == 0x6e8088e300ca8a66);
@@ -435,12 +435,12 @@ const _: () = assert!(RSP_CLOSED_8_FNV1A64 == 0xff0d1569c389022a);
 const RSP_CLOSED_9_BYTES: &[u8] =
     include_bytes!("build_gate/receipt_surface_normalization_kodex.rs");
 const RSP_CLOSED_9_FNV1A64: u64 = fnv1a64(RSP_CLOSED_9_BYTES);
-const _: () = assert!(RSP_CLOSED_9_FNV1A64 == 0x823bcd7246a41d77);
+const _: () = assert!(RSP_CLOSED_9_FNV1A64 == 0x88d832fd93fa7f7f);
 
 const RSP_CLOSED_10_BYTES: &[u8] =
     include_bytes!("build_gate/receipt_surface_normalization_kodex_tests.rs");
 const RSP_CLOSED_10_FNV1A64: u64 = fnv1a64(RSP_CLOSED_10_BYTES);
-const _: () = assert!(RSP_CLOSED_10_FNV1A64 == 0x8d6a4c6c23637948);
+const _: () = assert!(RSP_CLOSED_10_FNV1A64 == 0xf06820a875fd5602);
 
 const RSP_CLOSED_11_BYTES: &[u8] =
     include_bytes!("build_gate/render_receipt_surface_permit_v1.txt");
@@ -460,7 +460,7 @@ const _: () = assert!(RFC_TEST_1_FNV1A64 == 0xef5db085002f9e44);
 
 const SSC_CONTRACT_0_BYTES: &[u8] = include_bytes!("build_gate/ssc_evidence_proof_shadow_permit_kodex.rs");
 const SSC_CONTRACT_0_FNV1A64: u64 = fnv1a64(SSC_CONTRACT_0_BYTES);
-const _: () = assert!(SSC_CONTRACT_0_FNV1A64 == 0x16c5c48643627dd0);
+const _: () = assert!(SSC_CONTRACT_0_FNV1A64 == 0x5a36ac3583f68c53);
 
 const SSC_CONTRACT_1_BYTES: &[u8] = include_bytes!("build_gate/ssc_evidence_proof_shadow_permit_kodex_tests.rs");
 const SSC_CONTRACT_1_FNV1A64: u64 = fnv1a64(SSC_CONTRACT_1_BYTES);

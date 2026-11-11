@@ -794,7 +794,10 @@ fn finish_solver_candidate_from_seed(
     let score = parse_musicxml(xml)
         .with_context(|| format!("Interne MIDI-Notationsbasis Profil {} konnte nicht geprüft werden", profile.display_name()))?;
     detail.enter(2);
-    let first_result = run_checks(&score, options);
+    let has_declared_source_voices = midi_seed_stats.rhythmic_courses.has_bound_source_voices();
+    let first_result = crate::rules::run_checks_with_hand_geometry(
+        &score, options, has_declared_source_voices,
+    );
     detail.enter(3);
     let reference_signature = build_reference_signature(reference, &score);
     if no_polish || has_non_repairable_preledger_blockers(&first_result) {
@@ -1005,6 +1008,15 @@ fn finish_solver_candidate_from_seed(
         }
     }
     detail.enter(7);
+    if has_declared_source_voices {
+        let checked_score = parse_musicxml(chosen_variant.master_state.document())
+            .context("Deklarierte MIDI-Stimmen: polierte Partitur konnte nicht geprüft werden")?;
+        chosen_variant.final_result =
+            crate::rules::run_checks_with_hand_geometry(&checked_score, options, true);
+        let _ = suppress_lower_staff_treble_clef_high_register_hints(
+            &mut chosen_variant.final_result, chosen_variant.master_state.document(),
+        );
+    }
     let mut midi_seed_stats = midi_seed_stats;
     midi_seed_stats.source_selection_candidate_evaluation = source_selection_candidate_evaluation(
         &chosen_variant.final_result,

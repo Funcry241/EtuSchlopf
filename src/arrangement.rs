@@ -2389,7 +2389,9 @@
                         rhythm_context.expected_duration(),
                         beat_duration,
                     )
-                } else if whole_bar_single_note_is_eligible(
+                } else if source_bound_long_tie_is_eligible(
+                    rhythm_context, &raw_notes, &meta_by_raw, idx, course_measure.as_deref(),
+                ) || whole_bar_single_note_is_eligible(
                     measure_text, rhythm_context, &raw_notes, &meta_by_raw, idx,
                 ) || aligned_half_bar_note_is_eligible(
                     measure_text, rhythm_context, &raw_notes, &meta_by_raw, idx,
@@ -2710,6 +2712,36 @@
             note_text.to_string()
         }
     }
+
+fn source_bound_long_tie_is_eligible(
+    context: RhythmContext,
+    raw: &[RawNote],
+    metas: &BTreeMap<usize, NoteMeta>,
+    idx: usize,
+    courses: Option<&CourseMeasure>,
+) -> bool {
+    let (Some(courses), Some(host)) = (courses, metas.get(&idx)) else { return false; };
+    if context.beats != 4 || context.beat_type != 4
+        || !crate::midi_seed::aligned_long_tie_value(
+            host.start, host.duration, context.expected_duration(), context.beat_duration(),
+        )
+    {
+        return false;
+    }
+
+    let mut end = idx + 1;
+    while metas.get(&end).is_some_and(|member| member.is_chord) {
+        end += 1;
+    }
+    courses.binds_distinct_sources(idx..end) && (idx..end).all(|member| {
+        let Some((note, meta)) = raw.get(member).zip(metas.get(&member)) else { return false; };
+        meta.midi.is_some() && meta.start == host.start && meta.duration == host.duration
+            && meta.staff == host.staff && meta.voice == host.voice
+            && is_note_block_visible(&note.text)
+            && (note.text.contains("<tie type=\"start\"/>")
+                || note.text.contains("<tie type=\"stop\"/>"))
+    })
+}
 
 // Preserve an existing unambiguous whole-bar occurrence before metric splitting.
 // The source owner and all continuation paths remain unchanged; no chain merging.

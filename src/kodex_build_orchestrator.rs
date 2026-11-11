@@ -256,7 +256,8 @@ fn run() -> Result<(), String> {
     );
 
     let manifest_dir = kodex_build_context::manifest_dir()?;
-    take_change_control::ssc_evidence_proof_shadow_permit_kodex::validate_current_tree(&manifest_dir)?;
+    let validated_ssc =
+        take_change_control::ssc_evidence_proof_shadow_permit_kodex::validate_current_tree(&manifest_dir)?;
     let dead_code_suppression_count =
         take_change_control::validate_dead_code_detection_integrity_installed(&manifest_dir)?;
     println!(
@@ -445,6 +446,7 @@ fn run() -> Result<(), String> {
 
     inventory_kodex::validate_and_emit_inventory_kodex(
         inventory_kodex::InventoryKodexInputs {
+            validated_ssc: &validated_ssc,
             manifest_dir: &context.manifest_dir,
             source_root: &context.source_root,
             kodex_gate_core_source_root: &context.kodex_gate_core_source_root,

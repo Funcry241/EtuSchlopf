@@ -266,6 +266,7 @@ struct SourceVoice {
 fn qualified_source_voices(
     notes: &[MidiSeedNote],
     source: &crate::midi::DecodedMidiSource,
+    metric: &MetricTimeline,
 ) -> Option<BTreeMap<usize, SourceVoice>> {
     use crate::midi::MidiVoiceRole::{Alto, Bass, Soprano, Tenor};
 
@@ -280,6 +281,12 @@ fn qualified_source_voices(
     }
     let roles = lanes.keys().map(|&(role, _, _)| role).collect::<BTreeSet<_>>();
     if roles.len() < 2 || roles.len() != lanes.len() { return None; }
+    let bass = lanes.iter().find_map(|(&(role, _, _), lane)| (role == Bass).then_some(lane));
+    let lower_alto = match (bass, roles.contains(&Soprano), roles.contains(&Tenor)) {
+        (Some(bass), true, false) => lanes.iter().find_map(|(&(role, _, _), lane)|
+            (role == Alto).then(|| low_alto_source_measures(lane, bass, metric))).unwrap_or_default(),
+        _ => BTreeSet::new(),
+    };
     let mut assignments = BTreeMap::new();
     for ((role, _, _), mut lane) in lanes {
         lane.sort_by_key(|note| (note.pos, note.midi));
@@ -298,10 +305,65 @@ fn qualified_source_voices(
             Bass => (2, 2, false),
         };
         for note in lane {
-            assignments.insert(note.source_ordinal, SourceVoice { staff, voice, opposite_stem });
+            let move_alto = role == Alto
+                && metric.ordinal_at(note.pos).is_some_and(|index| lower_alto.contains(&index));
+            let assignment = if move_alto {
+                SourceVoice { staff: 2, voice, opposite_stem: true }
+            } else {
+                SourceVoice { staff, voice, opposite_stem }
+            };
+            assignments.insert(note.source_ordinal, assignment);
         }
     }
     (assignments.len() == notes.len()).then_some(assignments)
+}
+
+// Compare the complete measured line on the two piano staves. Keep the
+// bass below every simultaneous alto note and prefer a sustained relocation.
+fn low_alto_source_measures(
+    alto: &[&MidiSeedNote],
+    bass: &[&MidiSeedNote],
+    metric: &MetricTimeline,
+) -> BTreeSet<usize> {
+    let ledger = |midi: i32, low: i32, high: i32| {
+        let (step, _, octave) = midi_to_pitch(midi);
+        let offset = "CDEFGAB".find(step).expect("seed diatonic pitch") as i32;
+        let diatonic = octave * 7 + offset;
+        (low - diatonic).max(diatonic - high).max(0) / 2
+    };
+    let mut regions = BTreeSet::new();
+    for index in 0..metric.len() {
+        let Some(bar) = metric.measure(index) else { continue; };
+        let line: Vec<_> = alto.iter().copied()
+            .filter(|note| note.pos < bar.end && bar.start < note.pos + note.len)
+            .collect();
+        if line.len() < 2 || line.iter().any(|note| note.pos < bar.start || note.pos + note.len > bar.end) {
+            continue;
+        }
+        let mut gain = 0;
+        let mut overlapping_bass = false;
+        let mut spaced = true;
+        for note in &line {
+            // E4 to F5 in treble and G2 to A3 in bass.
+            gain += ledger(note.midi, 30_i32, 38_i32) - ledger(note.midi, 18_i32, 26_i32);
+            for low in bass.iter().filter(|low| low.pos < note.pos + note.len && note.pos < low.pos + low.len) {
+                overlapping_bass = true;
+                if note.midi - low.midi < 3 { spaced = false; }
+            }
+        }
+        if overlapping_bass && spaced && gain >= line.len() as i32 {
+            regions.insert(index);
+        }
+    }
+    regions.iter().copied().filter(|&index| regions.contains(&(index + 1))
+        || index.checked_sub(1).is_some_and(|before| regions.contains(&before))).collect()
+}
+
+pub(crate) fn aligned_long_tie_value(
+    start: i64, duration: i64, measure_duration: i64, beat_duration: i64,
+) -> bool {
+    measure_duration == 384 && beat_duration == 96
+        && matches!((start, duration), (0, 384) | (0 | 192, 192))
 }
 
 fn source_voice_fragments(
@@ -313,7 +375,8 @@ fn source_voice_fragments(
     let mut measures = BTreeMap::<_, Vec<_>>::new();
     for source in sources {
         let voice = assignments[&source.source_ordinal];
-        let course = courses.iter().find(|c| c.staff == voice.staff && c.voice == Some(voice.voice))
+        let course = courses.iter().find(|c| c.staff == voice.staff && c.voice == Some(voice.voice)
+            && c.coverage.contains(&source.pos))
             .ok_or_else(|| anyhow!("Missing source voice staff"))?;
         let release = source.pos + source.len;
         let mut start = source.pos;
@@ -321,11 +384,15 @@ fn source_voice_fragments(
             let bar = metric.ordinal_at(start).and_then(|i| metric.measure(i))
                 .ok_or_else(|| anyhow!("Source voice escapes the metric"))?;
             let duration = bar.end.min(release) - start;
-            let part = if start == source.pos && duration == source.len {
+            let beat = metric.divisions * 4 / i64::from(bar.beat_type);
+            let bar_offset = start - bar.start;
+            let part = if (start == source.pos && duration == source.len)
+                || (bar.beats == 4 && bar.beat_type == 4
+                    && aligned_long_tie_value(bar_offset, duration, bar.end - bar.start, beat))
+            {
                 duration
             } else {
-                let beat = metric.divisions * 4 / i64::from(bar.beat_type);
-                let until_beat = beat - (start - bar.start) % beat;
+                let until_beat = beat - bar_offset % beat;
                 [96, 72, 48, 36, 24, 18, 12, 6]
                     .into_iter().find(|part| *part <= duration.min(until_beat))
                     .ok_or_else(|| anyhow!("Source fragment duration is unsupported"))?
@@ -348,7 +415,7 @@ fn source_voice_fragments(
     let mut plan = Vec::new();
     for index in 0..metric.len() {
         let bar = metric.measure(index).ok_or_else(|| anyhow!("Missing source voice measure"))?;
-        for course in courses {
+        for course in courses.iter().filter(|course| course.coverage.contains(&bar.start)) {
             let mut notes = measures.remove(&(bar.start, course.creation)).unwrap_or_default();
             notes.sort_by_key(|note| (note.interval.start, note.source_voice, note.pitch));
             let mut covered = bar.start;
@@ -378,7 +445,116 @@ fn source_voice_fragments(
     Ok(plan)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SourceVoiceGap {
+    pub(crate) measure: usize,
+    pub(crate) divisions: i64,
+    pub(crate) start: i64,
+    pub(crate) duration: i64,
+    pub(crate) staff: u8,
+    pub(crate) seed_voice: usize,
+    pub(crate) above_lower_staff: bool,
+}
+
+fn assigned_voice_staff_lifetimes(
+    sources: &[MidiSeedNote],
+    assignments: &BTreeMap<usize, SourceVoice>,
+    metric: &MetricTimeline,
+    voice: usize,
+    staff: u8,
+    end: i64,
+) -> anyhow::Result<Vec<std::ops::Range<i64>>> {
+    let mut staff_by_bar = BTreeMap::new();
+    for source in sources {
+        let assignment = assignments[&source.source_ordinal];
+        if assignment.voice != voice { continue; }
+        let index = metric.ordinal_at(source.pos)
+            .ok_or_else(|| anyhow!("Assigned voice occurrence outside metric"))?;
+        let bar = metric.measure(index)
+            .ok_or_else(|| anyhow!("Missing assigned voice measure"))?;
+        if staff_by_bar.insert(bar.start, assignment.staff)
+            .is_some_and(|previous| previous != assignment.staff)
+        {
+            return Err(anyhow!("Assigned voice changes staff inside a measure"));
+        }
+    }
+    let mut ranges = Vec::new();
+    let mut start = 0;
+    let mut current = *staff_by_bar.first_key_value()
+        .ok_or_else(|| anyhow!("Missing assigned voice lifetime"))?.1;
+    for (boundary, assigned) in staff_by_bar {
+        if assigned == current { continue; }
+        if current == staff { ranges.push(start..boundary); }
+        start = boundary;
+        current = assigned;
+    }
+    if current == staff { ranges.push(start..end); }
+    Ok(ranges)
+}
+
 impl MidiSeedRhythmicCourses {
+    /// An interior gap of a qualified original voice can cross a barline at
+    /// either edge. Full-bar padding and gaps beside absent source notes have
+    /// no such witness.
+    pub(crate) fn bounded_source_voice_gaps(
+        &self,
+        active_sources: &BTreeMap<usize, (u8, i64, i64)>,
+    ) -> Vec<SourceVoiceGap> {
+        if !self.source_voices { return Vec::new(); }
+        let mut gaps = Vec::new();
+        let staff_by_course = self.courses.iter().map(|course| (course.creation, course.staff))
+            .collect::<BTreeMap<_, _>>();
+        let mut by_voice = BTreeMap::<_, Vec<_>>::new();
+        for occurrence in self.planned.iter().filter(|occurrence| !occurrence.chord) {
+            if let Some(voice) = occurrence.source_voice {
+                by_voice.entry(voice).or_default().push(occurrence);
+            }
+        }
+        for (seed_voice, lane) in by_voice {
+            let mut remaining = lane.as_slice();
+            while let Some((left, tail)) = remaining.split_first() {
+                let gap_len = tail.iter().take_while(|occurrence| occurrence.source.is_none()).count();
+                let (silence, following) = tail.split_at(gap_len);
+                remaining = following;
+                let (Some(first), Some(last), Some(right)) =
+                    (silence.first(), silence.last(), following.first())
+                else { continue; };
+                if silence.iter().any(|gap| gap.interval.is_empty())
+                    || silence.windows(2).any(|pair| pair[0].interval.end != pair[1].interval.start)
+                    || left.interval.end != first.interval.start
+                    || last.interval.end != right.interval.start
+                { continue; }
+                let Some((left_staff, _, release)) = left.source.and_then(|id| active_sources.get(&id)) else { continue; };
+                let Some((right_staff, attack, _)) = right.source.and_then(|id| active_sources.get(&id)) else { continue; };
+                if (*left_staff, *release, *right_staff, *attack)
+                    != (staff_by_course[&left.course], first.interval.start,
+                        staff_by_course[&right.course], last.interval.end)
+                { continue; }
+                for gap in silence {
+                    let Some(index) = self.metric.ordinal_at(gap.interval.start) else { continue; };
+                    let Some(bar) = self.metric.measure(index) else { continue; };
+                    if gap.interval.end > bar.end || gap.interval == (bar.start..bar.end) { continue; }
+                    let staff = staff_by_course[&gap.course];
+                    let adjacent = [left, right];
+                    let mut on_staff = adjacent.iter().filter(|note| staff_by_course[&note.course] == staff);
+                    let above_lower_staff = staff == 2
+                        && on_staff.clone().any(|note| note.opposite_stem)
+                        && on_staff.all(|note| note.opposite_stem);
+                    gaps.push(SourceVoiceGap {
+                        measure: index,
+                        divisions: self.metric.divisions,
+                        start: gap.interval.start - bar.start,
+                        duration: gap.interval.end - gap.interval.start,
+                        staff,
+                        seed_voice,
+                        above_lower_staff,
+                    });
+                }
+            }
+        }
+        gaps
+    }
+
     pub(crate) fn has_bound_source_voices(&self) -> bool { self.source_voices }
 
     pub(crate) fn source_voice_continuation_slots(&self) -> Vec<(usize, usize, usize)> {
@@ -465,15 +641,25 @@ impl MidiSeedRhythmicCourses {
                 presentations
             },
         );
-        let courses = presentations.into_iter().map(|(staff, voice)| {
-            Ok(SeedPrimaryCourse {
-                creation: RhythmicCreationIdentity::create()?,
-                presentation: SeedCoursePresentation::Primary,
-                staff,
-                coverage: 0..end,
-                voice,
-            })
-        }).collect::<anyhow::Result<Vec<_>>>()?;
+        let mut courses = Vec::new();
+        for (staff, voice) in &presentations {
+            let mut coverage = std::iter::once(0..end).collect::<Vec<_>>();
+            if let Some(voice) = *voice
+                && presentations.iter().any(|(other, candidate)| other != staff && *candidate == Some(voice))
+                && let Some(voices) = source_voices
+            {
+                coverage = assigned_voice_staff_lifetimes(sources, voices, metric, voice, *staff, end)?;
+            }
+            for span in coverage {
+                courses.push(SeedPrimaryCourse {
+                    creation: RhythmicCreationIdentity::create()?,
+                    presentation: SeedCoursePresentation::Primary,
+                    staff: *staff,
+                    coverage: span,
+                    voice: *voice,
+                });
+            }
+        }
         if let Some(source_voices) = source_voices {
             let planned = source_voice_fragments(sources, metric, source_voices, &courses)?;
             return Ok(Self {
@@ -588,7 +774,8 @@ impl MidiSeedRhythmicCourses {
             || self.sources != sources || self.metric.len() != measures
             || self.metric.divisions != 96
             || self.metric.segments().any(|bar| !matches!(bar.beats, 2..=4) || bar.beat_type != 4)
-            || self.courses.iter().any(|course| Some(course.coverage.end) != end)
+            || self.courses.iter().any(|course| course.coverage.start < 0
+                || course.coverage.is_empty() || end.is_none_or(|end| course.coverage.end > end))
         {
             return Err(anyhow!("Stale or incompatible rhythmic emission plan"));
         }
@@ -599,12 +786,12 @@ impl MidiSeedRhythmicCourses {
         &mut self, staff: u8, voice: Option<usize>, interval: std::ops::Range<i64>,
         source: Option<usize>, bytes: std::ops::Range<usize>,
     ) -> anyhow::Result<()> {
-        let course = self.courses.iter().find(|course| course.staff == staff && course.voice == voice)
-            .ok_or_else(|| anyhow!("Missing planned primary presentation"))?;
         let expected = self.planned.get(self.occurrences.len())
             .ok_or_else(|| anyhow!("Unplanned rhythmic seed occurrence"))?;
-        if expected.course != course.creation || expected.interval != interval
-            || expected.source != source
+        let course = self.courses.iter().find(|course| course.creation == expected.course
+            && course.staff == staff && course.voice == voice)
+            .ok_or_else(|| anyhow!("Missing planned primary presentation"))?;
+        if expected.interval != interval || expected.source != source
             || self.emission_snapshot.is_some() || interval.start < course.coverage.start
             || interval.end > course.coverage.end || interval.start > interval.end
             || (interval.start == interval.end && !source.is_some_and(|ordinal|
@@ -846,7 +1033,7 @@ pub fn midi_to_musicxml_seed_with_profile_and_hotspots(
         return Err(anyhow!("MIDI enthält keine lesbaren Notenereignisse"));
     }
 
-    let source_voices = qualified_source_voices(&notes, &decoded);
+    let source_voices = qualified_source_voices(&notes, &decoded, metric);
     let mut decision_trace = notes.iter().map(initial_staff_decision).collect::<Vec<_>>();
     let mut grace_notes = notes.iter().filter(|n| n.len == 0).copied().collect::<Vec<_>>();
     notes.retain(|n| n.len > 0);
