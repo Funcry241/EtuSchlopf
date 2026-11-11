@@ -3,7 +3,7 @@
 EtuSchlopf ist ein experimentelles, privat gepflegtes Projekt. Beginne je nach
 Aufgabe mit einem der folgenden Einstiege:
 
-Der Entwicklungsquellstand ist r1740. Die [native Abnahme](evidence/r1740/README.md) dokumentiert den Windows-Lauf für BWV 847. Die [Windows-Testversion r1684](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1684-windows-preview) hat eigene Paketbelege. Historische Abnahmen, Forschungsnotizen und Fachverträge behalten ihre jeweilige Revision.
+Der Entwicklungsquellstand ist r1740. Die [native Abnahme](evidence/r1740/README.md) dokumentiert den Windows-Lauf für BWV 847. Die [Windows-Testversion r1740](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1740-windows-preview) hat eigene Paketbelege. Historische Abnahmen, Forschungsnotizen und Fachverträge behalten ihre jeweilige Revision.
 
 | Aufgabe | Einstieg |
 | --- | --- |

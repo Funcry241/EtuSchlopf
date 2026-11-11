@@ -1,6 +1,6 @@
 # Technische Referenz und Quellenarbeit
 
-Der angenommene Entwicklungsquellstand ist **r1740 / 0.10.1839**. Die [nativen Prüfbelege](evidence/r1740/README.md) dokumentieren Build, Strict-Clippy, 3039 bestandene Tests und den PDF-Export für BWV 847. Der frühere vollständige [Korpuslauf r1684](evidence/r1684/README.md) umfasst zehn Etüden. Die [Download-Anleitung](../README.md) gehört zur verfügbaren Windows-Testversion r1684.
+Der angenommene Entwicklungsquellstand ist **r1740 / 0.10.1839**. Die [nativen Prüfbelege](evidence/r1740/README.md) dokumentieren Build, Strict-Clippy, 3039 bestandene Tests und den PDF-Export für BWV 847. Der frühere vollständige [Korpuslauf r1684](evidence/r1684/README.md) umfasst zehn Etüden. Die [Download-Anleitung](../README.md) gehört zur verfügbaren Windows-Testversion r1740.
 
 Seit r1659 enthält der Quellstand weitere Zuständigkeitsbereinigungen, indizierte Endpunktabfragen und Verbesserungen an Fokus, Verbindungsstatus und PDF-Sitzungsbindung der Watch-Webansicht. r1683 führt ursprüngliche Pausenanker als eigene Evidenz in die C3-Entscheidung; nicht geschlossene systemübergreifende Gruppenabhängigkeiten bleiben offen. Die [Mathematik-Seite](MATHEMATIK.md) ordnet 34 Verfahrensfamilien ihren Quellen, Wirkungen und Beweisgrenzen zu. Die native Abnahme bestätigt den geprüften Korpus; sie belegt weder allgemeine Fehlerfreiheit noch die Spielbarkeit beliebiger Eingaben.
 

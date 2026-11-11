@@ -11,13 +11,13 @@ Leg beide Dateien in denselben Ordner und zieh die MIDI-Datei auf EtuSchlopf. **
 
 Der Name darf dich zum Schmunzeln bringen. Die Mathematik dahinter nehmen wir ernst. Probier EtuSchlopf mit deinem eigenen Stück aus oder schau dir an, wie es arbeitet. [Die Mathematik hinter EtuSchlopf](docs/MATHEMATIK.md)
 
-**[Windows-EXE herunterladen · Testversion r1684](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1684-windows-preview/EtuSchlopf-Windows-x64.exe)**
+**[Windows-EXE herunterladen · Testversion r1740](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1740-windows-preview/EtuSchlopf-Windows-x64.exe)**
 
 Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI und WAV als Eingabe
 
 Der Quellstand auf `main` ist **r1740**. Die [Windows-Abnahme für BWV 847](docs/evidence/r1740/README.md) dokumentiert Build, Tests und Notensatz.
 
-[Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1684-windows-preview) ·
+[Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1740-windows-preview) ·
 [Erstes Stück](#dein-erstes-stück) · [Grenzen der Testversion](#aktueller-stand) ·
 [Technische Dokumentation](docs/DEVELOPMENT.md) · [Mathematik dahinter](docs/MATHEMATIK.md)
 
@@ -35,7 +35,7 @@ kann erforderlich sein.
 
 ## Dein erstes Stück
 
-**[Kleines Startbeispiel herunterladen](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1684-windows-preview/EtuSchlopf-Beispiel-r1684.zip)** – synthetisches MIDI/WAV-Paar mit der PDF, die die veröffentlichte r1684-EXE daraus erzeugt hat.
+**[Kleines Startbeispiel herunterladen](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1740-windows-preview/EtuSchlopf-Beispiel-r1740.zip)** – synthetisches MIDI/WAV-Paar mit der PDF, die die veröffentlichte r1740-EXE daraus erzeugt hat.
 
 1. Lade die Windows-EXE herunter. Für die PDF-Ausgabe brauchst du außerdem **[MuseScore](https://musescore.org/de/download)**.
 2. Lege MIDI und WAV in denselben Ordner. Die Namen vor der Dateiendung müssen übereinstimmen: `Mein Stück.mid` und `Mein Stück.wav`.
@@ -79,24 +79,23 @@ Laufbericht zusammentragen. Unbekannte technische Angaben kannst du offenlassen.
 
 ## Aktueller Stand
 
-Die Windows-Testversion enthält **Engine r1684 / 0.10.1839** und den verbesserten
-Starter. Unterstützt sind 2/4, 3/4 und 4/4 sowie Taktwechsel an Taktgrenzen.
-Andere Taktarten, Triolen und Wechsel mitten im Takt bleiben nicht unterstützt.
+Die Windows-Testversion enthält **Engine r1740 / 0.10.1839** und den
+eigenständigen Windows-Starter. Unterstützt sind 2/4, 3/4 und 4/4 sowie
+Taktwechsel an Taktgrenzen. Andere Taktarten, Triolen und Wechsel mitten
+im Takt bleiben offen.
 
-Windows-Build, Pakettests, isolierter Start ohne Entwickler-PATH und ein frisch
-gerendertes PDF-Startbeispiel sind bestanden. Strict-Clippy und native Tests
-sind im angenommenen Entwicklungslauf bestanden. Der private native Korpus umfasst zehn vollständige
-Etüden mit MuseScore. Die [Versionshinweise mit Prüfbelegen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1684-windows-preview)
-beschreiben den Umfang. Das ersetzt keine unabhängige Bewertung fremder Stücke
-und keinen interaktiven Anwender-Probelauf. Lesbarkeit und Spielbarkeit prüfst
-du am eigenen Ergebnis.
+Der Paketlauf prüft den isolierten Start ohne Entwickler-PATH und rendert
+das synthetische MIDI/WAV-Startbeispiel mit MuseScore. Die
+[Versionshinweise und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1740-windows-preview)
+verlinken den Paketlauf. Die native musikalische Abnahme dokumentiert
+BWV 847. Prüfe Lesbarkeit und Spielbarkeit am eigenen Stück.
 
 ## Quellstand und Beiträge
 
 Der Entwicklungsquellstand ist **r1740 / 0.10.1839**. Im nativen Windows-Lauf für BWV 847 bestanden Build, Strict-Clippy und 3039 Tests. Der PDF-Export wurde freigegeben. [Native Abnahme r1740](docs/evidence/r1740/README.md). Der vollständige Korpuslauf mit zehn Etüden ist für [r1684](docs/evidence/r1684/README.md) dokumentiert.
 
-Die Download-Engine wurde aus dem angenommenen nativen Stand **r1684** gebaut.
-Der [zum geprüften Build gehörende r1684-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1684-windows-preview/EtuSchlopf-r1684-source.zip)
+Die Download-Engine wurde aus dem angenommenen nativen Stand **r1740** gebaut.
+Der [zum geprüften Build gehörende r1740-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1740-windows-preview/EtuSchlopf-r1740-source.zip)
 und das Dateiprüfsummen-Manifest stehen beim Release bereit. Für den exakten
 Engine-Build ist dieser Snapshot maßgeblich; der zugehörige Prüfzweig enthält
 den Starter und die Skripte zur vollständigen Rekonstruktion und Verifikation.
