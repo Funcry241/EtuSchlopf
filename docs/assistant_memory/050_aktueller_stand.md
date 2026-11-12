@@ -11,8 +11,7 @@ Annahmebeleg.
 | r1745 | Halbe mit gebundenem Achtel in Takt 24. Der Notenwert-Abgleich für BWV 847 ist abgeschlossen. | Windows hat r1745 angenommen. Im Referenzvergleich stimmen 754 Notenansätze, geschriebene Notenwerte und Haltebögen überein. |
 | r1746 | E057 überspringt den frühen Cursor-Austausch ohne aktuellen gebundenen Plan. | Windows hat r1746 angenommen. |
 | r1747 | Anfangspausen verwenden die Position und Metrik des tatsächlichen Takts. Gleichlautende numerische Taktnummern können unabhängige Entscheidungen nicht mehr zusammenlegen. | Windows hat r1747 angenommen. Build, Clippy und MuseScore waren erfolgreich. 3.041 Tests bestanden, vier wurden ignoriert. |
-| r1748 | Der Pausen-Owner steuert die Folgerunden der Konsolidierung. Eine Runde ohne Änderung beendet die Wiederholung. | Lokal sind Zulassung, Clippy und 2.247 Hauptprogrammtests bestanden. Beide MusicXML-Dateien und die vier gerenderten PDF-Seiten stimmen mit r1747 überein. Der Annahmebeleg von r1749 nennt r1748 als akzeptierten Vorgänger. |
-| r1749 | Dokumentationspflege. | Windows nahm r1749 an. Build, Strict-Clippy und MuseScore bestanden. 3.041 Tests bestanden, vier wurden übersprungen. Die PDF und beide MusicXML-Dateien sind bytegleich mit r1748. [Abnahmebeleg](../evidence/r1749/README.md). |
+| r1748 | Der Pausen-Owner steuert die Folgerunden der Konsolidierung. Eine Runde ohne Änderung beendet die Wiederholung. | Lokal sind Zulassung, Clippy und 2.247 Hauptprogrammtests bestanden. Beide MusicXML-Dateien und die vier gerenderten PDF-Seiten stimmen mit r1747 überein. Ein Windows-Annahmebeleg für r1748 liegt hier noch nicht vor. |
 
 Der bestätigte r1747-Export bindet den Take an die SHA-256
 `31e6b0caff51bfcd108271dcb2dccb9a90a11c1a5c3ad278316d1f46803eaedb`.

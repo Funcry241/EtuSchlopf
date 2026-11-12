@@ -1,6 +1,6 @@
 # Mathematik in EtuSchlopf
 
-**Quellstand r1749 / 0.10.1839.** C4 bewertet Registerzeichen vor Köpfen mit drei Hilfslinien. Der [Projektstatus](assistant_memory/050_aktueller_stand.md) nennt die belegten Windows- und lokalen Prüfstände.
+**Quellstand r1748 / 0.10.1839.** C4 bewertet Registerzeichen vor Köpfen mit drei Hilfslinien. Der [Projektstatus](assistant_memory/050_aktueller_stand.md) nennt die belegten Windows- und lokalen Prüfstände.
 
 EtuSchlopf verwendet Mathematik für musikalische Entscheidungen, Darstellungsentscheidungen, Messungen und technische Beweise. Diese Aufgaben sind verschieden: Eine Erhaltungsbilanz beweist keine Lesbarkeit; ein lesbarer Registerkurs beweist keine menschliche Spielbarkeit; eine bestandene Prüfung erlaubt nur den Übergang, dessen Bedingungen sie tatsächlich abdeckt.
 
@@ -294,4 +294,4 @@ Die Quellen der früheren Fassung sind hier wieder einzeln aufgeführt. Hinzu ko
 - **Handspanne und alternative Klaviatur:** Craig Turner et al., „An alternative 6-inch octave keyboard reduces forearm muscle activation level and improves finger postures in expert pianists with smaller hand spans“, *Applied Ergonomics* 133, 104709 (2026; online 2025), [DOI: 10.1016/j.apergo.2025.104709](https://doi.org/10.1016/j.apergo.2025.104709). Empirischer Kontext für die Trennung von Musikanspruch, Instrumentengeometrie und individueller Fähigkeit; keine Kalibrierung unserer Spielformel.
 - **Handspanne, Klaviaturgröße und EMG:** Ju-Yang Chi et al., „Interaction between hand span and different sizes of keyboards on EMG activity in pianists: An observational study“, *Applied Ergonomics* 97, 103518 (2021), [DOI: 10.1016/j.apergo.2021.103518](https://doi.org/10.1016/j.apergo.2021.103518). Weiterer empirischer Kontext; daraus folgt kein universeller Spannweiten- oder Löschgrenzwert für EtuSchlopf.
 
-Die konkrete Einbindung des Audiomodells und der beiden Handspannenstudien ist zusätzlich unter [Forschungsbezüge und ihre tatsächliche Rolle](RESEARCH_CONTEXT.md) dokumentiert. Die Projektbegriffe und selbst gesetzten Kosten werden durch diese Literatur nicht nachträglich zu extern bestätigten mathematischen oder musikalischen Gesetzen.
+Die konkrete Einbindung des Audiomodells und der beiden Handspannenstudien ist zusätzlich unter [Forschungsbezüge und ihre tatsächliche Rolle](https://github.com/Funcry241/EtuSchlopf/blob/main/docs/RESEARCH_CONTEXT.md) dokumentiert. Die Projektbegriffe und selbst gesetzten Kosten werden durch diese Literatur nicht nachträglich zu extern bestätigten mathematischen oder musikalischen Gesetzen.
