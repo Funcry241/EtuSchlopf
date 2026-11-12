@@ -60,18 +60,19 @@ fn run_rest_and_articulation_render_stage(
             trial.done_fragment = trial.done_fragment.replace("RenderXmlWrite nein", "RenderXmlWrite ja");
             trial.pipeline_line = trial.pipeline_line.replace("written nein", "written ja");
             let lane_root = render_state.require_state_root("RestArticulation current State");
-            // A rest write grants no XML-only cursor decision. E057 receives
-            // the existing canonical owner context and refuses an unprepared
-            // or stale exchange; final PDF preparation binds the live course.
-            let ((lane_post, lane_stats), lane_receipt) = human_bound_cursor_lane_owner_transfer_xml_with_receipt(
-                (lane_root.document(), &*render_final_chord_structural_plan));
-            let mut lane_chain = RenderTransitionReceipts::new();
-            lane_chain.push_preserving(lane_receipt, &lane_post);
-            if lane_stats.written && lane_post != lane_root.document() {
-                render_state.adopt_transition(lane_root, &lane_post, lane_chain,
-                    structural_write_authority::RenderSinkKind::Checkpoint(structural_write_authority::RenderCheckpointSink::CursorLaneRepair),
-                    |path, _pre, verified| structural_write_authority::write_cursor_lane_repair_checkpoint_authorized(path, verified))?;
-            } else { lane_chain.discard_unadopted(RenderDiscardReason::LosingCandidate); }
+            // A rest write does not prepare a cursor exchange. Only call the
+            // existing writer when its canonical plan is bound to these bytes.
+            if render_final_chord_structural_plan.has_cursor_exchange_for(lane_root.document()) {
+                let ((lane_post, lane_stats), lane_receipt) = human_bound_cursor_lane_owner_transfer_xml_with_receipt(
+                    (lane_root.document(), &*render_final_chord_structural_plan));
+                let mut lane_chain = RenderTransitionReceipts::new();
+                lane_chain.push_preserving(lane_receipt, &lane_post);
+                if lane_stats.written && lane_post != lane_root.document() {
+                    render_state.adopt_transition(lane_root, &lane_post, lane_chain,
+                        structural_write_authority::RenderSinkKind::Checkpoint(structural_write_authority::RenderCheckpointSink::CursorLaneRepair),
+                        |path, _pre, verified| structural_write_authority::write_cursor_lane_repair_checkpoint_authorized(path, verified))?;
+                } else { lane_chain.discard_unadopted(RenderDiscardReason::LosingCandidate); }
+            }
         } else { receipts.discard_unadopted(RenderDiscardReason::LosingCandidate); }
         trial
     } else {

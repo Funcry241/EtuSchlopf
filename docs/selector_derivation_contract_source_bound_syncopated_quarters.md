@@ -1,0 +1,26 @@
+# Preserve source-bound quarter syncopations within a half-bar
+
+SelectorDerivationContract: causal_class_first_v1
+SelectorChange: yes
+SelectorRole: repair_scope
+KnownWitnessUsedForFeatureDerivation: no
+TargetConditionedFeatureNarrowing: no
+ClassDefinitionPrecedesCorpusDistribution: yes
+UniquenessIsOutcomeNotGoal: yes
+RepairSelectorSeparatedFromErrorClass: yes
+ParentErrorClassContract: docs/selector_derivation_contract_redundant_metric_note_fragmentation.md
+CausalFeatureNecessityReview: complete
+CorpusDistributionPurpose: measurement_only
+CorpusDistributionMayRefineClassToKnownWitness: no
+ScopeNarrowingBasis: authority_or_safety_only
+DiscriminativeContextOnlyNarrowing: forbidden
+MultiplicityInvarianceContract: candidate_duplication_v1
+IndependentCandidateDuplicationInvariant: yes
+ScorewideMultiplicityAsWriteAuthority: forbidden
+GlobalRankingOfIndependentCandidates: forbidden
+MultiplicityDecisionScope: local_candidate_or_explicit_conflict_group
+CandidateDuplicationProbe: required_before_productive_write
+CausalFeature: a plain source-bound quarter on the second eighth of either half-bar in common meter crosses only its weaker beat
+CausalFeature: independent source identity and coincident chord support are verified before retaining the original note value
+CausalFeature: syncopations that cross the stronger half-bar boundary still follow the existing split rule
+NonCausalContextExcluded: project, printed measure label, pitch, voice label and absolute time

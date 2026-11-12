@@ -1,6 +1,6 @@
 kind=EtuSchlopfTake
 version=0.10.1839
-revision=r1740
-name=BeamAndRestHeight
-parent_revision=r1739
-change_class=GovernedChange
+revision=r1749
+name=DocumentationRefresh
+parent_revision=r1748
+change_class=RefactorOnly

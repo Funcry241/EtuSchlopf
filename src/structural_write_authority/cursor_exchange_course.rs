@@ -421,6 +421,10 @@ impl CanonicalFinalChordStructuralPlan {
         });
         Ok(guard)
     }
+    pub(crate) fn has_cursor_exchange_for(&self, input: &str) -> bool {
+        self.cursor_exchange.as_ref().is_some_and(|plan| plan.input == input)
+    }
+
     pub(crate) fn cursor_exchange_edits(&self, input: &str) -> io::Result<CursorExchangeEdits> {
         let plan = self
             .cursor_exchange
@@ -782,9 +786,12 @@ mod tests {
         let (canonical, voices, source) =
             CanonicalFinalChordStructuralPlan::synthetic_cursor_exchange_fixture(&input, &groups)
                 .unwrap();
+        assert!(!canonical.has_cursor_exchange_for(source.xml()));
         let guard = canonical
             .bind_rest_bridge_cursor_exchange(&source, &voices, &BTreeSet::new())
             .unwrap();
+        assert!(guard.has_cursor_exchange_for(source.xml()));
+        assert!(!guard.has_cursor_exchange_for(&format!("{} ", source.xml())));
         assert_eq!(guard.cursor_exchange_edits(source.xml()).unwrap().0, 2);
         let altered = input.replacen(
             "<forward><duration>24</duration><voice>lower</voice>",

@@ -1939,7 +1939,8 @@ impl FrozenSerializationVoiceChannelPlan {
         production: &FrozenSerializedVoicePlan,
     ) -> Option<(Self, FrozenSerializedVoicePlan)> {
         let _timing = crate::audit_only::voice_allocation_timing::Timer::span("OriginalComponents");
-        let projection_reuse = cross_role_channel_sharing::ProjectionReuse::new(canonical, original_beams);
+        let projection_reuse = cross_role_channel_sharing::ProjectionReuse::new(canonical, original_beams)
+            .with_source_voice_gaps(production);
         let mut accepted_sources = std::collections::BTreeSet::new();
         let mut accepted: Option<(Self, FrozenSerializedVoicePlan)> = None;
         for group in &canonical.original_beam_voice_groups {
@@ -2104,6 +2105,43 @@ impl FrozenSerializationVoiceChannelPlan {
                 }
             }
             accepted = Some((channels, voices));
+        }
+        // After the initial beam allocation, an exact source gap may still be
+        // occupied by a split or already coherent group from another line.
+        // Test the whole group against the current projection and require a
+        // unique destination with independently captured notation identity.
+        for group in &canonical.original_beam_voice_groups {
+            let sources = group.allocation_sources();
+            let (current, before) = accepted.as_ref()
+                .map_or((self, production), |(channels, voices)| (channels, voices));
+            if !projection_reuse.component_overlaps_replaced_source_gap(before, &sources).unwrap_or(false) {
+                continue;
+            }
+            let mut compatible = current.channel_to_role.keys().filter_map(|&target| {
+                let destination = current.source_to_channel.iter().filter_map(|(&source, &channel)|
+                    (target == channel && !sources.contains(&source)).then_some(source)).collect();
+                let member_channel = sources.iter().any(|source| current.source_to_channel.get(source) == Some(&target));
+                if !member_channel && !canonical.proves_original_notation_voice_for_component_reuse(&sources, &destination) {
+                    return None;
+                }
+                let allocation = sources.iter().map(|&source| (source, target)).collect();
+                let attempt = current.checked_original_component_channel_assignment(
+                    canonical, attacks, original_beams, before, allocation, &projection_reuse,
+                );
+                if canonical.source_locators.iter().any(|row| sources.contains(&row.source_event_id)
+                    && crate::audit_only::original_beam_diagnostics::detail_requested_for_measure(row.measure))
+                {
+                    eprintln!("SourceGapComponentAllocation: sources={sources:?}; target={target}; outcome={:?}",
+                        attempt.as_ref().map(|_| ()).map_err(|error| error.to_string()));
+                }
+                attempt.ok()
+            });
+            if let Some(pair) = compatible.next()
+                && compatible.next().is_none()
+            {
+                accepted = Some(pair);
+                let _ = writeln!(out, "OriginalNotationBeamAllocation: restored a qualified source gap with the entire original component");
+            }
         }
         projection_reuse.append_diagnostics(out);
         crate::audit_only::voice_allocation_timing::summary();
@@ -2836,6 +2874,34 @@ pub(crate) fn frozen_serialized_voice_plan_for_rest_role_replay_test(
     }
 }
 
+fn source_gap_rest_starts_in_measures<'a>(
+    xml: &str,
+    measures: &[FinalChordBindingMeasure],
+    gaps: impl Iterator<Item = &'a crate::midi_seed::SourceVoiceGap>,
+) -> std::collections::BTreeSet<usize> {
+    gaps.filter_map(|gap| {
+        let measure = measures.get(gap.measure)?;
+        if measure.divisions != gap.divisions { return None; }
+        let end = gap.start.checked_add(gap.duration)?;
+        let voice = gap.seed_voice.to_string();
+        let staff = gap.staff.to_string();
+        let mut carriers = measure.notes.iter().filter(|note| {
+            note.rest_like && !note.chord_member && note.duration > 0
+                && note.staff == staff && note.voice == voice
+                && note.onset < end && gap.start < note.onset.saturating_add(note.duration)
+        }).collect::<Vec<_>>();
+        carriers.sort_unstable_by_key(|note| note.onset);
+        let mut cursor = gap.start;
+        for note in &carriers {
+            if note.onset != cursor
+                || !xml.get(note.range.clone()).is_some_and(final_chord_note_fragment_is_visible)
+            { return None; }
+            cursor = cursor.checked_add(note.duration)?;
+        }
+        (cursor == end).then_some(carriers)
+    }).flatten().map(|note| note.range.start).collect()
+}
+
 impl FrozenSerializedVoicePlan {
     pub(crate) fn bind_source_voice_gaps(&mut self, gaps: Vec<crate::midi_seed::SourceVoiceGap>) {
         self.source_voice_gaps = gaps.into_iter()
@@ -2849,6 +2915,36 @@ impl FrozenSerializedVoicePlan {
 
     pub(crate) fn source_upper_voice_rest_starts(&self, xml: &str) -> std::collections::BTreeSet<usize> {
         self.selected_source_voice_gap_rest_starts(xml, |gap| gap.above_lower_staff)
+    }
+
+    // MuseScore uses the importing track clef before applying the staff move.
+    // At the committed projection, recognize the unambiguous case where the
+    // lower staff only carries this upper track's proven, nonoverlapping gaps.
+    pub(crate) fn source_upper_voice_cross_staff_rest_starts(
+        &self,
+        xml: &str,
+    ) -> std::collections::BTreeSet<usize> {
+        let gaps = self.source_upper_voice_rest_starts(xml);
+        if gaps.is_empty() { return gaps; }
+        let Ok(measures) = final_chord_parse_binding_measures(xml) else { return Default::default(); };
+        let mut by_voice = std::collections::BTreeMap::<_, Vec<_>>::new();
+        for (ordinal, measure) in measures.iter().enumerate() {
+            for note in measure.notes.iter().filter(|note| note.duration > 0 && !note.chord_member) {
+                by_voice.entry(note.voice.as_str()).or_default().push((ordinal, note));
+            }
+        }
+        by_voice.into_values().flat_map(|notes| {
+            let (upper, lower): (Vec<_>, Vec<_>) = notes.into_iter()
+                .partition(|(_, note)| note.staff == "1");
+            let is_upper_track = upper.len() > lower.len()
+                && upper.iter().any(|(_, note)| note.pitch_midi.is_some())
+                && lower.iter().all(|(measure, gap)| gap.staff == "2"
+                    && gaps.contains(&gap.range.start)
+                    && !upper.iter().any(|(other_measure, note)| other_measure == measure
+                        && note.onset < gap.onset.saturating_add(gap.duration)
+                        && gap.onset < note.onset.saturating_add(note.duration)));
+            lower.into_iter().filter_map(move |(_, rest)| is_upper_track.then_some(rest.range.start))
+        }).collect()
     }
 
     fn selected_source_voice_gap_rest_starts(

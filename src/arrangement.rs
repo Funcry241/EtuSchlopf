@@ -2389,9 +2389,11 @@
                         rhythm_context.expected_duration(),
                         beat_duration,
                     )
-                } else if source_bound_long_tie_is_eligible(
+                } else if let Some(parts) = source_bound_metric_note_parts(
                     rhythm_context, &raw_notes, &meta_by_raw, idx, course_measure.as_deref(),
-                ) || whole_bar_single_note_is_eligible(
+                ) {
+                    parts
+                } else if whole_bar_single_note_is_eligible(
                     measure_text, rhythm_context, &raw_notes, &meta_by_raw, idx,
                 ) || aligned_half_bar_note_is_eligible(
                     measure_text, rhythm_context, &raw_notes, &meta_by_raw, idx,
@@ -2713,34 +2715,69 @@
         }
     }
 
-fn source_bound_long_tie_is_eligible(
+fn source_bound_metric_note_parts(
     context: RhythmContext,
     raw: &[RawNote],
     metas: &BTreeMap<usize, NoteMeta>,
     idx: usize,
     courses: Option<&CourseMeasure>,
-) -> bool {
-    let (Some(courses), Some(host)) = (courses, metas.get(&idx)) else { return false; };
-    if context.beats != 4 || context.beat_type != 4
-        || !crate::midi_seed::aligned_long_tie_value(
-            host.start, host.duration, context.expected_duration(), context.beat_duration(),
-        )
-    {
-        return false;
+) -> Option<Vec<i64>> {
+    let (Some(courses), Some(host)) = (courses, metas.get(&idx)) else { return None; };
+    if context.divisions != 96 || context.beats != 4 || context.beat_type != 4 {
+        return None;
+    }
+    let aligned_long_value = crate::midi_seed::aligned_long_tie_value(
+        host.start, host.duration, context.expected_duration(), context.beat_duration(),
+    );
+    // A quarter on the second eighth of a half-bar may span its weak beat.
+    // Keep the subdivision visible at the stronger boundary between halves.
+    let half_bar = context.expected_duration() / 2;
+    let syncopated_quarter = host.duration == context.beat_duration()
+        && (0..context.expected_duration()).contains(&host.start)
+        && host.start % half_bar == context.beat_duration() / 2;
+    // A held note starting with a complete half-bar can show that group
+    // as a half note and tie only its short remainder across the midpoint.
+    let tail = host.duration - half_bar;
+    let crosses_midpoint = host.start == 0
+        && (1..context.beat_duration()).contains(&tail)
+        && is_exact_notation_duration(tail);
+    if !aligned_long_value && !syncopated_quarter && !crosses_midpoint {
+        return None;
     }
 
     let mut end = idx + 1;
     while metas.get(&end).is_some_and(|member| member.is_chord) {
         end += 1;
     }
-    courses.binds_distinct_sources(idx..end) && (idx..end).all(|member| {
+    if !courses.binds_distinct_sources(idx..end) {
+        return None;
+    }
+
+    let is_plain = |note: &str| {
+        ["<tie", "<notations", "<grace", "<time-modification", "<lyric", "<beam"]
+            .iter().all(|tag| !note.contains(tag))
+    };
+    let keeps_long_tie = aligned_long_value && (idx..end).all(|member| {
+        raw.get(member).is_some_and(|note| {
+            note.text.contains("<tie type=\"start\"/>") || note.text.contains("<tie type=\"stop\"/>")
+        })
+    });
+    let keeps_plain_value = (host.duration == half_bar || syncopated_quarter || crosses_midpoint)
+        && raw[idx..end].iter().all(|note| is_plain(&note.text));
+    let bound_cohort = (idx..end).all(|member| {
         let Some((note, meta)) = raw.get(member).zip(metas.get(&member)) else { return false; };
         meta.midi.is_some() && meta.start == host.start && meta.duration == host.duration
             && meta.staff == host.staff && meta.voice == host.voice
             && is_note_block_visible(&note.text)
-            && (note.text.contains("<tie type=\"start\"/>")
-                || note.text.contains("<tie type=\"stop\"/>"))
-    })
+    });
+    if !bound_cohort || !(keeps_long_tie || keeps_plain_value) {
+        return None;
+    }
+    if crosses_midpoint {
+        Some(vec![half_bar, tail])
+    } else {
+        Some(vec![host.duration])
+    }
 }
 
 // Preserve an existing unambiguous whole-bar occurrence before metric splitting.

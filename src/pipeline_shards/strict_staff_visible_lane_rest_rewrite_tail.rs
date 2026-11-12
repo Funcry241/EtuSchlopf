@@ -960,6 +960,7 @@ fn empty_voice_rest_suppression_plan(xml: &str, max_actions: usize) -> (
     let mut actions = Vec::new();
     let mut occupied = Vec::<(usize, usize)>::new();
 
+    let atomic_notes = parse_atomic_notes(xml);
     let mut scan = 0_usize;
     while let Some((measure_start, measure_end, scope_number)) = find_next_measure_bounds(xml, scan) {
         if actions.len() >= max_actions {
@@ -1064,6 +1065,13 @@ fn empty_voice_rest_suppression_plan(xml: &str, max_actions: usize) -> (
             if staff_trimmed != "1" || rests.is_empty() {
                 continue;
             }
+            rests.retain(|fragment| {
+                let Some(note) = atomic_notes.binary_search_by_key(&fragment.start, |note| note.note_start)
+                    .ok().map(|index| &atomic_notes[index])
+                else { return false; };
+                !atomic_rest_connects_written_voice_course(xml, note, &atomic_notes)
+            });
+            if rests.is_empty() { continue; }
             rests.sort_by_key(|frag| (frag.onset, frag.duration, frag.start));
             let same_lane_visible_pitched = visible_pitched_by_staff_voice.get(&(staff.clone(), voice.clone())).copied().unwrap_or(0);
             if same_lane_visible_pitched == 0 { continue; }
@@ -1351,19 +1359,25 @@ fn apply_lower_staff_overlapping_visible_rest_suppression(
 
 
 
-type UpperStaffInitialRestCandidate = (usize, usize, String, i32, usize);
+struct UpperStaffInitialRestCandidate {
+    measure_start: usize,
+    insertion: usize,
+    replacement: String,
+    duration: i32,
+    measure_label: usize,
+}
 
 
 fn select_measure_local_upper_initial_rest_candidates(
     candidates: Vec<UpperStaffInitialRestCandidate>,
 ) -> Vec<UpperStaffInitialRestCandidate> {
-    let mut candidates_by_scope = BTreeMap::<usize, Vec<UpperStaffInitialRestCandidate>>::new();
+    let mut candidates_by_measure = BTreeMap::<usize, Vec<UpperStaffInitialRestCandidate>>::new();
     for candidate in candidates {
-        candidates_by_scope.entry(candidate.4).or_default().push(candidate);
+        candidates_by_measure.entry(candidate.measure_start).or_default().push(candidate);
     }
 
     let mut selected = Vec::new();
-    for (_scope, mut candidate_group) in candidates_by_scope {
+    for (_measure_start, mut candidate_group) in candidates_by_measure {
         if candidate_group.len() != 1 {
             continue;
         }
@@ -1381,14 +1395,13 @@ fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
     let mut replacements: Vec<(usize, usize, String)> = Vec::new();
     let mut duration_promotions = Vec::<crate::structural_write_authority::DurationPromotion>::new();
     let mut occupied = Vec::<(usize, usize)>::new();
-    let mut initial_candidates: Vec<(usize, usize, String, i32, usize)> = Vec::new();
+    let mut initial_candidates = Vec::new();
     let mut coalesce_candidates: Vec<UpperStaffBeatLocalCoalesceCandidate> = Vec::new();
     let mut cross_beat_blocked = 0_usize;
     let mut cross_beat_scopes = BTreeSet::<usize>::new();
-    let metric_by_scope = render_scope_metric_expected_and_beat_map(xml);
-
-    let mut scan = 0_usize;
-    while let Some((measure_start, measure_end, scope_number)) = find_next_measure_bounds(xml, scan) {
+    for (measure_start, measure_end, scope_number, (expected, beat_unit)) in
+        render_measure_metric_entries(xml)
+    {
         let measure = &xml[measure_start..measure_end];
         let fragments = collect_render_timeline_fragments_in_segment(measure, measure_start, scope_number);
         let has_octave_context = measure.contains("octave-shift") || measure.contains("<clef number=\"2\"><sign>G</sign>");
@@ -1432,19 +1445,13 @@ fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
                     && frag.onset < first_onset
                     && frag.onset.saturating_add(frag.duration.max(0)) > 0
             });
-            let initial_metric_single_rest = metric_by_scope
-                .get(&scope_number)
-                .is_some_and(|(expected, beat_unit)| {
-                    let metric_plan =
-                        crate::model::metric_rest_notation::plan_partial_visible_rest_durations(
-                            0,
-                            i64::from(first_onset),
-                            i64::from(*expected),
-                            i64::from(*beat_unit),
-                        );
-                    metric_plan.len() == 1
-                        && metric_plan.first().copied() == Some(i64::from(first_onset))
-                });
+            let metric_plan = crate::model::metric_rest_notation::plan_partial_visible_rest_durations(
+                0,
+                i64::from(first_onset),
+                i64::from(expected),
+                i64::from(beat_unit),
+            );
+            let initial_metric_single_rest = metric_plan.as_slice() == [i64::from(first_onset)];
             let upper_begins_after_cross_staff_material = first_onset > 0
                 && first_onset <= 96
                 && !has_upper_start_rest
@@ -1457,13 +1464,13 @@ fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
                 let replacement = format!(
                     "\n      <backup><duration>{first_onset}</duration></backup>{rest_fragment}"
                 );
-                initial_candidates.push((
-                    first_upper.start,
-                    first_upper.start,
+                initial_candidates.push(UpperStaffInitialRestCandidate {
+                    measure_start,
+                    insertion: first_upper.start,
                     replacement,
-                    first_onset,
-                    scope_number,
-                ));
+                    duration: first_onset,
+                    measure_label: scope_number,
+                });
             }
         }
 
@@ -1507,19 +1514,13 @@ fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
                 && upper_first.is_some_and(|first_upper| {
                     first_upper.voice == first.voice && pair_end <= first_upper.onset
                 });
-            let metric_single_rest = metric_by_scope
-                .get(&scope_number)
-                .is_some_and(|(expected, beat_unit)| {
-                    let metric_plan =
-                        crate::model::metric_rest_notation::plan_partial_visible_rest_durations(
-                            i64::from(first.onset),
-                            i64::from(total),
-                            i64::from(*expected),
-                            i64::from(*beat_unit),
-                        );
-                    metric_plan.len() == 1
-                        && metric_plan.first().copied() == Some(i64::from(total))
-                });
+            let metric_plan = crate::model::metric_rest_notation::plan_partial_visible_rest_durations(
+                i64::from(first.onset),
+                i64::from(total),
+                i64::from(expected),
+                i64::from(beat_unit),
+            );
+            let metric_single_rest = metric_plan.as_slice() == [i64::from(total)];
             let initial_metric_pair = initial_pre_entry_pair && metric_single_rest;
             let same_beat_micro_pair = both_sixteenth && inside_single_beat && metric_single_rest;
             if same_beat_micro_pair || initial_metric_pair {
@@ -1545,7 +1546,6 @@ fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
                 cross_beat_scopes.insert(scope_number);
             }
         }
-        scan = measure_end;
     }
 
     let initial_seen = initial_candidates.len();
@@ -1553,15 +1553,17 @@ fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
     let mut initial_written = 0_usize;
     let mut initial_duration = 0_i32;
     let mut initial_scopes = BTreeSet::<usize>::new();
-    for (start, end, replacement, duration, scope) in initial_candidates.into_iter() {
+    for candidate in initial_candidates {
+        let start = candidate.insertion;
+        let end = start;
         if occupied.iter().any(|(used_start, used_end)| start < *used_end && end > *used_start) {
             continue;
         }
-        replacements.push((start, end, replacement));
+        replacements.push((start, end, candidate.replacement));
         occupied.push((start, end));
         initial_written += 1;
-        initial_duration = initial_duration.saturating_add(duration);
-        initial_scopes.insert(scope);
+        initial_duration = initial_duration.saturating_add(candidate.duration);
+        initial_scopes.insert(candidate.measure_label);
     }
 
     let coalesce_seen = coalesce_candidates.len();
@@ -1818,6 +1820,37 @@ mod upper_initial_metric_rest_coalescing_safety_tests {
         assert_eq!(duplicated_duration, 72);
         assert_eq!(duplicated_out.matches("<rest/>").count(), 2);
 
+        let labels = partial_beat_measure_spans(&duplicated);
+        let first_number = find_next_measure_bounds(&duplicated, labels[0].start).unwrap().2;
+        let second_number = find_next_measure_bounds(&duplicated, labels[1].start).unwrap().2;
+        let collision = duplicated.replace(
+            &format!("number=\"{second_number}\""),
+            &format!("number=\"{first_number}\""),
+        );
+        let ((collision_out, seen, written, _, duration, _, _, _, _, _, _), receipts) =
+            apply_upper_staff_initial_rest_and_beat_local_coalescing(&collision, 0).expect("prepare");
+        assert_eq!(receipts.len(), 1);
+        discard_probe(receipts);
+        assert_eq!((seen, written, duration), (2, 2, duplicated_duration));
+        assert_eq!(collision_out, duplicated_out.replace(
+            &format!("number=\"{second_number}\""),
+            &format!("number=\"{first_number}\""),
+        ));
+
+        // A different metric context in the second physical measure must
+        // not supply the metric used to evaluate the first one.
+        let mut changed_metric = collision;
+        let second_start = labels[1].start;
+        let second = changed_metric[second_start..].replacen(
+            "<divisions>96</divisions>", "<divisions>48</divisions>", 1,
+        );
+        changed_metric.replace_range(second_start.., &second);
+        let ((changed_out, _, written, _, duration, _, _, _, _, _, _), receipts) =
+            apply_upper_staff_initial_rest_and_beat_local_coalescing(&changed_metric, 0).expect("prepare");
+        discard_probe(receipts);
+        assert_eq!((written, duration), (1, 48));
+        assert_eq!(changed_out.matches("<rest/>").count(), 1);
+
         let (singleton_start, singleton_end, _) =
             find_next_measure_bounds(&singleton_out, 0).expect("singleton measure");
         let (duplicated_start, duplicated_end, _) =
@@ -1842,10 +1875,14 @@ mod upper_initial_metric_rest_coalescing_safety_tests {
 
     #[test]
     fn same_measure_initial_rest_candidate_ambiguity_fails_closed() {
-        let candidates = vec![
-            (10, 10, "first".to_string(), 24, 1),
-            (20, 20, "second".to_string(), 48, 1),
-        ];
+        let candidate = |insertion| UpperStaffInitialRestCandidate {
+            measure_start: 0,
+            insertion,
+            replacement: String::new(),
+            duration: 24,
+            measure_label: 1,
+        };
+        let candidates = vec![candidate(10), candidate(20)];
         let selected = select_measure_local_upper_initial_rest_candidates(candidates);
         assert!(selected.is_empty());
     }

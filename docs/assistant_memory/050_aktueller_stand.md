@@ -1,42 +1,29 @@
 # 050 – Aktueller Stand
 
-Advisory only. Laufartefakte und hashgebundene Annahmebelege entscheiden.
+Stand der vorliegenden Prüfbelege vom 12. November 2026. Maßgeblich für die
+Annahme eines Takes sind der Windows-Export und der darin gebundene
+Annahmebeleg.
 
-## Bestaetigte Basis
+## BWV 847 und technische Pflege
 
-r1595 / 0.10.1839 ist nativ angenommen, Take-SHA256
-`e67f79eff0cf0f05d7bed3c832dae686e765ebc8dbebae61b3e76b619bd0fe7c`.
-2913 Tests bestanden, 0 fehlgeschlagen, 3 ignoriert; Build/Clippy gruen;
-10/10 Etueden formal gruen. Etuede 6 T34 unten zeigt die Pausenbruecke;
-T32 unten zeigt eine getrennte Balken-Schlussgruppe. Kein Gesamtabschluss.
+| Revision | Änderung | Beleg |
+| --- | --- | --- |
+| r1745 | Halbe mit gebundenem Achtel in Takt 24. Der Notenwert-Abgleich für BWV 847 ist abgeschlossen. | Windows hat r1745 angenommen. Im Referenzvergleich stimmen 754 Notenansätze, geschriebene Notenwerte und Haltebögen überein. |
+| r1746 | E057 überspringt den frühen Cursor-Austausch ohne aktuellen gebundenen Plan. | Windows hat r1746 angenommen. |
+| r1747 | Anfangspausen verwenden die Position und Metrik des tatsächlichen Takts. Gleichlautende numerische Taktnummern können unabhängige Entscheidungen nicht mehr zusammenlegen. | Windows hat r1747 angenommen. Build, Clippy und MuseScore waren erfolgreich. 3.041 Tests bestanden, vier wurden ignoriert. |
+| r1748 | Der Pausen-Owner steuert die Folgerunden der Konsolidierung. Eine Runde ohne Änderung beendet die Wiederholung. | Lokal sind Zulassung, Clippy und 2.247 Hauptprogrammtests bestanden. Beide MusicXML-Dateien und die vier gerenderten PDF-Seiten stimmen mit r1747 überein. Der Annahmebeleg von r1749 nennt r1748 als akzeptierten Vorgänger. |
+| r1749 | Dokumentationspflege. | Windows nahm r1749 an. Build, Strict-Clippy und MuseScore bestanden. 3.041 Tests bestanden, vier wurden übersprungen. Die PDF und beide MusicXML-Dateien sind bytegleich mit r1748. [Abnahmebeleg](../evidence/r1749/README.md). |
 
-## Vorbereitete Kette, Annahme jeweils separat pruefen
+Der bestätigte r1747-Export bindet den Take an die SHA-256
+`31e6b0caff51bfcd108271dcb2dccb9a90a11c1a5c3ad278316d1f46803eaedb`.
 
-1. r1596 / Q0b: Ressourcenabschluss verweigern, wenn eine mitgezogene
-   Ressource zu einer fremden positiven Originalbalkengruppe gehoert.
-   Authentifizierte Hilfsrollen bleiben unveraendert. Native Annahme und
-   Vergleich von T32/T34 sowie Vollkorpus stehen ohne neuen Export offen.
-2. r1597 / Q1 + Take A: Python-Cache aus Source-Snapshot ausschliessen,
-   diesen Kurzstand bereinigen, Kanaltrennungs- und Seitenobergrenzenklasse
-   ausschliesslich als Stufe A definieren. Nur nach Annahme von r1596 anwenden.
-3. r1598 / Q2: Balken-Struktur und Kanalressourcen nur diagnostisch zaehlen;
-   kein Release-Veto und keine Reparatur aus Zaehlern.
+## Geltungsbereich der Nachweise
 
-## Zurueckgestellt
+Die aktuellen Windows-Exporte prüfen BWV 847 als Einzelprojekt. Die
+[Mathe-Seite](../MATHEMATIK.md#historischer-vollkorpuslauf-r1683) dokumentiert
+den Vollkorpuslauf r1683 mit seinem damaligen Stand. Ein aktueller
+Vollkorpuslauf ist in den vorliegenden Exporten nicht belegt.
 
-Take B / Seitenverdichtung besitzt kein Go. Zuerst begruendeter Vorschlag
-fuer den minimalen sichtbaren Systemabstand mit Vergleichsbildern und
-Nutzerentscheidung. Ein spaeterer Versuch darf bestaetigte Systeme nur auf
-Seiten umverteilen, muss Grenzen/Abstaende frisch im PDF pruefen und die
-musikalischen Daten ausserhalb einer exakten Layout-Whitelist erhalten.
-
-Schluessel/Oktaven: Lesbarkeitsbefunde in Etueden 7, 8 und 9 offen.
-Boegen in Etuede 6 T42–43: unruhig, kein nachgewiesener Musikfehler.
-SoundingDifferent: keine Aenderung; bestehende Tests erst fachlich pruefen.
-
-Historische Ursachen und Annahmen: separate thematische Dokumente in docs/.
-Historische Bauauftraege sind keine aktuelle Fortsetzungsanweisung.
-
-Q2-Zaehler: syntaktische Primaerbalkenbilanz pro Part/Takt/Stimme und
-nicht zugewiesene Kanalreservierungen des bestehenden Importprofils.
-Keine musikalische Klassifikation, minimale Kanalzahl oder Release-Veto.
+Die Schlöpfchen-Formel bleibt ein Entwurf für die Seitenfüllung.
+Ein Versuch zur Seitenverdichtung setzt begründete sichtbare Mindestabstände
+und einen frischen PDF-Vergleich voraus.

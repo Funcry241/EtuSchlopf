@@ -115,10 +115,32 @@ MuseScore wird als separat installiertes Programm aufgerufen. Weder dessen
 Programmdateien noch Quellcode werden hier mitgeliefert. Eine eigene
 Weiterverteilung von MuseScore wäre gesondert nach dessen Lizenz zu behandeln.
 
-Das Repository enthält den Programmquellbaum, keine WAV-/MIDI-Eingaben oder
-PDF-/MusicXML-Ausgaben des Etüdenkorpus. Rechte an Musik, Aufnahmen und sonstigen
-später hinzugefügten Inhalten müssen jeweils geklärt sein; die Softwarelizenz
-erteilt dafür keine Rechte.
+Das Repository enthält den Programmquellbaum und ausgewählte von EtuSchlopf
+erzeugte [Notensatzbeispiele](examples). Die MIT-Lizenz für den Code erteilt
+keine Rechte an eingelesenen Aufnahmen, Aufführungsdaten oder fremden
+Notenausgaben. Bei Veröffentlichung von Ein- oder Ausgaben sind die Rechte an
+den jeweils enthaltenen Werken, Aufnahmen und Ausgaben zu berücksichtigen.
+
+### Chopin, Etüde E-Dur op. 10 Nr. 3, Aufführung p01
+
+Die WAV-Aufnahme und das Performance-MIDI stammen aus demselben eingespielten
+Ausschnitt des Vienna 4x22 Piano Corpus. Die Originaldateien
+`Chopin_op10_no3_p01.wav` und `Chopin_op10_no3_p01.mid` werden separat
+bereitgestellt und gehören nicht zum Quellbaum oder Windows-Paket.
+
+Bei einer Weitergabe die folgende Namensnennung, den Quellenlink und den
+Lizenzlink mitführen und Änderungen kenntlich machen. Das separat bereitgestellte
+Referenzpaar enthält die beiden Dateien unverändert.
+
+> Werner Goebl, *The Vienna 4x22 Piano Corpus*, Version 1.0 (2017),
+> mdw – Universität für Musik und darstellende Kunst Wien.
+> Chopin op. 10 Nr. 3, Aufführung p01, WAV und Performance-MIDI.
+> [DOI 10.21939/4X22](https://doi.org/10.21939/4X22) ·
+> [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+Für gedruckte oder gescannte Notenausgaben gelten die Rechte der jeweiligen
+Ausgabe. Die als Vergleich verlinkte [Henle-Urtext-Ausgabe HN 656](https://www.henle.de/de/Etuede-E-dur-op.-10-Nr.-3/HN-656)
+wird separat vom Verlag angeboten.
 
 ## Umfang und Wiederholung der Prüfung
 

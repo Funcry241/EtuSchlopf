@@ -125,6 +125,45 @@ fn apply_pianistic_rest_consolidation_prepared(
     (out, actions, seen, receipts)
 }
 
+struct PreparedRestConsolidationClosure {
+    xml: String,
+    actions: Vec<RenderXmlPianisticRestRepairAction>,
+    peak_candidates: usize,
+    additional_write_rounds: usize,
+    last_candidate_probe: usize,
+    receipts: crate::master_state_identity::RenderTransitionReceipts,
+}
+
+fn prepare_post_insertion_rest_consolidation(xml: String) -> PreparedRestConsolidationClosure {
+    use crate::master_state_identity::{RenderDiscardReason, RenderTransitionReceipts};
+
+    let mut closure = PreparedRestConsolidationClosure {
+        xml,
+        actions: Vec::new(),
+        peak_candidates: 0,
+        additional_write_rounds: 0,
+        last_candidate_probe: 0,
+        receipts: RenderTransitionReceipts::new(),
+    };
+    // The first post-insertion batch and up to twelve continuation batches
+    // use the same owner and preserve the original receipt sequence.
+    for batch in 0..=12 {
+        let (post, mut actions, seen, receipts) =
+            apply_pianistic_rest_consolidation_prepared(&closure.xml, 256);
+        closure.peak_candidates = closure.peak_candidates.max(seen);
+        closure.last_candidate_probe = seen;
+        if actions.is_empty() {
+            receipts.discard_unadopted(RenderDiscardReason::LosingCandidate);
+            break;
+        }
+        closure.receipts.append(receipts);
+        closure.xml = post;
+        closure.actions.append(&mut actions);
+        closure.additional_write_rounds += usize::from(batch > 0);
+    }
+    closure
+}
+
 fn apply_single_rest_consolidation_candidate_prepared(
     xml: &str,
     candidate: &RenderXmlRestConsolidationCandidate,
@@ -661,33 +700,18 @@ fn build_strict_visible_rest_arithmetic_materializer_trial_prepared(
         }
     }
     else { missing_receipts.discard_unadopted(crate::master_state_identity::RenderDiscardReason::LosingCandidate); }
-    let (after_second_consolidation_xml, mut second_actions, second_consolidation_count, second_receipts) =
-        apply_pianistic_rest_consolidation_prepared(&candidate_xml, 256);
-    trial.consolidation_candidates_seen = trial.consolidation_candidates_seen.max(second_consolidation_count);
-    trial.consolidation_attempted += second_actions.len();
-    if !second_actions.is_empty() {
-        receipts.append(second_receipts);
-        candidate_xml = after_second_consolidation_xml;
-        actions.append(&mut second_actions);
-    }
-    else { second_receipts.discard_unadopted(crate::master_state_identity::RenderDiscardReason::LosingCandidate); }
-    let mut concrete_closure_rounds = 0_usize;
-    let mut concrete_closure_remaining_probe = 0_usize;
-    for _ in 0..12 {
-        let (after_loop_consolidation_xml, mut loop_actions, loop_consolidation_count, loop_receipts) =
-            apply_pianistic_rest_consolidation_prepared(&candidate_xml, 256);
-        concrete_closure_remaining_probe = loop_consolidation_count;
-        trial.consolidation_candidates_seen = trial.consolidation_candidates_seen.max(loop_consolidation_count);
-        if loop_actions.is_empty() {
-            loop_receipts.discard_unadopted(crate::master_state_identity::RenderDiscardReason::LosingCandidate);
-            break;
-        }
-        receipts.append(loop_receipts);
-        concrete_closure_rounds += 1;
-        trial.consolidation_attempted += loop_actions.len();
-        candidate_xml = after_loop_consolidation_xml;
-        actions.append(&mut loop_actions);
-    }
+    let PreparedRestConsolidationClosure {
+        xml: candidate_xml,
+        actions: mut consolidation_actions,
+        peak_candidates,
+        additional_write_rounds: concrete_closure_rounds,
+        last_candidate_probe: concrete_closure_remaining_probe,
+        receipts: consolidation_receipts,
+    } = prepare_post_insertion_rest_consolidation(candidate_xml);
+    trial.consolidation_candidates_seen = trial.consolidation_candidates_seen.max(peak_candidates);
+    trial.consolidation_attempted += consolidation_actions.len();
+    actions.append(&mut consolidation_actions);
+    receipts.append(consolidation_receipts);
     let (after_events, after_backup_forward_ok) = collect_render_xml_note_events(&candidate_xml);
     trial.visible_pitched_after = after_events.iter().filter(|event| !event.is_hidden && event.midi.is_some()).count();
     trial.visible_rests_after = after_events.iter().filter(|event| !event.is_hidden && event.is_rest).count();

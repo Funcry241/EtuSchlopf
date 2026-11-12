@@ -3024,7 +3024,7 @@ fn freeze_final_sounding_material(
             Some(&lane_plan.actual_source_beam_binding),
             &legacy_label_preferences,
         )?;
-    let frozen_serialized_voice_plan =
+    let mut frozen_serialized_voice_plan =
         crate::structural_write_authority::bind_musicxml_voice_labels(
             &frozen_channels,
             &legacy_label_preferences,
@@ -3037,6 +3037,14 @@ fn freeze_final_sounding_material(
             "FrozenSerializedVoiceChordConstraintCutover: frozen structure/voice seal did not bind"
         ));
     }
+    let active_spans = lane_plan.rows.iter().flat_map(|lane| {
+        lane.members.iter().map(move |member| {
+            (member.source_event_id.0, (lane.staff, lane.absolute_start, lane.absolute_end))
+        })
+    }).collect();
+    let source_voice_gaps = candidate.midi_seed_stats.rhythmic_courses.bounded_source_voice_gaps(&active_spans);
+
+    frozen_serialized_voice_plan.bind_source_voice_gaps(source_voice_gaps.clone());
     let mut written_only_probe = String::new();
     let replacement = frozen_channels.checked_written_only_replacement(
         &mut written_only_probe,
@@ -3048,14 +3056,7 @@ fn freeze_final_sounding_material(
     );
     let (frozen_channels, mut frozen_serialized_voice_plan) =
         replacement.unwrap_or((frozen_channels, frozen_serialized_voice_plan));
-    let active_spans = lane_plan.rows.iter().flat_map(|lane| {
-        lane.members.iter().map(move |member| {
-            (member.source_event_id.0, (lane.staff, lane.absolute_start, lane.absolute_end))
-        })
-    }).collect();
-    frozen_serialized_voice_plan.bind_source_voice_gaps(
-        candidate.midi_seed_stats.rhythmic_courses.bounded_source_voice_gaps(&active_spans),
-    );
+    frozen_serialized_voice_plan.bind_source_voice_gaps(source_voice_gaps);
     // Report the channel plan selected by the existing canonical serialization authority.
     eprintln!(
         "FrozenChannelConsumerAllocation: {} channels={} evidence={:?}",

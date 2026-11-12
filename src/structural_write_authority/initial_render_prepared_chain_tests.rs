@@ -86,22 +86,36 @@ mod r1230_ir17_ir18_prepared_chain_tests {
     #[test]
     fn ir17_full_builder_transports_productive_max64_between_real_rounds() {
         for base in [17_usize, 911_usize] {
-            let missing_measure = missing_measure_at(base + 513);
-            // Existing max_actions=256 leaves one real independent consolidation
-            // for the second #34 batch; #69 runs between the batches unchanged.
-            let measures = (base..base + 257).map(measure).collect::<String>();
+            let batch_capacity = 256;
+            let consolidation_count = 3 * batch_capacity + 1;
+            let missing_measure = missing_measure_at(base + consolidation_count);
+            // One batch before insertion and three afterwards exercise two
+            // continuation rounds, followed by an empty candidate probe.
+            let measures = (base..base + consolidation_count).map(measure).collect::<String>();
             let a = format!("<score-partwise><part id=\"P1\">{measures}{missing_measure}</part></score-partwise>");
             assert_eq!(find_next_measure_bounds(&a, 0).expect("relocated numeric scope").2, base);
             let p = path("full-ir17");
             let _ = std::fs::remove_file(&p);
             let (trial, candidate, chain) = build_strict_visible_rest_arithmetic_materializer_trial_prepared(&a, "test", &p).unwrap();
             assert!(trial.written);
-            assert!(trial.missing_inserted > 0);
+            assert_eq!(trial.missing_inserted, 1);
             assert!(!p.exists(), "prepare is pure");
-            assert_eq!(chain.len(), 260, "256 Generated #17 + #34, productive #69, then one Generated #17 + #34");
-            assert_eq!(trial.consolidation_attempted, 257);
+            assert_eq!(chain.len(), consolidation_count + 4 + 1, "one Generated #17 per rest, four #34 batches, one #69 insertion");
+            assert_eq!(trial.consolidation_attempted, consolidation_count);
+            assert!(trial.pipeline_line.contains("concrete_closure_rounds 2; letzte_kandidatensonde 0;"));
             let c = candidate.unwrap();
             assert!(!c.contains("<forward><duration>288</duration></forward>"));
+            let (consolidated, oracle_actions, _, oracle_receipts) =
+                apply_pianistic_rest_consolidation_prepared(&a, consolidation_count);
+            oracle_receipts.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
+            assert_eq!(oracle_actions.len(), consolidation_count);
+            let (expected, inserted, _, _, receipt) =
+                apply_pianistic_missing_rest_insert_with_receipt(&consolidated, 64, &mut Vec::new());
+            let mut oracle_receipts = RenderTransitionReceipts::new();
+            oracle_receipts.push_exact(receipt);
+            oracle_receipts.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
+            assert_eq!(inserted.len(), 1);
+            assert_eq!(c, expected);
             let m = master(&a);
             let mut state = RenderSovereignState::begin_project_render(&p, &m);
             let root = state.initial_trial_root(false);

@@ -1,6 +1,6 @@
 # Mathematik in EtuSchlopf
 
-**Fachlicher Stand: nativ angenommener r1683, 8. November 2026.** Diese Überarbeitung gehört zur Dokumentationsrevision r1684. Sie verändert keine Formeln im Programm, Gewichte, Suchräume, Tests oder Schreibbefugnisse.
+**Quellstand r1749 / 0.10.1839.** C4 bewertet Registerzeichen vor Köpfen mit drei Hilfslinien. Der [Projektstatus](assistant_memory/050_aktueller_stand.md) nennt die belegten Windows- und lokalen Prüfstände.
 
 EtuSchlopf verwendet Mathematik für musikalische Entscheidungen, Darstellungsentscheidungen, Messungen und technische Beweise. Diese Aufgaben sind verschieden: Eine Erhaltungsbilanz beweist keine Lesbarkeit; ein lesbarer Registerkurs beweist keine menschliche Spielbarkeit; eine bestandene Prüfung erlaubt nur den Übergang, dessen Bedingungen sie tatsächlich abdeckt.
 
@@ -50,7 +50,7 @@ $\mathcal F$ müsste die tatsächlich lesbaren und materialisierbaren Kandidaten
 
 **Status:** Diese Gesamtformel ist nicht als vollständiger Seitenoptimierer implementiert. Die bestehende horizontale Systemplanung ist davon zu unterscheiden. Seitenverdichtung bleibt zurückgestellt, bis sichtbare Mindestabstände und die zugehörige Vergleichsgrundlage festgelegt sind. Aus einer großen beobachteten Lücke folgt weder ein Mindestabstand noch automatisch die Erlaubnis zum Zusammenrücken.
 
-Quelle: [Fehlerklasse zur unnötig beibehaltenen Seite](selector_derivation_contract_redundant_page_retention.md), [aktueller Arbeitsrahmen](assistant_memory/050_aktueller_stand.md). Dessen alte Revisionsangaben ersetzen keine aktuellen Laufbelege.
+Quelle: [Fehlerklasse zur unnötig beibehaltenen Seite](selector_derivation_contract_redundant_page_retention.md), [Projektstatus und Arbeitsrahmen](assistant_memory/050_aktueller_stand.md).
 
 ### Symbolische Spielformel: Anforderungen und Fähigkeiten
 
@@ -79,8 +79,8 @@ Die Quellstellen nennen die jeweiligen Implementierungsstellen, nicht automatisc
 | 9 | Verteilung verborgener Akkordtöne: quadratische Kosten plus diskrete Strafen | Entscheidet unter weiteren Zulassungsprüfungen. Gewichte sind Modellierung, keine kalibrierte Wahrnehmung. | [hidden_chord_reduction_texture_rebuild_tail.rs](../src/pipeline_shards/hidden_chord_reduction_texture_rebuild_tail.rs) |
 | 10 | Gesten- und Kettenvarianten der Verteilung | Kandidatenentscheidungen. Die konkrete Variante und ihre musikalischen Wirkungen müssen einzeln nachgewiesen werden. | dieselbe Verteilungsfamilie und ihre bestehenden Owner |
 | 11 | Hilfsliniengeometrie und gradueller Druck | Beobachtung und Kosten des separaten Schlüsselplaners. Kein universelles Vier-Hilfslinien-Verbot. | [clef_readability_observation.rs](../src/clef_readability_observation.rs), [Schlüsselplanung](../src/structural_write_authority/rustig_clef_planning.rs) |
-| 12 | Separater Schlüsselverlauf: dynamische Programmierung | Entscheidet im jeweils zuständigen Pfad. Bei gebundenem C3-Kurs darf keine unabhängige spätere Entscheidung dessen Darstellung ersetzen. | [rustig_clef_planning.rs](../src/structural_write_authority/rustig_clef_planning.rs) |
-| 13 | C3: gemeinsamer Schlüssel-/Oktavkurs mit exakter Abschnittsdauer | Entscheidet in vollständig belegten, unterstützten Domänen. Systemübergreifende Kopplung bleibt derzeit eine mögliche UNKNOWN-Grenze. | [Suchkern](../src/pipeline_shards/joint_reading_c3_course.rs), [Adapter](../src/pipeline_shards/joint_reading_c3_adapter.rs) |
+| 12 | Separater Schlüsselverlauf: dynamische Programmierung | Entscheidet im jeweils zuständigen Pfad. Bei gebundenem gemeinsamen Kurs darf keine unabhängige spätere Entscheidung dessen Darstellung ersetzen. | [rustig_clef_planning.rs](../src/structural_write_authority/rustig_clef_planning.rs) |
+| 13 | C4: gemeinsamer Schlüssel-/Oktavkurs mit exakter Abschnittsdauer | Entscheidet in vollständig belegten, unterstützten Domänen. Systemübergreifende Kopplung bleibt derzeit eine mögliche UNKNOWN-Grenze. | [Suchkern](../src/pipeline_shards/joint_reading_c3_course.rs), [Adapter](../src/pipeline_shards/joint_reading_c3_adapter.rs) |
 | 14 | Vergleich vollständiger gemeinsamer Registerspannen | Entscheidet nur bei vollständigem Ausgangsplan, Anschluss und zulässiger Verbesserung. | [gemeinsame_spanne.rs](../src/registernotation/gemeinsame_spanne.rs) |
 | 15 | Tonart- und Schreibweisenbewertung: gewichtete Tonklassen, Tonika-/Dominantbeiträge, Vorzeichenkosten | Audit und daran gebundene produktive Schreibweisenentscheidung. Klingende Tonhöhe und Darstellung sind zu unterscheiden. | [key_signature_enharmonic_report_core.rs](../src/pipeline_shards/key_signature_enharmonic_report_core.rs) |
 | 16 | Harmonik-Kandidaten: Nichtdominanz / Pareto-Vergleich | Kandidatenauswahl innerhalb vorhandener Owner. Ein nichtdominierter Kandidat muss nicht übernommen werden. | [sheaf_noether_projection_core.rs](../src/pipeline_shards/sheaf_noether_projection_core.rs) |
@@ -145,7 +145,7 @@ $$T(P)=\sum_n w_n\big(3[c_n\in\mathrm{Skala}(P)]-4[c_n\notin\mathrm{Skala}(P)]+2
 
 Dies ist eine Projekteinstellung und kein statistisch kalibrierter Tonartbeweis. Die tatsächliche Schreibweisenentscheidung verlangt zusätzliche Bedingungen zu Geltungsbereich, Stabilität, konkurrierenden Lesarten und Vorzeichenkosten. Enharmonische Umbenennung darf die klingende Tonhöhe nicht verändern. Ein Profilwert allein erteilt weder eine neue Tonhöhe noch eine neue Abschnittsgrenze.
 
-### Separater Schlüsselplan und C3 sind verschiedene Zielfunktionen
+### Separater Schlüsselplan und gemeinsamer Registerkurs sind verschiedene Zielfunktionen
 
 Der separate Lesbarkeitskurs verwendet den graduellen Druck
 
@@ -153,9 +153,15 @@ $$p(l)=l^2+8\max(l-3,0)$$
 
 und Kosten für Schlüsselwechsel, Redundanzen und kurze Ausflüge. Seine bekannten 24 Einheiten je Wechsel beziehungsweise kurzem Ausflug sind Setzungen dieses Modells. Daraus folgt keine universelle Grenze von drei Hilfslinien.
 
-C3 verwendet dagegen die eingefrorene **lexikografische** Reihenfolge
+Die historische C3-Policy verwendete die eingefrorene **lexikografische** Reihenfolge
 
 $$ (h_8,h_7,h_6,h_5,h_4,k_o,u_k,k_s,g_b,h_3,c_h,h_2,h_1). $$
+
+Die versionierte [C4-Policy](joint_register_dp_policy_c4_v1.md) vertauscht ausschließlich die benachbarten Prioritäten $h_3$ und $c_h$:
+
+$$ (h_8,h_7,h_6,h_5,h_4,k_o,u_k,k_s,g_b,c_h,h_3,h_2,h_1). $$
+
+Damit kann ein Kurs mit weniger Registerzeichen trotz zusätzlicher Drei-Hilfslinien-Köpfe gewinnen. Schwerere Hilfslinienklassen, die Kopf-Schutzregel, Gruppengrenzen und alle tatsächlichen Schreibbedingungen behalten ihren Vorrang. Es gibt keine neue Gewichts- oder Schwellenkalibrierung. Der Dateiname des bestehenden Suchkerns und die C3-Präfixe einiger Transporttypen bleiben aus Kompatibilitätsgründen erhalten.
 
 | Größe | Bedeutung |
 |---|---|
@@ -176,9 +182,9 @@ $$\neg\big(L_z(n)\ge4\ \land\ L_z(n)>L_0(n)\big).$$
 
 Ein Kandidat darf also keine neue oder verschärfte Belastung ab vier Hilfslinien erzeugen. Ein bereits belasteter Ausgangszustand wird nicht durch Behauptung unsichtbar. Unter den zulässigen vollständigen Kursen zählt die erste abweichende Kostenkomponente; Gleichstand erhält den Ausgang.
 
-**Wichtige Folge:** Weniger Umschaltungen gewinnt nicht immer. Zum Beispiel kann die Vermeidung eines Vier-Hilfslinien-Kopfes einen kurzen Schlüsselwechsel rechtfertigen. Diese bewusste C3-Priorität ist nicht identisch mit der alten skalaren Druckfunktion und kein universelles Lesbarkeitsgesetz.
+**Wichtige Folge:** Weniger Umschaltungen gewinnt nicht immer. Zum Beispiel kann die Vermeidung eines Vier-Hilfslinien-Kopfes einen kurzen Schlüsselwechsel rechtfertigen. Diese auch in C4 erhaltene Priorität ist nicht identisch mit der alten skalaren Druckfunktion und kein universelles Lesbarkeitsgesetz.
 
-Der Suchkern trägt zusätzlich zum Registerzustand das genaue, bei einer Taktlänge gesättigte Abschnittsalter. Rationale Taktkoordinaten behandeln Takt- und Divisionswechsel. Ein Ressourcenabbruch oder eine unbekannte Abhängigkeit beweist kein Optimum. Maßgeblich ist [die vollständige C3-Policy](joint_register_dp_policy_v1.md).
+Der Suchkern trägt zusätzlich zum Registerzustand das genaue, bei einer Taktlänge gesättigte Abschnittsalter. Rationale Taktkoordinaten behandeln Takt- und Divisionswechsel. Ein Ressourcenabbruch oder eine unbekannte Abhängigkeit beweist kein Optimum. Die [C3-Policy](joint_register_dp_policy_v1.md) bleibt als unveränderte historische Spezifikation erhalten; im aktuellen Suchkern gilt die [C4-Policy](joint_register_dp_policy_c4_v1.md).
 
 ### Graphzeugen der Spielformel
 
@@ -222,11 +228,15 @@ für die betroffenen erreichbaren Leser $L$ und ihre Beobachtung $O_L$, einschli
 
 Hashes sind davon getrennt: Sie binden Bytes unter ihren jeweiligen Kollisionsannahmen. FNV-1a ist kein kryptografischer Beweis; auch SHA-256 ist mathematisch nicht injektiv über beliebig lange Eingaben. Provenienz, tatsächlich mitgeführte Ereignisidentität und bytebezogene Integritätsprüfung erfüllen verschiedene Aufgaben.
 
-## Aktueller Nachweis und verbleibende Grenzen
+## Prüfstände und verbleibende Grenzen
 
-Der frische r1683-Export bestätigt Annahme des ausgelieferten Kandidaten, Build und Projekt-Clippy mit Exit 0, 2.992 bestandene Tests bei vier ignorierten Tests sowie zehn formal erfolgreiche Projekte. Diese Abnahme beweist die geprüften Verträge, nicht allgemeine menschliche Spielbarkeit oder ein fehlerfreies Notenbild.
+Für BWV 847 bestätigt der Windows-Export r1747 mit 3.041 bestandenen und vier ignorierten Tests. Der Notenwert-Abgleich wurde in r1745 unter Windows abgenommen. Alle 754 Notenansätze, geschriebenen Notenwerte und Haltebögen stimmen mit der geprüften Referenz überein. Für r1748 ist lokal belegt, dass beide MusicXML-Dateien bytegleich mit r1747 sind und der gerenderte Vergleich auf allen vier Seiten dasselbe Bild ergibt.
 
-| Projekte im aktuellen Korpus | Übernommener C3-Kurs nach r1683 | Einordnung |
+### Historischer Vollkorpuslauf r1683
+
+Der r1683-Export bestätigt Build und Projekt-Clippy mit Exit 0, 2.992 bestandene Tests bei vier ignorierten Tests sowie zehn formal erfolgreiche Projekte. Diese Abnahme beweist die geprüften Verträge, nicht allgemeine menschliche Spielbarkeit oder ein fehlerfreies Notenbild.
+
+| Projekte im damaligen Korpus | Übernommener C3-Kurs nach r1683 | Einordnung |
 |---|---|---|
 | 5, 9, 10 | Beide Systeme | Unteres System durch r1683 neu verfügbar. |
 | 7, 8 | Beide Systeme | Bereits vorher übernommen. |
@@ -265,7 +275,7 @@ Die Quellen der früheren Fassung sind hier wieder einzeln aufgeführt. Hinzu ko
 ### Mathematische und algorithmische Grundlagen
 
 - **Quadratische Ausgleichsverfahren:** C. F. Gauss, *Theoria motus corporum coelestium* (1809); A.-M. Legendre, *Nouvelles méthodes pour la détermination des orbites des comètes* (1805; [Originalausgabe im BnF-Katalog](https://catalogue.bnf.fr/ark:/12148/cb30775990h)). Historischer Bezug zur Methode der kleinsten Quadrate. Die quadratischen Kosten und ihre Gewichte in EtuSchlopf sind eigene Modellentscheidungen; die Referenzen begründen weder eine Normalverteilung der Musikdaten noch diese konkreten Gewichte.
-- **Dynamische Programmierung:** Richard Bellman, *Dynamic Programming*, Princeton University Press (1957; [Verlagsseite](https://press.princeton.edu/books/paperback/9780691146683/dynamic-programming)). Grundlage für mehrstufige Optimierung. Die konkreten C3-Zustände, Gruppenpflichten und Kosten werden durch die Projektverträge definiert.
+- **Dynamische Programmierung:** Richard Bellman, *Dynamic Programming*, Princeton University Press (1957; [Verlagsseite](https://press.princeton.edu/books/paperback/9780691146683/dynamic-programming)). Grundlage für mehrstufige Optimierung. Die konkreten Registerzustände, Gruppenpflichten und Kosten werden durch die Projektverträge definiert.
 - **Optimale Pfade in Zustandsfolgen:** Andrew J. Viterbi, „Error Bounds for Convolutional Codes and an Asymptotically Optimum Decoding Algorithm“, *IEEE Transactions on Information Theory* 13(2), 260–269 (1967), [DOI: 10.1109/TIT.1967.1054010](https://doi.org/10.1109/TIT.1967.1054010). Methodischer Bezug zu dynamischen Pfadverfahren; EtuSchlopf behauptet damit weder eine Implementierung des ursprünglichen Kanaldecoders noch dessen statistische Voraussetzungen.
 - **Intervallgraphen und perfekte Graphen:** Martin Charles Golumbic, *Algorithmic Graph Theory and Perfect Graphs*, Academic Press (1980; [Originalausgabe beim Verlag](https://www.sciencedirect.com/science/book/9780122892608)). Grundlage für die Beziehung zwischen maximaler Überlappung und Farbzahl im beschriebenen Intervallmodell. Zusätzliche musikalische Bindungen folgen nicht aus dem Graphsatz.
 - **Gezielte Frequenzauswertung:** Gerald Goertzel, „An Algorithm for the Evaluation of Finite Trigonometric Series“, *The American Mathematical Monthly* 65(1), 34–35 (1958), [DOI: 10.2307/2310304](https://doi.org/10.2307/2310304). Literaturbezug zur oben angegebenen Spektralrekurrenz. Frequenzraster, Fenster, Normalisierung und Interpretation bleiben die konkreten Entscheidungen der Audioprobe.

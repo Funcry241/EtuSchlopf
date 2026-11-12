@@ -1,5 +1,10 @@
 # EtuSchlopf
 
+[![Windows-Prüfung](https://github.com/Funcry241/EtuSchlopf/actions/workflows/windows-download.yml/badge.svg?branch=main)](https://github.com/Funcry241/EtuSchlopf/actions/workflows/windows-download.yml)
+[![Lizenz: MIT](https://img.shields.io/badge/Lizenz-MIT-blue.svg)](LICENSE)
+[![Rust 1.98](https://img.shields.io/badge/Rust-1.98-orange.svg)](rust-toolchain.toml)
+![Status: experimentell](https://img.shields.io/badge/Status-experimentell-red.svg)
+
 **Mach aus deiner Einspielung Klaviernoten. Zwei Dateien genügen.**
 
 EtuSchlopf ist für Musikerinnen und Musiker. Ob Etüde, Song oder eigene Komposition, spielt dabei keine Rolle.
@@ -11,13 +16,13 @@ Leg beide Dateien in denselben Ordner und zieh die MIDI-Datei auf EtuSchlopf. **
 
 Der Name darf dich zum Schmunzeln bringen. Die Mathematik dahinter nehmen wir ernst. Probier EtuSchlopf mit deinem eigenen Stück aus oder schau dir an, wie es arbeitet. [Die Mathematik hinter EtuSchlopf](docs/MATHEMATIK.md)
 
-**[Windows-EXE herunterladen · Testversion r1740](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1740-windows-preview/EtuSchlopf-Windows-x64.exe)**
+**[Windows-EXE herunterladen · Testversion r1749](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1749-windows-preview/EtuSchlopf-Windows-x64.exe)** · [Vorherige Testversion r1740](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1740-windows-preview)
 
 Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI und WAV als Eingabe
 
-Der Quellstand auf `main` ist **r1740**. Die [Windows-Abnahme für BWV 847](docs/evidence/r1740/README.md) dokumentiert Build, Tests und Notensatz.
+Der Quellstand auf `main` ist **r1749**. Die [native Windows-Abnahme für BWV 847](docs/evidence/r1749/README.md) dokumentiert Build, Tests und Notensatz.
 
-[Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1740-windows-preview) ·
+[Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1749-windows-preview) ·
 [Erstes Stück](#dein-erstes-stück) · [Grenzen der Testversion](#aktueller-stand) ·
 [Technische Dokumentation](docs/DEVELOPMENT.md) · [Mathematik dahinter](docs/MATHEMATIK.md)
 
@@ -25,9 +30,9 @@ Der Quellstand auf `main` ist **r1740**. Die [Windows-Abnahme für BWV 847](docs
 
 ## Ein Blick auf die Noten
 
-[![Bachs Fuge BWV 847, Takt 4 bis 6, aus EtuSchlopf r1740](docs/images/bwv847-fuge-r1740-ausschnitt.png)](docs/examples/bwv847-fuge-r1740.pdf)
+[![Bachs Fuge BWV 847 aus EtuSchlopf r1749, Ausschnitt der ersten Seite](docs/images/bwv847-fuge-r1749-ausschnitt.png)](docs/examples/bwv847-fuge-r1749.pdf)
 
-*Johann Sebastian Bach, Fuge c-Moll BWV 847, Takt 4 bis 6 aus dem Windows-Lauf von r1740. Das Bild öffnet die vollständige vierseitige PDF.*
+*Johann Sebastian Bach, Fuge c-Moll BWV 847, aus dem nativen Windows-Lauf von r1749. Das Bild öffnet die vollständige vierseitige PDF.*
 
 Das Projekt ist experimentell und privat gepflegt. Prüfe am eigenen Stück,
 ob dir die Fassung bei der weiteren Arbeit hilft. Musikalische Nachbearbeitung
@@ -35,7 +40,7 @@ kann erforderlich sein.
 
 ## Dein erstes Stück
 
-**[Kleines Startbeispiel herunterladen](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1740-windows-preview/EtuSchlopf-Beispiel-r1740.zip)** – synthetisches MIDI/WAV-Paar mit der PDF, die die veröffentlichte r1740-EXE daraus erzeugt hat.
+**[Kleines Startbeispiel herunterladen](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1749-windows-preview/EtuSchlopf-Beispiel-r1749.zip)** – synthetisches MIDI/WAV-Paar mit der PDF, die die veröffentlichte r1749-EXE daraus erzeugt hat.
 
 1. Lade die Windows-EXE herunter. Für die PDF-Ausgabe brauchst du außerdem **[MuseScore](https://musescore.org/de/download)**.
 2. Lege MIDI und WAV in denselben Ordner. Die Namen vor der Dateiendung müssen übereinstimmen: `Mein Stück.mid` und `Mein Stück.wav`.
@@ -79,23 +84,23 @@ Laufbericht zusammentragen. Unbekannte technische Angaben kannst du offenlassen.
 
 ## Aktueller Stand
 
-Die Windows-Testversion enthält **Engine r1740 / 0.10.1839** und den
+Die Windows-Testversion enthält **Engine r1749 / 0.10.1839** und den
 eigenständigen Windows-Starter. Unterstützt sind 2/4, 3/4 und 4/4 sowie
 Taktwechsel an Taktgrenzen. Andere Taktarten, Triolen und Wechsel mitten
 im Takt bleiben offen.
 
 Der Paketlauf prüft den isolierten Start ohne Entwickler-PATH und rendert
 das synthetische MIDI/WAV-Startbeispiel mit MuseScore. Die
-[Versionshinweise und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1740-windows-preview)
+[Versionshinweise und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1749-windows-preview)
 verlinken den Paketlauf. Die native musikalische Abnahme dokumentiert
 BWV 847. Prüfe Lesbarkeit und Spielbarkeit am eigenen Stück.
 
 ## Quellstand und Beiträge
 
-Der Entwicklungsquellstand ist **r1740 / 0.10.1839**. Im nativen Windows-Lauf für BWV 847 bestanden Build, Strict-Clippy und 3039 Tests. Der PDF-Export wurde freigegeben. [Native Abnahme r1740](docs/evidence/r1740/README.md). Der vollständige Korpuslauf mit zehn Etüden ist für [r1684](docs/evidence/r1684/README.md) dokumentiert.
+Der Entwicklungsquellstand ist **r1749 / 0.10.1839**. Im nativen Windows-Lauf für BWV 847 bestanden Build, Strict-Clippy und 3.041 Tests. Vier Tests wurden übersprungen. Der PDF-Export wurde freigegeben. [Native Abnahme r1749](docs/evidence/r1749/README.md). Der vollständige Korpuslauf mit zehn Etüden ist für [r1684](docs/evidence/r1684/README.md) dokumentiert.
 
-Die Download-Engine wurde aus dem angenommenen nativen Stand **r1740** gebaut.
-Der [zum geprüften Build gehörende r1740-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1740-windows-preview/EtuSchlopf-r1740-source.zip)
+Die Download-Engine wurde aus dem angenommenen nativen Stand **r1749** gebaut.
+Der [zum geprüften Build gehörende r1749-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1749-windows-preview/EtuSchlopf-r1749-source.zip)
 und das Dateiprüfsummen-Manifest stehen beim Release bereit. Für den exakten
 Engine-Build ist dieser Snapshot maßgeblich; der zugehörige Prüfzweig enthält
 den Starter und die Skripte zur vollständigen Rekonstruktion und Verifikation.
@@ -113,8 +118,4 @@ Meldung und – bei einem Notationsfehler – die betroffene Stelle.
 
 ## Lizenz
 
-EtuSchlopf steht unter der [MIT-Lizenz](LICENSE).
-[Fremdkomponenten und Lizenzen](docs/THIRD_PARTY_NOTICES.md).
-
-
-
+Der eigene EtuSchlopf-Code steht unter der [MIT-Lizenz](LICENSE). Für Fremdkomponenten gelten die jeweiligen Lizenzbedingungen. Die externe Chopin-Referenz (WAV und MIDI) steht unter CC BY 4.0. [Fremdkomponenten, Referenzdaten und Namensnennung](docs/THIRD_PARTY_NOTICES.md).

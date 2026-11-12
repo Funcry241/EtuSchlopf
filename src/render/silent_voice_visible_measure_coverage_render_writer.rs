@@ -243,6 +243,7 @@ struct FinalRestRawRow {
     canonical_anchor: String,
     opposite_anchor: String,
     polyphonic_whole_rest_anchor: String,
+    transferred_upper_anchor: Option<String>,
     measure_rest: bool,
     whole_like: bool,
     timeline_underfill: i64,
@@ -300,8 +301,13 @@ fn final_rest_element_text_range(
     )
 }
 
-fn final_rest_structural_targets(xml: &str) -> Option<Vec<FinalRestVerticalTarget>> {
+fn final_rest_structural_targets(
+    xml: &str,
+    voice_plan: Option<&crate::structural_write_authority::FrozenSerializedVoicePlan>,
+) -> Option<Vec<FinalRestVerticalTarget>> {
     let document = roxmltree::Document::parse(xml).ok()?;
+    let upper_track_rests = voice_plan.map(|plan| plan.source_upper_voice_cross_staff_rest_starts(xml))
+        .unwrap_or_default();
     let mut rows = Vec::<FinalRestRawRow>::new();
     for part in document
         .root_element()
@@ -445,6 +451,17 @@ fn final_rest_structural_targets(xml: &str) -> Option<Vec<FinalRestVerticalTarge
                     let opposite_anchor = final_rest_opposite_anchor(&clef, &rest_type);
                     let polyphonic_whole_rest_anchor =
                         final_rest_polyphonic_whole_rest_anchor(&clef);
+                    let transferred_upper_anchor = if clef == "F"
+                        && clefs.get("1").is_some_and(|upper| upper == "G")
+                        && upper_track_rests.contains(&node.range().start)
+                        && matches!(rest_type.trim(), "eighth" | "16th" | "32nd" | "64th")
+                    {
+                        super::rest_placement::anchor_from_musicxml(
+                            "G", &rest_type, super::rest_placement::RestPlacementMode::UpperVoiceShortRest,
+                        ).map(|anchor| format!("{}{}", anchor.step, anchor.octave))
+                    } else {
+                        None
+                    };
                     let whole_like = matches!(
                         rest_type.trim(),
                         "whole" | "breve" | "long" | "maxima"
@@ -467,6 +484,7 @@ fn final_rest_structural_targets(xml: &str) -> Option<Vec<FinalRestVerticalTarge
                         canonical_anchor,
                         opposite_anchor,
                         polyphonic_whole_rest_anchor,
+                        transferred_upper_anchor,
                         measure_rest,
                         whole_like,
                         timeline_underfill: 0,
@@ -548,7 +566,11 @@ fn final_rest_structural_targets(xml: &str) -> Option<Vec<FinalRestVerticalTarge
                     && row.overlapping_voices == 0
                     && display == row.opposite_anchor
                     && display != row.canonical_anchor;
-                let (expected_anchor, decision) = if polyphonic_whole_rest {
+                let (expected_anchor, decision) = if let Some(anchor) = row.transferred_upper_anchor
+                    .filter(|anchor| *anchor != display)
+                {
+                    (anchor, FinalRestPlacementDecision::CanonicalClefRebind)
+                } else if polyphonic_whole_rest {
                     (
                         row.polyphonic_whole_rest_anchor,
                         FinalRestPlacementDecision::PolyphonicWholeRestSeparation,
@@ -623,11 +645,12 @@ fn final_rest_replacement_note(
 fn stage_final_rest_vertical_placement_candidate(
     xml: &str,
     write_enabled: bool,
+    voice_plan: Option<&crate::structural_write_authority::FrozenSerializedVoicePlan>,
 ) -> (String, FinalRestVerticalPlacementRenderWriteAudit, RenderTransitionReceipts) {
     let mut receipts = RenderTransitionReceipts::new();
     let parse_before_ok = roxmltree::Document::parse(xml).is_ok();
     let targets = if parse_before_ok {
-        final_rest_structural_targets(xml).unwrap_or_default()
+        final_rest_structural_targets(xml, voice_plan).unwrap_or_default()
     } else {
         Vec::new()
     };
@@ -711,7 +734,7 @@ fn stage_final_rest_vertical_placement_candidate(
         before_observation.raw_cursor_signature == after_observation.raw_cursor_signature;
     audit.pitched_event_multiset_stable = before_observation.pitched_timeline_signature
         == after_observation.pitched_timeline_signature;
-    audit.candidate_rows_after = final_rest_structural_targets(&candidate_xml)
+    audit.candidate_rows_after = final_rest_structural_targets(&candidate_xml, voice_plan)
         .map_or(usize::MAX, |rows| rows.len());
     audit.exact_candidate_delta = audit.parse_before_ok
         && audit.parse_after_ok
@@ -2030,7 +2053,7 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
     silent_audit.primary_clef_projection_changed = primary_clef_projection_changed;
 
     let (rest_bound_candidate, mut rest_audit, rest_receipts) =
-        stage_final_rest_vertical_placement_candidate(&primary_clef_bound_candidate, write_enabled);
+        stage_final_rest_vertical_placement_candidate(&primary_clef_bound_candidate, write_enabled, Some(&effective_voice_plan));
     receipts.append(rest_receipts);
     rest_audit.final_clef_bound = primary_clef_projection_green;
     let before_rest_continuation = match candidate_occurrence_continuation.as_ref() {
@@ -2208,7 +2231,7 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
                     Ok(()) => usize::from(clef_fixpoint_probe != committed_xml),
                     Err(_) => usize::MAX,
                 };
-            committed_rest_vertical_candidates = final_rest_structural_targets(&committed_xml)
+            committed_rest_vertical_candidates = final_rest_structural_targets(&committed_xml, Some(&effective_voice_plan))
                 .map_or(usize::MAX, |targets| targets.len());
             committed_higher_beam_candidates = match master_xml.as_deref() {
                 Some(master_xml) => final_pdf_source_higher_beam_regression_candidates(
@@ -2876,7 +2899,7 @@ mod silent_voice_visible_measure_coverage_render_write_tests {
     #[test]
     fn rest_anchor_target_is_final_clef_bound_and_idempotent() {
         let xml = rest_anchor_score("B", "4", false);
-        let targets = final_rest_structural_targets(&xml).expect("rest score parses");
+        let targets = final_rest_structural_targets(&xml, None).expect("rest score parses");
         assert_eq!(targets.len(), 1);
         let target = &targets[0];
         assert_eq!(target.display_step_before, "B");
@@ -2903,7 +2926,7 @@ mod silent_voice_visible_measure_coverage_render_write_tests {
     #[test]
     fn polyphonic_whole_rest_is_owned_by_final_rest_placement_writer() {
         let xml = rest_anchor_score("F", "3", true);
-        let targets = final_rest_structural_targets(&xml).expect("rest score parses");
+        let targets = final_rest_structural_targets(&xml, None).expect("rest score parses");
         assert_eq!(targets.len(), 1);
         assert_eq!(
             targets[0].decision,
@@ -2933,7 +2956,7 @@ mod silent_voice_visible_measure_coverage_render_write_tests {
         let xml = rest_anchor_score("F", "3", true)
             .replace("<rest>", "<rest measure=\"yes\">")
             .replace("<type>whole</type>", "");
-        let targets = final_rest_structural_targets(&xml).expect("measure rest parses");
+        let targets = final_rest_structural_targets(&xml, None).expect("measure rest parses");
         assert_eq!(targets.len(), 1);
         assert_eq!(
             targets[0].decision,
@@ -3017,7 +3040,7 @@ mod silent_voice_visible_measure_coverage_render_write_tests {
         primary_clef_probe(&mut wrong_order)
             .expect("primary clef projection");
         assert_eq!(
-            final_rest_structural_targets(&wrong_order)
+            final_rest_structural_targets(&wrong_order, None)
                 .expect("wrong-order score parses")
                 .len(),
             1
@@ -3037,14 +3060,14 @@ mod silent_voice_visible_measure_coverage_render_write_tests {
             .expect("primary clef reentry");
         assert_eq!(primary_reentry, closed);
         assert!(
-            final_rest_structural_targets(&closed)
+            final_rest_structural_targets(&closed, None)
                 .expect("closed score parses")
                 .is_empty()
         );
     }
 
     fn stage_final_rest_vertical_placement_candidate(xml: &str, enabled: bool) -> (String, super::FinalRestVerticalPlacementRenderWriteAudit) {
-        let (post, audit, receipts) = stage_final_rest_vertical_placement_candidate_with_receipts(xml, enabled);
+        let (post, audit, receipts) = stage_final_rest_vertical_placement_candidate_with_receipts(xml, enabled, None);
         receipts.discard_unadopted(crate::master_state_identity::RenderDiscardReason::ReadOnlyProbe);
         (post, audit)
     }

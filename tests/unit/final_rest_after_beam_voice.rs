@@ -8,7 +8,7 @@ fn final_rest_placement_consumes_the_late_beam_voice_relation_once() {
     let (canonical, voices, source, prepared) = crate::structural_write_authority::
         CanonicalFinalChordStructuralPlan::original_beam_alignment_test_fixture(&input);
     assert!(prepared.changed_voice_elements() > 0);
-    let (_, premature, trial) = stage_final_rest_vertical_placement_candidate(source.xml(), true);
+    let (_, premature, trial) = stage_final_rest_vertical_placement_candidate(source.xml(), true, None);
     trial.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
     assert_eq!(premature.candidates, 0);
     let edits = prepared
@@ -35,7 +35,7 @@ fn final_rest_placement_consumes_the_late_beam_voice_relation_once() {
             .as_deref(),
         Some(old_order.as_str())
     );
-    let newly_required = final_rest_structural_targets(&old_order).unwrap().len();
+    let newly_required = final_rest_structural_targets(&old_order, None).unwrap().len();
     assert!(
         newly_required > 0,
         "late lane completion exposes stale glyph anchors"
@@ -55,7 +55,7 @@ fn final_rest_placement_consumes_the_late_beam_voice_relation_once() {
         .receipts
         .discard_unadopted(crate::master_state_identity::RenderDiscardReason::ReadOnlyProbe);
     assert!(
-        final_rest_structural_targets(&candidate)
+        final_rest_structural_targets(&candidate, None)
             .unwrap()
             .is_empty()
     );
@@ -73,7 +73,7 @@ fn final_rest_placement_consumes_the_late_beam_voice_relation_once() {
         &continued, &candidate, &canonical, snapshot.committed_voice_plan.as_ref().unwrap(),
         Some(&std::collections::BTreeSet::new()),
     ).unwrap();
-    let (again, audit, trial) = stage_final_rest_vertical_placement_candidate(&candidate, true);
+    let (again, audit, trial) = stage_final_rest_vertical_placement_candidate(&candidate, true, None);
     trial.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
     assert_eq!(again, candidate);
     assert_eq!(audit.candidates, 0);
@@ -160,7 +160,7 @@ fn final_sink_keeps_clef_and_foreign_rest_stable_after_beam_voice_alignment() {
         .receipts
         .discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
     assert!(
-        final_rest_structural_targets(&expected_sink_input)
+        final_rest_structural_targets(&expected_sink_input, None)
             .unwrap()
             .is_empty()
     );
@@ -186,7 +186,7 @@ fn final_sink_keeps_clef_and_foreign_rest_stable_after_beam_voice_alignment() {
     );
     assert_eq!(commit.committed_xml(), Some(persisted.as_str()));
     assert!(
-        final_rest_structural_targets(&persisted)
+        final_rest_structural_targets(&persisted, None)
             .unwrap()
             .is_empty()
     );

@@ -1,0 +1,26 @@
+# Preserve source voice gaps through render admission
+
+SelectorDerivationContract: causal_class_first_v1
+SelectorChange: yes
+SelectorRole: repair_scope
+KnownWitnessUsedForFeatureDerivation: no
+TargetConditionedFeatureNarrowing: no
+ClassDefinitionPrecedesCorpusDistribution: yes
+UniquenessIsOutcomeNotGoal: yes
+RepairSelectorSeparatedFromErrorClass: yes
+CausalFeatureNecessityReview: complete
+CorpusDistributionPurpose: measurement_only
+CorpusDistributionMayRefineClassToKnownWitness: no
+ParentErrorClassContract: docs/selector_derivation_contract_visible_rest_elision_rhythmic_obligation.md
+ScopeNarrowingBasis: authority_or_safety_only
+DiscriminativeContextOnlyNarrowing: forbidden
+MultiplicityInvarianceContract: candidate_duplication_v1
+IndependentCandidateDuplicationInvariant: yes
+ScorewideMultiplicityAsWriteAuthority: forbidden
+GlobalRankingOfIndependentCandidates: forbidden
+MultiplicityDecisionScope: local_candidate_or_explicit_conflict_group
+CandidateDuplicationProbe: required_before_productive_write
+CausalFeature: exact gaps from the qualified source voice have contiguous time and active endpoints
+CausalFeature: the original rest carrier matches the gap in voice, staff, onset and duration
+CausalFeature: a whole captured beam group can share one existing channel after exact projection proves restoration of a source rest and preserves other resources
+NonCausalContextExcluded: piece, printed measure label, pitch, numeric voice rank and absolute time

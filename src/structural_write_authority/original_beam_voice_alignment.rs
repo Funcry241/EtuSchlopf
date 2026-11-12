@@ -2134,7 +2134,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires a separately installed MuseScore 4.7.4 and ETUSCHLOPF_BEAM_RENDER_WRAPPER"]
+    #[ignore = "manual renderer test; set ETUSCHLOPF_BEAM_RENDER_WRAPPER (verified with MuseScore 4.7.5)"]
     fn actual_musescore_roundtrip_confirms_the_later_primary_target_becomes_visible() {
         let wrapper =
             std::env::var("ETUSCHLOPF_BEAM_RENDER_WRAPPER").expect("explicit renderer wrapper");

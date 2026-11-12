@@ -2730,12 +2730,20 @@ fn render_scope_metric_expected_duration_map(xml: &str) -> BTreeMap<usize, i32> 
     out
 }
 fn render_scope_metric_expected_and_beat_map(xml: &str) -> BTreeMap<usize, (i32, i32)> {
-    let mut out = BTreeMap::new();
+    render_measure_metric_entries(xml)
+        .map(|(_, _, scope_number, metric)| (scope_number, metric))
+        .collect()
+}
+
+fn render_measure_metric_entries(
+    xml: &str,
+) -> impl Iterator<Item = (usize, usize, usize, (i32, i32))> + '_ {
     let mut scan = 0_usize;
     let mut divisions = 96_i32;
     let mut beats = 4_i32;
     let mut beat_type = 4_i32;
-    while let Some((measure_start, measure_end, scope_number)) = find_next_measure_bounds(xml, scan) {
+    std::iter::from_fn(move || {
+        let (measure_start, measure_end, scope_number) = find_next_measure_bounds(xml, scan)?;
         let measure = &xml[measure_start..measure_end];
         if let Some(value) = extract_first_text_from_fragment(measure, "divisions")
             .and_then(|value| value.trim().parse::<i32>().ok())
@@ -2766,10 +2774,9 @@ fn render_scope_metric_expected_and_beat_map(xml: &str) -> BTreeMap<usize, (i32,
             .checked_div(beat_type.max(1))
             .unwrap_or(divisions)
             .max(1);
-        out.insert(scope_number, (expected, beat_unit));
         scan = measure_end;
-    }
-    out
+        Some((measure_start, measure_end, scope_number, (expected, beat_unit)))
+    })
 }
 fn format_visible_lane_gaps(gaps: &[(i32, i32, &'static str)], limit: usize) -> String {
     if gaps.is_empty() {

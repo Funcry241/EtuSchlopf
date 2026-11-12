@@ -623,11 +623,80 @@ fn half_bar_owned_independent_same_pitch_attacks() {
     assert_eq!(half_bar_pitch_count(&output, 48), 2);
 }
 #[test]
-fn half_bar_owned_chord_keeps_members() {
-    let (_, output) = half_bar_owned(&[(101, 0, 2, 55), (102, 192, 2, 48), (103, 192, 2, 52)], 1);
-    assert_eq!(half_bar_pitch_count(&output, 48), 2);
-    assert_eq!(half_bar_pitch_count(&output, 52), 2);
+fn source_bound_aligned_chords_keep_their_half_note_heads() {
+    use crate::midi_seed::rhythmic_course_creation_tests::arrangement_source_lengths_fixture;
+    let rows = [
+        (101, 0, 192, 2, 48), (102, 0, 192, 2, 52), (103, 192, 192, 2, 55),
+        (201, 576, 192, 1, 67), (202, 576, 192, 1, 71),
+    ];
+    let (input, seed) = arrangement_source_lengths_fixture(&rows, 2);
+    let result = arrange_piano_musicxml_with_profile(&input, ArrangementProfile {
+        rhythmic_courses: Some(&seed),
+        preserve_reference: true,
+        ..Default::default()
+    });
+    result.stats.rhythmic_courses.as_ref().unwrap().validate_binding(&result.xml).unwrap();
+    assert_preserved(&input, &result.xml);
+    for (_, _, _, _, pitch) in rows {
+        assert_eq!(half_bar_pitch_count(&result.xml, pitch), 1);
+    }
+    let notes = collect_raw_notes(&result.xml);
+    for meta in collect_note_metas(&result.xml, &notes).into_iter().filter(|meta| meta.midi.is_some()) {
+        assert!(notes[meta.raw_idx].text.contains("<type>half</type>"));
+        assert!(!notes[meta.raw_idx].text.contains("<tie"));
+    }
 }
+#[test]
+fn source_bound_quarters_cross_weak_beats_but_expose_the_half_bar() {
+    use crate::midi_seed::rhythmic_course_creation_tests::arrangement_source_lengths_fixture;
+    let rows = [
+        (101, 48, 96, 2, 48), (102, 144, 96, 2, 50),
+        (103, 240, 96, 2, 52), (104, 336, 48, 2, 55),
+    ];
+    let (input, seed) = arrangement_source_lengths_fixture(&rows, 1);
+    let result = arrange_piano_musicxml_with_profile(&input, ArrangementProfile {
+        rhythmic_courses: Some(&seed),
+        preserve_reference: true,
+        ..Default::default()
+    });
+    result.stats.rhythmic_courses.as_ref().unwrap().validate_binding(&result.xml).unwrap();
+    assert_preserved(&input, &result.xml);
+    for (pitch, count) in [(48, 1), (50, 2), (52, 1)] {
+        assert_eq!(half_bar_pitch_count(&result.xml, pitch), count);
+    }
+}
+
+#[test]
+fn source_bound_held_halves_tie_only_the_short_remainder() {
+    use crate::midi_seed::rhythmic_course_creation_tests::arrangement_source_lengths_fixture;
+    let rows = [
+        (101, 0, 240, 2, 48), (102, 240, 144, 2, 50),
+        (201, 384, 216, 1, 67), (202, 600, 168, 1, 69),
+    ];
+    let (input, seed) = arrangement_source_lengths_fixture(&rows, 2);
+    let result = arrange_piano_musicxml_with_profile(&input, ArrangementProfile {
+        rhythmic_courses: Some(&seed),
+        preserve_reference: true,
+        ..Default::default()
+    });
+    result.stats.rhythmic_courses.as_ref().unwrap().validate_binding(&result.xml).unwrap();
+    assert_preserved(&input, &result.xml);
+    for (pitch, tail) in [(48, 48), (67, 24)] {
+        let parts = find_measure_spans(&result.xml).iter().flat_map(|span| {
+            let measure = &result.xml[span.start..span.end];
+            let notes = collect_raw_notes(measure);
+            collect_note_metas(measure, &notes).into_iter().filter(|meta| meta.midi == Some(pitch))
+                .map(|meta| (meta.start, meta.duration, notes[meta.raw_idx].text.clone()))
+                .collect::<Vec<_>>()
+        }).collect::<Vec<_>>();
+        assert_eq!(parts.len(), 2);
+        assert_eq!((parts[0].0, parts[0].1), (0, 192));
+        assert_eq!((parts[1].0, parts[1].1), (192, tail));
+        assert!(parts[0].2.contains("<type>half</type>") && parts[0].2.contains("<tie type=\"start\"/>"));
+        assert!(parts[1].2.contains("<tie type=\"stop\"/>"));
+    }
+}
+
 #[test]
 fn half_bar_owned_duplication_is_independent() {
     let (_, output) = half_bar_owned(&[(101, 0, 1, 55), (102, 192, 1, 48), (103, 0, 2, 57), (104, 192, 2, 60),

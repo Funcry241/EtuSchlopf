@@ -20,6 +20,7 @@ pub(super) struct ProjectionReuse<'a> {
     canonical: &'a CanonicalFinalChordStructuralPlan,
     observation: &'a ActualSourceBeamBindingObservation,
     ordered_edges: Result<Vec<OwnerEdge<'a>>, &'static str>,
+    source_gaps: &'a [(usize, crate::midi_seed::SourceVoiceGap)],
     projections: RefCell<std::collections::VecDeque<Rc<SharingProjection>>>,
     witnesses: RefCell<BTreeMap<usize, Result<actual_source_beam_binding::SharingBeamWitness<'a>, &'static str>>>,
     binding_source: std::cell::OnceCell<FinalChordBindingSource<'a>>,
@@ -42,17 +43,34 @@ impl<'a> ProjectionReuse<'a> {
                 sources.contains(&note.source) && rest.overlaps(note))))
     }
 
+    pub(super) fn component_overlaps_replaced_source_gap(
+        &self,
+        voices: &FrozenSerializedVoicePlan,
+        sources: &BTreeSet<usize>,
+    ) -> io::Result<bool> {
+        if self.source_gaps.is_empty() { return Ok(false); }
+        let before = self.project(voices.clone())?;
+        Ok(before.entry_rests.values().any(|rest| rest.qualified_gap && rest.note_index.is_none()
+            && before.notes.values().any(|note|
+                sources.contains(&note.source) && rest.overlaps(note))))
+    }
+
     // Performance-only LRU bound. All evicted values are recomputed by the same
     // projector; this does not bound traversal or candidate admission.
     const RETAINED_PROJECTIONS: usize = 64;
 
     pub(super) fn new(canonical: &'a CanonicalFinalChordStructuralPlan,
         observation: &'a ActualSourceBeamBindingObservation) -> Self {
-        Self { canonical, observation, ordered_edges: ordered_received_beam_readback::owner_edges(canonical, observation), projections: RefCell::default(), witnesses: RefCell::default(),
+        Self { canonical, observation, ordered_edges: ordered_received_beam_readback::owner_edges(canonical, observation), source_gaps: &[], projections: RefCell::default(), witnesses: RefCell::default(),
             binding_source: std::cell::OnceCell::new(),
             projection_hits: Cell::new(0), projection_misses: Cell::new(0),
             witness_hits: Cell::new(0), witness_misses: Cell::new(0),
             edge_loss_detail_emitted: Cell::new(false) }
+    }
+
+    pub(super) fn with_source_voice_gaps(mut self, production: &'a FrozenSerializedVoicePlan) -> Self {
+        self.source_gaps = &production.source_voice_gaps;
+        self
     }
 
     fn matches(&self, canonical: &CanonicalFinalChordStructuralPlan,
@@ -91,7 +109,7 @@ impl<'a> ProjectionReuse<'a> {
             let _ = self.binding_source.set(source);
         }
         let result = Rc::new(SharingContext::project_voices_from_source(
-            self.canonical, voices, Some(edges), self.binding_source.get().expect("parsed source"),
+            self.canonical, voices, Some(edges), self.binding_source.get().expect("parsed source"), self.source_gaps,
         )?);
         let mut entries = self.projections.borrow_mut();
         if entries.len() == Self::RETAINED_PROJECTIONS { entries.pop_front(); }
@@ -207,6 +225,7 @@ struct BoundEntryRest {
     label: String,
     raw_index: usize,
     note_index: Option<usize>,
+    qualified_gap: bool,
 }
 
 impl BoundEntryRest {
@@ -453,7 +472,7 @@ impl<'a, 'input, 'reuse> SharingContext<'a, 'input, 'reuse> {
         let xml = &canonical.written_projection.as_ref()
             .ok_or_else(|| sharing_error("Missing source producer"))?.original_xml;
         let source = FinalChordBindingSource::parse(xml)?;
-        Self::project_voices_from_source(canonical, voices, owner_edges, &source)
+        Self::project_voices_from_source(canonical, voices, owner_edges, &source, &[])
     }
 
     fn project_voices_from_source(
@@ -461,6 +480,7 @@ impl<'a, 'input, 'reuse> SharingContext<'a, 'input, 'reuse> {
         voices: FrozenSerializedVoicePlan,
         owner_edges: Option<&[OwnerEdge<'_>]>,
         parsed: &FinalChordBindingSource<'_>,
+        source_gaps: &[(usize, crate::midi_seed::SourceVoiceGap)],
     ) -> io::Result<SharingProjection> {
         let _timing = crate::audit_only::voice_allocation_timing::Timer::probe("CanonicalProjection");
         let source = parsed.xml;
@@ -651,7 +671,7 @@ impl<'a, 'input, 'reuse> SharingContext<'a, 'input, 'reuse> {
             }
         }
         let entry_rests = bound_entry_rests(
-            parsed, &projected, &document, &raw_indices, &note_indices,
+            parsed, &projected, &document, &raw_indices, &note_indices, source_gaps,
         )?;
         let edges = written_connections(&notes);
         let owner_edges = owner_edges.map_or_else(Vec::new, |edges|
@@ -1368,6 +1388,7 @@ fn bound_entry_rests(
     document: &roxmltree::Document<'_>,
     raw_indices: &BTreeMap<usize, usize>,
     note_indices: &BTreeMap<usize, usize>,
+    source_gaps: &[(usize, crate::midi_seed::SourceVoiceGap)],
 ) -> io::Result<BTreeMap<usize, BoundEntryRest>> {
     let source = parsed.xml;
     let mut by_offset = BTreeMap::new();
@@ -1378,16 +1399,22 @@ fn bound_entry_rests(
     let outputs = document.descendants().filter(|node| node.has_tag_name("note") || node.has_tag_name("forward"))
         .map(|node| (node.range().start, node)).collect::<BTreeMap<_, _>>();
     let mut result = BTreeMap::new();
+    let qualified_gaps = source_gap_rest_starts_in_measures(
+        source, &parsed.measures, source_gaps.iter().map(|(_, gap)| gap),
+    );
     for measure in &parsed.measures {
-        for pair in measure.notes.windows(2) {
-            let [rest, head] = pair else { continue; };
-            if !rest.rest_like || rest.chord_member || rest.onset != 0 || rest.duration <= 0
-                || head.rest_like || head.chord_member || head.pitch_midi.is_none()
-                || head.onset != rest.duration || head.staff != rest.staff || head.voice != rest.voice
+        for (index, rest) in measure.notes.iter().enumerate() {
+            if !rest.rest_like || rest.chord_member || rest.duration <= 0
                 || !final_chord_note_fragment_is_visible(&source[rest.range.clone()])
-                || !final_chord_note_fragment_is_visible(&source[head.range.clone()])
-                || source[rest.range.end..head.range.start].contains("<backup")
             { continue; }
+            let qualified = qualified_gaps.contains(&rest.range.start);
+            let entry = rest.onset == 0 && measure.notes.get(index + 1).is_some_and(|head| {
+                !head.rest_like && !head.chord_member && head.pitch_midi.is_some()
+                    && head.onset == rest.duration && head.staff == rest.staff && head.voice == rest.voice
+                    && final_chord_note_fragment_is_visible(&source[head.range.clone()])
+                    && !source[rest.range.end..head.range.start].contains("<backup")
+            });
+            if !qualified && !entry { continue; }
             let Some(Some(row)) = by_offset.get(&rest.range.start) else { continue; };
             if row.fragment_ordinal != 0 || row.source_note_end != rest.range.end { continue; }
             let Some(node) = outputs.get(&row.projected_start) else { continue; };
@@ -1406,7 +1433,7 @@ fn bound_entry_rests(
             let Some(&raw_index) = raw_indices.get(&row.projected_start) else { continue; };
             result.insert(rest.range.start, BoundEntryRest {
                 interval: (rest.measure, rest.onset, rest.duration, rest.staff.clone()),
-                label: rest.voice.clone(), raw_index, note_index,
+                label: rest.voice.clone(), raw_index, note_index, qualified_gap: qualified,
             });
         }
     }
@@ -1418,6 +1445,7 @@ struct RestRestoration {
     before_raw: BTreeSet<usize>,
     after_raw: BTreeSet<usize>,
     after_notes: BTreeSet<usize>,
+    qualified_gap: bool,
 }
 
 fn prove_entry_rest_restoration(
@@ -1439,6 +1467,7 @@ fn prove_entry_rest_restoration(
         proof.before_raw.insert(old.raw_index);
         proof.after_raw.insert(new.raw_index);
         proof.after_notes.insert(index);
+        proof.qualified_gap |= old.qualified_gap && new.qualified_gap;
     }
     let same_raw = before.non_pitched.iter().enumerate().filter(|(i, _)| !proof.before_raw.contains(i))
         .map(|(_, raw)| raw).eq(after.non_pitched.iter().enumerate()
@@ -1616,11 +1645,25 @@ fn verify_original_component_projection(
                 && original_group(*level, left).zip(original_group(*level, right))
                     .is_some_and(|(a, b)| a != b)
         })
-        .map_err(|error| sharing_error(error.reason()))?;
+        .map_err(|error| {
+            if let BeamTransitionFailure::LostWrittenPair((level, left, right)) = error
+                && crate::audit_only::original_beam_diagnostics::detail_requested_for_measure(before.notes[&left].measure)
+            {
+                let describe = |key| {
+                    let note = &before.notes[&key];
+                    (note.source, note.onset, note.duration, note.states.get(&level),
+                        original_group(level, &key))
+                };
+                eprintln!("SourceGapBeamTransition: level={level}; left={:?}; right={:?}", describe(left), describe(right));
+            }
+            sharing_error(error.reason())
+        })?;
     for (old, new) in before.owner_edges.iter().zip(&after.owner_edges) {
         improved |= *old == OwnerEdgeReadback::SplitVoice && *new == OwnerEdgeReadback::Present;
     }
-    if !changed || !improved { return Err(sharing_error("original_component_has_no_proved_improvement")); }
+    if !changed || !(improved || restored.qualified_gap) {
+        return Err(sharing_error("original_component_has_no_proved_improvement"));
+    }
     Ok(())
 }
 
@@ -2222,7 +2265,7 @@ mod tests {
         let mut before = measure_context_fixture(&[(17, 43, "1", 0, "a")]);
         let mut after = measure_context_fixture(&[(17, 43, "1", 0, "b")]);
         let rest = BoundEntryRest {
-            interval: (43, 0, 24, "1".into()), label: "a".into(), raw_index: 0, note_index: None,
+            interval: (43, 0, 24, "1".into()), label: "a".into(), raw_index: 0, note_index: None, qualified_gap: false,
         };
         before.entry_rests.insert(91, rest.clone());
         after.entry_rests.insert(91, BoundEntryRest { note_index: Some(0), ..rest.clone() });

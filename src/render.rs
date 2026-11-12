@@ -158,8 +158,11 @@ pub(super) mod rest_placement {
                     step: "C",
                     octave: 4,
                 }),
-                (Self::Above, RestClef::Treble)
-                | (_, RestClef::C | RestClef::Other) => None,
+                (Self::Above, RestClef::Treble) => Some(RestDisplayAnchor {
+                    step: "C",
+                    octave: 6,
+                }),
+                (_, RestClef::C | RestClef::Other) => None,
             }
         }
     }
