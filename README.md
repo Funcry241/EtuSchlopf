@@ -22,7 +22,7 @@ Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI u
 
 Der Quellstand auf `main` ist **r1749**. Die [native Windows-Abnahme für BWV 847](docs/evidence/r1749/README.md) dokumentiert Build, Tests und Notensatz.
 
-Der nativ geprüfte Entwicklungsstand ist **r1792**. Der Windows-Lauf für Chopin op. 10 Nr. 3, p01 endete mit Exitcode 0, ohne Warnungen und mit 100 % Notenerhalt. Build, Strict Clippy, 3.066 Tests und PDF-Export bestanden. Vier Tests waren ignoriert. [Stand und Prüfumfang](docs/assistant_memory/050_aktueller_stand.md)
+Der nativ geprüfte Entwicklungsstand ist **r1792**. Der Windows-Lauf für Chopin op. 10 Nr. 3, p01 endete mit Exitcode 0, ohne Warnungen und mit 100 % Notenerhalt. Build, Strict Clippy, 3.066 Tests und PDF-Export bestanden. Vier Tests waren ignoriert. [Stand und Prüfumfang](docs/evidence/r1792/README.md)
 
 [Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1749-windows-preview) ·
 [Erstes Stück](#dein-erstes-stück) · [Grenzen der Testversion](#aktueller-stand) ·
