@@ -1,6 +1,6 @@
 # Technische Referenz und Quellenarbeit
 
-Der angenommene Entwicklungsquellstand ist **r1740 / 0.10.1839**. Die [nativen Prüfbelege](evidence/r1740/README.md) dokumentieren Build, Strict-Clippy, 3039 bestandene Tests und den PDF-Export für BWV 847. Der frühere vollständige [Korpuslauf r1684](evidence/r1684/README.md) umfasst zehn Etüden. Die [Download-Anleitung](../README.md) gehört zur verfügbaren Windows-Testversion r1740.
+Die technische Referenz begleitet den öffentlichen Quellstand **r1749 / 0.10.1839**. Für ihn liegen die [Windows-Abnahme mit BWV 847](evidence/r1749/README.md) und der [Windows-Download](../README.md) vor. Der neuere [Windows-Prüfstand r1792](evidence/r1792/README.md) dokumentiert den Chopin-Einzellauf. Der historische [Korpuslauf r1684](evidence/r1684/README.md) umfasst zehn Etüden.
 
 Seit r1659 enthält der Quellstand weitere Zuständigkeitsbereinigungen, indizierte Endpunktabfragen und Verbesserungen an Fokus, Verbindungsstatus und PDF-Sitzungsbindung der Watch-Webansicht. r1683 führt ursprüngliche Pausenanker als eigene Evidenz in die C3-Entscheidung; nicht geschlossene systemübergreifende Gruppenabhängigkeiten bleiben offen. Die [Mathematik-Seite](MATHEMATIK.md) ordnet 34 Verfahrensfamilien ihren Quellen, Wirkungen und Beweisgrenzen zu. Die native Abnahme bestätigt den geprüften Korpus; sie belegt weder allgemeine Fehlerfreiheit noch die Spielbarkeit beliebiger Eingaben.
 

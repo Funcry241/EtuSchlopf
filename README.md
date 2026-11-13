@@ -38,7 +38,7 @@ Die beiden Referenzen zeigen den von EtuSchlopf erzeugten Notensatz. Beide Vorsc
 | :---: | :---: |
 | **Fuge c-Moll, BWV 847** | **Etüde E-Dur, op. 10 Nr. 3 · Aufführung p01** |
 | [![Ausschnitt aus der Fuge BWV 847](docs/images/bwv847-fuge-r1749-ausschnitt.png)](docs/examples/bwv847-fuge-r1749.pdf) | [![Ausschnitt aus Chopins Etüde op. 10 Nr. 3](docs/images/chopin-op10-no3-p01-r1792-ausschnitt.png)](docs/examples/chopin-op10-no3-p01-r1792.pdf) |
-| Windows-Lauf r1749 · [PDF, 4 Seiten](docs/examples/bwv847-fuge-r1749.pdf) · [Prüfbelege](docs/evidence/r1749/README.md) | Windows-Lauf r1792 · [PDF, 1 Seite](docs/examples/chopin-op10-no3-p01-r1792.pdf) · [Prüfergebnisse](docs/assistant_memory/050_aktueller_stand.md#windows-prüfstand-r1792) |
+| Windows-Lauf r1749 · [PDF, 4 Seiten](docs/examples/bwv847-fuge-r1749.pdf) · [Prüfbelege](docs/evidence/r1749/README.md) | Windows-Lauf r1792 · [PDF, 1 Seite](docs/examples/chopin-op10-no3-p01-r1792.pdf) · [Prüfbelege](docs/evidence/r1792/README.md) |
 
 Die Chopin-Referenz ist ein eingespielter Ausschnitt aus Werner Goebls *Vienna 4x22 Piano Corpus* (mdw, 2017). MIDI und WAV stammen aus derselben Aufführung. EtuSchlopf erhielt im Windows-Lauf **100 % der Noten** und erzeugte das PDF **ohne Warnungen**. Die genaue Zeitzuordnung zwischen MIDI und WAV bleibt offen. Das PDF und die Vorschau sind aus der Einspielung erzeugte Ausgaben. [Korpus und DOI](https://doi.org/10.21939/4X22) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) · [Namensnennung](docs/THIRD_PARTY_NOTICES.md#chopin-etüde-e-dur-op-10-nr-3-aufführung-p01)
 
@@ -105,7 +105,7 @@ BWV 847. Prüfe Lesbarkeit und Spielbarkeit am eigenen Stück.
 
 ## Quellstand und Beiträge
 
-Der Entwicklungsquellstand ist **r1749 / 0.10.1839**. Im nativen Windows-Lauf für BWV 847 bestanden Build, Strict-Clippy und 3.041 Tests. Vier Tests wurden übersprungen. Der PDF-Export wurde freigegeben. [Native Abnahme r1749](docs/evidence/r1749/README.md). Der vollständige Korpuslauf mit zehn Etüden ist für [r1684](docs/evidence/r1684/README.md) dokumentiert.
+Auf `main` liegt der veröffentlichte Quellstand **r1749 / 0.10.1839**. Der neuere [Windows-Prüfstand r1792](docs/evidence/r1792/README.md) dokumentiert den Chopin-Lauf. Der historische [Vollkorpuslauf r1684](docs/evidence/r1684/README.md) umfasst zehn Etüden.
 
 Die Download-Engine wurde aus dem angenommenen nativen Stand **r1749** gebaut.
 Der [zum geprüften Build gehörende r1749-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1749-windows-preview/EtuSchlopf-r1749-source.zip)

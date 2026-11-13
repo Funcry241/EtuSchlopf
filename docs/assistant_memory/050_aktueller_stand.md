@@ -20,7 +20,7 @@ gerenderten Seiten pixelgleich.
 Die Chopin-Zeitzuordnung zwischen MIDI und WAV bleibt wegen zu geringer
 gemeinsamer Anschlagsdeckung offen. Der r1792-Prüfumfang umfasst den
 Windows-Einzellauf für Chopin und den lokalen Vergleich mit BWV 847.
-Auf GitHub liegen Quellstand und Windows-Testdownload auf r1749.
+Auf GitHub liegen Quellstand und Windows-Testdownload auf r1749. [Windows-Prüfbelege r1792](../evidence/r1792/README.md)
 
 ## BWV 847 und technische Pflege
 
