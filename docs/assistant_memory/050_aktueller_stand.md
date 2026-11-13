@@ -1,8 +1,26 @@
 # 050 – Aktueller Stand
 
-Stand der vorliegenden Prüfbelege vom 12. November 2026. Maßgeblich für die
+Stand der vorliegenden Prüfbelege vom 13. November 2026. Maßgeblich für die
 Annahme eines Takes sind der Windows-Export und der darin gebundene
 Annahmebeleg.
+
+## Windows-Prüfstand r1792
+
+Windows hat r1792 für Chopin op. 10 Nr. 3, p01 angenommen. Der Lauf endete
+mit Exitcode 0, ohne Warnungen und mit 100 % Notenerhalt. Build, Strict
+Clippy, 3.066 Tests und der PDF-Export bestanden. Vier Tests waren ignoriert.
+
+Der MIDI-Seed-Owner berücksichtigt Sprungbelastung und Tastenbelegung
+beider Hände sowie die bestehende Akkordaufteilung. r1792 prüft die
+Spannweite bereits bei der ersten Aufteilung. Im lokalen Chopin-Vergleich
+zu r1791 entfielen damit drei späte Spannweitenkorrekturen. Für Chopin
+und BWV 847 waren die beiden MusicXML-Dateien bytegleich und die
+gerenderten Seiten pixelgleich.
+
+Die Chopin-Zeitzuordnung zwischen MIDI und WAV bleibt wegen zu geringer
+gemeinsamer Anschlagsdeckung offen. Der r1792-Prüfumfang umfasst den
+Windows-Einzellauf für Chopin und den lokalen Vergleich mit BWV 847.
+Auf GitHub liegen Quellstand und Windows-Testdownload auf r1749.
 
 ## BWV 847 und technische Pflege
 
@@ -18,7 +36,7 @@ Der bestätigte r1747-Export bindet den Take an die SHA-256
 
 ## Geltungsbereich der Nachweise
 
-Die aktuellen Windows-Exporte prüfen BWV 847 als Einzelprojekt. Die
+Die früheren Windows-Exporte zu BWV 847 prüfen das Einzelprojekt. Die
 [Mathe-Seite](../MATHEMATIK.md#historischer-vollkorpuslauf-r1683) dokumentiert
 den Vollkorpuslauf r1683 mit seinem damaligen Stand. Ein aktueller
 Vollkorpuslauf ist in den vorliegenden Exporten nicht belegt.
