@@ -3,6 +3,8 @@
 use std::path::Path;
 use crate::sha256;
 pub(crate) const MARKER: &str = "src/cursor_lane_temporal_check.rs";
+// Exact successor that checks an implicit opening measure at its physical extent.
+const PICKUP_REPLAY_SHA256: &str = "d17e2d8dcdef15acaa60bd2c40a7f6ae72ab12044a246a4ef13ddcc08bce35d2";
 const SUCCESSORS: &[(&str, &str)] = &[
     ("ZIP_KIND.txt", "3f32028b99895d95dd61844169ce880bc1c85d106b21c60fa0d705af080187ec"),
     ("docs/render_opus_population_map_r1225.tsv", "3e17108eb93bab93f229ba50425f006b0f772f25befdc9fea9a983e9363da733"),
@@ -46,7 +48,10 @@ pub(crate) fn validate_tree(root: &Path) -> Result<(), String> {
     let replay_path="src/audit_only/serialized_temporal_replay.rs";
     let replay=std::fs::read(root.join(replay_path)).map_err(|e| e.to_string())?;
     let replay_digest=SUCCESSORS.iter().find(|(path,_)| *path==replay_path).ok_or("replay binding missing")?.1;
-    if sha256::hex(&replay)!=replay_digest { return Err("CursorTemporal productive replay bytes changed".into()); }
+    let actual_replay=sha256::hex(&replay);
+    if actual_replay!=replay_digest && actual_replay!=PICKUP_REPLAY_SHA256 {
+        return Err("CursorTemporal productive replay bytes changed".into());
+    }
     let stage=std::fs::read(root.join("src/pipeline_shards/pipeline_orchestrator_initial_render_stage.rs")).map_err(|e| e.to_string())?;
     if !stage_successor(&stage) { return Err("CursorTemporal initial-stage boundary changed".into()); }
     let lineage=std::fs::read_to_string(root.join("src/master_state_identity/render_lineage.rs")).map_err(|e| e.to_string())?;
@@ -79,6 +84,7 @@ pub(crate) fn validate_transition(parent: &Path, child: &Path, class: &str) -> R
 pub(crate) fn bound_path_admissible(path: &str, fingerprint: Option<u64>) -> bool {
     matches!((path, fingerprint),
         ("src/audit_only/serialized_temporal_replay.rs", Some(0x17a3f1d924742ea4)) |
+        ("src/audit_only/serialized_temporal_replay.rs", Some(0xa05c0ca52f22d316)) |
         ("src/main.rs", Some(0x594f6e7c48b20151)) |
         ("src/build_gate/destructive_transformation_population_v1.tsv", Some(0xe75776661286014f)) |
         ("src/build_gate/render_origins_v1.tsv", Some(0x81e20fee4cbb052b)) |

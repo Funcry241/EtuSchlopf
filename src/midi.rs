@@ -68,21 +68,28 @@ impl MidiVoiceRole {
     }
 }
 
+#[derive(Debug, Default)]
+struct MidiNotationMetadata {
+    key_events: Vec<(u64, Option<MidiKeySignature>)>,
+    timing_markers: Vec<(u64, String)>,
+}
+
 #[derive(Debug)]
 struct ParsedMidi {
-    key_events: Vec<(u64, Option<MidiKeySignature>)>,
+    notation: MidiNotationMetadata,
     voice_roles: Vec<Option<MidiVoiceRole>>,
     meter_changes: Vec<MeterChange>,
     format: u16,
     tracks: u16,
     ppq: i64,
     note_events: Vec<RawNoteEvent>,
-    tempo_microseconds_per_quarter: Vec<u32>,
+    tempo_changes: Vec<(u64, u32)>,
     time_signatures: Vec<(u8, u16)>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct DecodedMidiSource {
+    pub(crate) timing_markers: Vec<(u64, String)>,
     pub(crate) opening_key_signature: Option<MidiKeySignature>,
     pub(crate) voice_roles: Vec<Option<MidiVoiceRole>>,
     pub(crate) time_domain: SourceTimeDomain,
@@ -93,6 +100,7 @@ pub(crate) struct DecodedMidiSource {
     pub(crate) notes: Vec<CanonicalSourceEvent>,
     pub(crate) source_event_causal_ledger: SourceEventCausalLedger,
     pub(crate) tempo_microseconds_per_quarter: Vec<u32>,
+    pub(crate) tempo_changes: Vec<(u64, u32)>,
     pub(crate) time_signatures: Vec<(u8, u16)>,
 }
 
@@ -119,12 +127,16 @@ fn decode_standard_midi_bytes(data: &[u8]) -> anyhow::Result<DecodedMidiSource> 
     let metric_timeline = MetricTimeline::from_midi(time_domain, &parsed.meter_changes, extent)?;
     // The seed can write a constant key for the whole score. Require an
     // explicit opening event and agreement across all tracks and repeats.
-    let opening_key_signature = parsed.key_events.iter().find_map(|&(tick, key)| {
+    let opening_key_signature = parsed.notation.key_events.iter().find_map(|&(tick, key)| {
         (tick == 0).then_some(key)
     }).flatten().filter(|&opening| {
-        parsed.key_events.iter().all(|&(_, key)| key == Some(opening))
+        parsed.notation.key_events.iter().all(|&(_, key)| key == Some(opening))
     });
+    let mut tempo_microseconds_per_quarter = parsed.tempo_changes.iter().map(|&(_, tempo)| tempo).collect::<Vec<_>>();
+    tempo_microseconds_per_quarter.sort_unstable();
+    tempo_microseconds_per_quarter.dedup();
     Ok(DecodedMidiSource {
+        timing_markers: parsed.notation.timing_markers,
         opening_key_signature,
         voice_roles: parsed.voice_roles,
         time_domain,
@@ -134,7 +146,8 @@ fn decode_standard_midi_bytes(data: &[u8]) -> anyhow::Result<DecodedMidiSource> 
         source_ppq: parsed.ppq,
         notes,
         source_event_causal_ledger,
-        tempo_microseconds_per_quarter: parsed.tempo_microseconds_per_quarter,
+        tempo_microseconds_per_quarter,
+        tempo_changes: parsed.tempo_changes,
         time_signatures: parsed.time_signatures,
     })
 }
@@ -178,10 +191,10 @@ fn parse_midi(data: &[u8]) -> anyhow::Result<ParsedMidi> {
 
     let mut pos = header_end;
     let mut note_events = Vec::new();
-    let mut tempo_microseconds_per_quarter = Vec::new();
+    let mut tempo_changes = Vec::new();
     let mut time_signatures = Vec::new();
     let mut meter_changes = Vec::new();
-    let mut key_events = Vec::new();
+    let mut notation = MidiNotationMetadata::default();
     let mut voice_roles = Vec::with_capacity(usize::from(tracks));
     for track_index in 0..usize::from(tracks) {
         if data.get(pos..pos + 4) != Some(&MIDI_TRACK[..]) {
@@ -200,10 +213,10 @@ fn parse_midi(data: &[u8]) -> anyhow::Result<ParsedMidi> {
             &data[body..end],
             track_index,
             &mut note_events,
-            &mut tempo_microseconds_per_quarter,
+            &mut tempo_changes,
             &mut time_signatures,
             &mut meter_changes,
-            &mut key_events,
+            &mut notation,
         )?;
         voice_roles.push(role);
         pos = end;
@@ -214,20 +227,20 @@ fn parse_midi(data: &[u8]) -> anyhow::Result<ParsedMidi> {
             data.len().saturating_sub(pos)
         ));
     }
-    tempo_microseconds_per_quarter.sort_unstable();
-    tempo_microseconds_per_quarter.dedup();
+    tempo_changes.sort_unstable();
+    tempo_changes.dedup();
     time_signatures.sort_unstable();
     time_signatures.dedup();
 
     Ok(ParsedMidi {
-        key_events,
+        notation,
         voice_roles,
         meter_changes,
         format,
         tracks,
         ppq,
         note_events,
-        tempo_microseconds_per_quarter,
+        tempo_changes,
         time_signatures,
     })
 }
@@ -236,10 +249,10 @@ fn parse_track(
     track: &[u8],
     track_index: usize,
     note_events: &mut Vec<RawNoteEvent>,
-    tempos: &mut Vec<u32>,
+    tempos: &mut Vec<(u64, u32)>,
     time_signatures: &mut Vec<(u8, u16)>,
     meter_changes: &mut Vec<MeterChange>,
-    key_events: &mut Vec<(u64, Option<MidiKeySignature>)>,
+    notation: &mut MidiNotationMetadata,
 ) -> anyhow::Result<Option<MidiVoiceRole>> {
     let mut pos = 0usize;
     let mut tick = 0u64;
@@ -327,6 +340,11 @@ fn parse_track(
                         };
                         track_name = Some(role);
                     }
+                    0x06 => {
+                        if let Some(marker) = payload.strip_prefix(b"EtuSchlopf notation ") {
+                            notation.timing_markers.push((tick, std::str::from_utf8(marker)?.to_owned()));
+                        }
+                    }
                     0x2f => {
                         if !payload.is_empty() {
                             return Err(anyhow!(
@@ -346,11 +364,11 @@ fn parse_track(
                                 "MIDI-Track {track_index}: Tempo-Metaereignis muss Länge 3 haben"
                             ));
                         }
-                        tempos.push(
+                        tempos.push((tick,
                             (u32::from(payload[0]) << 16)
                                 | (u32::from(payload[1]) << 8)
                                 | u32::from(payload[2]),
-                        );
+                        ));
                     }
                     0x59 => {
                         let key = match payload {
@@ -359,7 +377,7 @@ fn parse_track(
                             }
                             _ => None,
                         };
-                        key_events.push((tick, key));
+                        notation.key_events.push((tick, key));
                     }
                     0x58 => {
                         if payload.len() != 4 {
@@ -598,7 +616,7 @@ mod tests {
         let causal_projection =
             project_source_event_causality(&causal_ledger, &events, parsed.ppq)
                 .expect("causal ledger must replay");
-        assert_eq!(parsed.tempo_microseconds_per_quarter, vec![461_538]);
+        assert_eq!(parsed.tempo_changes, vec![(0, 461_538)]);
         assert_eq!(parsed.time_signatures, vec![(4, 4)]);
         assert_eq!(projection.event_count, 3);
         assert_eq!(causal_projection.raw_note_event_count, 6);
@@ -624,7 +642,7 @@ mod tests {
     fn decoder_rejects_lossy_ppq_normalization() {
         let parsed = ParsedMidi {
             meter_changes: Vec::new(),
-            key_events: Vec::new(),
+            notation: MidiNotationMetadata::default(),
             voice_roles: vec![None],
             format: 0,
             tracks: 1,
@@ -647,7 +665,7 @@ mod tests {
                     kind: RawNoteEventKind::Off,
                 },
             ],
-            tempo_microseconds_per_quarter: Vec::new(),
+            tempo_changes: Vec::new(),
             time_signatures: Vec::new(),
         };
         let error = pair_and_normalize_note_events(&parsed, SourceTimeDomain { source_ppq: parsed.ppq, divisions: 96 })

@@ -1031,15 +1031,22 @@ fn sixteenth_grid_distance(frame: u64, quarter_frames: u64) -> u64 {
     u64::try_from(diff_scaled.saturating_add(2) / 4).unwrap_or(u64::MAX)
 }
 
-fn build_audio_hypotheses(signal: &DecodedWavSignalAudit) -> AudioHypothesisBuild {
-    let sample_rate = signal.sample_rate;
-    let hop_frames = u64::from((sample_rate / 200).max(1));
+pub(super) fn original_audio_attack_frames(signal: &DecodedWavSignalAudit) -> Vec<u64> {
+    let hop_frames = u64::from((signal.sample_rate / 200).max(1));
+    let (attacks, _, _, _) = detect_attack_candidates(signal, hop_frames);
+    collapse_for_pulse(&attacks, hop_frames.saturating_mul(3))
+        .into_iter()
+        .map(|attack| attack.frame)
+        .collect()
+}
+
+fn detect_attack_candidates(
+    signal: &DecodedWavSignalAudit,
+    hop_frames: u64,
+) -> (Vec<AttackCandidate>, usize, usize, usize) {
     let envelopes = build_envelopes(signal, usize::try_from(hop_frames).unwrap_or(1));
-    let duration_seconds = if sample_rate == 0 {
-        0usize
-    } else {
-        usize::try_from(signal.original_frame_count / u64::from(sample_rate)).unwrap_or(0)
-    };
+    let duration_seconds =
+        usize::try_from(signal.original_frame_count / u64::from(signal.sample_rate.max(1))).unwrap_or(0);
     let family_capacity = duration_seconds
         .saturating_mul(MAX_LOCAL_PEAKS_PER_SECOND_PER_FAMILY)
         .max(MIN_PEAK_CAPACITY_PER_FAMILY);
@@ -1048,16 +1055,24 @@ fn build_audio_hypotheses(signal: &DecodedWavSignalAudit) -> AudioHypothesisBuil
     let transient_rise = positive_rise(&envelopes, |bin| bin.transient);
     let energy_peaks = strongest_local_peaks(&energy_rise, family_capacity);
     let transient_peaks = strongest_local_peaks(&transient_rise, family_capacity);
-    let attack_candidates = merge_peak_families(&energy_peaks, &transient_peaks, hop_frames);
+    let attacks = merge_peak_families(&energy_peaks, &transient_peaks, hop_frames);
+    (attacks, envelopes.len(), energy_peaks.len(), transient_peaks.len())
+}
+
+fn build_audio_hypotheses(signal: &DecodedWavSignalAudit) -> AudioHypothesisBuild {
+    let sample_rate = signal.sample_rate;
+    let hop_frames = u64::from((sample_rate / 200).max(1));
+    let (attack_candidates, envelope_bins, energy_family_peaks, transient_family_peaks) =
+        detect_attack_candidates(signal, hop_frames);
     let pulse_attacks = collapse_for_pulse(&attack_candidates, hop_frames.saturating_mul(3));
     let hypotheses = build_metric_hypotheses(&pulse_attacks, sample_rate, hop_frames);
 
     AudioHypothesisBuild {
         sample_rate,
         hop_frames,
-        envelope_bins: envelopes.len(),
-        energy_family_peaks: energy_peaks.len(),
-        transient_family_peaks: transient_peaks.len(),
+        envelope_bins,
+        energy_family_peaks,
+        transient_family_peaks,
         attack_candidates,
         pulse_attacks,
         hypotheses,

@@ -1,7 +1,6 @@
 //! Read back the accepted source sustain error class from bound Render occurrences.
 use crate::midi::notation_time::NotationTimePlan;
 use crate::musicxml::parse_musicxml;
-use crate::source_event::CANONICAL_DIVISIONS;
 use crate::structural_write_authority::FinalPdfSourceOccurrenceContinuation;
 use anyhow::{Context, Result, ensure};
 use std::collections::BTreeMap;
@@ -123,14 +122,8 @@ pub(crate) fn report(
 
     let mut findings = Vec::new();
     for ((source, attack), mut fragments) in chains {
-        let event = time.source_event(source)?;
-        let onset = exact_ticks(event.pos, CANONICAL_DIVISIONS, time.metric.divisions)
-            .context("Inexact source onset")?;
-        let release = event
-            .pos
-            .checked_add(event.len)
-            .and_then(|end| exact_ticks(end, CANONICAL_DIVISIONS, time.metric.divisions))
-            .context("Inexact source release")?;
+        let interval = time.written_sustain_interval(source)?;
+        let (onset, release) = (interval.start, interval.end);
         let Some(index) = time.metric.ordinal_at(onset) else {
             continue;
         };

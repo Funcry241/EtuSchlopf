@@ -198,6 +198,34 @@ impl MetricTimeline {
         })
     }
 
+    pub(crate) fn from_written_meter(beats: u8, pickup: i64, extent: i64) -> Result<Self> {
+        let domain = SourceTimeDomain { source_ppq: 96, divisions: 96 };
+        let meter = MeterChange { tick: 0, beats, beat_type: 4 };
+        let mut timeline = Self::from_midi(domain, &[meter], extent - pickup)?;
+        if pickup == 0 {
+            return Ok(timeline);
+        }
+        for segment in &mut timeline.segments {
+            segment.first_ordinal += 1;
+            segment.start += pickup;
+            segment.end = segment.end.checked_add(pickup)
+                .ok_or_else(|| anyhow!("Die Notationszeitgrenze ist zu gross"))?;
+        }
+        timeline.segments.insert(0, MetricSegment {
+            first_ordinal: 0,
+            start: 0,
+            end: pickup,
+            full_duration: pickup,
+            count: 1,
+            beats,
+            beat_type: 4,
+            truncated_last: false,
+        });
+        timeline.count = timeline.count.checked_add(1)
+            .ok_or_else(|| anyhow!("Zu viele Takte"))?;
+        Ok(timeline)
+    }
+
     pub(crate) fn len(&self) -> usize {
         self.count
     }

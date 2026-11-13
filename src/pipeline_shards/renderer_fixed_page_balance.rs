@@ -136,6 +136,9 @@ fn build_renderer_fixed_page_balance_candidate(
     observed: &PageClearanceObservation,
     rejected: &RendererRejectedPartitions,
 ) -> Option<(JointPageSystemCandidate, usize)> {
+    if basis.compact_geometry_planned {
+        return None;
+    }
     if observed.gaps.len() != pages.len()
         || observed.page_bottom.len() != pages.len()
         || observed.page_top.len() != pages.len()
@@ -311,6 +314,9 @@ fn build_extra_system_page_fill_candidate(
     rejected: &RendererRejectedPartitions,
     no_goods: &std::collections::BTreeSet<(usize, usize)>,
 ) -> Option<(JointPageSystemCandidate, usize)> {
+    if basis.compact_geometry_planned {
+        return None;
+    }
     let remainders = non_title_bottom_remainders(observed)?;
     if remainders.len() < 2 || observed.gaps.len() != pages.len() {
         return None;

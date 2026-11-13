@@ -31,6 +31,11 @@ fn run_project_run_preparation_stage(
         &source.expected_midi,
         cli.reference_wav.as_deref().or(Some(source.expected_wav.as_path())),
     );
+    let wav_path = cli.reference_wav.as_deref().unwrap_or(&source.expected_wav);
+    console_progress(crate::audit_only::wav_midi_performance_alignment::report(
+        &decoded_midi,
+        wav_path,
+    ));
     let midi_projection = crate::source_event::project_source_events(&decoded_midi.notes);
     let source_event_causal_projection = crate::source_event::project_source_event_causality(
         &decoded_midi.source_event_causal_ledger,
@@ -38,11 +43,12 @@ fn run_project_run_preparation_stage(
         decoded_midi.source_ppq,
     )?;
     console_progress(format!(
-        "MIDI produktiv; Format {}; Tracks {}; PPQ {}; Tempo-Metadaten {}; Taktarten {}; Events {}; Endposition {}; Fingerprint {}; RawNoteEvents {}; CausalPairs {}; CrossTrackPairs {}; RawPairFingerprint {}; CausalFingerprint {}; PairingReplay ja",
+        "MIDI produktiv; Format {}; Tracks {}; PPQ {}; Tempo-Metadaten {}; Tempoereignisse {}; Taktarten {}; Events {}; Endposition {}; Fingerprint {}; RawNoteEvents {}; CausalPairs {}; CrossTrackPairs {}; RawPairFingerprint {}; CausalFingerprint {}; PairingReplay ja",
         decoded_midi.format,
         decoded_midi.tracks,
         decoded_midi.source_ppq,
         decoded_midi.tempo_microseconds_per_quarter.len(),
+        decoded_midi.tempo_changes.len(),
         decoded_midi.time_signatures.len(),
         midi_projection.event_count,
         midi_projection.terminal_extent_ticks,
@@ -325,12 +331,11 @@ fn run_master_notation_and_salience_stage(
 fn validate_project_input_files(source: &source::SourcePlan, explicit_wav: Option<&Path>) -> anyhow::Result<crate::midi::DecodedMidiSource> {
     let wav = explicit_wav.unwrap_or(&source.expected_wav);
     crate::source::validate_file_targets(
-        &[source.expected_midi.clone(), wav.to_path_buf()],
-        &source.output_paths(),
+        &[source.expected_midi.clone(), wav.to_path_buf()], &source.output_paths(),
     )?;
     let decoded_midi = crate::midi::read_standard_midi(&source.expected_midi)
         .with_context(|| format!("MIDI-Datei konnte nicht verarbeitet werden: {}", source.expected_midi.display()))?;
-    let _ = crate::midi::notation_time::NotationTimePlan::from_source(&decoded_midi)?;
+    let _ = crate::midi::notation_time::NotationTimePlan::from_midi(&decoded_midi)?;
     if decode_wav_mono_samples(wav).is_none() {
         return Err(anyhow!("WAV kann nicht als Audiodatei gelesen werden: {}. Bitte eine unterstuetzte, nicht leere WAV-Datei bereitstellen.", wav.display()));
     }

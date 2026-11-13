@@ -200,6 +200,7 @@ pub(crate) struct MidiSeedRhythmicCourses {
     metric: MetricTimeline,
     emission_snapshot: Option<String>,
     source_voices: bool,
+    preserve_attacks: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -253,6 +254,130 @@ fn select_exact_pair_sustain_source(
         }
     }
     None
+}
+
+// Keep an independently held note when the primary lane can carry the
+// intervening attacks and the auxiliary lane has a supported written value.
+fn select_inferred_sustain_source(
+    onsets: &[i64],
+    notes_by_onset: &BTreeMap<i64, Vec<MidiSeedNote>>,
+    measure_end: i64,
+) -> Option<usize> {
+    let [start, next, ..] = onsets else { return None };
+    let group = notes_by_onset.get(start)?;
+    if !group.iter().any(|note| note.len == next - start) {
+        return None;
+    }
+    group.iter().filter(|note| {
+        let end = start + note.len;
+        end > *next && end <= measure_end
+            && matches!(note.len, 192 | 144 | 96 | 72 | 48 | 36 | 24)
+            && onsets[1..].iter().take_while(|&&onset| onset < end).all(|onset| {
+                notes_by_onset[onset].iter().all(|attack| attack.midi != note.midi)
+            })
+    }).max_by_key(|note| (note.len, std::cmp::Reverse(note.source_ordinal)))
+        .map(|note| note.source_ordinal)
+}
+
+// A complete upper note may span several lower attacks even if its
+// first attack has no short partner on the same staff.
+fn select_upper_independent_sustain(
+    onsets: &[i64],
+    notes_by_onset: &BTreeMap<i64, Vec<MidiSeedNote>>,
+    measure_end: i64,
+) -> Option<usize> {
+    let [start, next, ..] = onsets else { return None; };
+    let group = notes_by_onset.get(start)?;
+    let upper = group.iter().max_by_key(|note| note.midi)?;
+    let release = start + upper.len;
+    if release > measure_end || !matches!(upper.len, 192 | 144 | 96 | 72 | 48 | 36)
+        || group.iter().filter(|note| note.midi == upper.midi).count() != 1
+        || group.iter().any(|note| note.source_ordinal != upper.source_ordinal && note.len > next - start)
+    {
+        return None;
+    }
+    let mut lower_attacks = onsets[1..].iter().take_while(|&&onset| onset < release);
+    if lower_attacks.clone().count() < 2
+        || !lower_attacks.all(|onset| notes_by_onset[onset].iter().all(|note| note.midi < upper.midi))
+    {
+        return None;
+    }
+    Some(upper.source_ordinal)
+}
+
+fn select_upper_sustains_with_distinct_releases(
+    onsets: &[i64], notes_by_onset: &BTreeMap<i64, Vec<MidiSeedNote>>,
+    bar_start: i64, bar_end: i64, beat: i64,
+) -> Option<[(MidiSeedNote, Vec<std::ops::Range<i64>>); 2]> {
+    let [start, _, ..] = onsets else { return None; };
+    let group = notes_by_onset.get(start)?;
+    let mut ranked = group.to_vec();
+    ranked.sort_by_key(|note| std::cmp::Reverse(note.midi));
+    let [upper, lower, ..] = ranked.as_slice() else { return None; };
+    if upper.midi == lower.midi || upper.len == lower.len
+        || ranked[2..].iter().any(|note| note.midi == lower.midi)
+    {
+        return None;
+    }
+    let parts = |source: MidiSeedNote| {
+        let release = source.pos + source.len;
+        let following = onsets[1..].iter().take_while(|&&onset| onset < release);
+        if release > bar_end || following.clone().count() < 2
+            || following.clone().any(|onset| notes_by_onset[onset].iter().any(|note| note.midi == source.midi))
+            || !following.clone().any(|onset| notes_by_onset[onset].iter().any(|note| note.midi < lower.midi))
+            || (source.midi == upper.midi && following.clone().any(|onset| {
+                notes_by_onset[onset].iter().any(|note| note.midi > upper.midi)
+            }))
+        {
+            return None;
+        }
+        let mut fragments = Vec::new();
+        let mut cursor = source.pos;
+        while cursor < release {
+            let end = (cursor + beat - (cursor - bar_start) % beat).min(release);
+            if !matches!(end - cursor, 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6) {
+                return None;
+            }
+            fragments.push(cursor..end);
+            cursor = end;
+        }
+        Some((source, fragments))
+    };
+    Some([parts(*upper)?, parts(*lower)?])
+}
+
+// An upper held note can continue through the rest of the beat as its own
+// melodic line. Require exact releases, stepwise motion and lower activity.
+fn upper_sustain_continuation(
+    onsets: &[i64],
+    notes_by_onset: &BTreeMap<i64, Vec<MidiSeedNote>>,
+    sustain: MidiSeedNote,
+    beat_end: i64,
+) -> Option<Vec<MidiSeedNote>> {
+    let end = sustain.pos + sustain.len;
+    if end >= beat_end || !onsets.iter().any(|&onset| sustain.pos < onset && onset < end) {
+        return None;
+    }
+    let mut continuation = vec![sustain];
+    let mut pos = end;
+    let mut pitch = sustain.midi;
+    while pos < beat_end {
+        let group = notes_by_onset.get(&pos)?;
+        let head = group.iter().max_by_key(|note| note.midi)?;
+        if !(1..=2).contains(&(head.midi - pitch).abs())
+            || !matches!(head.len, 48 | 36 | 24 | 18 | 12 | 9 | 6)
+            || head.len > beat_end - pos
+            || group.iter().filter(|note| note.midi == head.midi).count() != 1
+        {
+            return None;
+        }
+        continuation.push(*head);
+        pos += head.len;
+        pitch = head.midi;
+    }
+    (continuation.len() > 2 && onsets.iter().any(|&onset| {
+        onset >= end && onset < beat_end && notes_by_onset[&onset].len() > 1
+    })).then_some(continuation)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -445,6 +570,34 @@ fn source_voice_fragments(
     Ok(plan)
 }
 
+fn cross_bar_sustain_group(
+    attack: &[MidiSeedNote], sources: &[MidiSeedNote], bar_start: i64, boundary: i64,
+    next_end: i64,
+) -> Vec<MidiSeedNote> {
+    let mut held = attack.iter().copied().filter(|note| note.pos + note.len > boundary)
+        .collect::<Vec<_>>();
+    let Some(first) = held.first() else { return held; };
+    let release = first.pos + first.len;
+    let exact_value = |length| matches!(length, 384 | 288 | 192 | 144 | 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6);
+    let head = boundary - first.pos;
+    let tail = release - boundary;
+    let offset = first.pos - bar_start;
+    let mut pitches = BTreeSet::new();
+    if release > next_end || !exact_value(head) || !exact_value(tail)
+        || (head > 96 - offset % 96 && !aligned_long_tie_value(offset, head, boundary - bar_start, 96))
+        || (tail > 96 && !aligned_long_tie_value(0, tail, next_end - boundary, 96))
+        || held.iter().any(|note| note.pos + note.len != release || !pitches.insert(note.midi))
+        || sources.iter().any(|note| {
+            note.pos < release && note.pos + note.len > first.pos && pitches.contains(&note.midi)
+                && !held.iter().any(|member| member.source_ordinal == note.source_ordinal)
+        })
+    {
+        return Vec::new();
+    }
+    held.sort_by_key(|note| note.midi);
+    held
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SourceVoiceGap {
     pub(crate) measure: usize,
@@ -493,6 +646,10 @@ fn assigned_voice_staff_lifetimes(
 }
 
 impl MidiSeedRhythmicCourses {
+    pub(crate) fn physical_measure_duration(&self, ordinal: usize) -> Option<i64> {
+        self.metric.measure(ordinal).map(|measure| measure.end - measure.start)
+    }
+
     /// An interior gap of a qualified original voice can cross a barline at
     /// either edge. Full-bar padding and gaps beside absent source notes have
     /// no such witness.
@@ -557,8 +714,11 @@ impl MidiSeedRhythmicCourses {
 
     pub(crate) fn has_bound_source_voices(&self) -> bool { self.source_voices }
 
+    pub(crate) fn preserves_attacks(&self) -> bool {
+        self.preserve_attacks
+    }
+
     pub(crate) fn source_voice_continuation_slots(&self) -> Vec<(usize, usize, usize)> {
-        if !self.source_voices { return Vec::new(); }
         let mut continuations = Vec::new();
         let mut raw_by_measure = BTreeMap::<_, usize>::new();
         for occurrence in &self.planned {
@@ -606,13 +766,14 @@ impl MidiSeedRhythmicCourses {
                 beats: u8::try_from(measure_duration / 96)?, beat_type: 4 }],
             i64::try_from(measures)?.checked_mul(measure_duration)
                 .ok_or_else(|| anyhow!("Test notation domain overflow"))?)?;
-        Self::create_metric_presentations(sources, &metric, None)
+        Self::create_metric_presentations(sources, &metric, None, false)
     }
 
     fn create_metric_presentations(
         sources: &[MidiSeedNote],
         metric: &MetricTimeline,
         source_voices: Option<&BTreeMap<usize, SourceVoice>>,
+        preserve_attacks: bool,
     ) -> anyhow::Result<Self> {
         let measures = metric.len();
         let end = metric.measure(measures.saturating_sub(1))
@@ -664,7 +825,7 @@ impl MidiSeedRhythmicCourses {
             let planned = source_voice_fragments(sources, metric, source_voices, &courses)?;
             return Ok(Self {
                 courses, sources: sources.to_vec(), planned, occurrences: Vec::new(),
-                metric: metric.clone(), emission_snapshot: None, source_voices: true,
+                metric: metric.clone(), emission_snapshot: None, source_voices: true, preserve_attacks,
             });
         }
         let mut grouped = BTreeMap::<(i64, u8), BTreeMap<i64, Vec<MidiSeedNote>>>::new();
@@ -673,6 +834,7 @@ impl MidiSeedRhythmicCourses {
                 .entry(source.pos).or_default().push(*source);
         }
         let mut planned = Vec::new();
+        let mut incoming_sustains = BTreeMap::<(usize, u8), Vec<PlannedSeedOccurrence>>::new();
         for measure in 0..measures {
             let bar = metric.measure(measure).ok_or_else(|| anyhow!("Missing notation measure"))?;
             let begin = bar.start;
@@ -681,8 +843,11 @@ impl MidiSeedRhythmicCourses {
                 let mut by_start = grouped.remove(&(measure as i64, course.staff)).unwrap_or_default();
                 let starts = by_start.keys().copied().collect::<Vec<_>>();
                 let mut cursor = begin;
-                let mut independent = Vec::new();
-                let mut independent_end = begin;
+                let mut independent = incoming_sustains.remove(&(measure, course.staff)).unwrap_or_default();
+                let mut second_independent = Vec::<PlannedSeedOccurrence>::new();
+                let mut independent_end = independent.last().map_or(begin, |note| note.interval.end);
+                let mut upper_line = BTreeSet::new();
+                let mut upper_line_end = begin;
                 for (index, start) in starts.iter().copied().enumerate() {
                     if cursor < start {
                         planned.push(PlannedSeedOccurrence {
@@ -692,20 +857,83 @@ impl MidiSeedRhythmicCourses {
                     }
                     let next = starts.get(index + 1).copied().unwrap_or(bar.end);
                     let following = starts.get(index + 2).copied().unwrap_or(bar.end);
+                    let across_bar = if preserve_attacks && next < bar.end
+                        && start >= independent_end && start >= upper_line_end
+                    {
+                        metric.measure(measure + 1).map_or_else(Vec::new, |next_bar| {
+                            cross_bar_sustain_group(&by_start[&start], sources, bar.start, bar.end, next_bar.end)
+                        })
+                    } else {
+                        Vec::new()
+                    };
+                    for (member, source) in across_bar.iter().enumerate() {
+                        let head = PlannedSeedOccurrence {
+                            course: course.creation, interval: start..bar.end,
+                            source: Some(source.source_ordinal), pitch: Some(source.midi),
+                            chord: member > 0, independent: true, opposite_stem: false,
+                            source_voice: None, tie_stop: false, tie_start: true,
+                        };
+                        independent.push(head.clone());
+                        incoming_sustains.entry((measure + 1, course.staff)).or_default().push(
+                            PlannedSeedOccurrence { interval: bar.end..source.pos + source.len,
+                                tie_stop: true, tie_start: false, ..head });
+                        independent_end = bar.end;
+                    }
                     let one_exact_intervening_head = by_start.get(&next).is_some_and(|notes| {
                         matches!(notes.as_slice(), [note] if note.len == following - next)
                     });
                     let beat = (metric.divisions * 4 / i64::from(bar.beat_type)).max(1);
                     let exact_pair_sustain = if start >= independent_end {
                         select_exact_pair_sustain_source(&starts[index..], &by_start, bar.end)
+                            .or_else(|| preserve_attacks.then(|| {
+                                select_inferred_sustain_source(&starts[index..], &by_start, bar.end)
+                            }).flatten())
                     } else {
                         None
                     };
+                    if preserve_attacks && course.staff == 1
+                        && let Some(ordinal) = exact_pair_sustain
+                        && let Some(sustain) = by_start[&start].iter().find(|n| n.source_ordinal == ordinal)
+                        && by_start[&start].iter().all(|n| n.midi < sustain.midi || n.source_ordinal == ordinal)
+                    {
+                        let beat_end = (start + beat - (start - begin) % beat).min(bar.end);
+                        if let Some(line) = upper_sustain_continuation(&starts[index..], &by_start, *sustain, beat_end) {
+                            upper_line = line.iter().map(|n| n.source_ordinal).collect();
+                            upper_line_end = beat_end;
+                        }
+                    }
+                    let use_upper_cursor = preserve_attacks && course.staff == 1
+                        && start >= upper_line_end && start >= independent_end
+                        && exact_pair_sustain.is_none();
+                    let paired_sustains = if use_upper_cursor {
+                        select_upper_sustains_with_distinct_releases(&starts[index..], &by_start, begin, bar.end, beat)
+                    } else { None };
+                    let upper_sustain = if use_upper_cursor && paired_sustains.is_none() {
+                        select_upper_independent_sustain(&starts[index..], &by_start, bar.end)
+                    } else {
+                        None
+                    };
+                    if let Some([upper, lower]) = &paired_sustains {
+                        for ((source, fragments), lane) in [(upper, &mut independent), (lower, &mut second_independent)] {
+                            let release = source.pos + source.len;
+                            for fragment in fragments {
+                                lane.push(PlannedSeedOccurrence {
+                                    course: course.creation, interval: fragment.clone(),
+                                    source: Some(source.source_ordinal), pitch: Some(source.midi),
+                                    chord: false, independent: true, opposite_stem: false, source_voice: None,
+                                    tie_stop: fragment.start != source.pos, tie_start: fragment.end != release,
+                                });
+                            }
+                            independent_end = independent_end.max(release);
+                        }
+                    }
                     let group = by_start.get_mut(&start).expect("planned onset exists");
                     group.sort_by_key(|source| (source.midi, source.source_ordinal));
                     if course.staff == 1 { group.reverse(); }
                     if exact_pair_sustain == Some(group[0].source_ordinal) {
-                        group.swap(0, 1);
+                        let primary = group.iter().position(|note| Some(note.source_ordinal) != exact_pair_sustain)
+                            .expect("independent sustain has a primary partner");
+                        group.swap(0, primary);
                     }
                     for grace in sources.iter().filter(|g| g.len == 0 && g.pos == start && g.staff == course.staff) {
                         planned.push(PlannedSeedOccurrence {
@@ -716,7 +944,27 @@ impl MidiSeedRhythmicCourses {
                     let head_duration = next - start;
                     let head_fits_one_beat = head_duration <= beat - (start - begin) % beat
                         && matches!(head_duration, 384 | 288 | 192 | 144 | 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6);
-                    for (member, source) in group.iter().enumerate() {
+                    let primary = group.iter().filter(|source| {
+                        Some(source.source_ordinal) != upper_sustain
+                            && !paired_sustains.as_ref().is_some_and(|pair| pair.iter().any(|(held, _)| held.source_ordinal == source.source_ordinal))
+                            && !across_bar.iter().any(|selected| selected.source_ordinal == source.source_ordinal)
+                            && (start >= upper_line_end || !upper_line.contains(&source.source_ordinal))
+                    }).collect::<Vec<_>>();
+                    if start < upper_line_end || upper_sustain.is_some() {
+                        for source in group.iter().filter(|source| {
+                            Some(source.source_ordinal) == upper_sustain
+                                || (start < upper_line_end && upper_line.contains(&source.source_ordinal))
+                        }) {
+                            independent.push(PlannedSeedOccurrence {
+                                course: course.creation, interval: start..start + source.len,
+                                source: Some(source.source_ordinal), pitch: Some(source.midi),
+                                chord: false, independent: true, opposite_stem: false,
+                                source_voice: None, tie_stop: false, tie_start: false,
+                            });
+                            independent_end = start + source.len;
+                        }
+                    }
+                    for (member, source) in primary.iter().enumerate() {
                         // The host and member can have independent releases when
                         // the host does not need a tied metric partition.
                         let end = if member > 0 && head_fits_one_beat
@@ -729,18 +977,18 @@ impl MidiSeedRhythmicCourses {
                         let source_end = start + source.len;
                         // A two-note onset can carry a separate sustain across
                         // one complete intervening head within the same beat.
-                        let separate = exact_pair_sustain == Some(source.source_ordinal)
+                        let separate = start >= upper_line_end && (exact_pair_sustain == Some(source.source_ordinal)
                             || member > 0 && group.len() == 2
                             && group[0].len == head_duration && one_exact_intervening_head
                             && next < source_end && source_end == following
                             && source.len <= beat - (start - begin) % beat
-                            && start >= independent_end;
+                            && start >= independent_end);
                         let occurrence = PlannedSeedOccurrence {
                             course: course.creation, interval: start..if separate { source_end } else { end },
                             source: Some(source.source_ordinal), pitch: Some(source.midi),
                             chord: member > 0 && !separate,
                             independent: separate,
-                            opposite_stem: exact_pair_sustain == Some(source.source_ordinal)
+                            opposite_stem: start < upper_line_end || upper_sustain.is_some() || paired_sustains.is_some() || !across_bar.is_empty() || exact_pair_sustain == Some(source.source_ordinal)
                                 && group[0].midi == source.midi,
                             source_voice: None, tie_stop: false, tie_start: false,
                         };
@@ -751,6 +999,13 @@ impl MidiSeedRhythmicCourses {
                             planned.push(occurrence);
                         }
                     }
+                    if primary.is_empty() && (start < upper_line_end || upper_sustain.is_some() || paired_sustains.is_some() || !across_bar.is_empty()) {
+                        planned.push(PlannedSeedOccurrence {
+                            course: course.creation, interval: start..next,
+                            source: None, pitch: None, chord: false, independent: false, opposite_stem: false,
+                            source_voice: None, tie_stop: false, tie_start: false,
+                        });
+                    }
                     cursor = next;
                 }
                 if cursor < begin + measure_duration {
@@ -760,11 +1015,12 @@ impl MidiSeedRhythmicCourses {
                     });
                 }
                 planned.extend(independent);
+                planned.extend(second_independent);
             }
         }
         Ok(Self {
             courses, sources: sources.to_vec(), planned, occurrences: Vec::new(),
-            metric: metric.clone(), emission_snapshot: None, source_voices: false,
+            metric: metric.clone(), emission_snapshot: None, source_voices: false, preserve_attacks,
         })
     }
 
@@ -837,7 +1093,7 @@ impl MidiSeedRhythmicCourses {
                 .ok_or_else(|| anyhow!("Foreign rhythmic course"))?;
             let fragment = xml.get(occurrence.bytes.clone())
                 .ok_or_else(|| anyhow!("Invalid rhythmic seed byte continuation"))?;
-            if self.source_voices && let Some(source) = occurrence.source {
+            if (self.source_voices || planned.tie_start || planned.tie_stop) && let Some(source) = occurrence.source {
                 let original = self.sources.iter().find(|n| n.source_ordinal == source)
                     .ok_or_else(|| anyhow!("Missing original source voice interval"))?;
                 let expected = releases.entry(source).or_insert(original.pos);
@@ -867,7 +1123,7 @@ impl MidiSeedRhythmicCourses {
                 || (grace != (occurrence.interval.start == occurrence.interval.end))
                 || course.presentation != SeedCoursePresentation::Primary
                 || occurrence.source.is_some_and(|source| {
-                    (!sources.insert(source) && !self.source_voices) || !self.sources.iter().any(|n| {
+                    (if planned.tie_stop { !sources.contains(&source) } else { !sources.insert(source) }) || !self.sources.iter().any(|n| {
                         n.source_ordinal == source && n.staff == course.staff
                     })
                 })
@@ -876,8 +1132,9 @@ impl MidiSeedRhythmicCourses {
             }
             byte_cursor = occurrence.bytes.end;
         }
-        if self.source_voices && self.sources.iter().any(|source| {
-            releases.get(&source.source_ordinal) != Some(&(source.pos + source.len))
+        if self.sources.iter().any(|source| {
+            (self.source_voices || releases.contains_key(&source.source_ordinal))
+                && releases.get(&source.source_ordinal) != Some(&(source.pos + source.len))
         }) {
             return Err(anyhow!("Incomplete source voice releases"));
         }
@@ -885,8 +1142,10 @@ impl MidiSeedRhythmicCourses {
             return Err(anyhow!("Incomplete rhythmic source membership"));
         }
         for course in &self.courses {
-            let mut activity = self.occurrences.iter().filter(|o| o.course == course.creation && o.interval.start < o.interval.end)
-                .collect::<Vec<_>>();
+            let mut activity = self.occurrences.iter().zip(&self.planned)
+                .filter(|(o, planned)| o.course == course.creation && o.interval.start < o.interval.end
+                    && (self.source_voices || !planned.independent))
+                .map(|(o, _)| o).collect::<Vec<_>>();
             activity.sort_by_key(|o| (o.interval.start, o.interval.end));
             let mut end = course.coverage.start;
             let mut rest_end = course.coverage.start;
@@ -1015,8 +1274,10 @@ pub fn midi_to_musicxml_seed_with_profile_and_hotspots(
 ) -> anyhow::Result<(String, MidiSeedStats)> {
     let decoded = read_standard_midi(path)
         .with_context(|| format!("Konnte MIDI nicht als produktive Quelle lesen: {}", path.display()))?;
-    let notation_time = std::sync::Arc::new(NotationTimePlan::from_source(&decoded)?);
+    let notation_time = std::sync::Arc::new(NotationTimePlan::from_midi(&decoded)?);
     let metric = &notation_time.metric;
+    let preserve_attacks = notation_time.preserves_attacks();
+    let allow_removal = !preserve_attacks;
     let mut events = decoded.notes.clone();
     events.sort_by_key(|event| event.source_ordinal);
     let mut notes = events
@@ -1052,18 +1313,16 @@ pub fn midi_to_musicxml_seed_with_profile_and_hotspots(
             }
         }
     } else {
-        redistribute_midi_seed_hands_for_piano(metric, &mut notes, &profile, hotspots, &mut decision_trace);
-        apply_hotspot_reductions(metric, 
-            &mut notes,
-            &profile,
-            hotspots,
-            &mut removal_reasons,
-            &mut decision_trace,
-        );
+        redistribute_midi_seed_hands_for_piano(metric, &mut notes, &profile, hotspots, preserve_attacks, &mut decision_trace);
+        if allow_removal {
+            apply_hotspot_reductions(metric, &mut notes, &profile, hotspots,
+                &mut removal_reasons, &mut decision_trace);
+        }
         let trajectory = apply_hand_trajectory_solver(metric, 
             &mut notes,
             &profile,
             hotspots,
+            allow_removal,
             &mut removal_reasons,
             &mut decision_trace,
         );
@@ -1084,6 +1343,7 @@ pub fn midi_to_musicxml_seed_with_profile_and_hotspots(
             &mut notes,
             &profile,
             hotspots,
+            allow_removal,
             &mut removal_reasons,
             &mut decision_trace,
         );
@@ -1098,6 +1358,13 @@ pub fn midi_to_musicxml_seed_with_profile_and_hotspots(
                 SourceSelectionDecisionPass::PostResidualWideSimultaneity,
                 0,
                 &mut decision_trace,
+            );
+        }
+        // Later owners can alter the staff assignment after the initial split.
+        if preserve_attacks && (trajectory.moved > 0 || residual.moved > 0) {
+            redistribute_wide_simultaneities(
+                metric, &mut notes, &profile, hotspots,
+                SourceSelectionDecisionPass::AlignedHandSpanSplit, 0, &mut decision_trace,
             );
         }
     }
@@ -1165,7 +1432,9 @@ pub fn midi_to_musicxml_seed_with_profile_and_hotspots(
             staff: event.final_staff,
         })
         .collect();
-    let rhythmic_courses = MidiSeedRhythmicCourses::create_metric_presentations(&notes, metric, source_voices.as_ref())?;
+    let rhythmic_courses = MidiSeedRhythmicCourses::create_metric_presentations(
+        &notes, metric, source_voices.as_ref(), preserve_attacks,
+    )?;
     let stats = MidiSeedStats {
         solver_profile: profile.display_name().to_string(),
         source_selection_candidate_id: 0,
@@ -1218,6 +1487,7 @@ fn apply_residual_critical_pass(metric: &MetricTimeline,
     notes: &mut Vec<MidiSeedNote>,
     profile: &CandidateProfile,
     hotspots: Option<&HotspotPlan>,
+    allow_removal: bool,
     removal_reasons: &mut Vec<RemovedSourceSelectionReason>,
     decision_trace: &mut Vec<SourceSelectionDecisionEvidence>,
 ) -> ResidualCriticalStats {
@@ -1236,25 +1506,18 @@ fn apply_residual_critical_pass(metric: &MetricTimeline,
             pass_iteration,
             decision_trace,
         );
-        let removed_spans = residual_remove_critical_spans(metric, 
-            notes,
-            profile,
-            plan,
-            removal_reasons,
-            pass_iteration,
-            decision_trace,
-        );
-        let removed_jumps = residual_remove_critical_jumps(metric, 
-            notes,
-            profile,
-            plan,
-            removal_reasons,
-            pass_iteration,
-            decision_trace,
-        );
+        let removed = if allow_removal {
+            let spans = residual_remove_critical_spans(metric, notes, profile, plan,
+                removal_reasons, pass_iteration, decision_trace);
+            let jumps = residual_remove_critical_jumps(metric, notes, profile, plan,
+                removal_reasons, pass_iteration, decision_trace);
+            spans + jumps
+        } else {
+            0
+        };
         stats.moved += moved;
-        stats.removed += removed_spans + removed_jumps;
-        if moved == 0 && removed_spans == 0 && removed_jumps == 0 {
+        stats.removed += removed;
+        if moved == 0 && removed == 0 {
             break;
         }
     }
@@ -1544,6 +1807,7 @@ fn apply_hand_trajectory_solver(metric: &MetricTimeline,
     notes: &mut Vec<MidiSeedNote>,
     profile: &CandidateProfile,
     hotspots: Option<&HotspotPlan>,
+    allow_removal: bool,
     removal_reasons: &mut Vec<RemovedSourceSelectionReason>,
     decision_trace: &mut Vec<SourceSelectionDecisionEvidence>,
 ) -> HandTrajectoryStats {
@@ -1576,17 +1840,13 @@ fn apply_hand_trajectory_solver(metric: &MetricTimeline,
             changed = true;
         }
 
-        let removed = trajectory_remove_zigzags(metric, 
-            notes,
-            profile,
-            plan,
-            removal_reasons,
-            pass_iteration,
-            decision_trace,
-        );
-        if removed > 0 {
-            stats.removed += removed;
-            changed = true;
+        if allow_removal {
+            let removed = trajectory_remove_zigzags(metric, notes, profile, plan,
+                removal_reasons, pass_iteration, decision_trace);
+            if removed > 0 {
+                stats.removed += removed;
+                changed = true;
+            }
         }
 
         if !changed {
@@ -2079,6 +2339,7 @@ fn redistribute_midi_seed_hands_for_piano(metric: &MetricTimeline,
     notes: &mut [MidiSeedNote],
     profile: &CandidateProfile,
     hotspots: Option<&HotspotPlan>,
+    preserve_attacks: bool,
     decision_trace: &mut Vec<SourceSelectionDecisionEvidence>,
 ) {
     // v0.1.38: MIDI-Seed-Material ist Rohmaterial, keine fertige
@@ -2107,26 +2368,33 @@ fn redistribute_midi_seed_hands_for_piano(metric: &MetricTimeline,
         let measure = note_measure(metric, notes[*indices.first().expect("non-empty onset group")].pos);
         let focus_score = hotspots.map_or(0, |h| h.focus_score_for(measure, None));
         let local_profile = profile.focused(focus_score);
-        if span <= local_profile.span_limit() {
+        let preferred = wide_piano_hand_split(&group, span, &local_profile);
+        let aligned = preserve_attacks.then(|| aligned_hand_span_split(&group, |order, index| {
+            preferred.map_or(notes[index].staff, |split| staff_for_hand_split(order, split))
+        })).flatten();
+        let Some(split) = aligned.map(|(split, _)| split).or(preferred) else {
             continue;
-        }
-
-        let split = choose_piano_hand_split(&group, &local_profile);
+        };
+        let (pass, observed_span, span_bound) = aligned.map_or(
+            (SourceSelectionDecisionPass::PianoHandSplit, i64::from(span), i64::from(local_profile.span_limit())),
+            |(_, current_span)| (SourceSelectionDecisionPass::AlignedHandSpanSplit,
+                i64::from(current_span), i64::from(crate::rules::PIANO_HAND_MAX_SPAN)),
+        );
         let split_code = u8::try_from(split).unwrap_or(u8::MAX);
         for (order, (idx, _midi)) in group.iter().enumerate() {
-            let new_staff = if order < split { 2 } else { 1 };
+            let new_staff = staff_for_hand_split(order, split);
             if notes[*idx].staff != new_staff {
                 let evidence = staff_move_decision(
                     &notes[*idx],
                     new_staff,
                     SourceSelectionDecisionContext {
-                        pass: SourceSelectionDecisionPass::PianoHandSplit,
+                        pass,
                         pass_iteration: 0,
                         witness_a_source_ordinal: Some(notes[low_idx].source_ordinal),
                         witness_b_source_ordinal: Some(notes[high_idx].source_ordinal),
-                        observed_primary: i64::from(span),
+                        observed_primary: observed_span,
                         observed_secondary: i64::try_from(split).unwrap_or(i64::MAX),
-                        threshold_primary: i64::from(local_profile.span_limit()),
+                        threshold_primary: span_bound,
                         threshold_secondary: i64::try_from(group.len()).unwrap_or(i64::MAX),
                         focus_score,
                         tie_break_code: split_code,
@@ -2139,16 +2407,7 @@ fn redistribute_midi_seed_hands_for_piano(metric: &MetricTimeline,
     }
 
     if profile.smooth_jumps() {
-        smooth_fast_staff_jumps(metric, notes, profile, hotspots, decision_trace);
-        // Nach der Sprungglättung erneut weite Gleichzeitigkeiten entspannen.
-        redistribute_wide_simultaneities(metric, 
-            notes,
-            profile,
-            hotspots,
-            SourceSelectionDecisionPass::SmoothWideSimultaneity,
-            0,
-            decision_trace,
-        );
+        smooth_fast_staff_jumps(metric, notes, profile, hotspots, preserve_attacks, decision_trace);
     }
 }
 
@@ -2177,10 +2436,17 @@ fn redistribute_wide_simultaneities(metric: &MetricTimeline,
         let measure = note_measure(metric, notes[*indices.first().expect("non-empty onset group")].pos);
         let focus_score = hotspots.map_or(0, |h| h.focus_score_for(measure, None));
         let local_profile = profile.focused(focus_score);
-        if span <= local_profile.span_limit() {
-            continue;
-        }
-        let split = choose_piano_hand_split(&group, &local_profile);
+        let (split, span, threshold) = if pass == SourceSelectionDecisionPass::AlignedHandSpanSplit {
+            let Some((split, current_span)) = aligned_hand_span_split(&group, |_, index| notes[index].staff) else {
+                continue;
+            };
+            (split, i64::from(current_span), i64::from(crate::rules::PIANO_HAND_MAX_SPAN))
+        } else {
+            let Some(split) = wide_piano_hand_split(&group, span, &local_profile) else {
+                continue;
+            };
+            (split, i64::from(span), i64::from(local_profile.span_limit()))
+        };
         let split_code = u8::try_from(split).unwrap_or(u8::MAX);
         for (order, (idx, _midi)) in group.iter().enumerate() {
             let new_staff = if order < split { 2 } else { 1 };
@@ -2193,9 +2459,9 @@ fn redistribute_wide_simultaneities(metric: &MetricTimeline,
                         pass_iteration,
                         witness_a_source_ordinal: Some(notes[low_idx].source_ordinal),
                         witness_b_source_ordinal: Some(notes[high_idx].source_ordinal),
-                        observed_primary: i64::from(span),
+                        observed_primary: span,
                         observed_secondary: i64::try_from(split).unwrap_or(i64::MAX),
-                        threshold_primary: i64::from(local_profile.span_limit()),
+                        threshold_primary: threshold,
                         threshold_secondary: i64::try_from(group.len()).unwrap_or(i64::MAX),
                         focus_score,
                         tie_break_code: split_code,
@@ -2208,46 +2474,77 @@ fn redistribute_wide_simultaneities(metric: &MetricTimeline,
     }
 }
 
+// The alignment commits pitches and times. Only a split that fits both
+// hands can override the current assignment, with the fewest staff changes.
+fn staff_for_hand_split(order: usize, split: usize) -> u8 {
+    if order < split { 2 } else { 1 }
+}
+
+fn aligned_hand_span_split(
+    group: &[(usize, i32)],
+    staff_at: impl Fn(usize, usize) -> u8,
+) -> Option<(usize, u32)> {
+    use crate::rules::{PIANO_HAND_MAX_KEYS, PIANO_HAND_MAX_SPAN};
+
+    let current_span = [1, 2].into_iter().map(|staff| {
+        let mut pitches = group.iter().enumerate().filter_map(|(order, &(index, pitch))| {
+            (staff_at(order, index) == staff).then_some(pitch)
+        });
+        pitches.next().map_or(0, |low| pitches.next_back().unwrap_or(low).abs_diff(low))
+    }).max()?;
+    if current_span <= PIANO_HAND_MAX_SPAN {
+        return None;
+    }
+    let span = |hand: &[(usize, i32)]| hand.last().unwrap().1.abs_diff(hand[0].1);
+    (1..group.len()).filter_map(|split| {
+        let (left, right) = group.split_at(split);
+        let widest = span(left).max(span(right));
+        if widest > PIANO_HAND_MAX_SPAN || left.len().max(right.len()) > PIANO_HAND_MAX_KEYS {
+            return None;
+        }
+        let staff_changes = group.iter().enumerate().filter(|&(order, &(index, _))| {
+            staff_at(order, index) != staff_for_hand_split(order, split)
+        }).count();
+        Some((staff_changes, widest, split))
+    }).min().map(|(_, _, split)| (split, current_span))
+}
+
 fn smooth_fast_staff_jumps(metric: &MetricTimeline, 
     notes: &mut [MidiSeedNote],
     profile: &CandidateProfile,
     hotspots: Option<&HotspotPlan>,
+    preserve_attacks: bool,
     decision_trace: &mut Vec<SourceSelectionDecisionEvidence>,
 ) {
     let max_passes = if hotspots.is_none_or(|h| h.is_empty()) { 3 } else { 24 };
+    let mut ordered: Vec<_> = (0..notes.len()).collect();
+    ordered.sort_by_key(|&idx| (notes[idx].pos, notes[idx].midi));
+    let jump_context = HandJumpContext { metric, profile, hotspots, preserve_attacks };
     for pass_iteration in 0..max_passes {
         let mut changed = false;
         for staff in [1_u8, 2_u8] {
-            let mut indices = notes
-                .iter()
-                .enumerate()
-                .filter(|(_, note)| note.staff == staff)
-                .map(|(idx, _)| idx)
-                .collect::<Vec<_>>();
-            indices.sort_by_key(|idx| (notes[*idx].pos, notes[*idx].midi));
-
-            for pair in indices.windows(2) {
-                let a = pair[0];
-                let b = pair[1];
-                let dt = (notes[b].pos - notes[a].pos).abs();
-                let measure = note_measure(metric, notes[a].pos.min(notes[b].pos));
-                let focus_score = hotspots.map_or(0, |h| h.focus_score_for(measure, Some(staff)));
+            let mut previous = None;
+            for (b_slot, &b) in ordered.iter().enumerate() {
+                if notes[b].staff != staff {
+                    continue;
+                }
+                let Some((a_slot, a)) = previous.replace((b_slot, b)) else {
+                    continue;
+                };
+                let (jump, dt, threshold, dt_limit, focus_score) =
+                    jump_context.edge(notes[a], notes[b], staff);
+                if dt == 0 || dt > dt_limit || jump <= threshold {
+                    continue;
+                }
                 let local_profile = profile.focused(focus_score);
-                let dt_limit = if local_profile.jump_limit() < profile.jump_limit() { 144 } else { 96 };
-                if dt > dt_limit {
-                    continue;
-                }
-                let jump = (notes[b].midi - notes[a].midi).abs();
-                if jump <= local_profile.jump_limit() {
-                    continue;
-                }
-
-                let target_idx = choose_jump_reassignment_target(notes, a, b, staff, &local_profile);
-                let Some(target_idx) = target_idx else {
+                let Some(target_idx) =
+                    choose_jump_reassignment_target(notes, a, b, staff, &local_profile)
+                else {
                     continue;
                 };
                 let new_staff = if staff == 1 { 2 } else { 1 };
-                if notes[target_idx].staff == new_staff {
+                let slot = if target_idx == a { a_slot } else { b_slot };
+                if !jump_context.handoff_improves(notes, &ordered, slot, new_staff) {
                     continue;
                 }
                 let tie_break_code = (if target_idx == a { 1_u8 } else { 2_u8 })
@@ -2262,7 +2559,7 @@ fn smooth_fast_staff_jumps(metric: &MetricTimeline,
                         witness_b_source_ordinal: Some(notes[b].source_ordinal),
                         observed_primary: i64::from(jump),
                         observed_secondary: dt,
-                        threshold_primary: i64::from(local_profile.jump_limit()),
+                        threshold_primary: i64::from(threshold),
                         threshold_secondary: dt_limit,
                         focus_score,
                         tie_break_code,
@@ -2270,6 +2567,9 @@ fn smooth_fast_staff_jumps(metric: &MetricTimeline,
                 );
                 decision_trace.push(evidence);
                 notes[target_idx].staff = new_staff;
+                if target_idx == b {
+                    previous = Some((a_slot, a));
+                }
                 changed = true;
             }
         }
@@ -2277,6 +2577,106 @@ fn smooth_fast_staff_jumps(metric: &MetricTimeline,
             break;
         }
     }
+}
+
+struct HandJumpContext<'a> {
+    metric: &'a MetricTimeline,
+    profile: &'a CandidateProfile,
+    hotspots: Option<&'a HotspotPlan>,
+    preserve_attacks: bool,
+}
+
+impl HandJumpContext<'_> {
+    fn edge(&self, a: MidiSeedNote, b: MidiSeedNote, staff: u8) -> (i32, i64, i32, i64, i64) {
+        let measure = note_measure(self.metric, a.pos);
+        let focus = self.hotspots.map_or(0, |plan| plan.focus_score_for(measure, Some(staff)));
+        let profile = self.profile;
+        let local_profile = profile.focused(focus);
+        let dt_limit = if local_profile.jump_limit() < profile.jump_limit() { 144 } else { 96 };
+        ((b.midi - a.midi).abs(), b.pos - a.pos, local_profile.jump_limit(), dt_limit, focus)
+    }
+
+    fn handoff_improves(
+        &self,
+        notes: &[MidiSeedNote],
+        ordered: &[usize],
+        slot: usize,
+        receiving_staff: u8,
+    ) -> bool {
+        let moving = notes[ordered[slot]];
+        let edge_cost = |a, b, staff| match (a, b) {
+            (Some(a), Some(b)) => {
+                let (jump, dt, threshold, window, _) = self.edge(a, b, staff);
+                if dt > 0 && dt <= window { (jump - threshold).max(0) } else { 0 }
+            }
+            _ => 0,
+        };
+        let neighbors = |staff| {
+            let find = |idx: &usize| {
+                let note = notes[*idx];
+                (note.staff == staff).then_some(note)
+            };
+            (
+                ordered[..slot].iter().rev().find_map(find),
+                ordered[slot + 1..].iter().find_map(find),
+            )
+        };
+        let (from_prev, from_next) = neighbors(moving.staff);
+        let (to_prev, to_next) = neighbors(receiving_staff);
+        let before = edge_cost(from_prev, Some(moving), moving.staff)
+            + edge_cost(Some(moving), from_next, moving.staff)
+            + edge_cost(to_prev, to_next, receiving_staff);
+        let after = edge_cost(from_prev, from_next, moving.staff)
+            + edge_cost(to_prev, Some(moving), receiving_staff)
+            + edge_cost(Some(moving), to_next, receiving_staff);
+        after < before
+            && receiving_hand_fits(notes, moving, receiving_staff)
+            && self.onset_split_allows_handoff(notes, ordered, slot, receiving_staff)
+    }
+
+    fn onset_split_allows_handoff(
+        &self,
+        notes: &[MidiSeedNote],
+        ordered: &[usize],
+        slot: usize,
+        receiving_staff: u8,
+    ) -> bool {
+        let pos = notes[ordered[slot]].pos;
+        let first = ordered.partition_point(|&index| notes[index].pos < pos);
+        let end = ordered.partition_point(|&index| notes[index].pos <= pos);
+        let group: Vec<_> = ordered[first..end].iter().map(|&index| (index, notes[index].midi)).collect();
+        let span = group[group.len() - 1].1 - group[0].1;
+        let measure = note_measure(self.metric, pos);
+        let focus = self.hotspots.map_or(0, |plan| plan.focus_score_for(measure, None));
+        let local_profile = self.profile.focused(focus);
+        wide_piano_hand_split(&group, span, &local_profile).is_none_or(|split| {
+            // Attack-preserving seeds already have the feasible split at this onset.
+            // Keep that assignment, including where it differs from the soft split.
+            !self.preserve_attacks && receiving_staff == staff_for_hand_split(slot - first, split)
+        })
+    }
+}
+
+fn receiving_hand_fits(notes: &[MidiSeedNote], moving: MidiSeedNote, staff: u8) -> bool {
+    use crate::rules::{PIANO_HAND_MAX_KEYS, PIANO_HAND_MAX_SPAN};
+
+    let end = moving.pos.saturating_add(moving.len);
+    let overlapping: Vec<_> = notes.iter().filter(|note| {
+        note.staff == staff && note.pos < end && note.pos.saturating_add(note.len) > moving.pos
+    }).collect();
+    // Occupancy can increase only at the transferred attack or a later attack.
+    std::iter::once(moving.pos)
+        .chain(overlapping.iter().filter_map(|note| (note.pos > moving.pos).then_some(note.pos)))
+        .all(|pos| {
+            let mut keys = BTreeSet::from([moving.midi]);
+            for note in &overlapping {
+                if note.pos <= pos && note.pos.saturating_add(note.len) > pos {
+                    keys.insert(note.midi);
+                }
+            }
+            keys.len() <= PIANO_HAND_MAX_KEYS
+                && keys.last().unwrap().abs_diff(*keys.first().unwrap()) <= PIANO_HAND_MAX_SPAN
+        })
 }
 
 fn choose_jump_reassignment_target(
@@ -2307,6 +2707,10 @@ fn choose_jump_reassignment_target(
         }
         if ma < mb { Some(a) } else { Some(b) }
     }
+}
+
+fn wide_piano_hand_split(group: &[(usize, i32)], span: i32, profile: &CandidateProfile) -> Option<usize> {
+    (span > profile.span_limit()).then(|| choose_piano_hand_split(group, profile))
 }
 
 fn choose_piano_hand_split(group: &[(usize, i32)], profile: &CandidateProfile) -> usize {
@@ -2407,7 +2811,11 @@ fn build_musicxml(
 
     for (idx, staff_notes) in by_measure_staff.iter_mut().enumerate() {
         let measure_no = idx + 1;
-        xml.push_str(&format!("    <measure number=\"{measure_no}\">\n"));
+        let bar = rhythmic_courses.metric.measure(idx)
+            .ok_or_else(|| anyhow!("Missing notation meter"))?;
+        let partial = bar.end - bar.start < DIVISIONS * i64::from(bar.beats) * 4 / i64::from(bar.beat_type);
+        let implicit = if partial { " implicit=\"yes\"" } else { "" };
+        xml.push_str(&format!("    <measure number=\"{measure_no}\"{implicit}>\n"));
         if idx == 0 {
             xml.push_str("      <attributes>\n");
             xml.push_str(&format!("        <divisions>{DIVISIONS}</divisions>\n"));
@@ -2455,8 +2863,6 @@ fn build_musicxml(
                 rhythmic_courses,
             },
         )?;
-        let bar = rhythmic_courses.metric.measure(idx)
-            .ok_or_else(|| anyhow!("Missing notation meter"))?;
         xml.push_str(&format!("      <backup><duration>{}</duration></backup>\n", bar.end - bar.start));
         append_staff_voice(
             &mut xml,
@@ -2530,16 +2936,13 @@ fn append_staff_voice(
         if rhythmic_courses.source_voices && !occurrence.chord {
             append_cursor_motion(xml, source_cursor, occurrence.interval.start);
             source_cursor = occurrence.interval.end;
-        } else if occurrence.independent && !rhythmic_courses.source_voices {
+        } else if occurrence.independent && !occurrence.chord && !rhythmic_courses.source_voices {
             let cursor = *independent_cursor.get_or_insert_with(|| {
                 let measure_duration = bar.end - bar.start;
                 xml.push_str(&format!("      <backup><duration>{measure_duration}</duration></backup>\n"));
                 bar.start
             });
-            if occurrence.interval.start > cursor {
-                let distance = occurrence.interval.start - cursor;
-                xml.push_str(&format!("      <forward><duration>{distance}</duration></forward>\n"));
-            }
+            append_cursor_motion(xml, cursor, occurrence.interval.start);
             independent_cursor = Some(occurrence.interval.end);
         }
         let duration = occurrence.interval.end - occurrence.interval.start;

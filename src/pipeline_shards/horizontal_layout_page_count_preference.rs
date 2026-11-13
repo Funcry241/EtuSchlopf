@@ -152,6 +152,7 @@ impl PageCountPreferenceCandidate {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct GlobalHorizontalPageCountPreferenceAudit {
+    compact_geometry_planned: bool,
     slots_compared: usize,
     preferred_pages: usize,
     first_tested_pages: usize,
@@ -301,6 +302,41 @@ fn page_count_preference_thin_first_candidate(
     )
 }
 
+// MusicXML layout values use tenths of a staff space. This model supplies
+// planning bounds; the existing committed-source renderer checks actual fit.
+fn compact_page_capacity(xml: &str, demands: &[usize]) -> Option<(usize, usize)> {
+    let document = roxmltree::Document::parse(xml).ok()?;
+    let defaults = document.root_element().children().find(|n| n.has_tag_name("defaults"))?;
+    fn child<'a, 'input>(node: roxmltree::Node<'a, 'input>, name: &str) -> Option<roxmltree::Node<'a, 'input>> {
+        node.children().find(|n| n.has_tag_name(name))
+    }
+    let value = |node, name| child(node, name)?.text()?.parse::<f64>().ok()
+        .filter(|v| v.is_finite() && *v >= 0.0);
+    let page = child(defaults, "page-layout")?;
+    let margins = page.children().find(|n| n.has_tag_name("page-margins") && n.attribute("type") == Some("both"))?;
+    let system = child(defaults, "system-layout")?;
+    let width = value(page, "page-width")? - value(margins, "left-margin")? - value(margins, "right-margin")?;
+    let height = value(page, "page-height")? - value(margins, "top-margin")? - value(margins, "bottom-margin")?
+        - value(system, "top-system-distance")?;
+    let staff_distance = defaults.children().find(|n| n.has_tag_name("staff-layout") && n.attribute("number") == Some("2"))?;
+    let system_height = 80.0 + value(staff_distance, "staff-distance")?;
+    let clearance = 80.0;
+    let systems = ((height + clearance) / (system_height + clearance)) as usize;
+    const NOMINAL_MEASURE_WIDTH: f64 = 4.0 * 40.0;
+    const RHYTHMIC_COLUMN_WIDTH: f64 = 2.5 * 10.0;
+    let timeline = crate::final_notation_timeline_facts::observe_final_notation_timeline_measure_facts(xml).ok()?;
+    if timeline.len() != demands.len() {
+        return None;
+    }
+    let columns = timeline.iter().map(|measure| measure.columns).sum::<usize>();
+    let total_demand = demands.iter().sum::<usize>();
+    let nominal_width = total_demand as f64 * NOMINAL_MEASURE_WIDTH
+        / GLOBAL_REFLOW_NOMINAL_MEASURE_DEMAND as f64;
+    let rhythmic_width = columns as f64 * RHYTHMIC_COLUMN_WIDTH;
+    let horizontal = (width * total_demand as f64 / nominal_width.max(rhythmic_width)) as usize;
+    (horizontal > 0 && systems > 0).then_some((horizontal, systems))
+}
+
 fn evaluate_global_horizontal_page_count_preference(
     final_notation_xml: &str,
     baseline_plan: &HorizontalLayoutPlan,
@@ -322,11 +358,21 @@ fn evaluate_global_horizontal_page_count_preference(
         .collect::<Vec<_>>();
     let authoritative_shape = authoritative_page_shape(baseline_plan)?;
     let preferred_pages = authoritative_shape.page_starts.len();
-    let vertical_max_systems_per_page = authoritative_shape.max_systems_per_page;
-    let max_system_measures = global_reflow_audit.max_reflow_system_measures.max(1);
-    let accepted_system_capacity = global_reflow_audit
+    let baseline_capacity = global_reflow_audit
         .typical_system_capacity
         .max(global_reflow_audit.max_page_capacity);
+    let compact = if baseline_plan.manual_page_target {
+        None
+    } else {
+        compact_page_capacity(final_notation_xml, &demands)
+    };
+    let (accepted_system_capacity, vertical_max_systems_per_page) = compact
+        .unwrap_or((baseline_capacity, authoritative_shape.max_systems_per_page));
+    let max_system_measures = if compact.is_some() {
+        (accepted_system_capacity / GLOBAL_REFLOW_NOMINAL_MEASURE_DEMAND).max(1)
+    } else {
+        global_reflow_audit.max_reflow_system_measures.max(1)
+    };
     let reference_systems = global_reflow_audit.reflow_systems.max(1);
     let horizontal_minimum_systems = joint_page_system_segment_partition(
         &demands,
@@ -388,7 +434,15 @@ fn evaluate_global_horizontal_page_count_preference(
             .iter()
             .cloned()
             .reduce(|best, candidate| {
-                if candidate.is_preference_better_than(&best, preferred_pages) {
+                let better = if compact.is_some() {
+                    (candidate.pages, candidate.slack_square_sum, candidate.system_count_balance_penalty,
+                        candidate.page_slot_balance_penalty)
+                        < (best.pages, best.slack_square_sum, best.system_count_balance_penalty,
+                            best.page_slot_balance_penalty)
+                } else {
+                    candidate.is_preference_better_than(&best, preferred_pages)
+                };
+                if better {
                     candidate
                 } else {
                     best
@@ -411,6 +465,7 @@ fn evaluate_global_horizontal_page_count_preference(
         .find(|candidate| candidate.pages < preferred_pages);
 
     Ok(GlobalHorizontalPageCountPreferenceAudit {
+        compact_geometry_planned: compact.is_some(),
         slots_compared: baseline_plan.slots.len(),
         preferred_pages,
         first_tested_pages,

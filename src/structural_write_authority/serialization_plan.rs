@@ -2615,13 +2615,9 @@ pub(crate) struct PrimaryBeamVoicePartitionBoundPlan {
     scope_candidates: usize,
     original_group_alignment: Vec<String>,
     bridge_alignment_proofs: Vec<rest_bridge_extension_course::BridgeAlignmentProof>,
-    historical_phrase_decision_only: bool,
 }
 
 impl PrimaryBeamVoicePartitionBoundPlan {
-    pub(crate) fn permits_pdf_finalization(&self) -> bool {
-        !self.historical_phrase_decision_only
-    }
 
     pub(crate) fn matches_source_xml(&self, source_xml: &str) -> bool {
         self.source_fingerprint_fnv64 == fingerprint(source_xml)
@@ -2823,7 +2819,6 @@ pub(crate) fn rebind_primary_beam_voice_partition_plan_to_current_xml(
         scope_candidates: plan.scope_candidates,
         original_group_alignment: plan.original_group_alignment.clone(),
         bridge_alignment_proofs: plan.bridge_alignment_proofs.clone(),
-        historical_phrase_decision_only: plan.historical_phrase_decision_only,
     })
 }
 
@@ -9843,33 +9838,6 @@ pub(crate) fn bind_primary_beam_voice_partition_plan(
     source_xml: &str,
     context: PrimaryBeamVoicePartitionBindingContext<'_>,
 ) -> io::Result<PrimaryBeamVoicePartitionBoundPlan> {
-    bind_primary_beam_voice_partition_plan_for_purpose(source_xml, context, false)
-}
-
-pub(crate) fn bind_historical_metric_phrase_decision_course(
-    source_xml: &str, context: PrimaryBeamVoicePartitionBindingContext<'_>,
-    geometry: &crate::audit_only::renderer_system_break_readback::HistoricalPhrasePolicyDecisionGeometry,
-) -> io::Result<PrimaryBeamVoicePartitionBoundPlan> {
-    let candidate_ids=context.candidates.iter().map(|c|c.metric_line_id.as_str()).collect::<std::collections::BTreeSet<_>>();
-    let mut observations=std::collections::BTreeMap::new();
-    for cohort in primary_beam_voice_partition_renderer_cohorts(context.source_continuation,context.candidates) {
-        if !candidate_ids.contains(cohort.metric_line_id()) { continue; }
-        if let Some(count)=geometry.metric_decision_fragment_count(cohort.measure(),cohort.staff(),cohort.pitched_ordinals()) {
-            observations.insert(cohort.metric_line_id().to_owned(),count);
-        }
-    }
-    // Historical observations cannot reach generic original-group alignment.
-    // Its private purpose bit survives rebind and blocks PDF finalization.
-    let context = PrimaryBeamVoicePartitionBindingContext {
-        renderer_visible_fragments_by_metric_line_id: &observations, ..context
-    };
-    bind_primary_beam_voice_partition_plan_for_purpose(source_xml,context,true)
-}
-
-fn bind_primary_beam_voice_partition_plan_for_purpose(
-    source_xml: &str, context: PrimaryBeamVoicePartitionBindingContext<'_>,
-    historical_phrase_decision_only: bool,
-) -> io::Result<PrimaryBeamVoicePartitionBoundPlan> {
     let PrimaryBeamVoicePartitionBindingContext {
         source_continuation,
         voice_plan,
@@ -10192,13 +10160,6 @@ fn bind_primary_beam_voice_partition_plan_for_purpose(
         scope_candidates = scope_candidates.saturating_add(1);
     }
 
-    if historical_phrase_decision_only {
-        return Ok(PrimaryBeamVoicePartitionBoundPlan {
-            source_fingerprint_fnv64: fingerprint(source_xml), repaired_voice_plan,
-            edits, selected_members, scope_candidates, original_group_alignment: Vec::new(), bridge_alignment_proofs: Vec::new(),
-            historical_phrase_decision_only: true,
-        });
-    }
     let mut bridge_alignment_proofs = Vec::new();
     let added = original_beam_voice_alignment::append_proven_alignment(
         original_beam_voice_alignment::AlignmentInput {
@@ -10235,7 +10196,6 @@ fn bind_primary_beam_voice_partition_plan_for_purpose(
         scope_candidates,
         original_group_alignment: added,
         bridge_alignment_proofs,
-        historical_phrase_decision_only: false,
     })
 }
 

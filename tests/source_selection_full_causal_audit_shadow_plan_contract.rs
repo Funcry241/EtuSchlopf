@@ -19,7 +19,6 @@ fn full_causal_audit_is_source_ordinal_bound_and_reports_productive_plan_authori
         "InitialPitchStaff",
         "PianoHandSplit",
         "SmoothFastStaffJump",
-        "SmoothWideSimultaneity",
         "HotspotSpan",
         "HotspotJump",
         "TrajectoryMoveOutlier",

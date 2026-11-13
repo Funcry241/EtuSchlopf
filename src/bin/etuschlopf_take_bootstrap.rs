@@ -389,17 +389,20 @@ macro_rules! bootstrap_warning {
     };
 }
 
-macro_rules! bootstrap_commit {
-    ($($arg:tt)*) => {
-        write_bootstrap_presentation(
-            PresentationRole::Take,
-            Some(LocalStatus::Committed),
-            Attention::Notice,
-            Visibility::Both,
-            false,
-            format_args!($($arg)*),
-        )
+fn write_take_transition(committed: bool, transition: &str) {
+    let label = if committed { "ÜBERNOMMEN" } else { "UPDATE" };
+    let _ = append_bootstrap_technical_log(&format!("{label} {transition}"));
+    let policy = bootstrap_stream_policy(false);
+    let (color, reset) = match (policy.style, committed) {
+        (StyleMode::Styled, false) => ("\x1b[96m", "\x1b[0m"),
+        (StyleMode::Styled, true) => ("\x1b[92m", "\x1b[0m"),
+        (StyleMode::Plain, _) => ("", ""),
     };
+    with_bootstrap_step_line_cleared(|| {
+        let mut stdout = io::stdout().lock();
+        let _ = writeln!(stdout, "\n{color}[EtuSchlopf take] {label}  {transition}{reset}\n");
+        let _ = stdout.flush();
+    });
 }
 
 macro_rules! bootstrap_rollback {
@@ -808,6 +811,22 @@ fn run() -> AppResult<i32> {
         } else {
             bootstrap_detail!("[EtuSchlopf rust-take-bootstrap] Versionwechsel: {current_version} -> {incoming_version}");
         }
+
+        let (_, current_revision, _) = failure_parent_identity(&project_root);
+        let current_revision = current_revision.strip_prefix('r')
+            .and_then(|revision| revision.parse::<u64>().ok())
+            .map_or_else(|| "Revision unbekannt".to_string(), |revision| format!("r{revision}"));
+        let arrow = if bootstrap_stream_policy(false).glyphs == console_presentation_contract::GlyphMode::Ascii {
+            "->"
+        } else {
+            "→"
+        };
+        let transition = if same_version_known {
+            format!("{current_revision} {arrow} r{candidate_revision}  ·  Version {incoming_version}")
+        } else {
+            format!("{current_revision} (v{current_version}) {arrow} r{candidate_revision} (v{incoming_version})")
+        };
+        write_take_transition(false, &transition);
 
         let attempt_started_epoch_millis = current_epoch_millis()?;
         invalidate_published_assistant_export(&project_root)?;
@@ -1264,7 +1283,7 @@ fn run() -> AppResult<i32> {
             // historical final cleanup only after Acceptance provenance is durable.
             transaction.commit()?;
             bootstrap_detail!("[EtuSchlopf rust-take-bootstrap] TAKE-TRANSACTION COMMIT: Reexec 0; Acceptance-Provenienz gespeichert; Backup entfernt; PendingMarker entfernt.");
-            bootstrap_commit!("Reexec 0");
+            write_take_transition(true, &transition);
             Ok(0)
         } else {
             let reason = format!(

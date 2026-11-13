@@ -26,7 +26,7 @@ pub(super) fn load_decoded_wav_signal_for_score_title(
     load_decoded_wav_signal(&path)
 }
 
-fn load_decoded_wav_signal(path: &Path) -> Result<DecodedWavSignalAudit, &'static str> {
+pub(super) fn load_decoded_wav_signal(path: &Path) -> Result<DecodedWavSignalAudit, &'static str> {
     let data = fs::read(path).map_err(|_| "wav_file_unreadable")?;
     if data.len() < 12 || &data[0..4] != b"RIFF" || &data[8..12] != b"WAVE" {
         return Err("riff_wave_header_missing");

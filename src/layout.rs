@@ -12,6 +12,7 @@
 
     #[derive(Debug, Clone, Default)]
     pub struct HorizontalLayoutSeedPlan {
+        pub(crate) manual_page_target: bool,
         pub slots: Vec<HorizontalLayoutSeedSlot>,
     }
 
@@ -336,7 +337,7 @@
             pos = tag_end;
         }
 
-        HorizontalLayoutSeedPlan { slots }
+        HorizontalLayoutSeedPlan { slots, manual_page_target: false }
     }
 
     fn is_measure_tag(text: &str, start: usize) -> bool {

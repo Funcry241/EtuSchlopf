@@ -4102,10 +4102,6 @@ fn apply_expression_polish(
         return ("ExpressionPolish v0.1.162: keine Takte gefunden; keine Tempo-/Spiel-/Dynamikangaben gesetzt; keine Pedalzeichen eingefügt.".to_string(), receipts);
     };
 
-    // v0.1.159: Startseiten-Luxuspolitur vor der Statusprüfung. Tempo und
-    // non legato bleiben reine MusicXML-Directions, bekommen aber mehr Abstand
-    // zum ersten System. Es ändert keine Noten, Dauern, Stimmen, Staffs,
-    // Oktavierungen, Schlüssel oder Solver-Auswahl.
     let tempo_bpm = estimated_bpm
         .map(|bpm| bpm.round().clamp(40.0, 220.0) as u32)
         .filter(|bpm| *bpm > 0);
@@ -4116,56 +4112,16 @@ fn apply_expression_polish(
         receipts.append(tempo_receipts);
     }
 
-    let (performance_inserted, performance_receipt) =
-        insert_performance_words_direction_into_measure(xml, &first_measure, "non legato", "1");
-    inserted += performance_inserted;
-    receipts.push_additive(performance_receipt);
-
-    // Generische, sparsame Dynamikpunkte: Anfang, etwa 40%, etwa 60%, etwa 75%
-    // und ein später Schlussbereich. Die Positionen werden aus der Partiturstruktur
-    // abgeleitet, nicht aus festen Taktnummern.
-    let mut dynamic_targets = vec![(first_measure, "mf")];
-    for (fraction, dynamic) in [(0.40, "mp"), (0.60, "f"), (0.75, "mf"), (0.84, "f")] {
-        if let Some(locator) =
-            crate::structural_write_authority::fractional_structural_measure_locator(xml, fraction)
-        {
-            dynamic_targets.push((locator, dynamic));
-        }
-    }
-
-    dynamic_targets.sort_by_key(|(measure, _)| measure.measure_number());
-    dynamic_targets.dedup_by(|left, right| {
-        left.0.measure_number() == right.0.measure_number() && left.1 == right.1
-    });
-    for (measure, dyn_mark) in dynamic_targets {
-        let (dynamic_inserted, dynamic_receipt) =
-            insert_dynamic_direction_into_measure(xml, &measure, dyn_mark, "1");
-        inserted += dynamic_inserted;
-        receipts.push_additive(dynamic_receipt);
-    }
-
     let tempo_fragment = tempo_bpm
         .map_or_else(
             || "Tempo nicht gesetzt, weil kein plausibler WAV-Tempo-Schätzwert vorlag".to_string(),
             |bpm| format!("Tempo als echtes Metronomzeichen sichtbar: Viertel={bpm} aus WAV-Signatur"),
         );
     (format!(
-        "ExpressionPolish v0.1.162: {inserted} portable Tempo-/Spiel-/Dynamikangaben generisch aus der Partiturstruktur gesetzt; {tempo_fragment}; Startseite luxuriöser gesetzt: Tempo und non legato haben mehr Abstand zum ersten System, Editor-/Versionsmetadata bleiben aus dem Staff-Text entfernt; keine festen Taktnummern, keine Pedalzeichen, keine Noten-/Dauer-/Staff-/Oktavierungsänderung."
+        "ExpressionPolish: {inserted} Tempoangaben ergänzt. {tempo_fragment}."
     ), receipts)
 }
 
-
-fn insert_performance_words_direction_into_measure(
-    xml: &mut String,
-    measure: &crate::structural_write_authority::StructuralMeasureLocator,
-    words: &str,
-    staff: &str,
-) -> (usize, Option<master_state_identity::AdditiveTransformationReceipt>) {
-    let direction = format!(
-        "      <direction placement=\"above\">\n        <direction-type>\n          <words default-x=\"0\" default-y=\"58\" font-size=\"10\" font-style=\"italic\">{words}</words>\n        </direction-type>\n        <staff>{staff}</staff>\n      </direction>\n"
-    );
-    insert_direction_into_measure(xml, measure, &direction)
-}
 
 fn insert_tempo_words_direction_into_measure(
     xml: &mut String,
@@ -4351,19 +4307,6 @@ mod initial_tempo_semantic_identity_tests {
 #[cfg(test)]
 #[path = "../../tests/fixtures/synthetic/wav_metronome_construction.rs"]
 mod wav_metronome_construction_tests;
-
-fn insert_dynamic_direction_into_measure(
-    xml: &mut String,
-    measure: &crate::structural_write_authority::StructuralMeasureLocator,
-    dynamic: &str,
-    staff: &str,
-) -> (usize, Option<master_state_identity::AdditiveTransformationReceipt>) {
-    let direction = format!(
-        "      <direction placement=\"below\">\n        <direction-type>\n          <dynamics>\n            <{dynamic}/>\n          </dynamics>\n        </direction-type>\n        <staff>{staff}</staff>\n      </direction>\n"
-    );
-    insert_direction_into_measure(xml, measure, &direction)
-}
-
 
 fn insert_direction_into_measure(
     xml: &mut String,

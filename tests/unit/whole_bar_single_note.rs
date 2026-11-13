@@ -154,6 +154,7 @@ fn other_meters_are_excluded() {
                 divisions: 96,
                 beats,
                 beat_type,
+                physical_duration: None,
             },
         );
     }
@@ -271,6 +272,7 @@ fn hidden_note_and_unsupported_divisions_are_excluded() {
             divisions: 192,
             beats: 4,
             beat_type: 4,
+            physical_duration: None,
         },
     );
 }
@@ -723,7 +725,7 @@ fn half_bar_counterexamples_keep_parent_output() {
 #[test]
 fn half_bar_alternative_meters_and_bounds_keep_parent() {
     let xml=measure(&format!("{}{}",rest(96),pitched("C",3,192,"2",2,"")));
-    compare_excluded(&xml,RhythmContext {divisions:96,beats:3,beat_type:4});
+    compare_excluded(&xml,RhythmContext {divisions:96,beats:3,beat_type:4,physical_duration:None});
     let xml=measure(&format!("{}{}<forward><duration>24</duration></forward>",rest(192),pitched("C",3,192,"2",2,"")));
     compare_excluded(&xml,RhythmContext::default());
 }

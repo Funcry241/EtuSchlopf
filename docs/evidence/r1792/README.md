@@ -15,6 +15,7 @@ und Render-MusicXML bytegleich zu r1791 und die gerenderten Seiten pixelgleich.
 - [Erzeugtes Chopin-Notenbild](../../examples/chopin-op10-no3-p01-r1792.pdf)
 - [Quelle und Namensnennung der Einspielung](../../THIRD_PARTY_NOTICES.md#chopin-etüde-e-dur-op-10-nr-3-aufführung-p01)
 
-Die Windows-Abnahme gilt für dieses Einzelprojekt. Der öffentliche Quellstand
-und der Windows-Download liegen auf r1749. Den früheren Vollkorpuslauf
+Die Windows-Abnahme gilt für dieses Einzelprojekt. Den früheren Vollkorpuslauf
 dokumentiert [r1684](../r1684/README.md).
+
+[Prüfsummen des nativen Quellstands](accepted_source_sha256.tsv) · [Prüfsummen der öffentlichen Dokumentation](github_projection_sha256.tsv)

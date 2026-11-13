@@ -25,6 +25,9 @@ fn external_sensor_stages_the_complete_shared_midi_source_contract() {
 
     assert!(tool.contains("#[path = \"shared_source_event.rs\"]\nmod source_event;"));
     assert!(tool.contains("#[path = \"shared_midi.rs\"]\nmod midi;"));
-    assert!(tool.contains("[\"src/midi.rs\", \"src/source_event.rs\"]"));
+    for module in ["src/source_time.rs", "src/notation_time.rs"] {
+        assert!(benchmark.contains(module));
+        assert!(tool.contains(module));
+    }
     assert!(!tool.contains("mod source_event {\n    pub(crate) const CANONICAL_DIVISIONS"));
 }

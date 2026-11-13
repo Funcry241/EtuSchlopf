@@ -318,8 +318,7 @@ fn replay_measure_node(
         || row.backup_underflow_events > 0
         || row.chord_temporal_conflicts > 0
         || (final_cursor_mismatch_temporal && row.cursor_final != row.expected_duration);
-    // Keep the productive r476 raw-cursor contract unchanged. The corrected
-    // temporal interpretation above is observation-only in r477.
+    // The productive check requires closure against the resolved measure extent.
     row.hard_violation = row.cursor_min < 0
         || row.cursor_max > row.expected_duration
         || row.cursor_final != row.expected_duration
@@ -360,7 +359,13 @@ pub(crate) fn observe_serialized_temporal_xml(
             .filter(|node| node.is_element() && node.tag_name().name() == "measure")
             .enumerate()
         {
-            let expected = current_meter(measure, &mut divisions, &mut beats, &mut beat_type);
+            let nominal = current_meter(measure, &mut divisions, &mut beats, &mut beat_type);
+            let expected = if index == 0 {
+                crate::musicxml::implicit_measure_node_extent(measure, divisions, beats, beat_type)
+                    .unwrap_or(nominal)
+            } else {
+                nominal
+            };
             rows.push(replay_measure_node(
                 source,
                 measure_number(measure, index.saturating_add(1)),
@@ -472,13 +477,19 @@ mod tests {
     }
 
     #[test]
-    fn implicit_incomplete_measure_is_temporally_valid_without_relaxing_the_legacy_gate() {
+    fn implicit_incomplete_measure_closes_at_its_physical_extent() {
         let observation = observe_serialized_temporal_xml(
             "Synthetic",
             &score("<note><duration>96</duration></note>", true),
         );
+        assert_eq!(observation.rows[0].expected_duration, 96);
         assert!(!observation.rows[0].temporal_violation);
-        assert!(observation.rows[0].hard_violation);
+        assert!(!observation.rows[0].hard_violation);
+        let invalid = observe_serialized_temporal_xml(
+            "Synthetic",
+            &score("<note><duration>96</duration></note><backup><duration>96</duration></backup>", true),
+        );
+        assert!(invalid.rows[0].hard_violation);
     }
 
     #[test]

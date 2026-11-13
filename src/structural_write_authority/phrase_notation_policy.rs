@@ -12,6 +12,96 @@ use crate::audit_only::phrase_boundary_evidence::PhraseNotationIntentProjection;
 use anyhow::{Context, Result};
 use roxmltree::{Document, Node};
 use std::collections::BTreeMap;
+use std::ops::{Bound::Excluded, Range};
+
+type PickupPhrase = (PhraseNotationIntentProjection, Range<usize>, Range<usize>);
+
+/// A single-note pickup can lead into a connected upper line across written
+/// voices. The first sustained arrival must outlive an accompanying attack.
+pub(super) fn select_connected_pickup_phrase(xml: &str) -> Result<Option<PickupPhrase>> {
+    let document = Document::parse(xml)?;
+    let mut parts = document.root_element().children().filter(|node| is_el(*node, "part"));
+    let (Some(part), None) = (parts.next(), parts.next()) else { return Ok(None); };
+    let Some(part_id) = part.attribute("id") else { return Ok(None); };
+    let mut measures = part.children().filter(|node| is_el(*node, "measure"));
+    let (Some(pickup), Some(next)) = (measures.next(), measures.next()) else { return Ok(None); };
+    if pickup.attribute("implicit") != Some("yes") || next.attribute("implicit") == Some("yes") {
+        return Ok(None);
+    }
+    let pickup_attacks = melody_attacks(pickup);
+    let Some((start, [first])) = pickup_attacks.first_key_value()
+        .map(|(onset, group)| (onset, group.as_slice())) else { return Ok(None); };
+    if pickup_attacks.len() != 1 || *start != 0 || first.tie_start {
+        return Ok(None);
+    }
+    let following = melody_attacks(next);
+    let mut expected = 0;
+    let mut attack_count = 1;
+    let mut previous_pitch = first.pitch;
+    for (&onset, group) in &following {
+        let Some(upper) = group.iter().max_by_key(|note| note.pitch) else { return Ok(None); };
+        if onset < expected && upper.pitch < previous_pitch { continue; }
+        if onset != expected { return Ok(None); }
+        if upper.staff != first.staff || group.iter().filter(|note| note.pitch == upper.pitch).count() != 1 {
+            return Ok(None);
+        }
+        attack_count += 1;
+        expected = onset + upper.duration;
+        let arrives_by_step = (1..=2).contains(&upper.pitch.abs_diff(previous_pitch));
+        previous_pitch = upper.pitch;
+        if !upper.tie_start { continue; }
+        let has_accompaniment = following.range((Excluded(onset), Excluded(expected)))
+            .next().is_some_and(|(_, group)| group.iter().all(|note| note.pitch < upper.pitch));
+        if attack_count < 3 || !arrives_by_step || !has_accompaniment { return Ok(None); }
+        return Ok(Some((PhraseNotationIntentProjection {
+            part: part_id.to_owned(), staff: first.staff.clone(), voice: first.voice.clone(),
+            start_measure_ordinal: 1, start_onset: *start, start_canonical: 0,
+            start_pitches: vec![first.pitch], end_measure_ordinal: 2, end_onset: onset,
+            end_canonical: i128::from(first.duration) + i128::from(onset),
+            end_pitches: vec![upper.pitch], attack_count,
+        }, first.range.clone(), upper.range.clone())));
+    }
+    Ok(None)
+}
+
+struct MelodyAttack {
+    pitch: i32,
+    duration: i64,
+    staff: String,
+    voice: String,
+    tie_start: bool,
+    range: Range<usize>,
+}
+
+fn melody_attacks(measure: Node<'_, '_>) -> BTreeMap<i64, Vec<MelodyAttack>> {
+    let mut groups = BTreeMap::<i64, Vec<MelodyAttack>>::new();
+    let (mut cursor, mut onset) = (0_i64, 0_i64);
+    for note in measure.children().filter(Node::is_element) {
+        let duration = note_duration(note);
+        match note.tag_name().name() {
+            "backup" => cursor -= duration,
+            "forward" => cursor += duration,
+            "note" => {
+                if !note.children().any(|node| is_el(node, "chord")) {
+                    onset = cursor;
+                    cursor += duration;
+                }
+                let tied = |kind| note.children().any(|node| is_el(node, "tie") && node.attribute("type") == Some(kind));
+                if duration > 0 && note.attribute("print-object") != Some("no")
+                    && !tied("stop") && let Some(pitch) = note_pitch_midi(note)
+                {
+                    groups.entry(onset).or_default().push(MelodyAttack {
+                        pitch, duration, staff: child_text(note, "staff").unwrap_or_else(|| "1".into()),
+                        voice: child_text(note, "voice").unwrap_or_else(|| "1".into()),
+                        tie_start: tied("start"), range: note.range(),
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+    groups
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct PolicyLane {
@@ -57,12 +147,15 @@ pub(super) fn approve_pending_visual_intents_from_musicxml(
             voice: intent.voice.clone(),
         };
         let Some(source_attacks) = lane_attacks.get(&source_lane) else {
+            eprintln!("PhrasePolicyReadback: reason=missing_lane");
             continue;
         };
         let Some((source_start_index, source_window)) = source_window(source_attacks, intent) else {
+            eprintln!("PhrasePolicyReadback: reason=missing_span");
             continue;
         };
         let Some(source_signature) = exact_melodic_form(source_window) else {
+            eprintln!("PhrasePolicyReadback: reason=incomplete_form");
             continue;
         };
         let source_end_index = source_start_index
@@ -91,6 +184,8 @@ pub(super) fn approve_pending_visual_intents_from_musicxml(
 
         if same_lane_match {
             approved.push(intent.clone());
+        } else {
+            eprintln!("PhrasePolicyReadback: reason=no_same_lane_repeat");
         }
     }
 
@@ -373,5 +468,32 @@ mod tests {
         let approved = approve_pending_visual_intents_from_musicxml(&score(true, false), &[intent()])
             .expect("policy projection");
         assert!(approved.is_empty());
+    }
+
+    #[test]
+    fn pickup_phrase_binds_unique_upper_arrival_across_written_voices() {
+        fn note(step: &str, octave: u8, voice: u8, duration: u8, prefix: &str, tie: &str) -> String {
+            format!("<note>{prefix}<pitch><step>{step}</step><octave>{octave}</octave></pitch><duration>{duration}</duration>{tie}<voice>{voice}</voice><staff>1</staff></note>")
+        }
+        for (opening_voice, melody_voice, ending_voice, transpose) in [(1, 3, 5, 0), (7, 2, 8, 1)] {
+            let pickup = note("B", 3 + transpose, opening_voice, 2, "", "");
+            let head = note("D", 4 + transpose, melody_voice, 2, "", "");
+            let middle = note("E", 4 + transpose, melody_voice, 1, "", "");
+            let chord = note("C", 4 + transpose, ending_voice, 3, "", "");
+            let arrival = note("F", 4 + transpose, ending_voice, 3, "<chord/>", "<tie type=\"start\"/>");
+            let support = note("B", 3 + transpose, opening_voice, 1, "", "");
+            let support_run = format!("<backup><duration>2</duration></backup>{support}");
+            let first_number = 9 + transpose;
+            let next_number = first_number + 1;
+            let xml = format!("<score-partwise><part id=\"P\"><measure number=\"{first_number}\" implicit=\"yes\">{pickup}</measure><measure number=\"{next_number}\">{head}{middle}{chord}{arrival}{support_run}</measure></part></score-partwise>");
+            let (intent, start, end) = select_connected_pickup_phrase(&xml).unwrap().unwrap();
+            assert_eq!(intent.attack_count, 4);
+            assert_eq!(&xml[start], pickup);
+            assert_eq!(&xml[end], arrival);
+            let duplicate = xml.replace(&arrival, &format!("{arrival}{arrival}"));
+            assert!(select_connected_pickup_phrase(&duplicate).unwrap().is_none());
+            let continuation = xml.replace("type=\"start\"", "type=\"stop\"");
+            assert!(select_connected_pickup_phrase(&continuation).unwrap().is_none());
+        }
     }
 }

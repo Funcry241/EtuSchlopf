@@ -134,6 +134,40 @@ mod r1230_ra1_sovereign_tests {
         }
     }
     #[test]
+    fn fragmented_rest_owner_continues_after_rejections_and_rebinds_after_a_write() {
+        for base in [16, 73] {
+            let rejected = wrap_at(base, &format!(
+                "{}{}<note><pitch><step>C</step><octave>3</octave></pitch><duration>336</duration><voice>1</voice><type>half</type><staff>2</staff></note>",
+                rest(24, "16th"), rest(24, "16th"),
+            ));
+            let first = balance_at(base + 1);
+            let second = balance_at(base + 2);
+            let measure_body = |score: &str| {
+                score.find("<measure").unwrap()..score.find("</part>").unwrap()
+            };
+            let xml = rejected.replace("</part>", &format!(
+                "{}{}</part>", &first[measure_body(&first)], &second[measure_body(&second)],
+            ));
+            let path = path();
+            let (trial, post, receipts) = prepare(&xml, &path);
+            assert_eq!(trial.consolidation_candidates_seen, 3);
+            assert_eq!(trial.consolidation_attempted, 3);
+            assert_eq!(trial.consolidation_rejected, 1);
+            assert_eq!(trial.consolidation_adopted, 2);
+            assert_eq!(trial.actions.iter().map(|action| action.verdict.as_str()).collect::<Vec<_>>(), [
+                "rejected_xml_layer_balance_locator_failed",
+                "adopted_transactionally",
+                "adopted_transactionally",
+            ]);
+            assert!(post.contains(&rejected[measure_body(&rejected)]));
+            let mut state = state(&xml, &path);
+            rest_commit(&mut state, &post, receipts);
+            assert_eq!(state.document(), Some(post.as_str()));
+            std::fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
     fn r1230_ra1_no_candidate_no_write() {
         let xml=wrap("<note><rest/><duration>384</duration><voice>1</voice><type>whole</type><staff>2</staff></note>"); let path=path();
         let (trial,post,receipts)=build_fragmented_rest_chain_transactional_write_trial(&xml,"no candidate",&path).expect("no candidate");

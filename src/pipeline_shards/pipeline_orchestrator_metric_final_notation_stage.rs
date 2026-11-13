@@ -766,6 +766,10 @@ fn run_metric_beam_and_final_notation_stage(
             .with_context(|| {
                 "PrimaryBeamVoicePartition baseline lost FinalChord occurrence continuation"
             })?;
+        approved_phrase_occurrence_course = Some(structural_write_authority::approve_phrase_occurrence_course(
+            baseline_occurrence_continuation,
+            &crate::audit_only::phrase_boundary_evidence::pending_visual_notation_intents(),
+        )?);
         let baseline_render_xml = baseline_occurrence_continuation.xml().to_string();
 
         let project_root_hint = source
@@ -965,20 +969,6 @@ None)?;
                     .materialization_safety_proven_metric_line_ids(),
             },
         )?;
-        let historical_phrase_geometry = crate::audit_only::renderer_system_break_readback::
-            historical_phrase_policy_decision_geometry(&baseline_render_xml,&shadow_pdf)?;
-        let historical_phrase_course = structural_write_authority::bind_historical_metric_phrase_decision_course(
-            &baseline_render_xml,
-            structural_write_authority::PrimaryBeamVoicePartitionBindingContext {
-                source_continuation: baseline_occurrence_continuation,
-                voice_plan: &render_pdf_source_voice_plan, candidates: &repair_candidates,
-                classification_xml: &shadow_committed_xml,
-                renderer_visible_fragments_by_metric_line_id: &std::collections::BTreeMap::new(),
-                materialization_safety_proven_metric_line_ids: scope_projection.materialization_safety_proven_metric_line_ids(),
-            }, &historical_phrase_geometry)?;
-        approved_phrase_occurrence_course = Some(shadow_commit.approve_phrase_course_after_historical_metric_partition(
-            &crate::audit_only::phrase_boundary_evidence::pending_visual_notation_intents(),
-            &historical_phrase_course, &render_final_chord_structural_plan, &render_pruned_final_chord_omissions)?);
         if bound_plan.scope_candidates() > 0 {
             primary_beam_voice_partition_plan = Some(bound_plan);
         }
@@ -1426,6 +1416,11 @@ primary_beam_voice_partition_plan.as_ref())?,
                         no_goods,
                         source_fingerprint,
                     });
+                }
+                if renderer_feasibility_basis.compact_geometry_planned {
+                    anyhow::bail!(
+                        "Automatic compact layout: renderer did not confirm the planned system and page breaks"
+                    );
                 }
                 if balance_trial.as_ref().is_some_and(|trial| matches!(trial.objective, PageBalanceObjective::AddSystem(_))) {
                     return Ok(RendererFeasibilityOracleOutcome::Confirmed {

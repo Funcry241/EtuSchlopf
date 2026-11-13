@@ -20,9 +20,7 @@ Der Name darf dich zum Schmunzeln bringen. Die Mathematik dahinter nehmen wir er
 
 Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI und WAV als Eingabe
 
-Der Quellstand auf `main` ist **r1749**. Die [native Windows-Abnahme für BWV 847](docs/evidence/r1749/README.md) dokumentiert Build, Tests und Notensatz.
-
-Der nativ geprüfte Entwicklungsstand ist **r1792**. Der Windows-Lauf für Chopin op. 10 Nr. 3, p01 endete mit Exitcode 0, ohne Warnungen und mit 100 % Notenerhalt. Build, Strict Clippy, 3.066 Tests und PDF-Export bestanden. Vier Tests waren ignoriert. [Stand und Prüfumfang](docs/evidence/r1792/README.md)
+Der Quellstand auf `main` ist **r1792**. Der Windows-Lauf für Chopin op. 10 Nr. 3, p01 endete mit Exitcode 0, ohne Warnungen und mit 100 % Notenerhalt. Build, Strict Clippy, 3.066 Tests und PDF-Export bestanden. Vier Tests waren ignoriert. [Stand und Prüfumfang](docs/evidence/r1792/README.md)
 
 [Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1749-windows-preview) ·
 [Erstes Stück](#dein-erstes-stück) · [Grenzen der Testversion](#aktueller-stand) ·
@@ -105,7 +103,7 @@ BWV 847. Prüfe Lesbarkeit und Spielbarkeit am eigenen Stück.
 
 ## Quellstand und Beiträge
 
-Auf `main` liegt der veröffentlichte Quellstand **r1749 / 0.10.1839**. Der neuere [Windows-Prüfstand r1792](docs/evidence/r1792/README.md) dokumentiert den Chopin-Lauf. Der historische [Vollkorpuslauf r1684](docs/evidence/r1684/README.md) umfasst zehn Etüden.
+Auf `main` liegt der veröffentlichte Quellstand **r1792 / 0.10.1839**. Der [Windows-Prüfstand r1792](docs/evidence/r1792/README.md) dokumentiert den Chopin-Lauf. Der historische [Vollkorpuslauf r1684](docs/evidence/r1684/README.md) umfasst zehn Etüden.
 
 Die Download-Engine wurde aus dem angenommenen nativen Stand **r1749** gebaut.
 Der [zum geprüften Build gehörende r1749-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1749-windows-preview/EtuSchlopf-r1749-source.zip)

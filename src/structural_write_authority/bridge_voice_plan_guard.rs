@@ -363,7 +363,7 @@ mod tests {
         let plan=PrimaryBeamVoicePartitionBoundPlan {
             source_fingerprint_fnv64:fingerprint(course.xml()), repaired_voice_plan:final_voices,
             edits:Vec::new(),selected_members:Vec::new(),scope_candidates:1,
-            original_group_alignment:Vec::new(), bridge_alignment_proofs:Vec::new(),historical_phrase_decision_only:false,
+            original_group_alignment:Vec::new(), bridge_alignment_proofs:Vec::new(),
         };
         let ordinary=canonical.bind_projected_bridge_voice_guard(&course,&voices,None,&BTreeSet::new()).unwrap();
         let future=canonical.bind_projected_bridge_voice_guard(&course,&voices,Some(&plan),&BTreeSet::new()).unwrap();
@@ -379,7 +379,7 @@ mod tests {
         let intrusion=PrimaryBeamVoicePartitionBoundPlan {
             source_fingerprint_fnv64:fingerprint(course.xml()),repaired_voice_plan:final_voices,
             edits:Vec::new(),selected_members:Vec::new(),scope_candidates:1,
-            original_group_alignment:Vec::new(), bridge_alignment_proofs:Vec::new(),historical_phrase_decision_only:false,
+            original_group_alignment:Vec::new(), bridge_alignment_proofs:Vec::new(),
         };
         let members=heads(course.xml()).into_iter().take(2).collect::<Vec<_>>();
         let ordinary=canonical.bind_projected_bridge_voice_guard(&course,&voices,None,&BTreeSet::new()).unwrap();

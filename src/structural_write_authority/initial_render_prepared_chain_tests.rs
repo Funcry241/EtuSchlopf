@@ -84,13 +84,39 @@ mod r1230_ir17_ir18_prepared_chain_tests {
     }
 
     #[test]
-    fn ir17_full_builder_transports_productive_max64_between_real_rounds() {
+    fn transactional_rest_plan_transports_before_and_after_a_larger_middle_chain() {
+        for base in [4, 59] {
+            let middle = measure(base + 1).replace(&rest(24).repeat(2), &rest(12).repeat(4));
+            let xml = format!("<score-partwise><part id=\"P1\">{}{middle}{}</part></score-partwise>", measure(base), measure(base + 2));
+            let (post, actions, seen, chain) =
+                apply_structural_transactional_rest_coalesce_render_write_prepared(&xml, 3);
+            assert_eq!(seen, 3);
+            assert_eq!(actions.iter().map(|action| action.old_rest_count).collect::<Vec<_>>(), [4, 2, 2]);
+            assert!(actions.iter().all(|action| action.verdict == "adopted_transactionally"));
+            assert_eq!(chain.len(), 6);
+            chain.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
+            let (expected, _, _, oracle_chain) = apply_pianistic_rest_consolidation_prepared(&xml, 3);
+            oracle_chain.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
+            assert_eq!(post, expected);
+        }
+    }
+
+    #[test]
+    fn transactional_rest_scope_excludes_cursor_overlays_and_repeated_labels() {
+        let numbered = measure(3);
+        let overlay = measure(7).replace("</measure>", "<backup><duration>384</duration></backup></measure>");
+        let xml = format!("<score-partwise><part id=\"P1\">{numbered}{overlay}{}</part><part id=\"P2\">{numbered}</part></score-partwise>", measure(8));
+        assert_eq!(transactional_rest_sequential_scopes(&xml), BTreeSet::from([8]));
+    }
+
+    #[test]
+    fn ir17_owner_closes_all_post_insertion_chains_in_one_bound_write() {
         for base in [17_usize, 911_usize] {
             let batch_capacity = 256;
             let consolidation_count = 3 * batch_capacity + 1;
             let missing_measure = missing_measure_at(base + consolidation_count);
-            // One batch before insertion and three afterwards exercise two
-            // continuation rounds, followed by an empty candidate probe.
+            // This leaves more than two legacy batches after insertion.
+            // All those independent chains share one post-insertion source.
             let measures = (base..base + consolidation_count).map(measure).collect::<String>();
             let a = format!("<score-partwise><part id=\"P1\">{measures}{missing_measure}</part></score-partwise>");
             assert_eq!(find_next_measure_bounds(&a, 0).expect("relocated numeric scope").2, base);
@@ -100,11 +126,16 @@ mod r1230_ir17_ir18_prepared_chain_tests {
             assert!(trial.written);
             assert_eq!(trial.missing_inserted, 1);
             assert!(!p.exists(), "prepare is pure");
-            assert_eq!(chain.len(), consolidation_count + 4 + 1, "one Generated #17 per rest, four #34 batches, one #69 insertion");
+            assert_eq!(chain.len(), consolidation_count + 2 + 1, "one Generated #17 per chain, two #34 batches, one #69 insertion");
             assert_eq!(trial.consolidation_attempted, consolidation_count);
-            assert!(trial.pipeline_line.contains("concrete_closure_rounds 2; letzte_kandidatensonde 0;"));
             let c = candidate.unwrap();
             assert!(!c.contains("<forward><duration>288</duration></forward>"));
+            let (stable, remaining_actions, remaining, closure_receipts) =
+                apply_pianistic_rest_consolidation_prepared(&c, usize::MAX);
+            assert!(remaining_actions.is_empty());
+            assert_eq!(remaining, 0);
+            assert!(closure_receipts.is_empty());
+            assert_eq!(stable, c);
             let (consolidated, oracle_actions, _, oracle_receipts) =
                 apply_pianistic_rest_consolidation_prepared(&a, consolidation_count);
             oracle_receipts.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);

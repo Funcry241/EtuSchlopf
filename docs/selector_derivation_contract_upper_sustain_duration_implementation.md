@@ -1,0 +1,27 @@
+# Belegte Oberstimmendauer bei laufender Begleitung
+
+SelectorDerivationContract: causal_class_first_v1
+SelectorChange: yes
+SelectorRole: repair_scope
+KnownWitnessUsedForFeatureDerivation: no
+TargetConditionedFeatureNarrowing: no
+ClassDefinitionPrecedesCorpusDistribution: yes
+UniquenessIsOutcomeNotGoal: yes
+RepairSelectorSeparatedFromErrorClass: yes
+CausalFeatureNecessityReview: complete
+CorpusDistributionPurpose: measurement_only
+CorpusDistributionMayRefineClassToKnownWitness: no
+MultiplicityInvarianceContract: candidate_duplication_v1
+IndependentCandidateDuplicationInvariant: yes
+ScorewideMultiplicityAsWriteAuthority: forbidden
+GlobalRankingOfIndependentCandidates: forbidden
+MultiplicityDecisionScope: local_candidate_or_explicit_conflict_group
+CandidateDuplicationProbe: required_before_productive_write
+ParentErrorClassContract: docs/selector_derivation_contract_upper_sustain_over_lower_attacks.md
+ScopeNarrowingBasis: authority_or_safety_only
+DiscriminativeContextOnlyNarrowing: forbidden
+CausalFeature: one uniquely highest note has a supported duration within its measure and lower attacks before its release
+CausalFeature: other simultaneous events fit the advancing primary cursor and the existing independent cursor is available
+NonCausalContextExcluded: work identity, filename, measure address, absolute pitch and corpus frequency
+
+Die Stimmenbildung führt den Oberstimmenton über den bestehenden unabhängigen Cursor und verwendet seine gebundene Dauer. Die Begleitung läuft über den Hauptcursor weiter. Die Regel gilt für aus einer eingespielten MIDI abgeleitete Notationszeit. Eine weitere unabhängige Partitur beeinflusst die lokale Stimmenbildung nicht.

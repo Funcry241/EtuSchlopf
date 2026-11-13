@@ -1619,32 +1619,29 @@ fn build_fragmented_rest_chain_transactional_write_trial(
     trial.attempted = true;
     let mut current_xml = xml.to_string();
     let mut actions: Vec<RenderXmlPianisticRestRepairAction> = Vec::new();
-    let carrier_seen =
-        build_carrier_preserving_initial_rest_projection_candidates(&current_xml).len();
-    trial.consolidation_candidates_seen = carrier_seen
-        .saturating_add(build_rest_consolidation_candidates(&current_xml).len());
-    let mut processed_carriers = BTreeSet::<(usize, String, String, i32)>::new();
+    let mut carrier_candidates =
+        build_carrier_preserving_initial_rest_projection_candidates(&current_xml).into_iter();
+    let initial_balanced_candidates = build_rest_consolidation_candidates(&current_xml);
+    trial.consolidation_candidates_seen =
+        carrier_candidates.len().saturating_add(initial_balanced_candidates.len());
+    let mut processed_carriers = BTreeSet::new();
+    let mut carrier_write = false;
+    let mut refresh_carriers = false;
+    // The unvisited entries still describe the current document after a rejection.
     for _ in 0..8 {
-        let Some(candidate) =
-            build_carrier_preserving_initial_rest_projection_candidates(&current_xml)
-                .into_iter()
-                .find(|candidate| {
-                    !processed_carriers.contains(&(
-                        candidate.rest.scope,
-                        candidate.rest.staff.clone(),
-                        candidate.rest.voice.clone(),
-                        candidate.rest.total_duration,
-                    ))
-                })
-        else {
-            break;
-        };
-        processed_carriers.insert((
-            candidate.rest.scope,
-            candidate.rest.staff.clone(),
-            candidate.rest.voice.clone(),
-            candidate.rest.total_duration,
-        ));
+        if refresh_carriers {
+            carrier_candidates =
+                build_carrier_preserving_initial_rest_projection_candidates(&current_xml).into_iter();
+            refresh_carriers = false;
+        }
+        let Some(candidate) = carrier_candidates.find(|candidate| {
+            processed_carriers.insert((
+                candidate.rest.scope,
+                candidate.rest.staff.clone(),
+                candidate.rest.voice.clone(),
+                candidate.rest.total_duration,
+            ))
+        }) else { break; };
         trial.consolidation_attempted += 1;
         let (projected, local_chain) = match apply_layer_balanced_single_rest_consolidation_candidate_xml(
             &current_xml,
@@ -1656,6 +1653,8 @@ fn build_fragmented_rest_chain_transactional_write_trial(
             .is_some_and(|after| carrier_projection_invariants_hold(&current_xml, after, &candidate));
         if adopted {
             current_xml = projected.expect("checked carrier projection");
+            carrier_write = true;
+            refresh_carriers = true;
             main_chain.append(local_chain);
             trial.consolidation_adopted += 1;
         } else {
@@ -1674,27 +1673,30 @@ fn build_fragmented_rest_chain_transactional_write_trial(
             .to_string(),
         });
     }
-    let mut processed_keys: BTreeSet<(usize, String, String, i32, i32)> = BTreeSet::new();
+    let mut balanced_candidates = if carrier_write {
+        build_rest_consolidation_candidates(&current_xml)
+    } else {
+        initial_balanced_candidates
+    }.into_iter();
+    let mut metric_by_scope = render_scope_metric_expected_and_beat_map(&current_xml);
+    let mut processed_keys = BTreeSet::new();
+    let mut balanced_write = false;
+    let mut refresh_balanced = false;
     for _ in 0..16 {
-        let candidates = build_rest_consolidation_candidates(&current_xml);
-        let Some(candidate) = candidates.into_iter().find(|candidate| {
-            let key = (
+        if refresh_balanced {
+            balanced_candidates = build_rest_consolidation_candidates(&current_xml).into_iter();
+            metric_by_scope = render_scope_metric_expected_and_beat_map(&current_xml);
+            refresh_balanced = false;
+        }
+        let Some(candidate) = balanced_candidates.find(|candidate| {
+            processed_keys.insert((
                 candidate.scope,
                 candidate.staff.clone(),
                 candidate.voice.clone(),
                 candidate.first_onset,
                 candidate.total_duration,
-            );
-            !processed_keys.contains(&key)
+            ))
         }) else { break; };
-        let key = (
-            candidate.scope,
-            candidate.staff.clone(),
-            candidate.voice.clone(),
-            candidate.first_onset,
-            candidate.total_duration,
-        );
-        processed_keys.insert(key);
         trial.consolidation_attempted += 1;
 
         // Candidate detection stays policy-free: chord-anchored rest spans remain
@@ -1708,7 +1710,6 @@ fn build_fragmented_rest_chain_transactional_write_trial(
                 },
             )
         });
-        let metric_by_scope = render_scope_metric_expected_and_beat_map(&current_xml);
         let Some((expected, beat_unit)) = metric_by_scope.get(&candidate.scope).copied() else {
             trial.consolidation_rejected += 1;
             actions.push(RenderXmlPianisticRestRepairAction {
@@ -1781,6 +1782,8 @@ fn build_fragmented_rest_chain_transactional_write_trial(
             && local_after_visible_rests.saturating_add(expected_delta) == local_before_visible_rests;
         if invariant_ok {
             current_xml = candidate_xml;
+            balanced_write = true;
+            refresh_balanced = true;
             main_chain.append(local_chain);
             trial.consolidation_adopted += 1;
         } else {
@@ -1805,9 +1808,13 @@ fn build_fragmented_rest_chain_transactional_write_trial(
     trial.backup_forward_after_ok = after_backup_forward_ok;
     trial.parse_after_ok = parse_musicxml(&current_xml).is_ok();
     trial.visible_rest_delta = trial.visible_rests_after as i64 - trial.visible_rests_before as i64;
-    let remaining = build_carrier_preserving_initial_rest_projection_candidates(&current_xml)
-        .len()
-        .saturating_add(build_rest_consolidation_candidates(&current_xml).len());
+    let remaining = if carrier_write || balanced_write {
+        build_carrier_preserving_initial_rest_projection_candidates(&current_xml)
+            .len()
+            .saturating_add(build_rest_consolidation_candidates(&current_xml).len())
+    } else {
+        trial.consolidation_candidates_seen
+    };
     let final_ok = fragmented_rest_chain_final_guard(&trial);
     if final_ok {
         trial.verdict = if remaining == 0 {
@@ -2693,41 +2700,9 @@ fn apply_behind_bars_rule_check_lower_staff_rest_compaction(
     Ok(((out, actions, candidates_seen), receipts))
 }
 fn render_scope_metric_expected_duration_map(xml: &str) -> BTreeMap<usize, i32> {
-    let mut out = BTreeMap::new();
-    let mut scan = 0_usize;
-    let mut divisions = 96_i32;
-    let mut beats = 4_i32;
-    let mut beat_type = 4_i32;
-    while let Some((measure_start, measure_end, scope_number)) = find_next_measure_bounds(xml, scan) {
-        let measure = &xml[measure_start..measure_end];
-        if let Some(value) = extract_first_text_from_fragment(measure, "divisions")
-            .and_then(|value| value.trim().parse::<i32>().ok())
-            && value > 0
-        {
-            divisions = value;
-        }
-        if let Some(value) = extract_first_text_from_fragment(measure, "beats")
-            .and_then(|value| value.trim().parse::<i32>().ok())
-            && value > 0
-        {
-            beats = value;
-        }
-        if let Some(value) = extract_first_text_from_fragment(measure, "beat-type")
-            .and_then(|value| value.trim().parse::<i32>().ok())
-            && value > 0
-        {
-            beat_type = value;
-        }
-        let metric = beats
-            .saturating_mul(divisions)
-            .saturating_mul(4)
-            .checked_div(beat_type.max(1))
-            .unwrap_or(384)
-            .max(1);
-        out.insert(scope_number, metric);
-        scan = measure_end;
-    }
-    out
+    render_measure_metric_entries(xml)
+        .map(|(_, _, scope_number, (expected, _))| (scope_number, expected))
+        .collect()
 }
 fn render_scope_metric_expected_and_beat_map(xml: &str) -> BTreeMap<usize, (i32, i32)> {
     render_measure_metric_entries(xml)
@@ -2769,6 +2744,11 @@ fn render_measure_metric_entries(
             .checked_div(beat_type.max(1))
             .unwrap_or(384)
             .max(1);
+        let expected = crate::musicxml::implicit_measure_extent(
+            measure, i64::from(divisions), i64::from(beats), i64::from(beat_type),
+        )
+        .and_then(|extent| i32::try_from(extent).ok())
+        .unwrap_or(expected);
         let beat_unit = divisions
             .saturating_mul(4)
             .checked_div(beat_type.max(1))

@@ -1,0 +1,29 @@
+# Durchgehende Auftaktmelodie
+
+SelectorDerivationContract: causal_class_first_v1
+SelectorChange: yes
+SelectorRole: repair_scope
+KnownWitnessUsedForFeatureDerivation: no
+TargetConditionedFeatureNarrowing: no
+ClassDefinitionPrecedesCorpusDistribution: yes
+UniquenessIsOutcomeNotGoal: yes
+RepairSelectorSeparatedFromErrorClass: yes
+CausalFeatureNecessityReview: complete
+CorpusDistributionPurpose: measurement_only
+CorpusDistributionMayRefineClassToKnownWitness: no
+MultiplicityInvarianceContract: candidate_duplication_v1
+IndependentCandidateDuplicationInvariant: yes
+ScorewideMultiplicityAsWriteAuthority: forbidden
+GlobalRankingOfIndependentCandidates: forbidden
+MultiplicityDecisionScope: local_candidate_or_explicit_conflict_group
+CandidateDuplicationProbe: required_before_productive_write
+ParentErrorClassContract: docs/selector_derivation_contract_phrase_voice_fragmentation.md
+ScopeNarrowingBasis: authority_or_safety_only
+DiscriminativeContextOnlyNarrowing: forbidden
+CausalFeature: a physically marked pickup with one attack leads into an uninterrupted upper line
+CausalFeature: a uniquely pitched stepwise arrival is held while lower accompaniment resumes
+CausalFeature: endpoint bindings are actual attack occurrences and survive written voice and system changes
+NonCausalContextExcluded: work identity, score label, absolute measure number, written voice numbers and scorewide candidate count
+
+Der Owner bindet die Endpunkte vor Stimmenaufteilung und Layout. Bei einer
+überlappenden freigegebenen Phrase bleibt deren bestehende Entscheidung gültig.

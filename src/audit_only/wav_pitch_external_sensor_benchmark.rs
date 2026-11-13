@@ -137,7 +137,14 @@ pub(crate) fn build_for_score_title(
         let _ = fs::remove_dir_all(current.join("target/wav_pitch_external_sensor_audit/python"));
 
         let mut source_changed = false;
-        for relative in ["Cargo.toml", "BASIC_PITCH_NOTICE.md", "src/main.rs"] {
+        for (tool_source, relative) in [
+            (&tool_source, "Cargo.toml"),
+            (&tool_source, "BASIC_PITCH_NOTICE.md"),
+            (&tool_source, "src/main.rs"),
+            (&current, "src/source_time.rs"),
+            (&current, "src/notation_time.rs"),
+            (&current, "src/inferred_performance_timing.rs"),
+        ] {
             match sync_file_if_changed(&tool_source.join(relative), &target_source.join(relative)) {
                 Ok(changed) => source_changed |= changed,
                 Err(_) => return Some(not_observed("rust_onnx_tool_source_sync_failed")),
@@ -273,7 +280,10 @@ fn current_sensor_package_fingerprint(root: &Path) -> Result<String, &'static st
         bytes.extend_from_slice(&source);
         bytes.push(0);
     }
-    for relative in ["src/midi.rs", "src/source_event.rs"] {
+    for relative in [
+        "src/midi.rs", "src/source_event.rs", "src/source_time.rs", "src/notation_time.rs",
+        "src/inferred_performance_timing.rs",
+    ] {
         let source = fs::read(root.join(relative)).map_err(|_| "sensor_shared_source_unreadable")?;
         bytes.extend_from_slice(relative.as_bytes());
         bytes.push(0);

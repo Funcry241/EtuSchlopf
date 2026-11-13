@@ -236,3 +236,28 @@ fn combined_direction_has_one_receipt_and_survives_real_master_adoption() {
             .lineage_continuity_holds(adopted.document())
     );
 }
+
+#[test]
+fn expression_owner_preserves_existing_marks_and_adds_only_measured_tempo() {
+    let mark = "<direction placement=\"below\"><direction-type><dynamics><p/></dynamics></direction-type><staff>1</staff></direction>";
+    for additional_measures in [0, 7] {
+        for existing_mark in ["", mark] {
+            let mut xml = synthetic_empty_xml()
+                .replacen("</measure>", &format!("{existing_mark}</measure>"), 1);
+            let extension = (0..additional_measures)
+                .map(|index| format!("<measure number=\"{}\"></measure>", index + 20))
+                .collect::<String>();
+            xml = xml.replace("</part>", &format!("{extension}</part>"));
+            let before = xml.clone();
+            super::apply_expression_polish(&mut xml, None);
+            assert_eq!(xml, before);
+            super::apply_expression_polish(&mut xml, Some(83.0));
+            let parsed = roxmltree::Document::parse(&xml).unwrap();
+            assert!(parsed.descendants().any(|node| node.has_tag_name("words")
+                && node.text() == Some("♩ = 83")));
+            assert!(!xml.contains("non legato"));
+            assert_eq!(xml.matches("<dynamics>").count(), usize::from(!existing_mark.is_empty()));
+            assert!(xml.contains(existing_mark));
+        }
+    }
+}

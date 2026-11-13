@@ -1,6 +1,6 @@
 # Technische Referenz und Quellenarbeit
 
-Die technische Referenz begleitet den öffentlichen Quellstand **r1749 / 0.10.1839**. Für ihn liegen die [Windows-Abnahme mit BWV 847](evidence/r1749/README.md) und der [Windows-Download](../README.md) vor. Der neuere [Windows-Prüfstand r1792](evidence/r1792/README.md) dokumentiert den Chopin-Einzellauf. Der historische [Korpuslauf r1684](evidence/r1684/README.md) umfasst zehn Etüden.
+Der öffentliche Quellstand ist **r1792 / 0.10.1839**. Die [Windows-Abnahme r1792](evidence/r1792/README.md) dokumentiert den Chopin-Einzellauf. Der historische [Korpuslauf r1684](evidence/r1684/README.md) umfasst zehn Etüden.
 
 Seit r1659 enthält der Quellstand weitere Zuständigkeitsbereinigungen, indizierte Endpunktabfragen und Verbesserungen an Fokus, Verbindungsstatus und PDF-Sitzungsbindung der Watch-Webansicht. r1683 führt ursprüngliche Pausenanker als eigene Evidenz in die C3-Entscheidung; nicht geschlossene systemübergreifende Gruppenabhängigkeiten bleiben offen. Die [Mathematik-Seite](MATHEMATIK.md) ordnet 34 Verfahrensfamilien ihren Quellen, Wirkungen und Beweisgrenzen zu. Die native Abnahme bestätigt den geprüften Korpus; sie belegt weder allgemeine Fehlerfreiheit noch die Spielbarkeit beliebiger Eingaben.
 

@@ -125,45 +125,6 @@ fn apply_pianistic_rest_consolidation_prepared(
     (out, actions, seen, receipts)
 }
 
-struct PreparedRestConsolidationClosure {
-    xml: String,
-    actions: Vec<RenderXmlPianisticRestRepairAction>,
-    peak_candidates: usize,
-    additional_write_rounds: usize,
-    last_candidate_probe: usize,
-    receipts: crate::master_state_identity::RenderTransitionReceipts,
-}
-
-fn prepare_post_insertion_rest_consolidation(xml: String) -> PreparedRestConsolidationClosure {
-    use crate::master_state_identity::{RenderDiscardReason, RenderTransitionReceipts};
-
-    let mut closure = PreparedRestConsolidationClosure {
-        xml,
-        actions: Vec::new(),
-        peak_candidates: 0,
-        additional_write_rounds: 0,
-        last_candidate_probe: 0,
-        receipts: RenderTransitionReceipts::new(),
-    };
-    // The first post-insertion batch and up to twelve continuation batches
-    // use the same owner and preserve the original receipt sequence.
-    for batch in 0..=12 {
-        let (post, mut actions, seen, receipts) =
-            apply_pianistic_rest_consolidation_prepared(&closure.xml, 256);
-        closure.peak_candidates = closure.peak_candidates.max(seen);
-        closure.last_candidate_probe = seen;
-        if actions.is_empty() {
-            receipts.discard_unadopted(RenderDiscardReason::LosingCandidate);
-            break;
-        }
-        closure.receipts.append(receipts);
-        closure.xml = post;
-        closure.actions.append(&mut actions);
-        closure.additional_write_rounds += usize::from(batch > 0);
-    }
-    closure
-}
-
 fn apply_single_rest_consolidation_candidate_prepared(
     xml: &str,
     candidate: &RenderXmlRestConsolidationCandidate,
@@ -257,6 +218,23 @@ fn apply_layer_balanced_single_rest_consolidation_candidate_xml(
     Ok((post, receipts))
 }
 
+// Repeated printed scopes and cursor overlays can couple otherwise distinct chains.
+fn transactional_rest_sequential_scopes(xml: &str) -> BTreeSet<usize> {
+    let mut seen = BTreeSet::new();
+    let mut sequential = BTreeSet::new();
+    let mut scan = 0;
+    while let Some((start, end, scope)) = find_next_measure_bounds(xml, scan) {
+        scan = end;
+        let measure = &xml[start..end];
+        if !seen.insert(scope) {
+            sequential.remove(&scope);
+        } else if !measure.contains("<backup") && !measure.contains("<forward") {
+            sequential.insert(scope);
+        }
+    }
+    sequential
+}
+
 fn apply_structural_transactional_rest_coalesce_render_write_prepared(
     xml: &str,
     max_transactions: usize,
@@ -264,33 +242,25 @@ fn apply_structural_transactional_rest_coalesce_render_write_prepared(
     let mut receipts = crate::master_state_identity::RenderTransitionReceipts::new();
     let mut current_xml = xml.to_string();
     let mut actions: Vec<BehindBarsRuleCheckRestAndTieAction> = Vec::new();
-    let initial_candidates = build_rest_consolidation_candidates(&current_xml);
+    let initial_candidates = build_rest_consolidation_candidates(xml);
     let seen = initial_candidates.len();
+    let mut pending = std::collections::VecDeque::from(initial_candidates);
+    let mut metric_by_scope = render_scope_metric_expected_and_beat_map(xml);
+    let sequential_scopes = transactional_rest_sequential_scopes(xml);
     let mut processed_keys: BTreeSet<(usize, String, String, i32, i32)> = BTreeSet::new();
     for _ in 0..max_transactions {
-        let candidates = build_rest_consolidation_candidates(&current_xml);
-        let Some(candidate) = candidates.into_iter().find(|candidate| {
-            let key = (
+        let Some(candidate) = std::iter::from_fn(|| pending.pop_front()).find(|candidate| {
+            processed_keys.insert((
                 candidate.scope,
                 candidate.staff.clone(),
                 candidate.voice.clone(),
                 candidate.first_onset,
                 candidate.total_duration,
-            );
-            !processed_keys.contains(&key)
+            ))
         }) else { break; };
-        let key = (
-            candidate.scope,
-            candidate.staff.clone(),
-            candidate.voice.clone(),
-            candidate.first_onset,
-            candidate.total_duration,
-        );
-        processed_keys.insert(key);
         let chord_anchor_dependency = candidate.spans.iter().any(|span| {
             note_is_followed_by_chord_note(&current_xml, span.end, current_xml.len())
         });
-        let metric_by_scope = render_scope_metric_expected_and_beat_map(&current_xml);
         let Some((expected, beat_unit)) = metric_by_scope.get(&candidate.scope).copied() else {
             continue;
         };
@@ -386,6 +356,33 @@ fn apply_structural_transactional_rest_coalesce_render_write_prepared(
             && before_dedup == after_dedup
             && after_visible_rests.saturating_add(expected_rest_delta) == before_visible_rests;
         let verdict = if invariant_ok {
+            // An adjacent chain preserves the cursor at its end and changes no
+            // interleaved event. The other chains only need new byte locations.
+            // A split chain can move the cursor between fragments, so observe
+            // the new document before consuming further decisions.
+            let adjacent = candidate.spans.windows(2).all(|pair| {
+                pair[0].end <= pair[1].start
+                    && current_xml[pair[0].end..pair[1].start].trim().is_empty()
+            });
+            if adjacent && sequential_scopes.contains(&candidate.scope) {
+                let chain_end = candidate.spans.last().expect("multi-fragment chain").end;
+                let length_change = candidate_xml.len().abs_diff(current_xml.len());
+                let grew = candidate_xml.len() >= current_xml.len();
+                for span in pending.iter_mut().flat_map(|rest| &mut rest.spans) {
+                    if span.start >= chain_end {
+                        if grew {
+                            span.start += length_change;
+                            span.end += length_change;
+                        } else {
+                            span.start -= length_change;
+                            span.end -= length_change;
+                        }
+                    }
+                }
+            } else {
+                pending = build_rest_consolidation_candidates(&candidate_xml).into();
+                metric_by_scope = render_scope_metric_expected_and_beat_map(&candidate_xml);
+            }
             current_xml = candidate_xml;
             receipts.append(local_receipts);
             "adopted_transactionally"
@@ -700,15 +697,12 @@ fn build_strict_visible_rest_arithmetic_materializer_trial_prepared(
         }
     }
     else { missing_receipts.discard_unadopted(crate::master_state_identity::RenderDiscardReason::LosingCandidate); }
-    let PreparedRestConsolidationClosure {
-        xml: candidate_xml,
-        actions: mut consolidation_actions,
-        peak_candidates,
-        additional_write_rounds: concrete_closure_rounds,
-        last_candidate_probe: concrete_closure_remaining_probe,
-        receipts: consolidation_receipts,
-    } = prepare_post_insertion_rest_consolidation(candidate_xml);
-    trial.consolidation_candidates_seen = trial.consolidation_candidates_seen.max(peak_candidates);
+    // On this snapshot the owner has the complete set of beat-local chains.
+    // Bind their disjoint replacements together against the same source bytes.
+    let (candidate_xml, mut consolidation_actions, post_insertion_candidates, consolidation_receipts) =
+        apply_pianistic_rest_consolidation_prepared(&candidate_xml, usize::MAX);
+    trial.consolidation_candidates_seen =
+        trial.consolidation_candidates_seen.max(post_insertion_candidates);
     trial.consolidation_attempted += consolidation_actions.len();
     actions.append(&mut consolidation_actions);
     receipts.append(consolidation_receipts);
@@ -765,21 +759,20 @@ fn build_strict_visible_rest_arithmetic_materializer_trial_prepared(
     trial.examples.push("Render-XML-only: Der Materializer setzt nur vorhandene forward-Zeit in sichtbare Pausen um oder konsolidiert bereits sichtbare Pausen derselben Staff/Voice; klingende Events bleiben unverändert.".to_string());
     trial.examples.push("CrossBeatMerge bleibt gesperrt: zusammengefasst wird nur, wenn die neue Pause vollständig innerhalb derselben dynamisch berechneten Zählzeit liegt.".to_string());
     trial.examples.push("Cross-Staff-/Bookkeeping-Stimmen werden nicht als fehlende eigenständige Pausenstimme materialisiert; solche Fälle müssen im Readback als nicht independent geführt werden, damit keine falsche Schattenpausenebene entsteht.".to_string());
-    trial.examples.push(format!("Finale Sonden nach Kandidat: missing_rows {}, missing_safe {}, safe_consolidations {}, alter Planner missing {}, fragmented {}, consolidate {}; konkrete Closure-Runden {}, letzte Kandidatensonde {}.", final_missing_rows, final_missing_safe, remaining_safe_consolidations, final_audit_probe.missing_visible_rest_candidates, final_audit_probe.fragmented_chain_candidates, final_audit_probe.consolidate_candidates, concrete_closure_rounds, concrete_closure_remaining_probe));
+    trial.examples.push(format!("Finale Sonden nach Kandidat: missing_rows {}, missing_safe {}, safe_consolidations {}, alter Planner missing {}, fragmented {}, consolidate {}.", final_missing_rows, final_missing_safe, remaining_safe_consolidations, final_audit_probe.missing_visible_rest_candidates, final_audit_probe.fragmented_chain_candidates, final_audit_probe.consolidate_candidates));
     trial.done_fragment = format!(
-        "FinalRestClosureByInvariantProof: fehlende sichtbare Pausen gesehen {}, sichere Missing-Kandidaten {}, eingefügt {}; Konsolidierungskandidaten {}, versucht {}, übernommen {}; konkrete Closure-Runden {}; Render-XML-only {}; klingend stabil {}",
+        "FinalRestClosureByInvariantProof: fehlende sichtbare Pausen gesehen {}, sichere Missing-Kandidaten {}, eingefügt {}; Konsolidierungskandidaten {}, versucht {}, übernommen {}; Render-XML-only {}; klingend stabil {}",
         trial.missing_candidates_seen,
         missing_safe_count,
         trial.missing_inserted,
         trial.consolidation_candidates_seen,
         trial.consolidation_attempted,
         trial.consolidation_adopted,
-        concrete_closure_rounds,
         if trial.written { "geschrieben" } else { "nicht geschrieben" },
         if trial.sounding_signature_stable { "ja" } else { "nein" }
     );
     trial.pipeline_line = format!(
-        "FinalRestClosureByInvariantProof v{}: Render-XML-only auf {}; missing_rows_seen {}, missing_safe_seen {}, missing_safe_after_consolidation {}, missing_inserted {}; consolidation_candidates {}, attempted {}, adopted {}; concrete_closure_rounds {}; letzte_kandidatensonde {}; sichtbare Pausen {}→{}; sichtbare klingende Noten {}→{}; hidden pitched {}→{}; hidden rests {}→{}; sounding_signature {}/{} stabil {}; final_missing_safe {}; final_consolidations {}; parse/back-forward nachher {}/{}; geschrieben {}; Urteil {}.",
+        "FinalRestClosureByInvariantProof v{}: Render-XML-only auf {}; missing_rows_seen {}, missing_safe_seen {}, missing_safe_after_consolidation {}, missing_inserted {}; consolidation_candidates {}, attempted {}, adopted {}; sichtbare Pausen {}→{}; sichtbare klingende Noten {}→{}; hidden pitched {}→{}; hidden rests {}→{}; sounding_signature {}/{} stabil {}; final_missing_safe {}; final_consolidations {}; parse/back-forward nachher {}/{}; geschrieben {}; Urteil {}.",
         env!("CARGO_PKG_VERSION"),
         trial.source_label,
         trial.missing_candidates_seen,
@@ -789,8 +782,6 @@ fn build_strict_visible_rest_arithmetic_materializer_trial_prepared(
         trial.consolidation_candidates_seen,
         trial.consolidation_attempted,
         trial.consolidation_adopted,
-        concrete_closure_rounds,
-        concrete_closure_remaining_probe,
         trial.visible_rests_before,
         trial.visible_rests_after,
         trial.visible_pitched_before,

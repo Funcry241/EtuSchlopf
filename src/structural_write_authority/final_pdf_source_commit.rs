@@ -33,50 +33,6 @@ impl FinalPdfSourceCommit {
     pub(super) fn permits_shadow_renderer(&self, input: &Path) -> bool {
         !self.closed && self.shadow_partial.as_ref().is_some_and(|proof| proof.source_path == input)
     }
-    pub(in crate::pipeline) fn approve_phrase_course(&self,
-        intents: &[crate::audit_only::phrase_boundary_evidence::PhraseNotationIntentProjection],
-    ) -> anyhow::Result<crate::structural_write_authority::ApprovedPhraseOccurrenceCourse> {
-        let continuation = self.committed_occurrence_continuation.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("E007 phrase approval lacks committed original occurrence course"))?;
-        crate::structural_write_authority::approve_phrase_occurrence_course(continuation, intents)
-    }
-
-    /// Planning-branch execution of the already-authored ordinary partition on the
-    /// real committed planning branch. It uses the existing scalar owner and
-    /// its EXACT receipt, discards that probe, and creates no artifact or Main
-    /// adoption. FinalVoice, Clef and Rest still execute once on the live course.
-    pub(in crate::pipeline) fn approve_phrase_course_after_historical_metric_partition(&self,
-        intents: &[crate::audit_only::phrase_boundary_evidence::PhraseNotationIntentProjection],
-        combined: &crate::structural_write_authority::PrimaryBeamVoicePartitionBoundPlan,
-        canonical: &crate::structural_write_authority::CanonicalFinalChordStructuralPlan,
-        omissions: &std::collections::BTreeSet<crate::structural_write_authority::RenderPrunedFinalChordOmissionKey>,
-    ) -> anyhow::Result<crate::structural_write_authority::ApprovedPhraseOccurrenceCourse> {
-        anyhow::ensure!(!combined.permits_pdf_finalization(), "E007 reference requires its sealed historical-only purpose");
-        let ordinary = combined;
-        let source = self.committed_occurrence_continuation.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("E007 ordinary partition lacks its committed occurrence course"))?;
-        let rebound = crate::structural_write_authority::rebind_primary_beam_voice_partition_plan_to_current_xml(
-            source.xml(), source, ordinary)?;
-        eprintln!("PhraseOrdinaryPartitionDecisionCourse: pending={}; edits={:?}; authority=existing_actual_metric_partition",intents.len(),rebound.edits().iter().map(|edit|(edit.voice_text_start(),edit.voice_text_end(),edit.target_label())).collect::<Vec<_>>());
-        if rebound.edits().is_empty() { return self.approve_phrase_course(intents); }
-        let edits = rebound.edits().iter().map(|edit|
-            (edit.voice_text_start(), edit.voice_text_end(), edit.target_label().to_owned())).collect();
-        let (post, receipt) = crate::structural_write_authority::apply_atomic_staff_voice_scalar_batch_authorized(source.xml(), edits);
-        let owner_exact = post.as_ref().zip(receipt.as_ref()).is_some_and(|(post, receipt)|
-            receipt.realize_post_document(source.xml()).as_deref() == Some(post.as_str()));
-        let mut probe = crate::master_state_identity::RenderTransitionReceipts::new();
-        probe.push_exact(receipt);
-        let carried = (|| -> anyhow::Result<crate::structural_write_authority::FinalPdfSourceOccurrenceContinuation> {
-            anyhow::ensure!(owner_exact, "E007 ordinary projection lacks the scalar owner's exact byte course");
-            let post = post.ok_or_else(|| anyhow::anyhow!("E007 ordinary scalar projection was refused"))?;
-            Ok(crate::structural_write_authority::transport_final_pdf_source_occurrence_continuation_through_primary_beam_voice_partition(
-                source, source.xml(), &post, canonical, &rebound, Some(omissions))?)
-        })();
-        probe.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
-        let carried = carried?;
-        crate::structural_write_authority::approve_phrase_occurrence_course(&carried, intents)
-    }
-
     pub(in crate::pipeline) fn continue_phrase_course(&mut self,
         course: &crate::structural_write_authority::ApprovedPhraseOccurrenceCourse,
     ) -> anyhow::Result<()> {
@@ -172,11 +128,6 @@ pub(in crate::pipeline) fn finalize_pdf_source_before_renderer_authorized(
 ) -> std::io::Result<FinalPdfSourceCommit> {
     let _diagnostics = crate::audit_only::c3_diagnostics::shadow_scope(disposition == FinalPdfSourceDisposition::Shadow);
     let FinalPdfSourcePlans { chord: final_chord_structural_plan, voice: frozen_serialized_voice_plan } = plans;
-    if primary_beam_voice_partition_plan.is_some_and(|plan|!plan.permits_pdf_finalization()) {
-        return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied,
-            "historical E007 metric decision course cannot authorize PDF finalization"));
-    }
-
     if disposition == FinalPdfSourceDisposition::Live
         && input_musicxml != render_state.artifact_path()
     {

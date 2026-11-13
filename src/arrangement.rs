@@ -241,10 +241,11 @@
         divisions: i64,
         beats: i64,
         beat_type: i64,
+        physical_duration: Option<i64>,
     }
     impl Default for RhythmContext {
         fn default() -> Self {
-            Self { divisions: 96, beats: 4, beat_type: 4 }
+            Self { divisions: 96, beats: 4, beat_type: 4, physical_duration: None }
         }
     }
     impl RhythmContext {
@@ -253,6 +254,9 @@
                 divisions: extract_first_i64(measure_text, "divisions").unwrap_or(self.divisions).max(1),
                 beats: extract_first_i64(measure_text, "beats").unwrap_or(self.beats).max(1),
                 beat_type: extract_first_i64(measure_text, "beat-type").unwrap_or(self.beat_type).max(1),
+                physical_duration: crate::musicxml::implicit_measure_extent(
+                    measure_text, self.divisions, self.beats, self.beat_type,
+                ),
             }
         }
         fn metric_rank(self, onset: i64) -> i32 {
@@ -261,14 +265,14 @@
             else if onset.rem_euclid(self.beat_duration()) == 0 { 1 } else { 2 }
         }
         fn metric_segments(self) -> Vec<std::ops::Range<i64>> {
-            if self.beats == 4 && self.beat_type == 4 {
+            if self.beats == 4 && self.beat_type == 4 && self.expected_duration() == self.divisions * 4 {
                 let half = self.expected_duration() / 2;
                 vec![0..half, half..self.expected_duration()]
             } else { std::iter::once(0..self.expected_duration()).collect() }
         }
 
         fn expected_duration(self) -> i64 {
-            self.divisions * self.beats * 4 / self.beat_type
+            self.physical_duration.unwrap_or(self.divisions * self.beats * 4 / self.beat_type)
         }
         fn beat_duration(self) -> i64 {
             (self.divisions * 4 / self.beat_type).max(1)
@@ -314,6 +318,9 @@
             out.push_str(&xml[last..span.start]);
             let measure_text = &xml[span.start..span.end];
             rhythm_context = rhythm_context.update_from_measure(measure_text);
+            rhythm_context.physical_duration = profile.rhythmic_courses
+                .and_then(|seed| seed.physical_measure_duration(stats.measures_seen))
+                .or(rhythm_context.physical_duration);
             let mut course_measure = received_courses.as_ref().map(|courses| {
                 courses.measure(measure_text, course_offset, rhythm_context.expected_duration())
                     .expect("Complete received measure custody")
@@ -547,7 +554,9 @@
         }
         let bound_source_voices = profile.rhythmic_courses
             .is_some_and(crate::midi_seed::MidiSeedRhythmicCourses::has_bound_source_voices);
-        let (hidden, support_stats) = if bound_source_voices {
+        let preserve_attacks = profile.rhythmic_courses
+            .is_some_and(crate::midi_seed::MidiSeedRhythmicCourses::preserves_attacks);
+        let (hidden, support_stats) = if bound_source_voices || preserve_attacks {
             (BTreeSet::new(), LeftHandSupportStats::default())
         } else {
             select_hidden_notes_for_pianist_profile(&metas, &independent, &compact_chord_members, profile)

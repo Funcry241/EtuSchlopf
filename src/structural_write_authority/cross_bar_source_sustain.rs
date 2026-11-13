@@ -750,10 +750,7 @@ impl FinalPdfSourceOccurrenceContinuation {
         let mut result = self.clone();
         if time.metric.divisions == crate::source_event::CANONICAL_DIVISIONS {
             let source = (0..time.events.len())
-                .map(|ordinal| {
-                    let event = time.source_event(ordinal).ok()?;
-                    Some(event.pos..event.pos.checked_add(event.len)?)
-                })
+                .map(|ordinal| time.written_sustain_interval(ordinal).ok())
                 .collect::<Vec<_>>();
             result.sustain_inputs = Some(SustainInputs {
                 metric: time.metric.clone(),

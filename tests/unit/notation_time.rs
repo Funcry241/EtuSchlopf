@@ -2,6 +2,15 @@ use super::*;
 
 // Synthetic SMF source genesis; time coordinates below are 1/384 quarter.
 fn decoded(notes: &[(u8, u64, u64, u8)], ppq: u16, meters: &[(u64, u8, u8)]) -> DecodedMidiSource {
+    decoded_with_markers(notes, ppq, meters, &[])
+}
+
+fn decoded_with_markers(
+    notes: &[(u8, u64, u64, u8)],
+    ppq: u16,
+    meters: &[(u64, u8, u8)],
+    markers: &[(u64, &str)],
+) -> DecodedMidiSource {
     fn vlq(mut n: u64) -> Vec<u8> {
         let mut bytes = vec![(n & 127) as u8];
         n >>= 7;
@@ -21,6 +30,13 @@ fn decoded(notes: &[(u8, u64, u64, u8)], ppq: u16, meters: &[(u64, u8, u8)]) -> 
     for lane in 0..count {
         let mut events = Vec::new();
         if lane == 0 {
+            for &(tick, text) in markers {
+                let text = format!("EtuSchlopf notation {text}");
+                let mut payload = vec![255, 6];
+                payload.extend(vlq(text.len() as u64));
+                payload.extend(text.bytes());
+                events.push((tick * u64::from(ppq) / 384, 0, payload));
+            }
             for &(tick, beats, exponent) in meters {
                 events.push((
                     tick * u64::from(ppq) / 384,
@@ -207,4 +223,94 @@ fn odd_three_unit_lengths_and_onsets_are_refused_before_serialization() {
         let source = decoded(&[(0, 0, value * 4, 72), (0, 384, 384, 74)], 384, &[(0, 4, 2)]);
         assert!(NotationTimePlan::from_source(&source).is_ok());
     }
+}
+
+#[test]
+fn declared_timing_projects_variable_pulse_without_changing_source_time() {
+    let notes = [(0, 100, 99, 72), (0, 203, 237, 74), (0, 441, 119, 76)];
+    let markers = [
+        (100, "v1 meter 2"),
+        (200, "v1 anchor 48"),
+        (440, "v1 anchor 144"),
+        (560, "v1 anchor 240"),
+    ];
+    for ppq in [384, 768] {
+        let source = decoded_with_markers(&notes, ppq, &[], &markers);
+        let plan = NotationTimePlan::from_source(&source).unwrap();
+        assert_eq!((plan.measure(0).unwrap().start, plan.measure(0).unwrap().end), (0, 192));
+        assert_eq!((plan.measure(1).unwrap().start, plan.measure(1).unwrap().end), (192, 384));
+        assert_eq!(plan.measure(0).unwrap().beats, 2);
+        for (ordinal, (pos, len)) in [(0, 48), (48, 96), (144, 96)].into_iter().enumerate() {
+            assert_eq!(plan.source_event(ordinal).unwrap(), source.notes[ordinal]);
+            let event = plan.event(ordinal).unwrap();
+            assert_eq!((event.pos, event.len), (pos, len));
+            assert_eq!(plan.written_sustain_interval(ordinal).unwrap(), pos..pos + len);
+        }
+    }
+}
+
+#[test]
+fn declared_timing_refuses_unbracketed_ambiguous_and_conflicting_evidence() {
+    let markers = [(100, "v1 meter 2"), (484, "v1 anchor 96")];
+    for notes in [
+        vec![(0, 99, 193, 72)],
+        vec![(0, 112, 180, 72)],
+        vec![(0, 100, 384, 72), (0, 103, 189, 72)],
+    ] {
+        let source = decoded_with_markers(&notes, 384, &[], &markers);
+        assert!(NotationTimePlan::from_source(&source).is_err());
+    }
+    let source = decoded_with_markers(&[(0, 100, 384, 72)], 384, &[(0, 3, 2)], &markers);
+    assert!(NotationTimePlan::from_source(&source).is_err());
+}
+
+#[test]
+fn declared_pickup_uses_its_own_extent_and_moves_the_first_full_measure() {
+    let notes = [(0, 100, 100, 72), (0, 200, 240, 74), (0, 440, 120, 76)];
+    let markers = [
+        (100, "v1 meter 2 pickup 48"),
+        (200, "v1 anchor 48"),
+        (440, "v1 anchor 144"),
+        (560, "v1 anchor 240"),
+    ];
+    let source = decoded_with_markers(&notes, 384, &[], &markers);
+    let plan = NotationTimePlan::from_source(&source).unwrap();
+    let opening = plan.measure(0).unwrap();
+    let first_full = plan.measure(1).unwrap();
+    assert_eq!((opening.start, opening.end), (0, 48));
+    assert_eq!((first_full.start, first_full.end), (48, 240));
+    assert_eq!(opening.beats, first_full.beats);
+    assert_eq!(plan.metric.ordinal_at(48), Some(1));
+    assert_eq!(plan.event(1).unwrap().pos, 48);
+    assert_eq!(plan.source_event(1).unwrap(), source.notes[1]);
+}
+
+#[test]
+fn performed_binary_pulse_is_inferred_without_a_sidecar() {
+    let mut notes = vec![(0, 640, 126, 71)];
+    let first_downbeat = 796;
+    for index in 0..40 {
+        let onset = first_downbeat + index * 99 + index % 3;
+        let bass = if index % 4 == 0 { 43 } else { 55 };
+        notes.push((0, onset, 81, bass));
+        notes.push((0, onset + 5, 86, 76));
+    }
+    let source = decoded(&notes, 384, &[]);
+    let plan = NotationTimePlan::from_midi(&source).unwrap();
+    assert_eq!(plan.timing_authority, TimingAuthority::InferredPerformance);
+    assert_eq!(plan.events.len(), notes.len());
+    assert_eq!(plan.events[0].len, 48);
+    assert_eq!(plan.events[1].pos, 48);
+    assert_eq!(plan.events[2].pos, 48);
+    assert_eq!(plan.metric.measure(0).unwrap().end, 48);
+    assert_eq!(plan.metric.measure(1).unwrap().beats, 2);
+    assert_eq!(plan.source_events, source.notes);
+}
+
+#[test]
+fn a_steady_pulse_without_distinct_accents_is_insufficient() {
+    let notes = (0..40).map(|index| (0, 40 + index * 101, 83, 60))
+        .collect::<Vec<_>>();
+    let source = decoded(&notes, 384, &[]);
+    assert!(NotationTimePlan::from_inferred_performance(&source).is_err());
 }

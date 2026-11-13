@@ -72,6 +72,13 @@ pub(crate) fn approve_phrase_occurrence_course(
         endpoints.push((intent, source.bind_phrase_endpoint(a.note_start..a.note_end)?,
             source.bind_phrase_endpoint(b.note_start..b.note_end)?));
     }
+    if let Some((intent, start, end)) = super::phrase_notation_policy::select_connected_pickup_phrase(source.xml())?
+        && !endpoints.iter().any(|(existing, _, _)| existing.part == intent.part
+            && existing.start_canonical < intent.end_canonical
+            && intent.start_canonical < existing.end_canonical)
+    {
+        endpoints.push((intent, source.bind_phrase_endpoint(start)?, source.bind_phrase_endpoint(end)?));
+    }
     eprintln!("PhraseOccurrenceBoundCourse: endpoints={}; authority=actual_original_occurrence_receipt",endpoints.len());
     Ok(ApprovedPhraseOccurrenceCourse { endpoints })
 }

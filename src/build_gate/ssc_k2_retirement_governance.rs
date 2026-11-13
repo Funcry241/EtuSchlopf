@@ -729,7 +729,11 @@ fn validate_wav_metronome_positive(
     for (path, kind, name, expected) in WAV_METRONOME_ITEMS {
         let source = read(root, path)?;
         let actual = crate::rust_source_scan_primitives::fnv1a64(item(&source, kind, name)?.as_bytes());
-        if actual != *expected {
+        // Only the owner that used to add unrelated expression signs has a successor.
+        // The complete replacement still pins its tempo calculation and writer call.
+        let tempo_only_expression = *name == "apply_expression_polish"
+            && actual == 0xccd42782d0c8217c;
+        if actual != *expected && !tempo_only_expression {
             return Err(fail(format!("positive WAV metronome construction changed: {path}::{name}")));
         }
     }

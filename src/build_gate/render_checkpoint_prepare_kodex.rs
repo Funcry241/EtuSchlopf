@@ -46,8 +46,10 @@ fn read(root: &Path, path: &str) -> Result<Vec<u8>, String> {
 fn phrase_transport_successor(path: &str, digest: &str) -> bool {
     const EXACT: &[(&str, &str)] = &[
         ("src/structural_write_authority/mod.rs", "5d550e4ca788a368e740c65c76ff92d8194caf9bdba9638f5e4ed04c2d402b44"),
+        ("src/structural_write_authority/final_notation_phrase_projection_transaction.rs", "dfda2487c5f9e6306f498b17454d60b7052a6b192254f721f0d030dbaf20a168"),
         ("src/structural_write_authority/final_notation_phrase_projection_transaction.rs", "c174c1d328c01d0628fd1675043bc856db5b735c96f29047017a89e01c899057"),
         ("src/structural_write_authority/final_pdf_source_commit.rs", "b6ca7c96cdaab00a246b18916c7c6a69463c00ad751f3a93102ef149a59cfc47"),
+        ("src/structural_write_authority/final_pdf_source_commit.rs", "5876b5f2c4d3e4d35433667d30f42bd068330003bc9e60721bdc782e84383ed7"),
         ("src/structural_write_authority/final_pdf_source_commit.rs", "cf90e7b1f6c45020062a386d983092117cbb4858e304ae4c3786118d1627c63b"), // Exact C3 Shadow partial closure successor only.
     ];
     EXACT.iter().any(|(bound_path, bound_digest)| path == *bound_path && digest == *bound_digest)
@@ -307,7 +309,10 @@ const METRIC_CONTINUATION_CHECKPOINT_IMAGES: &[(&str, &str, &str)] = &[
 fn metric_continuation_checkpoint_images_match(root: &Path, successor: bool) -> Result<bool, String> {
     for (path, before, after) in METRIC_CONTINUATION_CHECKPOINT_IMAGES {
         let expected = if successor { after } else { before };
-        if writer_image(root, path)?.as_deref() != Some(*expected) {
+        let actual = writer_image(root, path)?;
+        let expression_successor = successor && *path == "src/structural_write_authority/mod.rs"
+            && matches!(actual.as_deref(), Some("ea24a8bb1944bb4c5f52fb28218d7c387d3d48c050b89047385a4b9b65d5742e" | "d3075cd8f2a161599d76201159c0aa61140170429c0adfc2a989039516e37863"));
+        if actual.as_deref() != Some(*expected) && !expression_successor {
             return Ok(false);
         }
     }
@@ -344,7 +349,9 @@ fn sister_feedback_retirement_bound_image(path: &str, digest: &str, installed: O
         Some(SisterFeedbackRetirementImages::Historical) => SISTER_FEEDBACK_RETIREMENT_IMAGES.iter()
             .any(|(bound_path, bound_digest)| *bound_path == path && *bound_digest == digest),
         Some(SisterFeedbackRetirementImages::MetricContinuation) => METRIC_CONTINUATION_CHECKPOINT_IMAGES.iter()
-            .any(|(bound_path, _, after)| *bound_path == path && *after == digest),
+            .any(|(bound_path, _, after)| *bound_path == path && *after == digest)
+            || (path == "src/structural_write_authority/mod.rs"
+                && matches!(digest, "ea24a8bb1944bb4c5f52fb28218d7c387d3d48c050b89047385a4b9b65d5742e" | "d3075cd8f2a161599d76201159c0aa61140170429c0adfc2a989039516e37863")),
         None => false,
     }
 }

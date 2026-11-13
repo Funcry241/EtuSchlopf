@@ -81,6 +81,35 @@
         Ok(Part { id, name, measures })
     }
     
+    pub(crate) fn implicit_measure_extent(
+        xml: &str,
+        divisions: i64,
+        beats: i64,
+        beat_type: i64,
+    ) -> Option<i64> {
+        let opening_tag = xml.split_once('>')?.0;
+        if !opening_tag.contains("implicit") {
+            return None;
+        }
+        let doc = Document::parse(xml).ok()?;
+        implicit_measure_node_extent(doc.root_element(), divisions, beats, beat_type)
+    }
+
+    pub(crate) fn implicit_measure_node_extent(
+        node: Node<'_, '_>,
+        divisions: i64,
+        beats: i64,
+        beat_type: i64,
+    ) -> Option<i64> {
+        if node.attribute("implicit") != Some("yes") {
+            return None;
+        }
+        let measure = parse_measure(node, 1, divisions, beats, beat_type).ok()?;
+        let nominal = ExpectedDuration::new(measure.divisions, measure.beats, measure.beat_type);
+        let extent = measure.expected.numerator;
+        (measure.expected.denominator == 1 && nominal.compare_to_actual(extent) < 0).then_some(extent)
+    }
+
     fn parse_measure(
         measure_node: Node<'_, '_>,
         fallback_number: usize,
@@ -182,7 +211,18 @@
             }
         }
     
-        let expected = ExpectedDuration::new(divisions, beats, beat_type);
+        let nominal = ExpectedDuration::new(divisions, beats, beat_type);
+        let expected = if measure_node.attribute("implicit") == Some("yes") {
+            let extent = events.iter().map(|event| event.start.saturating_add(event.duration))
+                .fold(cursor_max, i64::max);
+            if extent > 0 && nominal.compare_to_actual(extent) < 0 {
+                ExpectedDuration { numerator: extent, denominator: 1 }
+            } else {
+                nominal
+            }
+        } else {
+            nominal
+        };
         Ok(Measure {
             number,
             divisions,

@@ -121,6 +121,7 @@ impl HorizontalLayoutPlannedSlot {
 
 #[derive(Debug, Clone)]
 struct HorizontalLayoutPlan {
+    manual_page_target: bool,
     slots: Vec<HorizontalLayoutPlannedSlot>,
 }
 
@@ -229,6 +230,7 @@ impl HorizontalLayoutPlan {
 }
 
 struct HorizontalLayoutPlanBuilder {
+    manual_page_target: bool,
     slots: Vec<HorizontalLayoutPlannedSlot>,
 }
 
@@ -248,7 +250,7 @@ impl HorizontalLayoutPlanBuilder {
                 .map(HorizontalLayoutPlannedSlot::from_seed)
                 .collect::<Vec<_>>()
         };
-        let builder = Self { slots };
+        let builder = Self { slots, manual_page_target: seed.manual_page_target };
         if !builder.working_xml_is_compatible(materialized_xml)? {
             anyhow::bail!(
                 "HorizontalLayoutPlanMaterializationClosure: struktureller Layout-Seed und noch unmaterialisiertes Arbeits-XML sind nicht kompatibel"
@@ -275,6 +277,7 @@ impl HorizontalLayoutPlanBuilder {
             );
         }
         Ok(Self {
+            manual_page_target: seed.manual_page_target,
             slots: seed
                 .slots
                 .iter()
@@ -398,6 +401,7 @@ impl HorizontalLayoutPlanBuilder {
 
     fn close(self) -> anyhow::Result<HorizontalLayoutPlan> {
         let plan = HorizontalLayoutPlan {
+            manual_page_target: self.manual_page_target,
             slots: self.slots,
         };
         if !plan.provenance_complete() {
@@ -456,6 +460,7 @@ mod horizontal_layout_decision_plan_tests {
     fn decision_builder_preserves_renderer_auto_width_seed_boundary() {
         let xml = r#"<score><part><measure number="alpha"></measure><measure number="beta"><print new-system="yes"/></measure></part></score>"#;
         let seed = HorizontalLayoutSeedPlan {
+            manual_page_target: false,
             slots: vec![
                 HorizontalLayoutSeedSlot {
                     starts_new_system: false,
@@ -483,6 +488,7 @@ mod horizontal_layout_decision_plan_tests {
     fn page_replacement_owns_system_false_state() {
         let xml = r#"<score><part><measure number="x"><print new-system="yes"/></measure></part></score>"#;
         let seed = HorizontalLayoutSeedPlan {
+            manual_page_target: false,
             slots: vec![HorizontalLayoutSeedSlot {
                 starts_new_system: true,
                 starts_new_page: false,
@@ -500,6 +506,7 @@ mod horizontal_layout_decision_plan_tests {
     fn planned_system_state_is_structural_and_identity_free() {
         let xml = r#"<score><part><measure number="alpha"></measure><measure number="beta"><print new-system="yes"/></measure><measure number="gamma"><print new-page="yes"/></measure></part></score>"#;
         let seed = HorizontalLayoutSeedPlan {
+            manual_page_target: false,
             slots: vec![
                 HorizontalLayoutSeedSlot::default(),
                 HorizontalLayoutSeedSlot {

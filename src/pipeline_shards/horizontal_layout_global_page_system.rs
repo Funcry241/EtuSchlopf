@@ -23,6 +23,7 @@ struct GlobalHorizontalSystemLoadEvidence {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct GlobalHorizontalPageSystemPlanAudit {
+    compact_geometry_planned: bool,
     slots_compared: usize,
     preferred_pages: usize,
     selected_pages: usize,
@@ -552,6 +553,7 @@ fn build_global_horizontal_page_system_plan(
     }
 
     let mut audit = GlobalHorizontalPageSystemPlanAudit {
+        compact_geometry_planned: preference_audit.compact_geometry_planned,
         slots_compared: slots,
         preferred_pages: preference_audit.preferred_pages,
         selected_pages: selected.pages,

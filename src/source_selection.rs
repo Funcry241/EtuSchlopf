@@ -72,7 +72,6 @@ pub(crate) enum SourceSelectionDecisionPass {
     BoundSourceVoiceStaff,
     PianoHandSplit,
     SmoothFastStaffJump,
-    SmoothWideSimultaneity,
     HotspotSpan,
     HotspotJump,
     TrajectoryMoveOutlier,
@@ -82,6 +81,7 @@ pub(crate) enum SourceSelectionDecisionPass {
     ResidualCriticalSpan,
     ResidualCriticalJump,
     PostResidualWideSimultaneity,
+    AlignedHandSpanSplit,
 }
 
 impl SourceSelectionDecisionPass {
@@ -92,7 +92,6 @@ impl SourceSelectionDecisionPass {
             Self::BoundSourceVoiceStaff => "bound_source_voice_staff",
             Self::PianoHandSplit => "piano_hand_split",
             Self::SmoothFastStaffJump => "smooth_fast_staff_jump",
-            Self::SmoothWideSimultaneity => "smooth_wide_simultaneity",
             Self::HotspotSpan => "hotspot_span",
             Self::HotspotJump => "hotspot_jump",
             Self::TrajectoryMoveOutlier => "trajectory_move_outlier",
@@ -102,6 +101,7 @@ impl SourceSelectionDecisionPass {
             Self::ResidualCriticalSpan => "residual_critical_span",
             Self::ResidualCriticalJump => "residual_critical_jump",
             Self::PostResidualWideSimultaneity => "post_residual_wide_simultaneity",
+            Self::AlignedHandSpanSplit => "aligned_hand_span_split",
         }
     }
 
@@ -112,7 +112,7 @@ impl SourceSelectionDecisionPass {
             Self::BoundSourceVoiceStaff => 16,
             Self::PianoHandSplit => 2,
             Self::SmoothFastStaffJump => 3,
-            Self::SmoothWideSimultaneity => 4,
+            // Discriminator 4 belonged to the retired post-jump onset split.
             Self::HotspotSpan => 5,
             Self::HotspotJump => 6,
             // Discriminator 7 belonged to the retired soft-register hotspot pass.
@@ -124,6 +124,7 @@ impl SourceSelectionDecisionPass {
             Self::ResidualCriticalSpan => 12,
             Self::ResidualCriticalJump => 13,
             Self::PostResidualWideSimultaneity => 14,
+            Self::AlignedHandSpanSplit => 17,
         }
     }
 }

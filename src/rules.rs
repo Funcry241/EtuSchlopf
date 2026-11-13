@@ -8,8 +8,8 @@ use crate::central_rulebook::rule_by_id;
 use crate::rule_id::{runtime_severity_for_issue_kind, validator_issue_authority, ValidatorIssueKind};
 use std::collections::{BTreeMap, BTreeSet};
 
-const PIANO_HAND_MAX_SPAN: u32 = 12;
-const PIANO_HAND_MAX_KEYS: usize = 5;
+pub(crate) const PIANO_HAND_MAX_SPAN: u32 = 12;
+pub(crate) const PIANO_HAND_MAX_KEYS: usize = 5;
 const PIANO_FAST_JUMP_MIN_INTERVAL: u32 = 19;
 
 #[derive(Debug, Clone)]

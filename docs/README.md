@@ -3,7 +3,7 @@
 EtuSchlopf ist ein experimentelles, privat gepflegtes Projekt. Beginne je nach
 Aufgabe mit einem der folgenden Einstiege:
 
-Der veröffentlichte Quellstand auf `main` und die [Windows-Testversion](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1749-windows-preview) sind **r1749**. Die [Windows-Abnahme r1792](evidence/r1792/README.md) dokumentiert den neueren Entwicklungsstand für Chopin.
+Der veröffentlichte Quellstand auf `main` ist **r1792**. Die [Windows-Testversion](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1749-windows-preview) ist **r1749**. Die [Windows-Abnahme r1792](evidence/r1792/README.md) dokumentiert den Quellstand für Chopin.
 
 | Aufgabe | Einstieg |
 | --- | --- |

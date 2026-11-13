@@ -1101,18 +1101,6 @@ pub fn first_structural_measure_locator(source: &str) -> Option<StructuralMeasur
     structural_measure_locators(source).into_iter().next()
 }
 
-pub fn fractional_structural_measure_locator(
-    source: &str,
-    fraction: f64,
-) -> Option<StructuralMeasureLocator> {
-    if !fraction.is_finite() || !(0.0..=1.0).contains(&fraction) {
-        return None;
-    }
-    let locators = structural_measure_locators(source);
-    let idx = ((locators.len().saturating_sub(1)) as f64 * fraction).round() as usize;
-    locators.get(idx.min(locators.len().saturating_sub(1))).cloned()
-}
-
 #[derive(Debug)]
 struct DirectionInsertionCapability {
     source: ExactSourceBinding,

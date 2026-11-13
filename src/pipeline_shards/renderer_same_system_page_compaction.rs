@@ -5,6 +5,9 @@ fn build_renderer_same_system_page_candidate(
     current_pages: &[Vec<usize>],
     basis: &GlobalHorizontalPageSystemPlanAudit,
 ) -> anyhow::Result<Option<JointPageSystemCandidate>> {
+    if basis.compact_geometry_planned {
+        return Ok(None);
+    }
     let systems = current_pages.iter().flatten().copied().collect::<Vec<_>>();
     if current_pages.is_empty()
         || current_pages.iter().any(Vec::is_empty)

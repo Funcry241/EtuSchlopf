@@ -103,7 +103,7 @@ fn plan(parts: &[Vec<usize>]) -> HorizontalLayoutPlan {
             }
         }
     }
-    HorizontalLayoutPlan { slots }
+    HorizontalLayoutPlan { slots, manual_page_target: false }
 }
 
 fn observation() -> crate::audit_only::renderer_system_break_readback::RendererSystemBreakReadbackAudit {

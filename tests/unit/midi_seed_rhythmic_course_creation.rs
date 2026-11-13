@@ -245,7 +245,7 @@ fn aligned_tied_octave_keeps_long_values_through_arrangement() {
         (0, SourceVoice { staff: 2, voice: 2, opposite_stem: false }),
         (1, SourceVoice { staff: 2, voice: 2, opposite_stem: false }),
     ]);
-    let mut plan = MidiSeedRhythmicCourses::create_metric_presentations(&notes, &metric, Some(&voices))
+    let mut plan = MidiSeedRhythmicCourses::create_metric_presentations(&notes, &metric, Some(&voices), false)
         .unwrap();
     let (xml, _, _) = build_musicxml("Synthetic tied octave", &notes, 3, &mut plan, None).unwrap();
     let arrangement = crate::arrangement::arrange_piano_musicxml_with_profile(
@@ -279,4 +279,342 @@ fn aligned_tied_octave_keeps_long_values_through_arrangement() {
     }
     assert!(!aligned_long_tie_value(96, 192, 384, 96));
     assert!(!aligned_long_tie_value(0, 192, 288, 96));
+}
+
+#[test]
+fn preserve_attacks_keeps_distinct_chord_attacks_visible() {
+    use crate::arrangement::ArrangementMaterialDispositionKind::VisiblePitched;
+
+    let pitches = [60, 64, 69, 74];
+    for copies in [1, 2] {
+        let notes = [0, MEASURE_DIVISIONS].into_iter().take(copies)
+            .flat_map(|onset| pitches.map(|midi| (onset, midi)))
+            .enumerate().map(|(ordinal, (onset, midi))| MidiSeedNote {
+                len: MEASURE_DIVISIONS,
+                midi,
+                ..note(ordinal, onset, 1)
+            }).collect::<Vec<_>>();
+        let metric = MidiSeedRhythmicCourses::create_primary_presentations(
+            &notes, copies, MEASURE_DIVISIONS,
+        ).unwrap().metric;
+        for preserve_attacks in [false, true] {
+            let mut plan = MidiSeedRhythmicCourses::create_metric_presentations(
+                &notes, &metric, None, preserve_attacks,
+            ).unwrap();
+            let (seed, _, attacks) = build_musicxml(
+                "Synthetic", &notes, copies, &mut plan, None,
+            ).unwrap();
+            let arrangement = crate::arrangement::arrange_piano_musicxml_with_profile(
+                &seed,
+                crate::arrangement::ArrangementProfile {
+                    rhythmic_courses: Some(&plan),
+                    preserve_reference: true,
+                    ..Default::default()
+                },
+            );
+            assert_eq!(attacks.len(), notes.len());
+            for measure in 1..=copies {
+                let visible_attacks = attacks.iter()
+                    .filter(|attack| attack.measure_ordinal == measure)
+                    .filter(|attack| arrangement.stats.material_disposition_rows.iter().any(|row| {
+                        row.measure_ordinal == attack.measure_ordinal
+                            && row.raw_note_index == attack.raw_note_index
+                            && row.disposition == VisiblePitched
+                    }))
+                    .count();
+                let expected = if preserve_attacks { pitches.len() } else { 2 };
+                assert_eq!(visible_attacks, expected);
+            }
+        }
+    }
+}
+
+#[test]
+fn aligned_hand_span_split_requires_two_playable_hands() {
+    let notes = [
+        MidiSeedNote { midi: 39, ..note(0, 0, 2) },
+        MidiSeedNote { midi: 52, ..note(1, 0, 1) },
+        MidiSeedNote { midi: 58, ..note(2, 0, 1) },
+        MidiSeedNote { midi: 67, ..note(3, 0, 1) },
+    ];
+    let group = |notes: &[MidiSeedNote]| notes.iter().enumerate()
+        .map(|(index, note)| (index, note.midi)).collect::<Vec<_>>();
+    assert_eq!(aligned_hand_span_split(&group(&notes), |_, index| notes[index].staff), None);
+
+    let mut notes = notes;
+    notes[0].midi = 41;
+    assert_eq!(aligned_hand_span_split(&group(&notes), |_, index| notes[index].staff), Some((2, 15)));
+
+    notes[1].staff = 2;
+    assert_eq!(aligned_hand_span_split(&group(&notes), |_, index| notes[index].staff), None);
+}
+
+#[test]
+fn upper_stepwise_continuation_keeps_its_own_voice_over_lower_activity() {
+    let metric = MidiSeedRhythmicCourses::create_primary_presentations(&[], 1, 384).unwrap().metric;
+    let source = |source_ordinal, pos, len, midi| MidiSeedNote {
+        source_ordinal, pos, len, midi, staff: 1,
+    };
+    let notes = [
+        source(0, 96, 48, 77),
+        source(1, 96, 24, 65),
+        source(2, 120, 24, 69),
+        source(3, 144, 24, 76),
+        source(4, 168, 24, 74),
+        source(5, 168, 24, 67),
+    ];
+    let mut plan = MidiSeedRhythmicCourses::create_metric_presentations(&notes, &metric, None, true)
+        .unwrap();
+    let (xml, _, _) = build_musicxml("Synthetic", &notes, 1, &mut plan, None).unwrap();
+    let upper = plan.planned.iter()
+        .filter(|note| note.independent)
+        .map(|note| (note.pitch, note.interval.clone()))
+        .collect::<Vec<_>>();
+    assert_eq!(upper, [(Some(77), 96..144), (Some(76), 144..168), (Some(74), 168..192)]);
+    assert!(plan.planned.iter()
+        .filter(|note| matches!(note.pitch, Some(65 | 69 | 67)))
+        .all(|note| !note.independent && note.opposite_stem));
+    plan.validate_seed_binding(&xml).unwrap();
+}
+
+#[test]
+fn upper_sustain_keeps_its_release_over_multiple_lower_attacks() {
+    let metric = MidiSeedRhythmicCourses::create_primary_presentations(&[], 2, 384).unwrap().metric;
+    let mut notes = [
+        MidiSeedNote { midi: 79, len: 96, ..note(0, 96, 1) },
+        MidiSeedNote { midi: 67, ..note(1, 120, 1) },
+        MidiSeedNote { midi: 69, ..note(2, 144, 1) },
+        MidiSeedNote { midi: 72, ..note(3, 168, 1) },
+    ];
+    let repeated = notes.iter().copied().chain(notes.iter().map(|source| MidiSeedNote {
+        pos: source.pos + 384,
+        source_ordinal: source.source_ordinal + notes.len(),
+        ..*source
+    })).collect::<Vec<_>>();
+    let mut plan = MidiSeedRhythmicCourses::create_metric_presentations(&repeated, &metric, None, true)
+        .unwrap();
+    let (xml, _, attacks) = build_musicxml("Synthetic", &repeated, 2, &mut plan, None).unwrap();
+    let sustains = plan.planned.iter().filter(|occurrence| occurrence.independent)
+        .map(|occurrence| (occurrence.source, occurrence.interval.clone())).collect::<Vec<_>>();
+    assert_eq!(sustains, [(Some(0), 96..192), (Some(4), 480..576)]);
+    assert_eq!(attacks.len(), repeated.len());
+    plan.validate_seed_binding(&xml).unwrap();
+
+    notes[2].midi = 81;
+    let plan = MidiSeedRhythmicCourses::create_metric_presentations(&notes, &metric, None, true)
+        .unwrap();
+    let sustain = plan.planned.iter().find(|occurrence| occurrence.source == Some(0)).unwrap();
+    assert!(!sustain.independent);
+}
+
+#[test]
+fn simultaneous_sustains_keep_one_attack_each_across_a_barline() {
+    let metric = MidiSeedRhythmicCourses::create_primary_presentations(&[], 4, 192).unwrap().metric;
+    let notes = [
+        MidiSeedNote { midi: 77, len: 120, ..note(0, 96, 1) },
+        MidiSeedNote { midi: 73, len: 120, ..note(1, 96, 1) },
+        MidiSeedNote { midi: 65, ..note(2, 96, 1) },
+        MidiSeedNote { midi: 67, ..note(3, 120, 1) },
+        MidiSeedNote { midi: 69, ..note(4, 192, 1) },
+        MidiSeedNote { midi: 77, ..note(5, 216, 1) },
+    ];
+    let repeated = notes.iter().copied().chain(notes.iter().map(|source| MidiSeedNote {
+        pos: source.pos + 384,
+        source_ordinal: source.source_ordinal + notes.len(),
+        ..*source
+    })).collect::<Vec<_>>();
+    let mut plan = MidiSeedRhythmicCourses::create_metric_presentations(&repeated, &metric, None, true).unwrap();
+    let (xml, _, attacks) = build_musicxml("Synthetic", &repeated, 4, &mut plan, None).unwrap();
+    assert_eq!(attacks.len(), repeated.len());
+    for (source, offset) in [(0, 0), (1, 0), (6, 384), (7, 384)] {
+        let fragments = plan.planned.iter().filter(|note| note.source == Some(source))
+            .map(|note| (note.interval.clone(), note.tie_start, note.tie_stop)).collect::<Vec<_>>();
+        assert_eq!(fragments, [(96 + offset..192 + offset, true, false), (192 + offset..216 + offset, false, true)]);
+    }
+    assert_eq!(plan.source_voice_continuation_slots().len(), 4);
+    plan.validate_seed_binding(&xml).unwrap();
+    let arrangement = crate::arrangement::arrange_piano_musicxml_with_profile(
+        &xml,
+        crate::arrangement::ArrangementProfile {
+            rhythmic_courses: Some(&plan),
+            preserve_reference: true,
+            ..Default::default()
+        },
+    );
+    let arranged = crate::musicxml::parse_musicxml(&arrangement.xml).unwrap();
+    for measure in [1, 3] {
+        let tied_pitches = arranged.parts[0].measures[measure].events.iter()
+            .filter(|event| event.start == 0 && event.tie_stop && event.duration == 24)
+            .filter_map(|event| event.pitch.as_ref().map(|pitch| pitch.midi))
+            .collect::<BTreeSet<_>>();
+        assert_eq!(tied_pitches, BTreeSet::from([73, 77]));
+    }
+
+    let mut conflicting = notes;
+    conflicting[5].pos = 204;
+    let plan = MidiSeedRhythmicCourses::create_metric_presentations(&conflicting, &metric, None, true).unwrap();
+    assert!(plan.source_voice_continuation_slots().is_empty());
+}
+
+#[test]
+fn simultaneous_upper_notes_keep_distinct_releases() {
+    let metric = MidiSeedRhythmicCourses::create_primary_presentations(&[], 2, 192).unwrap().metric;
+    let notes = [
+        MidiSeedNote { midi: 83, len: 120, ..note(0, 0, 1) },
+        MidiSeedNote { midi: 79, len: 144, ..note(1, 0, 1) },
+        MidiSeedNote { midi: 70, len: 18, ..note(2, 0, 1) },
+        MidiSeedNote { midi: 74, ..note(3, 24, 1) },
+        MidiSeedNote { midi: 72, ..note(4, 48, 1) },
+        MidiSeedNote { midi: 76, ..note(5, 72, 1) },
+        MidiSeedNote { midi: 79, ..note(6, 144, 1) },
+    ];
+    let repeated = notes.iter().copied().chain(notes.iter().map(|source| MidiSeedNote {
+        pos: source.pos + 192,
+        source_ordinal: source.source_ordinal + notes.len(),
+        ..*source
+    })).collect::<Vec<_>>();
+    let mut plan = MidiSeedRhythmicCourses::create_metric_presentations(&repeated, &metric, None, true).unwrap();
+    let (xml, _, attacks) = build_musicxml("Synthetic", &repeated, 2, &mut plan, None).unwrap();
+    assert_eq!(attacks.len(), repeated.len());
+    let arranged = crate::arrangement::arrange_piano_musicxml_with_profile(
+        &xml,
+        crate::arrangement::ArrangementProfile {
+            rhythmic_courses: Some(&plan),
+            preserve_reference: true,
+            ..Default::default()
+        },
+    );
+    let score = crate::musicxml::parse_musicxml(&arranged.xml).unwrap();
+    for bar in &score.parts[0].measures {
+        let continuations = bar.events.iter().filter(|event| event.tie_stop)
+            .filter_map(|event| event.pitch.as_ref().map(|pitch| (pitch.midi, event.start, event.duration)))
+            .collect::<BTreeSet<_>>();
+        assert!(continuations.contains(&(83, 96, 24)));
+        assert!(continuations.contains(&(79, 96, 48)));
+    }
+}
+
+fn jump_fixture(pitches: &[(i64, i32, u8, i64)]) -> Vec<MidiSeedNote> {
+    pitches.iter().enumerate().map(|(source_ordinal, &(pos, midi, staff, len))| {
+        MidiSeedNote { source_ordinal, pos, len, midi, staff }
+    }).collect()
+}
+
+fn smooth_fixture(notes: &mut [MidiSeedNote]) -> Vec<SourceSelectionDecisionEvidence> {
+    let metric = MetricTimeline::from_midi(
+        crate::midi::source_time::SourceTimeDomain { source_ppq: 96, divisions: 96 },
+        &[],
+        768,
+    ).unwrap();
+    let mut decisions = Vec::new();
+    smooth_fast_staff_jumps(&metric, notes, &CandidateProfile::jump_smooth(), None, false, &mut decisions);
+    decisions
+}
+
+#[test]
+fn equal_opposing_hand_jumps_keep_the_incumbent_assignment() {
+    let mut notes = jump_fixture(&[(0, 85, 1, 12), (24, 64, 1, 12), (48, 43, 2, 12)]);
+    let before = notes.clone();
+    assert!(smooth_fixture(&mut notes).is_empty());
+    assert_eq!(notes, before);
+}
+
+#[test]
+fn beneficial_handoffs_preserve_attacks_and_are_independent_across_gaps() {
+    let mut notes = jump_fixture(&[
+        (0, 85, 1, 12), (24, 60, 1, 12), (48, 58, 2, 12),
+        (384, 85, 1, 12), (408, 60, 1, 12), (432, 58, 2, 12),
+    ]);
+    let mut expected = notes.clone();
+    expected[1].staff = 2;
+    expected[4].staff = 2;
+    let decisions = smooth_fixture(&mut notes);
+    assert_eq!(notes, expected);
+    assert_eq!(decisions.iter().map(|event| event.source_ordinal).collect::<Vec<_>>(), [1, 4]);
+    assert_eq!(decisions[0].witness_a_source_ordinal, Some(0));
+    assert_eq!(decisions[0].witness_b_source_ordinal, Some(1));
+    assert!(smooth_fixture(&mut notes).is_empty());
+}
+
+#[test]
+fn larger_receiving_jump_or_sustained_keys_prevent_a_handoff() {
+    for pitches in [
+        [(0, 85, 1, 12), (24, 64, 1, 12), (48, 40, 2, 12)],
+        [(0, 85, 1, 12), (24, 64, 1, 48), (48, 48, 2, 24)],
+        [(0, 85, 1, 12), (24, 64, 1, 48), (24, 48, 2, 24)],
+    ] {
+        let mut notes = jump_fixture(&pitches);
+        let before = notes.clone();
+        assert!(smooth_fixture(&mut notes).is_empty());
+        assert_eq!(notes, before);
+    }
+}
+
+#[test]
+fn newly_joined_donor_neighbors_are_included_in_the_comparison() {
+    let mut notes = jump_fixture(&[(0, 85, 1, 12), (24, 64, 1, 12), (48, 99, 1, 12)]);
+    let before = notes.clone();
+    // Removing the middle note really improves this hand, so it moves.
+    assert_eq!(smooth_fixture(&mut notes).len(), 1);
+    assert_eq!(notes[1].staff, 2);
+    assert_eq!(notes[0], before[0]);
+    assert_eq!(notes[2], before[2]);
+
+    // The old edge exceeds the limit, but removing its high endpoint
+    // would join the donor's remaining notes into a still larger jump.
+    let mut notes = jump_fixture(&[(0, 45, 2, 12), (24, 70, 2, 12), (48, 82, 2, 12)]);
+    let before = notes.clone();
+    assert!(smooth_fixture(&mut notes).is_empty());
+    assert_eq!(notes, before);
+}
+
+#[test]
+fn hand_jump_smoothing_keeps_the_owner_split_of_a_wide_onset() {
+    let mut notes = jump_fixture(&[
+        (24, 45, 2, 12), (24, 52, 2, 12), (24, 63, 1, 12), (48, 30, 2, 12),
+    ]);
+    let profile = CandidateProfile::jump_smooth();
+    let group = [(0, 45), (1, 52), (2, 63)];
+    assert_eq!(wide_piano_hand_split(&group, 18, &profile), Some(2));
+    let before = notes.clone();
+    assert!(smooth_fixture(&mut notes).is_empty());
+    assert_eq!(notes, before);
+
+    // Bring the lower pitch closer so that the onset no longer needs a split.
+    notes[0].midi = 50;
+    assert_eq!(smooth_fixture(&mut notes).len(), 1);
+    assert_eq!(notes[1].staff, 1);
+}
+
+#[test]
+fn attack_preserving_seed_commits_the_feasible_onset_split_directly() {
+    let metric = MetricTimeline::from_midi(
+        crate::midi::source_time::SourceTimeDomain { source_ppq: 96, divisions: 96 },
+        &[],
+        768,
+    ).unwrap();
+    let profile = CandidateProfile::jump_smooth();
+    let source = jump_fixture(&[(24, 43, 2, 12), (24, 44, 2, 12), (24, 56, 2, 12), (24, 68, 1, 12)]);
+    let mut notes = source.clone();
+    let mut decisions = Vec::new();
+    redistribute_midi_seed_hands_for_piano(&metric, &mut notes, &profile, None, false, &mut decisions);
+    assert_eq!(notes, source);
+    assert!(decisions.is_empty());
+
+    redistribute_midi_seed_hands_for_piano(&metric, &mut notes, &profile, None, true, &mut decisions);
+    let mut expected = source;
+    expected[2].staff = 1;
+    assert_eq!(notes, expected);
+    assert_eq!(decisions.len(), 1);
+    assert_eq!(decisions[0].pass, SourceSelectionDecisionPass::AlignedHandSpanSplit);
+    assert_eq!(decisions[0].observed_primary, 13);
+    assert_eq!(decisions[0].threshold_primary, 12);
+    assert_eq!(decisions[0].source_ordinal, 2);
+
+    redistribute_wide_simultaneities(
+        &metric, &mut notes, &profile, None,
+        SourceSelectionDecisionPass::AlignedHandSpanSplit, 0, &mut decisions,
+    );
+    assert_eq!(notes, expected);
+    assert_eq!(decisions.len(), 1);
 }

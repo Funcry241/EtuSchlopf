@@ -92,7 +92,8 @@ fn evaluate_arrangement_variant(
             }),
             LayoutPlan::manual,
         );
-    let layout = apply_pianist_layout(&polish.xml, layout_plan.target_pages);
+    let mut layout = apply_pianist_layout(&polish.xml, layout_plan.target_pages);
+    layout.horizontal_layout_seed.manual_page_target = layout_pages.is_some();
     detail.enter(4);
     let _origin = crate::audit_only::panic_origin_observation::enter("ArrangementVariant/PolishAndLayout", &arrangement.xml, Some(&layout.xml));
     if let Some(courses) = &arrangement.stats.rhythmic_courses {
@@ -544,7 +545,7 @@ fn corpus_hand_rhythm_repair_variants(xml: &str, report: &CheckReport, limit: us
     let mut seen = BTreeSet::new();
     let notes = parse_atomic_notes(xml);
     for issue in report.issues.iter().filter(|issue| issue.issue_type == "PIANO_FAST_LARGE_JUMP").take(24) {
-        for patch in warning_repair_patches_for_issue(xml, &notes, issue, 8) {
+        for patch in hand_rhythm_jump_patches(&notes, issue, 8) {
             let (patched, patch_receipt) = apply_atomic_patch(xml, &patch);
                     let patched = PatchedXml::with_exact(patched, patch_receipt);
             push_corpus_variant(&mut variants, &mut seen, format!("corpus_han_rhy_{}", patch.name), xml, patched, limit);
@@ -554,19 +555,14 @@ fn corpus_hand_rhythm_repair_variants(xml: &str, report: &CheckReport, limit: us
     variants
 }
 
-fn warning_repair_patches_for_issue(_xml: &str, notes: &[AtomicNote], issue: &Issue, limit: usize) -> Vec<AtomicPatch> {
-    let mut patches = Vec::new();
-    for patch in warning_repair_patches(_xml, &CheckReport {
-        tool: String::new(),
-        version: String::new(),
-        score_title: None,
-        summary: ReportSummary { status: ReportStatus::Blocked, blockers: 0, warnings: 1, hints: 0 },
-        issues: vec![issue.clone()],
-    }, limit.saturating_mul(2)) {
-        patches.push(patch);
-        if patches.len() >= limit { break; }
-    }
-    if patches.is_empty() && issue.issue_type == "PIANO_FAST_LARGE_JUMP" {
+fn hand_rhythm_jump_patches(notes: &[AtomicNote], issue: &Issue, limit: usize) -> Vec<AtomicPatch> {
+    let mut patches = if issue.severity == Severity::Warning {
+        jump_atomic_patches(notes, issue)
+    } else {
+        Vec::new()
+    };
+    patches.truncate(limit);
+    if patches.is_empty() {
         for choice in restify_choices_for_issue(notes, issue).into_iter().take(limit) {
             if let Some((start, end)) = choice.ranges.first().copied() {
                 patches.push(AtomicPatch {
@@ -851,6 +847,24 @@ fn hand_plan_candidate_risk(cand: &HiddenChordToneRecoveryCandidate) -> i64 {
 
 
 
+// A written alignment binds attacks to the input. Playability patches may
+// change their presentation, but must retain each visible attack, including
+// unisons and grace notes. Tie continuations do not initiate an attack.
+fn visible_attack_population(
+    xml: &str,
+) -> anyhow::Result<BTreeMap<(usize, i64, i32, bool), usize>> {
+    let mut population = BTreeMap::new();
+    for fragment in material_fragments_from_xml(xml)? {
+        if let Some(pitch) = fragment.pitch
+            && fragment.visible && !fragment.tie_stop
+        {
+            *population.entry((fragment.measure, fragment.onset, pitch, fragment.is_grace))
+                .or_default() += 1;
+        }
+    }
+    Ok(population)
+}
+
 fn evaluate_patched_candidates_parallel(
     label: &str,
     inputs: Vec<PatchedCandidateInput>,
@@ -875,9 +889,16 @@ fn evaluate_patched_candidates_parallel(
     let iteration_start = *next_iteration;
     *next_iteration += original_total;
 
+    let aligned_attacks = base.midi_seed_stats.rhythmic_courses.preserves_attacks()
+        .then(|| visible_attack_population(base.layout_xml())).transpose()?;
     let mut skipped_preexisting_transfer_targets = 0usize;
     let mut eligible_inputs = Vec::<(usize, PatchedCandidateInput)>::with_capacity(original_total);
     for (evaluation_index, input) in inputs.into_iter().enumerate() {
+        if let Some(expected) = &aligned_attacks
+            && visible_attack_population(&input.xml)? != *expected
+        {
+            continue;
+        }
         if base.material_lineage.authority_bound && !input.material_transfer_carriers.is_empty() {
             match preflight_candidate_material_representation_transfers(
                 base.layout_xml(),

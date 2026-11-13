@@ -34,7 +34,7 @@ const CONTRACT_SCHEMA: &str = "wav_pitch_sensor_qualification_v1";
 const SENSOR_IDENTITY: &str = "SpotifyBasicPitchOnnxRust";
 const SENSOR_VERSION: &str = "ICASSP2022-ONNX";
 const FEATURE_SCHEMA: &str = "basic_pitch_icassp2022_onnx_rust_note_event_original_frame_v2";
-const DERIVED_VIEW_IDENTITY: &str = "stereo_pcm24_44100_to_mono_f32_fir127_decimate2_rust_v1";
+
 const ORIGINAL_FRAME_MAPPING: &str = "basic_pitch_kept_window_frame_to_original_44100_frame_v1";
 const MODEL_SHA256: &str = "2c3c1d144bfa61ad236e92e169c13535c880469a12a047d4e73451f2c059a0ec";
 const MODEL_BYTES: usize = 230_444;
@@ -61,7 +61,6 @@ const ONSET_THRESHOLD: f32 = 0.5;
 const FRAME_THRESHOLD: f32 = 0.3;
 const MIN_NOTE_LEN: usize = 11;
 const ENERGY_TOLERANCE: usize = 11;
-const CANONICAL_DIVISIONS: u64 = 96;
 const HARMONIC_INTERVALS: [u8; 7] = [12, 19, 24, 28, 31, 34, 36];
 
 #[derive(Debug)]
@@ -78,8 +77,8 @@ struct Args {
 #[derive(Debug, Clone)]
 struct OracleEvent {
     ordinal: usize,
-    pos: u64,
-    length: u64,
+    tick: u64,
+    onset_frame: i64,
     midi: u8,
 }
 
@@ -185,7 +184,7 @@ fn run() -> Result<()> {
     let package_fingerprint = package_fingerprint(&args.root)?;
 
     // STAGE 1: Sensor-only. No MIDI source-oracle content is opened before the freeze below.
-    let mono_44100 = decode_pcm24_stereo_44100(&wav_bytes)?;
+    let (mono_44100, derived_view_identity) = decode_stereo_pcm_44100(&wav_bytes)?;
     let source_frame_count = mono_44100.len() as u64;
     let mono_22050 = decimate_2_fir127(&mono_44100);
     if mono_22050.len() < MODEL_SAMPLE_RATE / 2 {
@@ -227,7 +226,7 @@ fn run() -> Result<()> {
         MODEL_SHA256,
         FEATURE_SCHEMA,
         wav_sha,
-        DERIVED_VIEW_IDENTITY,
+        derived_view_identity,
         ORIGINAL_FRAME_MAPPING,
         projection_sha,
         events.len(),
@@ -268,26 +267,30 @@ fn run() -> Result<()> {
         decoded_midi.tempo_microseconds_per_quarter.len(),
         decoded_midi.time_signatures.len(),
     );
-    let oracle = decoded_midi
-        .notes
-        .into_iter()
-        .map(|event| {
-            Ok(OracleEvent {
-                ordinal: event.source_ordinal,
-                pos: u64::try_from(event.pos).context("MIDI-Oracle-Position ist negativ")?,
-                length: u64::try_from(event.len).context("MIDI-Oracle-Dauer ist negativ")?,
-                midi: u8::try_from(event.midi).context("MIDI-Oracle-Ton liegt außerhalb u8")?,
-            })
-        })
-        .collect::<Result<Vec<_>>>()?;
-    let m80 = evaluate_matches(&oracle, &events, args.quarter_frames, 80);
-    let chord_recall = chord_tone_recall(&oracle, &events, args.quarter_frames, 80);
-    let rearticulation = rearticulation_recall(&oracle, &events, args.quarter_frames, 80);
-    let multiplicity = multiplicity_recall(&oracle, &events, args.quarter_frames, 80);
-    let bass = subset_prf(&oracle, &events, args.quarter_frames, 80, |m| m <= 47);
-    let high = subset_prf(&oracle, &events, args.quarter_frames, 80, |m| m >= 84);
+    let ppq = u64::try_from(decoded_midi.source_ppq)?;
+    let mut oracle = midi_onsets_in_audio_frames(&decoded_midi, ppq)?;
+    let origin_offset = estimate_audio_origin_offset(&oracle, &events);
+    for event in &mut oracle {
+        event.onset_frame += origin_offset;
+    }
+    let matches = match_events(&oracle, &events, 80);
+    let m80 = prf(matches.len(), oracle.len(), events.len());
+    let chord_recall = chord_tone_recall(&oracle, &matches);
+    let rearticulation = rearticulation_recall(&oracle, &matches, ppq);
+    let multiplicity = multiplicity_recall(&oracle, &matches);
+    let bass = subset_prf(&oracle, &events, &matches, |m| m <= 47);
+    let high = subset_prf(&oracle, &events, &matches, |m| m >= 84);
     let (false_sensor_events, harmonic_false) =
-        false_event_harmonic_count(&oracle, &events, args.quarter_frames, 80);
+        false_event_harmonic_count(&oracle, &events, &matches, 80);
+    let mut residuals = matches.iter().map(|pair| {
+        oracle[pair.oracle].onset_frame.abs_diff(events[pair.sensor].onset_frame as i64)
+    }).collect::<Vec<_>>();
+    residuals.sort_unstable();
+    let median_residual_frames = residuals.get(residuals.len() / 2)
+        .map_or_else(|| "unavailable".to_string(), u64::to_string);
+    let p90_residual_frames = residuals.len().checked_sub(1)
+        .map(|last| residuals[last * 9 / 10].to_string())
+        .unwrap_or_else(|| "unavailable".to_string());
 
     let setup_network_used = if model_downloaded {
         format!("model_bootstrap_yes;cargo_{}", args.cargo_bootstrap_mode)
@@ -316,6 +319,12 @@ fn run() -> Result<()> {
             "freeze_sha256={}\n",
             "sensor_events={}\n",
             "oracle_events={}\n",
+            "midi_time_basis=raw_ticks_and_tempo_map\n",
+            "audio_pulse_quarter_frames={}\n",
+            "audio_origin_offset_frames={}\n",
+            "matched_onsets_80={}\n",
+            "matched_median_abs_residual_frames={}\n",
+            "matched_p90_abs_residual_frames={}\n",
             "precision_80_permille={}\n",
             "recall_80_permille={}\n",
             "f1_80_permille={}\n",
@@ -344,6 +353,11 @@ fn run() -> Result<()> {
         freeze_sha,
         events.len(),
         oracle.len(),
+        args.quarter_frames,
+        origin_offset,
+        matches.len(),
+        median_residual_frames,
+        p90_residual_frames,
         permille(m80.precision),
         permille(m80.recall),
         permille(m80.f1),
@@ -378,6 +392,9 @@ fn run() -> Result<()> {
             "SensorOutputFrozen: {}\n",
             "SensorEvents: {}\n",
             "OracleEvents: {}\n",
+            "MIDI-WAV origin offset (frames): {}\n",
+            "PitchOnset80 matched: {}\n",
+            "PitchOnset80 median/p90 residual (frames): {}/{}\n",
             "PitchOnset80 Precision: {:.2}%\n",
             "PitchOnset80 Recall: {:.2}%\n",
             "PitchOnset80 F1: {:.2}%\n",
@@ -394,6 +411,10 @@ fn run() -> Result<()> {
         freeze_sha,
         events.len(),
         oracle.len(),
+        origin_offset,
+        matches.len(),
+        median_residual_frames,
+        p90_residual_frames,
         m80.precision * 100.0,
         m80.recall * 100.0,
         m80.f1 * 100.0,
@@ -524,7 +545,10 @@ fn package_fingerprint(root: &Path) -> Result<String> {
         hasher.update(fs::read(&path)?);
         hasher.update([0]);
     }
-    for relative in ["src/midi.rs", "src/source_event.rs"] {
+    for relative in [
+        "src/midi.rs", "src/source_event.rs", "src/source_time.rs", "src/notation_time.rs",
+        "src/inferred_performance_timing.rs",
+    ] {
         let shared_source = root.join(relative);
         if !shared_source.is_file() {
             bail!("Gemeinsame SourceEvent-Quelle fehlt: {}", shared_source.display());
@@ -552,7 +576,7 @@ fn hex_lower(bytes: &[u8]) -> String {
     out
 }
 
-fn decode_pcm24_stereo_44100(bytes: &[u8]) -> Result<Vec<f32>> {
+fn decode_stereo_pcm_44100(bytes: &[u8]) -> Result<(Vec<f32>, &'static str)> {
     if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
         bail!("WAV ist kein RIFF/WAVE");
     }
@@ -584,22 +608,30 @@ fn decode_pcm24_stereo_44100(bytes: &[u8]) -> Result<Vec<f32>> {
         cursor += size + (size & 1);
     }
     let (format, channels, sample_rate, block_align, bits) = fmt.context("WAV fmt-Chunk fehlt")?;
-    if format != 1 || channels != 2 || sample_rate != 44_100 || block_align != 6 || bits != 24 {
-        bail!(
-            "WAV-Sensorvertrag verletzt: erwartet PCM 44.1kHz Stereo 24-bit, erhalten format={format} channels={channels} rate={sample_rate} align={block_align} bits={bits}"
-        );
-    }
+    let (decode, derived_view_identity): (fn(&[u8]) -> f32, &str) =
+        match (format, channels, sample_rate, block_align, bits) {
+            (1, 2, 44_100, 4, 16) => (
+                |sample| f32::from(i16::from_le_bytes([sample[0], sample[1]])) / 32_768.0,
+                "stereo_pcm16_44100_to_mono_f32_fir127_decimate2_rust_v1",
+            ),
+            (1, 2, 44_100, 6, 24) => (
+                |sample| pcm24(sample[0], sample[1], sample[2]),
+                "stereo_pcm24_44100_to_mono_f32_fir127_decimate2_rust_v1",
+            ),
+            _ => bail!(
+                "WAV-Sensorvertrag verletzt: erwartet PCM 44.1kHz Stereo 16/24-bit, erhalten format={format} channels={channels} rate={sample_rate} align={block_align} bits={bits}"
+            ),
+        };
     let data = data.context("WAV data-Chunk fehlt")?;
-    if data.len() % 6 != 0 {
+    let frame_size = usize::from(block_align);
+    if !data.len().is_multiple_of(frame_size) {
         bail!("WAV data-Chunk ist nicht frame-aligned");
     }
-    let mut mono = Vec::with_capacity(data.len() / 6);
-    for frame in data.chunks_exact(6) {
-        let left = pcm24(frame[0], frame[1], frame[2]);
-        let right = pcm24(frame[3], frame[4], frame[5]);
-        mono.push((left + right) * 0.5);
-    }
-    Ok(mono)
+    let mono = data.chunks_exact(frame_size).map(|frame| {
+        let (left, right) = frame.split_at(frame_size / 2);
+        (decode(left) + decode(right)) * 0.5
+    }).collect();
+    Ok((mono, derived_view_identity))
 }
 
 fn pcm24(a: u8, b: u8, c: u8) -> f32 {
@@ -972,51 +1004,107 @@ fn event_projection_bytes(events: &[SensorEvent]) -> Vec<u8> {
     text.into_bytes()
 }
 
-fn oracle_source_frame(pos: u64, quarter_frames: u64) -> u64 {
-    (pos * quarter_frames + CANONICAL_DIVISIONS / 2) / CANONICAL_DIVISIONS
+fn midi_onsets_in_audio_frames(source: &midi::DecodedMidiSource, ppq: u64) -> Result<Vec<OracleEvent>> {
+    let changes = &source.tempo_changes;
+    if ppq == 0 || changes.iter().any(|&(_, tempo)| tempo == 0)
+        || changes.windows(2).any(|pair| pair[0].0 == pair[1].0)
+    {
+        bail!("MIDI tempo map is invalid or ambiguous");
+    }
+    let mut entries = source.source_event_causal_ledger.entries.iter().collect::<Vec<_>>();
+    entries.sort_by_key(|entry| (entry.note_on.tick, entry.source_ordinal));
+    let mut changes = changes.iter().peekable();
+    let mut tempo = 500_000u32;
+    let mut tempo_tick = 0;
+    let mut elapsed = 0u128;
+    let denominator = u128::from(ppq) * 1_000_000;
+    let mut oracle = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let tick = entry.note_on.tick;
+        while let Some(&&(change_tick, new_tempo)) = changes.peek() {
+            if change_tick > tick {
+                break;
+            }
+            elapsed += u128::from(change_tick - tempo_tick) * u128::from(tempo);
+            tempo_tick = change_tick;
+            tempo = new_tempo;
+            changes.next();
+        }
+        let numerator = (elapsed + u128::from(tick - tempo_tick) * u128::from(tempo))
+            * u128::from(SOURCE_SAMPLE_RATE);
+        let onset_frame = i64::try_from((numerator + denominator / 2) / denominator)?;
+        oracle.push(OracleEvent { ordinal: oracle.len(), tick, onset_frame, midi: entry.note_on.key });
+    }
+    Ok(oracle)
 }
 
 fn tolerance_frames(ms: u64) -> u64 {
     (ms * SOURCE_SAMPLE_RATE + 500) / 1000
 }
 
-fn match_events(
-    oracle: &[OracleEvent],
-    sensor: &[SensorEvent],
-    quarter_frames: u64,
-    tolerance_ms: u64,
-) -> Vec<MatchPair> {
-    let tolerance = tolerance_frames(tolerance_ms);
-    let mut by_pitch_o = BTreeMap::<u8, Vec<(usize, u64)>>::new();
-    let mut by_pitch_s = BTreeMap::<u8, Vec<(usize, u64)>>::new();
+// Estimate one recording-origin shift from already frozen, equal-pitch attacks.
+// Limit the search to leading silence and report residuals against that one shift.
+fn estimate_audio_origin_offset(oracle: &[OracleEvent], sensor: &[SensorEvent]) -> i64 {
+    let bin_width = tolerance_frames(20) as i64;
+    let search_radius = tolerance_frames(10_000) as i64;
+    let mut sensor_by_pitch = BTreeMap::<u8, Vec<i64>>::new();
+    for event in sensor {
+        sensor_by_pitch.entry(event.midi).or_default().push(event.onset_frame as i64);
+    }
+    let mut votes = BTreeMap::<i64, usize>::new();
     for event in oracle {
-        by_pitch_o
-            .entry(event.midi)
-            .or_default()
-            .push((event.ordinal, oracle_source_frame(event.pos, quarter_frames)));
+        if let Some(times) = sensor_by_pitch.get(&event.midi) {
+            let start = times.partition_point(|&time| time < event.onset_frame - search_radius);
+            let end = times.partition_point(|&time| time <= event.onset_frame + search_radius);
+            let bins = times[start..end].iter().map(|&time| {
+                (time - event.onset_frame + bin_width / 2).div_euclid(bin_width)
+            }).collect::<HashSet<_>>();
+            for bin in bins {
+                *votes.entry(bin).or_default() += 1;
+            }
+        }
+    }
+    let Some((&bin, &support)) = votes.iter().max_by_key(|&(&bin, &count)| {
+        (count, std::cmp::Reverse(bin.abs()), std::cmp::Reverse(bin))
+    }) else {
+        return 0;
+    };
+    if support < 8usize.max(oracle.len().div_ceil(10)) {
+        return 0;
+    }
+    let offset = bin * bin_width;
+    let mut shifted = oracle.to_vec();
+    for event in &mut shifted {
+        event.onset_frame += offset;
+    }
+    if match_events(&shifted, sensor, 80).len() > match_events(oracle, sensor, 80).len() {
+        offset
+    } else {
+        0
+    }
+}
+
+fn match_events(oracle: &[OracleEvent], sensor: &[SensorEvent], tolerance_ms: u64) -> Vec<MatchPair> {
+    let tolerance = tolerance_frames(tolerance_ms);
+    let mut by_pitch_o = BTreeMap::<u8, Vec<(usize, i64)>>::new();
+    let mut by_pitch_s = BTreeMap::<u8, Vec<(usize, i64)>>::new();
+    for event in oracle {
+        by_pitch_o.entry(event.midi).or_default().push((event.ordinal, event.onset_frame));
     }
     for event in sensor {
-        by_pitch_s
-            .entry(event.midi)
-            .or_default()
-            .push((event.ordinal, event.onset_frame));
-    }
-    let mut pitches = BTreeMap::<u8, ()>::new();
-    for pitch in by_pitch_o.keys().chain(by_pitch_s.keys()) {
-        pitches.insert(*pitch, ());
+        by_pitch_s.entry(event.midi).or_default().push((event.ordinal, event.onset_frame as i64));
     }
     let mut out = Vec::new();
-    for pitch in pitches.keys() {
-        let empty = Vec::new();
-        let o = by_pitch_o.get(pitch).unwrap_or(&empty);
-        let s = by_pitch_s.get(pitch).unwrap_or(&empty);
-        out.extend(match_same_pitch(o, s, tolerance));
+    for (pitch, onsets) in by_pitch_o {
+        if let Some(sensor_onsets) = by_pitch_s.get(&pitch) {
+            out.extend(match_same_pitch(&onsets, sensor_onsets, tolerance));
+        }
     }
     out.sort_by_key(|pair| (pair.oracle, pair.sensor));
     out
 }
 
-fn match_same_pitch(oracle: &[(usize, u64)], sensor: &[(usize, u64)], tolerance: u64) -> Vec<MatchPair> {
+fn match_same_pitch(oracle: &[(usize, i64)], sensor: &[(usize, i64)], tolerance: u64) -> Vec<MatchPair> {
     let n = oracle.len();
     let m = sensor.len();
     let width = m + 1;
@@ -1087,11 +1175,6 @@ fn better_pair(candidate_count: u32, candidate_residual: u64, best_count: u32, b
     candidate_count > best_count || (candidate_count == best_count && candidate_residual < best_residual)
 }
 
-fn evaluate_matches(oracle: &[OracleEvent], sensor: &[SensorEvent], quarter_frames: u64, tolerance_ms: u64) -> Prf {
-    let matches = match_events(oracle, sensor, quarter_frames, tolerance_ms).len();
-    prf(matches, oracle.len(), sensor.len())
-}
-
 fn prf(matches: usize, oracle_count: usize, sensor_count: usize) -> Prf {
     let recall = if oracle_count == 0 { 1.0 } else { matches as f64 / oracle_count as f64 };
     let precision = if sensor_count == 0 {
@@ -1111,136 +1194,65 @@ fn prf(matches: usize, oracle_count: usize, sensor_count: usize) -> Prf {
     }
 }
 
-fn subset_prf<F: Fn(u8) -> bool>(
-    oracle: &[OracleEvent],
-    sensor: &[SensorEvent],
-    quarter_frames: u64,
-    tolerance_ms: u64,
-    predicate: F,
+fn subset_prf(
+    oracle: &[OracleEvent], sensor: &[SensorEvent], matches: &[MatchPair], predicate: impl Fn(u8) -> bool,
 ) -> Prf {
-    let mut o = Vec::new();
-    let mut s = Vec::new();
-    for event in oracle.iter().filter(|e| predicate(e.midi)) {
-        let mut event = event.clone();
-        event.ordinal = o.len();
-        o.push(event);
-    }
-    for event in sensor.iter().filter(|e| predicate(e.midi)) {
-        let mut event = event.clone();
-        event.ordinal = s.len();
-        s.push(event);
-    }
-    evaluate_matches(&o, &s, quarter_frames, tolerance_ms)
+    prf(
+        matches.iter().filter(|pair| predicate(oracle[pair.oracle].midi)).count(),
+        oracle.iter().filter(|event| predicate(event.midi)).count(),
+        sensor.iter().filter(|event| predicate(event.midi)).count(),
+    )
 }
 
-fn chord_tone_recall(oracle: &[OracleEvent], sensor: &[SensorEvent], quarter_frames: u64, tolerance_ms: u64) -> f64 {
-    let tolerance = tolerance_frames(tolerance_ms);
-    let mut groups = BTreeMap::<u64, Vec<&OracleEvent>>::new();
+fn grouped_recall(
+    oracle: &[OracleEvent], matches: &[MatchPair], key: impl Fn(&OracleEvent) -> (u64, Option<u8>),
+) -> f64 {
+    let mut groups = BTreeMap::new();
     for event in oracle {
-        groups.entry(event.pos).or_default().push(event);
+        *groups.entry(key(event)).or_insert(0usize) += 1;
     }
-    let mut total = 0usize;
-    let mut recovered = 0usize;
-    for (pos, group) in groups.into_iter().filter(|(_, group)| group.len() >= 2) {
-        let center = oracle_source_frame(pos, quarter_frames);
-        let mut want = [0usize; 128];
-        let mut got = [0usize; 128];
-        for event in group {
-            want[event.midi as usize] += 1;
-            total += 1;
-        }
-        for event in sensor {
-            if event.onset_frame.abs_diff(center) <= tolerance {
-                got[event.midi as usize] += 1;
-            }
-        }
-        for pitch in 0..128 {
-            recovered += want[pitch].min(got[pitch]);
-        }
-    }
+    let total = groups.values().filter(|&&count| count > 1).sum::<usize>();
+    let recovered = matches.iter().filter(|pair| groups[&key(&oracle[pair.oracle])] > 1).count();
     if total == 0 { 1.0 } else { recovered as f64 / total as f64 }
 }
 
-fn rearticulation_recall(
-    oracle: &[OracleEvent],
-    sensor: &[SensorEvent],
-    quarter_frames: u64,
-    tolerance_ms: u64,
-) -> f64 {
-    let matched: HashSet<usize> = match_events(oracle, sensor, quarter_frames, tolerance_ms)
-        .into_iter()
-        .map(|pair| pair.oracle)
-        .collect();
-    let mut by_pitch = BTreeMap::<u8, Vec<&OracleEvent>>::new();
-    for event in oracle {
-        by_pitch.entry(event.midi).or_default().push(event);
-    }
+fn chord_tone_recall(oracle: &[OracleEvent], matches: &[MatchPair]) -> f64 {
+    grouped_recall(oracle, matches, |event| (event.tick, None))
+}
+
+fn multiplicity_recall(oracle: &[OracleEvent], matches: &[MatchPair]) -> f64 {
+    grouped_recall(oracle, matches, |event| (event.tick, Some(event.midi)))
+}
+
+fn rearticulation_recall(oracle: &[OracleEvent], matches: &[MatchPair], ppq: u64) -> f64 {
+    let matched = matches.iter().map(|pair| pair.oracle).collect::<HashSet<_>>();
+    let mut previous_by_pitch = BTreeMap::<u8, &OracleEvent>::new();
     let mut pairs = 0usize;
     let mut both = 0usize;
-    for rows in by_pitch.values_mut() {
-        rows.sort_by_key(|event| (event.pos, event.ordinal));
-        for window in rows.windows(2) {
-            let previous = window[0];
-            let current = window[1];
-            if current.pos > previous.pos && current.pos - previous.pos <= CANONICAL_DIVISIONS {
-                pairs += 1;
-                if matched.contains(&previous.ordinal) && matched.contains(&current.ordinal) {
-                    both += 1;
-                }
-            }
+    for event in oracle {
+        if let Some(previous) = previous_by_pitch.insert(event.midi, event)
+            && event.tick > previous.tick && event.tick - previous.tick <= ppq
+        {
+            pairs += 1;
+            both += usize::from(matched.contains(&previous.ordinal) && matched.contains(&event.ordinal));
         }
     }
     if pairs == 0 { 1.0 } else { both as f64 / pairs as f64 }
 }
 
-fn multiplicity_recall(
-    oracle: &[OracleEvent],
-    sensor: &[SensorEvent],
-    quarter_frames: u64,
-    tolerance_ms: u64,
-) -> f64 {
-    let tolerance = tolerance_frames(tolerance_ms);
-    let mut groups = BTreeMap::<(u64, u8), usize>::new();
-    for event in oracle {
-        *groups.entry((event.pos, event.midi)).or_default() += 1;
-    }
-    let duplicates: Vec<_> = groups.into_iter().filter(|(_, count)| *count > 1).collect();
-    let total: usize = duplicates.iter().map(|(_, count)| *count).sum();
-    let mut recovered = 0usize;
-    for ((pos, midi), count) in duplicates {
-        let center = oracle_source_frame(pos, quarter_frames);
-        let got = sensor
-            .iter()
-            .filter(|event| event.midi == midi && event.onset_frame.abs_diff(center) <= tolerance)
-            .count();
-        recovered += count.min(got);
-    }
-    if total == 0 { 1.0 } else { recovered as f64 / total as f64 }
-}
-
 fn false_event_harmonic_count(
-    oracle: &[OracleEvent],
-    sensor: &[SensorEvent],
-    quarter_frames: u64,
-    tolerance_ms: u64,
+    oracle: &[OracleEvent], sensor: &[SensorEvent], matches: &[MatchPair], tolerance_ms: u64,
 ) -> (usize, usize) {
     let tolerance = tolerance_frames(tolerance_ms);
-    let matched_sensor: HashSet<usize> = match_events(oracle, sensor, quarter_frames, tolerance_ms)
-        .into_iter()
-        .map(|pair| pair.sensor)
-        .collect();
-    let oracle_times: Vec<_> = oracle
-        .iter()
-        .map(|event| (event.midi, oracle_source_frame(event.pos, quarter_frames)))
-        .collect();
+    let matched_sensor = matches.iter().map(|pair| pair.sensor).collect::<HashSet<_>>();
     let mut false_count = 0usize;
     let mut harmonic = 0usize;
     for event in sensor.iter().filter(|event| !matched_sensor.contains(&event.ordinal)) {
         false_count += 1;
-        if oracle_times.iter().any(|(pitch, frame)| {
-            event.onset_frame.abs_diff(*frame) <= tolerance
-                && event.midi > *pitch
-                && HARMONIC_INTERVALS.contains(&(event.midi - *pitch))
+        if oracle.iter().any(|reference| {
+            (event.onset_frame as i64).abs_diff(reference.onset_frame) <= tolerance
+                && event.midi > reference.midi
+                && HARMONIC_INTERVALS.contains(&(event.midi - reference.midi))
         }) {
             harmonic += 1;
         }

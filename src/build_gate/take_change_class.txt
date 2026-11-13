@@ -1,9 +1,10 @@
 schema_version=1
-change_class=RefactorOnly
+change_class=GovernedChange
 from_version=0.10.1839
 to_version=0.10.1839
-reason=Refresh the mathematics page and project status and clarify the manual renderer test
-change=modified|ZIP_KIND.txt|fnv64:84fd0eed32658af6
-change=modified|docs/MATHEMATIK.md|fnv64:d37a71713c0bb5dd
-change=modified|docs/assistant_memory/050_aktueller_stand.md|fnv64:2e438a88868def62
-change=modified|src/structural_write_authority/original_beam_voice_alignment.rs|fnv64:486e0a5d8e88889b
+reason=Resolve the feasible hand span at the initial MIDI seed split
+music_effect=declared|Project the existing aligned split before committing hand assignments
+change=modified|ZIP_KIND.txt|fnv64:e6c36fe2bdbccc2c
+change=added|docs/selector_derivation_contract_initial_aligned_hand_split.md|fnv64:2994478ba56a9e5c
+change=modified|src/midi_seed.rs|fnv64:f31c00200c8ae5ae
+change=modified|tests/unit/midi_seed_rhythmic_course_creation.rs|fnv64:8e684009ec49e67c

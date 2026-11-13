@@ -1537,7 +1537,6 @@ impl CanonicalFinalChordStructuralPlan {
             selected_members: Vec::new(),
             scope_candidates: 1,
             original_group_alignment: Vec::new(), bridge_alignment_proofs: Vec::new(),
-            historical_phrase_decision_only: false,
         };
         self.bind_rest_bridge_withdrawal(&source, &plan)
     }
@@ -1705,7 +1704,6 @@ impl CanonicalFinalChordStructuralPlan {
             selected_members: Vec::new(),
             scope_candidates: 1,
             original_group_alignment: Vec::new(), bridge_alignment_proofs: Vec::new(),
-            historical_phrase_decision_only: false,
         };
         (
             self.bind_rest_bridge_withdrawal(&source, &plan).unwrap(),

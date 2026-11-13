@@ -39,6 +39,7 @@ mod structure_to_system_break_retirement_guard;
 
 pub mod wav_observation_legacy_oracle;
 mod wav_signal_decode;
+pub(crate) mod wav_midi_performance_alignment;
 
 pub mod wav_attack_pulse_metric;
 

@@ -357,7 +357,6 @@ pub use thirty_surface_productive_authority::{
     ensure_arrangement_child_text_value_authorized,
     ensure_atomic_move_child_text_value_authorized,
     first_structural_measure_locator,
-    fractional_structural_measure_locator,
     insert_direction_into_measure_authorized,
     StructuralMeasureLocator,
     remove_note_hidden_attrs_in_range_authorized,
@@ -528,7 +527,6 @@ pub(crate) use serialization_plan::{
     PrimaryBeamVoicePartitionBindingContext,
     PrimaryBeamVoicePartitionBoundPlan,
     bind_primary_beam_voice_partition_plan,
-    bind_historical_metric_phrase_decision_course,
     rebind_primary_beam_voice_partition_plan_to_current_xml,
     transport_final_pdf_source_occurrence_continuation_through_primary_beam_voice_partition,
 };

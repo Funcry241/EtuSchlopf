@@ -720,10 +720,12 @@ pub(super) fn append_proven_alignment(
                     let _ = validate_batch_import_profile(source_xml, &trial, Some("trial"));
                 }
             }
-            // A bystander rest/pitched collision is still a whole-group veto.
-            // An alternative is considered for an actual import resource loss,
-            // never merely to evade that existing occupancy negative.
-            if !collisions.is_empty() && lost_registration.is_empty() { break; }
+            // Each existing channel is assessed against the complete written
+            // occupancy and import profile. A blocked channel can coexist
+            // with another member channel that already has room for the group.
+            if !collisions.is_empty() && lost_registration.is_empty() && !voices.has_canonical_role_allocation() {
+                break;
+            }
             if collisions.is_empty() && lost_registration.is_empty()
                 && validate_batch_import_profile(source_xml, &trial, None).is_ok() {
                 let improves = admitted_target.as_ref().is_none_or(|(_,_,_,prior): &(usize,usize,String,Vec<PrimaryBeamVoicePartitionBoundEdit>)|group_edits.len()<prior.len());
@@ -2240,26 +2242,6 @@ mod tests {
         let edit=PrimaryBeamVoicePartitionBoundEdit { measure:synthetic_measure,pitched_ordinal:1,voice_text_start:start,voice_text_end:end,expected_old_label:"1".to_owned(),target_label:"17".to_owned() };
         assert!(validate_batch_occupancy(&xml,&[edit]).is_err());
         }
-    }
-
-    #[test]
-    fn historical_phrase_purpose_excludes_original_group_extension_and_survives_rebind() {
-        let (_,voices,source)=fixture();
-        let combined=plan(&voices,&source,4);
-        assert_eq!(combined.scope_candidates(),1);
-        let geometry=source.receipt.original_beam_voice_groups.iter().map(|group|(group.id.clone(),4usize)).collect();
-        let ordinary=bind_primary_beam_voice_partition_plan_for_purpose(source.xml(),PrimaryBeamVoicePartitionBindingContext {
-            source_continuation:&source,voice_plan:&voices,candidates:&[],classification_xml:source.xml(),
-            renderer_visible_fragments_by_metric_line_id:&geometry,materialization_safety_proven_metric_line_ids:&BTreeSet::new(),
-        },true).unwrap();
-        assert_eq!(ordinary.scope_candidates(),0);
-        assert!(ordinary.edits().is_empty());
-        assert_eq!(ordinary.repaired_voice_plan().source_to_label,voices.source_to_label);
-        assert_eq!(combined.repaired_voice_plan().source_to_role,ordinary.repaired_voice_plan().source_to_role);
-        assert_ne!(combined.repaired_voice_plan().source_to_label,ordinary.repaired_voice_plan().source_to_label);
-        assert!(!ordinary.permits_pdf_finalization());
-        assert!(combined.permits_pdf_finalization());
-        assert!(!rebind_primary_beam_voice_partition_plan_to_current_xml(source.xml(),&source,&ordinary).unwrap().permits_pdf_finalization());
     }
 
     #[test]
