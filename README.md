@@ -16,13 +16,13 @@ Leg beide Dateien in denselben Ordner und zieh die MIDI-Datei auf EtuSchlopf. **
 
 Der Name darf dich zum Schmunzeln bringen. Die Mathematik dahinter nehmen wir ernst. Probier EtuSchlopf mit deinem eigenen Stück aus oder schau dir an, wie es arbeitet. [Die Mathematik hinter EtuSchlopf](docs/MATHEMATIK.md)
 
-**[Windows-EXE herunterladen · Testversion r1749](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1749-windows-preview/EtuSchlopf-Windows-x64.exe)** · [Vorherige Testversion r1740](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1740-windows-preview)
+**[Windows-EXE herunterladen · Testversion r1792](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1792-windows-preview/EtuSchlopf-Windows-x64.exe)** · [Vorherige Testversion r1749](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1749-windows-preview)
 
 Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI und WAV als Eingabe
 
 Der Quellstand auf `main` ist **r1792**. Der Windows-Lauf für Chopin op. 10 Nr. 3, p01 endete mit Exitcode 0, ohne Warnungen und mit 100 % Notenerhalt. Build, Strict Clippy, 3.066 Tests und PDF-Export bestanden. Vier Tests waren ignoriert. [Stand und Prüfumfang](docs/evidence/r1792/README.md)
 
-[Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1749-windows-preview) ·
+[Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1792-windows-preview) ·
 [Erstes Stück](#dein-erstes-stück) · [Grenzen der Testversion](#aktueller-stand) ·
 [Technische Dokumentation](docs/DEVELOPMENT.md) · [Mathematik dahinter](docs/MATHEMATIK.md)
 
@@ -46,7 +46,7 @@ kann erforderlich sein.
 
 ## Dein erstes Stück
 
-**[Kleines Startbeispiel herunterladen](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1749-windows-preview/EtuSchlopf-Beispiel-r1749.zip)** – synthetisches MIDI/WAV-Paar mit der PDF, die die veröffentlichte r1749-EXE daraus erzeugt hat.
+**[Kleines Startbeispiel herunterladen](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1792-windows-preview/EtuSchlopf-Beispiel-r1792.zip)** – synthetisches MIDI/WAV-Paar mit der PDF, die die veröffentlichte r1792-EXE daraus erzeugt hat.
 
 1. Lade die Windows-EXE herunter. Für die PDF-Ausgabe brauchst du außerdem **[MuseScore](https://musescore.org/de/download)**.
 2. Lege MIDI und WAV in denselben Ordner. Die Namen vor der Dateiendung müssen übereinstimmen: `Mein Stück.mid` und `Mein Stück.wav`.
@@ -90,14 +90,14 @@ Laufbericht zusammentragen. Unbekannte technische Angaben kannst du offenlassen.
 
 ## Aktueller Stand
 
-Die Windows-Testversion enthält **Engine r1749 / 0.10.1839** und den
+Die Windows-Testversion enthält **Engine r1792 / 0.10.1839** und den
 eigenständigen Windows-Starter. Unterstützt sind 2/4, 3/4 und 4/4 sowie
 Taktwechsel an Taktgrenzen. Andere Taktarten, Triolen und Wechsel mitten
 im Takt bleiben offen.
 
 Der Paketlauf prüft den isolierten Start ohne Entwickler-PATH und rendert
 das synthetische MIDI/WAV-Startbeispiel mit MuseScore. Die
-[Versionshinweise und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1749-windows-preview)
+[Versionshinweise und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1792-windows-preview)
 verlinken den Paketlauf. Die native musikalische Abnahme dokumentiert
 BWV 847. Prüfe Lesbarkeit und Spielbarkeit am eigenen Stück.
 
@@ -105,8 +105,8 @@ BWV 847. Prüfe Lesbarkeit und Spielbarkeit am eigenen Stück.
 
 Auf `main` liegt der veröffentlichte Quellstand **r1792 / 0.10.1839**. Der [Windows-Prüfstand r1792](docs/evidence/r1792/README.md) dokumentiert den Chopin-Lauf. Der historische [Vollkorpuslauf r1684](docs/evidence/r1684/README.md) umfasst zehn Etüden.
 
-Die Download-Engine wurde aus dem angenommenen nativen Stand **r1749** gebaut.
-Der [zum geprüften Build gehörende r1749-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1749-windows-preview/EtuSchlopf-r1749-source.zip)
+Die Download-Engine wurde aus dem angenommenen nativen Stand **r1792** gebaut.
+Der [zum geprüften Build gehörende r1792-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1792-windows-preview/EtuSchlopf-r1792-source.zip)
 und das Dateiprüfsummen-Manifest stehen beim Release bereit. Für den exakten
 Engine-Build ist dieser Snapshot maßgeblich; der zugehörige Prüfzweig enthält
 den Starter und die Skripte zur vollständigen Rekonstruktion und Verifikation.

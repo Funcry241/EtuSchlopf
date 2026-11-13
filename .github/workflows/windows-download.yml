@@ -36,7 +36,7 @@ jobs:
           }
           if ((Get-FileHash docs/evidence/r1792/native_acceptance.txt -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'e153fd657f1f092e6a161ca05d994db5f3a6360e3955c1b87139c12bdb33297d') { throw 'Native acceptance record checksum mismatch' }
           if ((Get-FileHash docs/evidence/r1792/accepted_source_sha256.tsv -Algorithm SHA256).Hash.ToLowerInvariant() -ne '93570e3d901c409a6c1daa136d887fa61b9651d807e8cdd11b25456aca1e69a2') { throw 'Accepted source inventory checksum mismatch' }
-          if ((Get-FileHash docs/evidence/r1792/github_projection_sha256.tsv -Algorithm SHA256).Hash.ToLowerInvariant() -ne '2a68bd05d48ff03e9c5e47ed4699caec53e901c562b36207f09d4f5055823d99') { throw 'Public documentation projection checksum mismatch' }
+          if ((Get-FileHash docs/evidence/r1792/github_projection_sha256.tsv -Algorithm SHA256).Hash.ToLowerInvariant() -ne '786f2cb37772fb5463b8118f1185702dfed87f9bd735bb8772fbfb6842d65c99') { throw 'Public documentation projection checksum mismatch' }
           $projection = @{}
           Get-Content docs/evidence/r1792/github_projection_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
             $parts = $_ -split "`t"
