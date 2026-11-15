@@ -36,3 +36,26 @@ The existing owner and receipt path remain responsible for materialization.
 No clef, pitch, onset, duration, staff, voice or rest is changed by the beam
 planner. Native acceptance must compare the real corpus and inspect changed
 rendered pages. The contract in r1603 remains byte-identical.
+
+## Continuation after a changed register course
+
+CausalFeature: a subsequent authorized register transaction can change the clef
+cuts that the original E053 decision used. The same E053 planner compares the
+two cut sets on a shared complete note course. Its difference is closed over
+all members and levels of the affected decisions. It includes explicit empty
+decisions when a formerly owned beam is split into isolated attacks.
+CausalFeature: a revised group is admissible only on the actual prepared
+register course and cannot cross a retained clef or octave boundary.
+CausalFeature: E053 carries the unaffected original occurrences by its
+complete-note emitter map. Changed occurrences must agree with the original
+owned beam levels on input. Partial replacement of an existing batch and
+changes to foreign beam levels refuse the continuation.
+CausalFeature: Master and Render each bind to their own actual original E053
+capture through the register and clef journals. Both continuations are prepared
+before either revision is adopted by the existing joint transaction.
+
+The two decisions are compared only where the original and prepared clef
+maps differ. The same owner still determines beam hierarchy and all underlying
+musical conditions. Independent groups in another time bucket or staff retain
+their original decisions. Clef and octave authority remains with their original
+owners. The continuation emits beam changes only.

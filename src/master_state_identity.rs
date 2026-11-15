@@ -772,7 +772,7 @@ pub(crate) trait ExactMintOwner: sealed::MintOwner {
 }
 
 /// Owner capability for minting a PRESERVING receipt of an exclusion owner.
-pub(crate) trait PreservingMintOwner: sealed::MintOwner {
+pub(crate) trait PreservingMintOwner: sealed::MintOwner + 'static {
     const DESCRIPTOR: &'static PreservingDescriptor;
 
     fn conserved_projection(xml: &str) -> Option<String> {
@@ -1631,6 +1631,9 @@ pub(crate) struct PreservingTransformationReceipt {
     identity: MintedIdentity,
     descriptor: &'static PreservingDescriptor,
     conserved_fingerprint: u64,
+    /// Exact, immutable output of the already-verified buffer owner. Retained
+    /// only for variant validation and dropped when the receipt is consumed.
+    verified_variant_output: Option<Box<VerifiedPreservingOutput>>,
     pre_fingerprint: u64,
     post_fingerprint: u64,
     /// Post bytes realized inside a path-bound owner's own transaction (the
@@ -1643,6 +1646,12 @@ pub(crate) struct PreservingTransformationReceipt {
     /// read by the verifier, the commit or the adoption verdict.
     layout_journal: Option<Box<crate::arrangement::representation_transport::RepresentationStep>>,
     recorded_representation: Option<Box<RecordedPreservingCourseTransport>>,
+}
+
+#[derive(Debug)]
+struct VerifiedPreservingOutput {
+    owner_type: std::any::TypeId,
+    xml: Box<str>,
 }
 
 /// Read-only original E007 course, recorded only when its real receipt commits.
@@ -1777,11 +1786,16 @@ impl PreservingTransformationReceipt {
             return None;
         }
         count(&PRESERVING_RECEIPTS_MINTED);
+        let owner_type = std::any::TypeId::of::<O>();
+        let verified_variant_output = (O::DESCRIPTOR == &NOTATION_POLISH_PRESERVING
+            || O::DESCRIPTOR == &PIANIST_LAYOUT_PRESERVING)
+            .then(|| Box::new(VerifiedPreservingOutput { owner_type, xml: post_xml.into() }));
         Some(Self {
             ssc_origin: Box::new(crate::ssc_evidence_proof::SscOriginState::capture(&SSC_ORIGIN_ACCESS, pre_xml, post_xml, crate::ssc_evidence_proof::SscOriginScope::Preserving(ssc_preserving_origin::<O>()))),
             identity: MintedIdentity::mint_fresh(),
             descriptor: O::DESCRIPTOR,
             conserved_fingerprint: fingerprint(&conserved?),
+            verified_variant_output,
             pre_fingerprint: fingerprint(pre_xml),
             post_fingerprint: fingerprint(post_xml),
             realized_post_document: None,
@@ -1830,6 +1844,13 @@ impl PreservingTransformationReceipt {
                 && self.post_fingerprint == fingerprint(post_xml),
             "PreservingTransformationReceipt: pre/post fingerprint drift"
         );
+        if let Some(output) = &self.verified_variant_output
+            && output.owner_type == std::any::TypeId::of::<O>()
+        {
+            ensure!(&*output.xml == post_xml,
+                "PreservingTransformationReceipt: exact post-state drift");
+            return Ok(());
+        }
         let conserved = O::conserved_projection(post_xml)
             .map(|projection| fingerprint(&projection));
         ensure!(

@@ -79,7 +79,7 @@ pub struct Cli {
     #[arg(long, num_args = 0..=1, require_equals = true, default_missing_value = "all", value_name = "TAKTE")]
     pub writer_trace: Option<String>,
 
-    /// Gesamtbudget für Rechenparallelität. Im Einzelprojekt steuert es Solver-Threads; bei --all wird es auf höchstens zwei gleichzeitige Projekte aufgeteilt. Die semantische Kandidatenbreite bleibt dabei separat erhalten. Standard: auto = erkannte logische Threads minus 1. Sicherheitsmodus: --jobs 1. Volle Parallelität: --jobs max.
+    /// Gesamtbudget für Rechenparallelität. Im Einzelprojekt steuert es Solver-Threads; bei --all wird es auf höchstens drei gleichzeitige Projekte aufgeteilt. Die Kandidatenbreite bleibt separat erhalten. Im Vollkorpus berücksichtigt auto zusätzlich verfügbaren Speicher. Ein Projekt mit einem Worker: --jobs 1. Volle Parallelität: --jobs max.
     #[arg(long, default_value = "auto")]
     pub jobs: String,
 

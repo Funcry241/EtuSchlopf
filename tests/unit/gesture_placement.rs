@@ -168,12 +168,12 @@ fn slot_geometry_mismatch_refuses_without_state_change() {
     wrong.start_tick += 1;
     assert!(!m.advance(&tone, &wrong, false));
     assert!(m.permits(&tone, &slots[1]));
-    // Slot duration is the actual serializer's proposed duration, not the
-    // atomic member's duration. It is carried unchanged into both simulations.
     let mut different = slots[1].clone();
     different.duration += 7;
-    assert!(m.advance(&tone, &different, false));
-    assert_eq!(m.notes[1].duration, different.duration.max(1));
+    assert!(!m.advance(&tone, &different, false));
+    assert!(m.permits(&tone, &slots[1]));
+    assert!(m.advance(&tone, &slots[1], false));
+    assert_eq!(m.notes[1].duration, slots[1].duration);
 }
 
 #[test]
@@ -197,4 +197,25 @@ fn missing_target_leaves_the_phase_seed_and_scoring_is_deterministic() {
             .map(|n| (n.note_start, n.start, n.duration))
             .collect::<Vec<_>>()
     );
+}
+
+
+#[test]
+fn gesture_slot_cannot_inherit_a_longer_chord_heads_duration() {
+    let base = xml(17).replace("number='17'", "number=\"17\"").replace(
+        "<note><chord/><pitch><step>C</step><octave>4</octave><duration>24</duration><voice>2</voice><staff>2</staff></note>",
+        "<note><chord/><pitch><step>D</step><octave>4</octave><duration>24</duration><voice>1</voice><staff>1</staff></note>",
+    );
+    let (tone, slots) = tone_and_slots(&base);
+    let head = &slots[0];
+    let notes = parse_atomic_notes(&base);
+    let written = &notes[3];
+    assert!(written.duration < head.duration);
+    let mut inherited = head.clone();
+    inherited.note_start = written.note_start;
+    inherited.note_end = written.note_end;
+    inherited.midi = written.pitch.as_ref().map(|pitch| pitch.midi);
+    let occupancy = legacy_fixture(&base);
+    assert!(occupancy.proposal(&tone, &inherited).is_none());
+    assert!(occupancy.proposal(&tone, head).is_some());
 }

@@ -2814,6 +2814,10 @@ fn renderer_head_binding(
     if expected.is_empty() { return Ok(Vec::new()); }
     let spacing = (cell.line_y_top.last().ok_or("missing_staff_lines")? - cell.line_y_top.first().ok_or("missing_staff_lines")?) / 4.0;
     let bottom = *cell.line_y_top.last().ok_or("missing_staff_lines")?;
+    // Widths are expressed in staff spaces: 0.10 is a regular stem and
+    // 0.07 its reduced-size counterpart. Keep the former upper tolerance
+    // of 0.65 points at a five-point staff space.
+    let stem_width_range = (0.069 * spacing)..=(0.13 * spacing);
     let mut stems = segments.iter().filter_map(|segment| {
         let stem = RendererStemGeometry {
             x: (segment.x1 + segment.x2) / 2.0,
@@ -2823,7 +2827,7 @@ fn renderer_head_binding(
         (segment.page_index == cell.page_index
             && (segment.x2 - segment.x1).abs() <= 0.5
             && stem.y_max - stem.y_min >= 8.0
-            && (0.35..=0.65).contains(&segment.width)
+            && stem_width_range.contains(&segment.width)
             && stem.x > cell.x_left + 1.0 && stem.x < cell.x_right - 1.0)
             .then_some(stem)
     }).collect::<Vec<_>>();
@@ -2934,6 +2938,24 @@ mod notehead_binding_tests {
         assert_eq!(stems.len(),1);
         assert_eq!(stems[0].x,26.25);
         assert!(renderer_head_bound_stems(&cell(), &[actual], &[], &expected).is_none());
+    }
+    #[test]
+    fn reduced_width_stem_binds_relative_to_staff_spacing() {
+        let expected = [occurrence(vec![0])];
+        for spacing in [4.6, 5.0, 5.4] {
+            let mut staff = cell();
+            staff.line_y_top = (0..5).map(|line| 120.0 - f64::from(4 - line) * spacing).collect();
+            let mut reduced = stroke(26.25, 105.0, 119.2);
+            reduced.width = 0.07 * spacing;
+            let mut too_thin = reduced;
+            too_thin.width = 0.04 * spacing;
+            let heads = [head(20.0, 120.0)];
+
+            let stems = renderer_head_bound_stems(&staff, &[reduced], &heads, &expected).unwrap();
+            assert_eq!(stems[0].x, reduced.x1);
+            assert!(renderer_head_bound_stems(&staff, &[reduced], &[], &expected).is_none());
+            assert!(renderer_head_bound_stems(&staff, &[too_thin], &heads, &expected).is_none());
+        }
     }
     #[test]
     fn stroke_duplicates_are_equivalent_but_same_x_different_endpoints_are_not() {

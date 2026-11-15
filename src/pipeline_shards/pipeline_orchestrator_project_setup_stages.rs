@@ -128,6 +128,7 @@ struct MasterNotationAndSalienceStageInputs<'a> {
     best: SolverCandidate,
     next_iteration: usize,
     options: &'a CheckOptions,
+    opening_tempo: Option<&'a AuthoredOpeningTempo>,
 }
 
 struct MasterNotationAndSalienceStageOutcome {
@@ -141,6 +142,7 @@ fn run_master_notation_and_salience_stage(
         mut best,
         mut next_iteration,
         options,
+        opening_tempo,
     } = inputs;
     console_progress(
         "NotationPolish: Schlussstrich/Spielanweisungen/Oktavierung/Layout werden geschrieben",
@@ -153,12 +155,11 @@ fn run_master_notation_and_salience_stage(
         |xml| {
             let mut receipts = master_state_identity::OwnerReceipts::default();
             receipts.push_additive(ensure_final_barline(xml));
-            let (_expression_summary, expression_receipts) =
-                apply_expression_polish(xml, estimated_bpm);
-            receipts.append(expression_receipts);
-            ((), receipts)
+            let result = apply_expression_polish(xml, estimated_bpm, opening_tempo)
+                .map(|(_, expression_receipts)| receipts.append(expression_receipts));
+            (result, receipts)
         },
-    );
+    )?;
     crate::audit_only::destructive_edit_attribution::observe_selected_state_successor(
         &receipt_before_master_notation_prelude,
         best.layout_xml(),

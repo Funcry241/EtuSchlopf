@@ -194,7 +194,7 @@ fn row57_ready_and_non_status_population_edits_are_rejected() {
 fn pre_v2_or_partial_proof_surfaces_are_rejected() {
     let t = Tree::new();
     t.put(PROOF_PATH, "struct SscInvariantCounterexample {}");
-    assert!(validate_runtime(&t.0).unwrap_err().contains("epoch base"));
+    assert!(validate_runtime(&t.0, None).unwrap_err().contains("epoch base"));
 }
 
 fn complete_v2(t: &Tree) {
@@ -219,7 +219,7 @@ fn v2_cannot_revert_and_a4_literal_changes_are_rejected() {
             .contains("epoch base")
     );
     p.put("src/ssc_shadow_report.rs", &format!("{}\npub(crate) fn append_ssc_shadow_observation(out: &mut String) {{ append_ssc_remaining_projection_v2(out); }}",A4.replace("retirement={}","retirement=none{}")));
-    assert!(validate_runtime(&p.0).is_err());
+    assert!(validate_runtime(&p.0, None).is_err());
 }
 
 #[test]
@@ -231,14 +231,14 @@ fn real_row28_mint_and_descriptor_block_retirement() {
         POP_PATH,
         &POP.replace(row, &row.replace(cols[9], "RETIRED_SSC_K2")),
     );
-    predicate(&t.0, "wav_pending_28").unwrap();
+    predicate(&t.0, "wav_pending_28", None).unwrap();
     for symbol in [
         "RenderRow28ExactMint",
         "ARTICULATION_BATCH_RENDER_EXACT",
         "ArticulationBatch",
     ] {
         t.put("src/leftover.rs", &format!("struct {symbol};"));
-        assert!(predicate(&t.0, "wav_pending_28").is_err(), "{symbol}");
+        assert!(predicate(&t.0, "wav_pending_28", None).is_err(), "{symbol}");
     }
 }
 #[test]
@@ -328,7 +328,7 @@ fn row57_installed_v2_does_not_grant_population_discharge() {
     let t = Tree::new();
     validate_row57_v2_installed(INSTALLED_WRITER).unwrap();
     assert!(
-        predicate(&t.0, "deferred_render_57")
+        predicate(&t.0, "deferred_render_57", None)
             .unwrap_err()
             .contains("population")
     );
@@ -338,7 +338,7 @@ fn row57_installed_v2_does_not_grant_population_discharge() {
         format!("{INSTALLED_WRITER}\n{region}\n"),
     ] {
         t.put(R57_WRITER_PATH, &forged);
-        assert!(predicate(&t.0, "deferred_render_57").unwrap_err().contains("V2"));
+        assert!(predicate(&t.0, "deferred_render_57", None).unwrap_err().contains("V2"));
     }
 }
 
@@ -466,7 +466,7 @@ fn positive_metronome_tree() -> Tree {
     let t = Tree::new();
     t.put("src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs", include_str!("ssc_test_fixture_r1485_metronome_tail.txt") );
     t.put("src/pipeline_shards/corpus_fastjump_human_potential_core.rs", include_str!("../pipeline_shards/corpus_fastjump_human_potential_core.rs") );
-    t.put("src/pipeline_shards/pipeline_orchestrator_project_setup_stages.rs", include_str!("../pipeline_shards/pipeline_orchestrator_project_setup_stages.rs") );
+    t.put("src/pipeline_shards/pipeline_orchestrator_project_setup_stages.rs", include_str!("ssc_test_fixture_opening_tempo_stage.txt") );
     t.put("src/pipeline_shards/pipeline_runtime_progress_console_core.rs", include_str!("../pipeline_shards/pipeline_runtime_progress_console_core.rs") );
     t.put("src/reference.rs", include_str!("../reference.rs") );
     t.put("src/ssc_evidence_proof.rs", include_str!("ssc_test_fixture_r1279_ssc_evidence_proof.txt") );
@@ -479,7 +479,7 @@ fn positive_metronome_tree() -> Tree {
 #[test]
 fn positive_metronome_is_reachable_with_estimate_present_and_open_removal() {
     let t = positive_metronome_tree();
-    predicate(&t.0, "wav_metronome").unwrap();
+    predicate(&t.0, "wav_metronome", None).unwrap();
     t.put(REMAINING_PATH, &super::super::INITIAL_REMAINING.replace("open=wav_metronome\n", ""));
     validate_tree(&t.0).unwrap();
 }
@@ -498,31 +498,31 @@ fn positive_metronome_rejects_formula_rounding_clamp_and_duplicate_direction_cha
         let source = read(&t.0, path).unwrap();
         assert!(source.contains(before));
         t.put(path, &source.replacen(before, after, 1));
-        assert!(predicate(&t.0, "wav_metronome").is_err(), "{path}: {before}");
+        assert!(predicate(&t.0, "wav_metronome", None).is_err(), "{path}: {before}");
     }
 }
 #[test]
 fn positive_metronome_rejects_missing_input_and_additive_owner_drift() {
     let t = positive_metronome_tree();
     std::fs::remove_file(t.0.join("src/reference.rs")).unwrap();
-    assert!(predicate(&t.0, "wav_metronome").is_err());
+    assert!(predicate(&t.0, "wav_metronome", None).is_err());
     let t = positive_metronome_tree();
     let path = "src/structural_write_authority/thirty_surface_productive_authority.rs";
     let text = read(&t.0, path).unwrap();
     assert!(text.contains("measure_numbers.sort_unstable();"));
     t.put(path, &text.replace("measure_numbers.sort_unstable();", "measure_numbers.reverse();"));
-    assert!(predicate(&t.0, "wav_metronome").is_err());
+    assert!(predicate(&t.0, "wav_metronome", None).is_err());
 }
 #[test]
 fn positive_metronome_rejects_second_source_and_wav_as_proof_input() {
     let t = positive_metronome_tree();
     t.put("src/synthetic_second_tempo.rs", "fn second_tempo() { apply_expression_polish(); }\n");
-    assert!(predicate(&t.0, "wav_metronome").unwrap_err().contains("source/caller scope"));
+    assert!(predicate(&t.0, "wav_metronome", None).unwrap_err().contains("source/caller scope"));
     for path in governed::PROOF_FILES {
         let t = positive_metronome_tree();
         let text = read(&t.0, path).unwrap();
         t.put(path, &(text + "\nfn wav_proof_source() { let estimated_bpm = 120.0; }\n"));
-        assert!(predicate(&t.0, "wav_metronome").unwrap_err().contains("proof firewall"));
+        assert!(predicate(&t.0, "wav_metronome", None).unwrap_err().contains("proof firewall"));
     }
 }
 #[test]
@@ -530,7 +530,7 @@ fn positive_metronome_rejects_retired_writers_and_unknown_closed_construction() 
     for symbol in ["WavTruthAccent", "run_salience_weighted_candidate_gate", "mint_articulation_fragment_receipt"] {
         let t = positive_metronome_tree();
         t.put("src/synthetic_retired_writer.rs", &format!("fn {symbol}() {{}}\n"));
-        assert!(predicate(&t.0, "wav_metronome").is_err());
+        assert!(predicate(&t.0, "wav_metronome", None).is_err());
     }
     let t = Tree::new();
     t.put(REMAINING_PATH, &super::super::INITIAL_REMAINING.replace("open=wav_metronome\n", ""));
@@ -565,11 +565,11 @@ fn positive_render57_tree() -> Tree {
 #[test]
 fn render57_positive_requires_ready_and_the_complete_accepted_construction() {
     let t = positive_render57_tree();
-    validate_render57_positive(&t.0).unwrap();
+    validate_render57_positive(&t.0, false).unwrap();
     validate_population(&t.0).unwrap();
     let pop = read(&t.0, POP_PATH).unwrap();
     t.put(POP_PATH, &pop.replace("\tREADY\tDEFERRED_RENDER_PREREQUISITE: contains clef", "\tDEFERRED_RENDER_PREREQUISITE\tDEFERRED_RENDER_PREREQUISITE: contains clef"));
-    assert!(validate_render57_positive(&t.0).unwrap_err().contains("not READY"));
+    assert!(validate_render57_positive(&t.0, false).unwrap_err().contains("not READY"));
 }
 #[test]
 fn render57_missing_or_changed_runtime_and_tests_reject_even_with_ready() {
@@ -577,9 +577,9 @@ fn render57_missing_or_changed_runtime_and_tests_reject_even_with_ready() {
         let t = positive_render57_tree();
         let original = read(&t.0, path).unwrap();
         t.put(path, &(original.clone() + "\n// synthetic changed binding\n"));
-        assert!(validate_render57_positive(&t.0).is_err(), "{path}");
+        assert!(validate_render57_positive(&t.0, false).is_err(), "{path}");
         std::fs::remove_file(t.0.join(path)).unwrap();
-        assert!(validate_render57_positive(&t.0).is_err(), "{path}");
+        assert!(validate_render57_positive(&t.0, false).is_err(), "{path}");
     }
 }
 #[test]
@@ -593,7 +593,7 @@ fn render57_changed_safety_planner_and_owner_error_transport_reject() {
         let source = read(&t.0, path).unwrap();
         assert!(source.contains(before));
         t.put(path, &source.replacen(before, after, 1));
-        assert!(validate_render57_positive(&t.0).is_err());
+        assert!(validate_render57_positive(&t.0, false).is_err());
     }
 }
 #[test]
@@ -611,25 +611,25 @@ fn proof_bundle_rejects_any_other_proof_or_identity_bytes() {
     // never an unreviewed acceptance; the content firewall holds on every tree.
     let p = positive_metronome_tree();
     let c = positive_metronome_tree();
-    predicate(&c.0, "wav_metronome").unwrap();
+    predicate(&c.0, "wav_metronome", None).unwrap();
     let text = read(&c.0, "src/ssc_evidence_proof.rs").unwrap();
     c.put("src/ssc_evidence_proof.rs", &(text + "\n// unreviewed drift\n"));
-    predicate(&c.0, "wav_metronome").unwrap();
+    predicate(&c.0, "wav_metronome", None).unwrap();
     for class in ["RefactorOnly", "KodexOnly", "MusicMutation"] {
         assert!(governed::validate_transition(&p.0, &c.0, class, false).unwrap_err().contains("proof_rule"));
     }
     // #57: drift outside the bound construction items is not #57 authority; drift inside is.
     let t = positive_render57_tree();
-    validate_render57_positive(&t.0).unwrap();
+    validate_render57_positive(&t.0, false).unwrap();
     let text = read(&t.0, "src/master_state_identity.rs").unwrap();
     t.put("src/master_state_identity.rs", &(text.clone() + "\n// unrelated drift\n"));
-    validate_render57_positive(&t.0).unwrap();
+    validate_render57_positive(&t.0, false).unwrap();
     for (_, kind, name, _) in R57_POSITIVE_ITEMS {
         let t = positive_render57_tree();
         let bound = item(&text, kind, name).unwrap();
         let changed = bound.replacen('{', "{ /* drift */", 1);
         t.put("src/master_state_identity.rs", &text.replacen(bound, &changed, 1));
-        assert!(validate_render57_positive(&t.0).unwrap_err().contains(name), "{name}");
+        assert!(validate_render57_positive(&t.0, false).unwrap_err().contains(name), "{name}");
     }
 }
 #[test]
@@ -678,7 +678,7 @@ fn historical_parent_documents_are_never_absent_or_changed() {
 
 #[test]
 fn proof_firewall_rejects_inputs_globals_and_dependencies_beyond_the_token_ban() {
-    validate_runtime(&positive_metronome_tree().0).unwrap();
+    validate_runtime(&positive_metronome_tree().0, None).unwrap();
     let injections = [
         "use std::fs;\n",
         "fn x() -> String { std::env::var(\"X\").unwrap_or_default() }\n",
@@ -704,7 +704,7 @@ fn proof_firewall_rejects_inputs_globals_and_dependencies_beyond_the_token_ban()
             let text = read(&t.0, path).unwrap();
             t.put(path, &(text + "\n" + injection));
             assert!(
-                validate_runtime(&t.0).unwrap_err().contains("proof firewall"),
+                validate_runtime(&t.0, None).unwrap_err().contains("proof firewall"),
                 "{path}: {injection}"
             );
         }
@@ -721,7 +721,7 @@ fn proof_firewall_checks_allowlisted_dependency_modules_transitively() {
         let t = positive_metronome_tree();
         let text = read(&t.0, path).unwrap_or_default();
         t.put(path, &(text + injection));
-        assert!(validate_runtime(&t.0).unwrap_err().contains("proof firewall"), "{path}");
+        assert!(validate_runtime(&t.0, None).unwrap_err().contains("proof firewall"), "{path}");
     }
 }
 #[test]
@@ -733,7 +733,7 @@ fn observer_accepts_only_sealed_ssc_inputs() {
     let head = "    necessity: SscNecessityAssessment<'event>,\n";
     for injected in ["    hint: f64,\n", "    xml: &str,\n", "    signature: crate::master_state_identity::MintedIdentity,\n"] {
         t.put(PROOF_PATH, &text.replacen(anchor, &format!("{head}{injected}) -> Result<"), 1));
-        let result = validate_runtime(&t.0);
+        let result = validate_runtime(&t.0, None);
         assert!(result.as_ref().is_err_and(|e| e.contains("proof firewall")), "{injected}: {result:?}");
     }
 }
@@ -756,9 +756,9 @@ fn surface_extensions_are_exact_appends_of_installed_v3_items() {
     let extended = real.replacen("    Preserving,\n}", "    Preserving,\n    Containment,\n}", 1);
     assert_ne!(extended, real);
     t.put(PROOF_PATH, &extended);
-    assert!(validate_runtime(&t.0).unwrap_err().contains("surface mismatch"));
+    assert!(validate_runtime(&t.0, None).unwrap_err().contains("surface mismatch"));
     t.put(governed::EXTENSIONS_PATH, &format!("{}variant=SscProofFamily|Containment\n", FIXTURE_EXTENSIONS));
-    validate_runtime(&t.0).unwrap();
+    validate_runtime(&t.0, None).unwrap();
 }
 #[test]
 fn verdict_tokens_escape_observation_only_through_declared_wiring() {
@@ -769,19 +769,19 @@ fn verdict_tokens_escape_observation_only_through_declared_wiring() {
     assert_eq!(text.matches(anchor).count(), 1);
     let gated = text.replacen(anchor, &format!("{anchor}\n        let _gate = crate::ssc_evidence_proof::ssc_adoption_verdict;"), 1);
     t.put(path, &gated);
-    assert!(validate_runtime(&t.0).unwrap_err().contains("escapes observation"));
+    assert!(validate_runtime(&t.0, None).unwrap_err().contains("escapes observation"));
     t.put(governed::WIRING_PATH, &format!("{}wiring={path}::commit\n", FIXTURE_WIRING));
-    validate_runtime(&t.0).unwrap();
+    validate_runtime(&t.0, None).unwrap();
     // r1278 F4 (Codex counterexample): the same verdict in another function of the wired
     // file is still an escape.
     for token in ["ssc_adoption_verdict", "SscPermitVerdictV2", "SscContainmentVerdict"] {
         t.put(path, &format!("{gated}\nfn some_mint_or_helper() {{ let _ = crate::ssc_evidence_proof::{token}; }}\n"));
-        assert!(validate_runtime(&t.0).unwrap_err().contains("escapes observation"), "{token}");
+        assert!(validate_runtime(&t.0, None).unwrap_err().contains("escapes observation"), "{token}");
     }
     t.put(path, &gated);
     let other = "src/structural_write_authority/synthetic_boundary.rs";
     t.put(other, "fn commit() { let _ = crate::ssc_evidence_proof::ssc_adoption_verdict; }\n");
-    assert!(validate_runtime(&t.0).unwrap_err().contains("escapes observation"));
+    assert!(validate_runtime(&t.0, None).unwrap_err().contains("escapes observation"));
 }
 #[test]
 fn governed_transition_runs_after_the_parent_k2_rules_for_every_class() {
@@ -796,12 +796,12 @@ fn governed_transition_runs_after_the_parent_k2_rules_for_every_class() {
 #[test]
 fn proof_firewall_reads_the_transaction_backup_layout_of_an_accepted_parent() {
     let t = positive_metronome_tree();
-    validate_runtime(&t.0).unwrap();
+    validate_runtime(&t.0, None).unwrap();
     let manifest = read(&t.0, "Cargo.toml").unwrap();
     std::fs::remove_file(t.0.join("Cargo.toml")).unwrap();
-    assert!(validate_runtime(&t.0).is_err());
+    assert!(validate_runtime(&t.0, None).is_err());
     t.put("root_files/Cargo.toml", &manifest);
-    validate_runtime(&t.0).unwrap();
+    validate_runtime(&t.0, None).unwrap();
     assert!(cargo_dependencies(&t.0).unwrap().iter().any(|d| d == "roxmltree"));
 }
 
@@ -830,7 +830,7 @@ fn proof_firewall_refuses_aliases_reexports_foreign_macros_and_hidden_modules() 
             let t = positive_metronome_tree();
             let text = read(&t.0, path).unwrap();
             t.put(path, &(text + "\n" + injection));
-            let result = validate_runtime(&t.0);
+            let result = validate_runtime(&t.0, None);
             assert!(result.as_ref().is_err_and(|e| e.contains("proof firewall")), "{path}: {injection}: {result:?}");
         }
     }
@@ -846,14 +846,14 @@ fn identity_dependency_cannot_reexport_or_read_an_ambient_input() {
         let t = positive_metronome_tree();
         let text = read(&t.0, "src/master_state_identity.rs").unwrap();
         t.put("src/master_state_identity.rs", &(text + injection));
-        let result = validate_runtime(&t.0);
+        let result = validate_runtime(&t.0, None);
         assert!(result.as_ref().is_err_and(|e| e.contains("proof firewall")), "{injection}: {result:?}");
     }
     // A reserved accessor name used by the proof must exist as a plain identity fn.
     let t = positive_metronome_tree();
     let proof = read(&t.0, PROOF_PATH).unwrap();
     t.put(PROOF_PATH, &(proof + "\nfn x() { let _ = crate::master_state_identity::ssc_block_descriptor; }\n"));
-    assert!(validate_runtime(&t.0).unwrap_err().contains("not a plain fn"));
+    assert!(validate_runtime(&t.0, None).unwrap_err().contains("not a plain fn"));
 }
 #[test]
 fn observer_signature_is_exactly_v2_or_v4_containment() {
@@ -867,14 +867,14 @@ fn observer_signature_is_exactly_v2_or_v4_containment() {
         "    containment: SscContainmentAssessment<'event>,\n    ambient: SscAmbientInput,\n",
     ] {
         t.put(PROOF_PATH, &format!("{}\npub(crate) struct SscAmbientInput {{\n    pub(crate) accept: bool,\n}}\n", text.replacen(anchor, &format!("{head}{injected}) -> Result<"), 1)));
-        assert!(validate_runtime(&t.0).unwrap_err().contains("proof firewall"), "{injected}");
+        assert!(validate_runtime(&t.0, None).unwrap_err().contains("proof firewall"), "{injected}");
     }
     let generic = text.replacen("fn observe_ssc_event_v2<'event>(", "fn observe_ssc_event_v2<'event, SscInput>(", 1);
     t.put(PROOF_PATH, &generic);
-    assert!(validate_runtime(&t.0).unwrap_err().contains("proof firewall"));
+    assert!(validate_runtime(&t.0, None).unwrap_err().contains("proof firewall"));
     // The V4 head alone, without the frozen V4 surface, is rejected.
     t.put(PROOF_PATH, &text.replacen(anchor, &format!("{head}    containment: SscContainmentAssessment<'event>,\n) -> Result<"), 1));
-    assert!(validate_runtime(&t.0).unwrap_err().contains("V4"));
+    assert!(validate_runtime(&t.0, None).unwrap_err().contains("V4"));
 }
 fn v4_proof(v3: &str) -> String {
     let old = item(v3, "struct", "SscClassifiedObservationV2").unwrap();
@@ -890,7 +890,7 @@ fn frozen_v4_containment_surface_is_admitted_exactly_and_never_reverts() {
     let v3 = read(&t.0, PROOF_PATH).unwrap();
     let v4 = v4_proof(&v3);
     t.put(PROOF_PATH, &v4);
-    validate_runtime(&t.0).unwrap();
+    validate_runtime(&t.0, None).unwrap();
     // Any drift of a V4 item is a mismatch; extensions stay bare unit variants.
     for (before, after) in [
         ("    ContainmentDenied,\n", "    ContainmentDenied,\n    Exempt,\n"),
@@ -899,7 +899,7 @@ fn frozen_v4_containment_surface_is_admitted_exactly_and_never_reverts() {
     ] {
         assert!(v4.contains(before));
         t.put(PROOF_PATH, &v4.replacen(before, after, 1));
-        assert!(validate_runtime(&t.0).unwrap_err().contains("surface mismatch"), "{after}");
+        assert!(validate_runtime(&t.0, None).unwrap_err().contains("surface mismatch"), "{after}");
     }
     // V4 -> V3 is a regression.
     let p = Tree::new();
@@ -914,14 +914,14 @@ fn render57_impl_pin_detects_helper_drift_behind_an_unchanged_wrapper() {
     // r1278 F6 (Codex counterexample): dropping the post fingerprint filter in the split
     // helper leaves the wrapper unchanged but breaks the bound impl.
     let t = positive_render57_tree();
-    validate_render57_positive(&t.0).unwrap();
+    validate_render57_positive(&t.0, false).unwrap();
     let text = read(&t.0, "src/master_state_identity.rs").unwrap();
     let block = item(&text, "impl", "BlockTransformationReceipt").unwrap();
     let filter = ".filter(|document| fingerprint(document) == self.post_fingerprint)";
     assert!(block.contains(filter));
     let changed = block.replacen(filter, "", 1);
     t.put("src/master_state_identity.rs", &text.replacen(block, &changed, 1));
-    assert!(validate_render57_positive(&t.0).unwrap_err().contains("BlockTransformationReceipt"));
+    assert!(validate_render57_positive(&t.0, false).unwrap_err().contains("BlockTransformationReceipt"));
     for helper in ["fn mint_block_receipt", "fn validate_block_transition", "fn split_realized_post_document"] {
         assert!(block.contains(helper), "{helper}");
     }
@@ -1010,8 +1010,8 @@ fn render57_noop_stage_admits_only_the_complete_one_way_music_transition() {
     let c = positive_render57_tree();
     p.put(R57_NOOP_STAGE_PATH, &before);
     c.put(R57_NOOP_STAGE_PATH, &after);
-    validate_render57_positive(&p.0).unwrap();
-    validate_render57_positive(&c.0).unwrap();
+    validate_render57_positive(&p.0, false).unwrap();
+    validate_render57_positive(&c.0, false).unwrap();
     validate_render57_noop_stage_transition(&p.0, &c.0, "MusicMutation").unwrap();
     // Exercise the actual complete transition owner, not just the local predicate.
     validate_transition(&p.0, &c.0, "MusicMutation").unwrap();
@@ -1043,13 +1043,13 @@ fn render57_noop_stage_rejects_every_partial_edit_and_extra_byte() {
             result.unwrap();
         } else {
             assert!(result.is_err(), "partial mask {mask}");
-            assert!(validate_render57_positive(&c.0).is_err());
+            assert!(validate_render57_positive(&c.0, false).is_err());
         }
     }
     for source in [before, after] {
         let c = positive_render57_tree();
         c.put(R57_NOOP_STAGE_PATH, &(source + "\n// extra synthetic byte\n"));
-        assert!(validate_render57_positive(&c.0).is_err());
+        assert!(validate_render57_positive(&c.0, false).is_err());
         assert!(validate_render57_noop_stage_transition(&p.0, &c.0, "MusicMutation").is_err());
     }
 }
@@ -1068,7 +1068,7 @@ fn render57_noop_stage_keeps_trial_receipt_sink_and_error_mutations_red_in_both_
             assert!(source.contains(old));
             let c = positive_render57_tree();
             c.put(R57_NOOP_STAGE_PATH, &source.replacen(old, new, 1));
-            assert!(validate_render57_positive(&c.0).is_err(), "{old}");
+            assert!(validate_render57_positive(&c.0, false).is_err(), "{old}");
         }
     }
 }
@@ -1095,7 +1095,7 @@ fn render57_noop_stage_rejects_the_unconditional_no_render_boundary_successor() 
     assert_eq!(crate::rust_source_scan_primitives::fnv1a64(unconditional.as_bytes()), 0x9e277f212f6585e9);
     let c = positive_render57_tree();
     c.put(R57_NOOP_STAGE_PATH, &unconditional);
-    assert!(validate_render57_positive(&c.0).is_err());
+    assert!(validate_render57_positive(&c.0, false).is_err());
     assert!(validate_render57_noop_stage_transition(&p.0, &c.0, "MusicMutation").is_err());
     assert!(validate_transition(&p.0, &c.0, "MusicMutation").is_err());
 }
@@ -1106,7 +1106,7 @@ fn render57_material_identity_admission_is_exact_one_way_and_independent() {
     let after = render57_material_stage_successor(&before).unwrap();
     let p = positive_render57_tree(); let c = positive_render57_tree();
     p.put(R57_NOOP_STAGE_PATH, &before); c.put(R57_NOOP_STAGE_PATH, &after);
-    validate_render57_positive(&p.0).unwrap(); validate_render57_positive(&c.0).unwrap();
+    validate_render57_positive(&p.0, false).unwrap(); validate_render57_positive(&c.0, false).unwrap();
     validate_transition(&p.0, &c.0, "MusicMutation").unwrap();
     for class in ["KodexOnly", "RefactorOnly", "AuditOnly", "GovernedChange", "MechanicalOnly", "ValidationOnly", "OutcomeProjection", "CalibrationOnly"] {
         assert!(validate_render57_noop_stage_transition(&p.0, &c.0, class).is_err(), "{class}");
@@ -1125,7 +1125,7 @@ fn render57_material_identity_admission_rejects_partial_delta_and_protected_drif
             if mask & (1 << index) != 0 { partial = partial.replacen(old, new, 1); }
         }
         let c = positive_render57_tree(); c.put(R57_NOOP_STAGE_PATH, &partial);
-        assert!(validate_render57_positive(&c.0).is_err());
+        assert!(validate_render57_positive(&c.0, false).is_err());
         assert!(validate_render57_noop_stage_transition(&p.0, &c.0, "MusicMutation").is_err());
     }
     for (old, new) in [
@@ -1137,11 +1137,11 @@ fn render57_material_identity_admission_rejects_partial_delta_and_protected_drif
     ] {
         assert!(after.contains(old));
         let c = positive_render57_tree(); c.put(R57_NOOP_STAGE_PATH, &after.replacen(old,new,1));
-        assert!(validate_render57_positive(&c.0).is_err());
+        assert!(validate_render57_positive(&c.0, false).is_err());
         assert!(validate_render57_noop_stage_transition(&p.0,&c.0,"MusicMutation").is_err());
     }
     let c = positive_render57_tree(); c.put(R57_NOOP_STAGE_PATH, &(after+"\n// extra byte\n"));
-    assert!(validate_render57_positive(&c.0).is_err());
+    assert!(validate_render57_positive(&c.0, false).is_err());
 }
 
 #[test]
@@ -1152,7 +1152,7 @@ fn original_cursor_evidence_borrow_admits_only_complete_one_way_refactor() {
     let after = render57_cursor_course_stage_successor(&material).unwrap();
     let parent = positive_render57_tree(); let child = positive_render57_tree();
     parent.put(R57_NOOP_STAGE_PATH, &material); child.put(R57_NOOP_STAGE_PATH, &after);
-    validate_render57_positive(&parent.0).unwrap(); assert!(validate_render57_positive(&child.0).is_err());
+    validate_render57_positive(&parent.0, false).unwrap(); assert!(validate_render57_positive(&child.0, false).is_err());
     assert!(validate_transition(&parent.0, &child.0, "RefactorOnly").is_err());
     for class in ["KodexOnly", "MusicMutation", "AuditOnly", "GovernedChange", "MechanicalOnly", "ValidationOnly", "OutcomeProjection", "CalibrationOnly"] {
         assert!(validate_render57_noop_stage_transition(&parent.0, &child.0, class).is_err(), "{class}");
@@ -1178,11 +1178,11 @@ fn original_cursor_evidence_borrow_refuses_missing_foreign_mutable_or_extra_code
     ] {
         assert_eq!(after.matches(old).count(),1);
         let child = positive_render57_tree(); child.put(R57_NOOP_STAGE_PATH, &after.replacen(old,new,1));
-        assert!(validate_render57_positive(&child.0).is_err());
+        assert!(validate_render57_positive(&child.0, false).is_err());
         assert!(validate_transition(&parent.0,&child.0,"RefactorOnly").is_err());
     }
     let child = positive_render57_tree(); child.put(R57_NOOP_STAGE_PATH, &(after+"\n// extra byte\n"));
-    assert!(validate_render57_positive(&child.0).is_err());
+    assert!(validate_render57_positive(&child.0, false).is_err());
     assert!(validate_transition(&parent.0,&child.0,"RefactorOnly").is_err());
 }
 
@@ -1195,7 +1195,7 @@ fn original_cursor_evidence_borrow_preserves_every_other_construction_pin() {
         let tree = positive_render57_tree(); tree.put(R57_NOOP_STAGE_PATH, &after);
         let original = std::fs::read_to_string(tree.0.join(path)).unwrap();
         tree.put(path, &(original+"\n// forbidden pin drift\n"));
-        assert!(validate_render57_positive(&tree.0).is_err(),"{path}");
+        assert!(validate_render57_positive(&tree.0, false).is_err(),"{path}");
     }
     let tree = positive_render57_tree(); tree.put(R57_NOOP_STAGE_PATH,&after);
     let identity = std::fs::read_to_string(tree.0.join("src/master_state_identity.rs")).unwrap();
@@ -1203,5 +1203,5 @@ fn original_cursor_evidence_borrow_preserves_every_other_construction_pin() {
     assert!(identity.contains(old));
     tree.put("src/master_state_identity.rs",&identity.replacen(old,
         "realized_post_document: Option<String>,\n    forbidden_observation: bool,",1));
-    assert!(validate_render57_positive(&tree.0).is_err());
+    assert!(validate_render57_positive(&tree.0, false).is_err());
 }

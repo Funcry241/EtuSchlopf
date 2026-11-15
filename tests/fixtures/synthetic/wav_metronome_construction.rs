@@ -23,6 +23,7 @@ fn synthetic_score() -> crate::model::Score {
                     cursor_min: 0,
                     cursor_max: 0,
                     events: Vec::new(),
+                    covered_cross_staff_chord_members: Vec::new(),
                 })
                 .collect(),
         }],
@@ -118,7 +119,7 @@ fn real_duration_signature_feeds_the_expression_wrapper_with_unchanged_clamps() 
         );
         assert_eq!(signature.estimated_bpm, Some(420.0 / seconds));
         let mut xml = synthetic_empty_xml();
-        super::apply_expression_polish(&mut xml, signature.estimated_bpm);
+        super::apply_expression_polish(&mut xml, signature.estimated_bpm, None).unwrap();
         let doc = roxmltree::Document::parse(&xml).unwrap();
         let sound = doc
             .descendants()
@@ -142,7 +143,7 @@ fn real_duration_signature_feeds_the_expression_wrapper_with_unchanged_clamps() 
 fn expression_rounds_before_clamping_and_rejects_absent_tempo() {
     for (estimate, expected) in [(100.49, 100), (100.5, 101), (39.49, 40), (220.5, 220)] {
         let mut xml = synthetic_empty_xml();
-        super::apply_expression_polish(&mut xml, Some(estimate));
+        super::apply_expression_polish(&mut xml, Some(estimate), None).unwrap();
         let doc = roxmltree::Document::parse(&xml).unwrap();
         let sound = doc
             .descendants()
@@ -158,7 +159,7 @@ fn expression_rounds_before_clamping_and_rejects_absent_tempo() {
         );
         assert_eq!(signature.estimated_bpm, None);
         let mut xml = synthetic_empty_xml();
-        super::apply_expression_polish(&mut xml, signature.estimated_bpm);
+        super::apply_expression_polish(&mut xml, signature.estimated_bpm, None).unwrap();
         let doc = roxmltree::Document::parse(&xml).unwrap();
         assert!(
             !doc.descendants()
@@ -166,7 +167,7 @@ fn expression_rounds_before_clamping_and_rejects_absent_tempo() {
         );
     }
     let mut absent = "<score-partwise/>".to_string();
-    super::apply_expression_polish(&mut absent, Some(105.0));
+    super::apply_expression_polish(&mut absent, Some(105.0), None).unwrap();
     assert_eq!(absent, "<score-partwise/>");
 }
 
@@ -249,9 +250,9 @@ fn expression_owner_preserves_existing_marks_and_adds_only_measured_tempo() {
                 .collect::<String>();
             xml = xml.replace("</part>", &format!("{extension}</part>"));
             let before = xml.clone();
-            super::apply_expression_polish(&mut xml, None);
+            super::apply_expression_polish(&mut xml, None, None).unwrap();
             assert_eq!(xml, before);
-            super::apply_expression_polish(&mut xml, Some(83.0));
+            super::apply_expression_polish(&mut xml, Some(83.0), None).unwrap();
             let parsed = roxmltree::Document::parse(&xml).unwrap();
             assert!(parsed.descendants().any(|node| node.has_tag_name("words")
                 && node.text() == Some("♩ = 83")));

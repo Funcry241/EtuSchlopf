@@ -11,6 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 pub(crate) enum NotationEventKind {
     Regular,
     Grace { host: usize },
+    PlaybackOnly,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +35,7 @@ pub(crate) struct NotationTimePlan {
 enum TimingAuthority {
     ExactMidi,
     PerformanceAnchors,
+    PerformanceNotes,
     InferredPerformance,
 }
 
@@ -154,7 +156,7 @@ impl NotationTimePlan {
     }
 
     pub(crate) fn preserves_attacks(&self) -> bool {
-        self.timing_authority == TimingAuthority::InferredPerformance
+        matches!(self.timing_authority, TimingAuthority::InferredPerformance | TimingAuthority::PerformanceNotes)
     }
 
     fn from_inferred_performance(source: &DecodedMidiSource) -> Result<Self> {
@@ -172,6 +174,9 @@ impl NotationTimePlan {
 
     pub(crate) fn from_source(source: &DecodedMidiSource) -> Result<Self> {
         if !source.timing_markers.is_empty() {
+            if source.timing_markers.iter().any(|(_, marker)| marker.starts_with("v2 ")) {
+                return Self::from_notated_performance(source);
+            }
             return Self::from_performance(source);
         }
         let d = source.time_domain.divisions;
@@ -373,6 +378,84 @@ impl NotationTimePlan {
         })
     }
 
+    fn from_notated_performance(source: &DecodedMidiSource) -> Result<Self> {
+        let originals = ordered_source_events(source)?;
+        let mut events = vec![None; originals.len()];
+        let mut locators = vec![None; originals.len()];
+        for entry in &source.source_event_causal_ledger.entries {
+            let slot = locators.get_mut(entry.source_ordinal)
+                .ok_or_else(|| anyhow!("Notationszeitkarte: Quellordinalitaet ausserhalb der MIDI-Quelle"))?;
+            ensure!(slot.replace(entry.note_on).is_none(), "Notationszeitkarte: doppelte Quellordinalitaet");
+        }
+        let mut meter = None;
+        let mut attacks = BTreeSet::new();
+        let mut extent = 0;
+        for (tick, marker) in &source.timing_markers {
+            let fields: Vec<_> = marker.split_ascii_whitespace().collect();
+            let (ordinal, channel, key, pos, len, kind) = match fields.as_slice() {
+                ["v2", "meter", beats, "pickup", pickup] => {
+                    ensure!(*tick == 0 && meter.is_none(), "Notationszeitkarte: genau ein Taktkopf an MIDI-Tick 0 ist erforderlich");
+                    let (beats, pickup) = (beats.parse()?, pickup.parse()?);
+                    validate_performance_meter(beats, pickup)?;
+                    meter = Some((beats, pickup));
+                    continue;
+                }
+                ["v2", "note", ordinal, channel, key, pos, len] => {
+                    let (pos, len) = (pos.parse::<i64>()?, len.parse::<i64>()?);
+                    ensure!(pos >= 0 && pos % 6 == 0 && plain_duration(len),
+                        "Notationszeitkarte: Einsatz oder Dauer liegt ausserhalb des Notationsrasters");
+                    (ordinal, channel, key, pos, len, NotationEventKind::Regular)
+                }
+                ["v2", "grace", ordinal, channel, key, host] => {
+                    (ordinal, channel, key, 0, 0, NotationEventKind::Grace { host: host.parse()? })
+                }
+                ["v2", "playback", ordinal, channel, key] => {
+                    (ordinal, channel, key, 0, 0, NotationEventKind::PlaybackOnly)
+                }
+                _ => bail!("Ungueltiger Eintrag der notenbezogenen MIDI-Notationszeitkarte"),
+            };
+            let ordinal = ordinal.parse::<usize>()?;
+            let locator = locators.get(ordinal).copied().flatten()
+                .ok_or_else(|| anyhow!("Notationszeitkarte: unbekannte Quellnote {ordinal}"))?;
+            ensure!(locator.tick == *tick && locator.channel == channel.parse::<u8>()? && locator.key == key.parse::<u8>()?,
+                "Notationszeitkarte: Quellnote {ordinal} stimmt nicht mit MIDI-Tick, Kanal und Ton ueberein");
+            if kind == NotationEventKind::Regular {
+                ensure!(attacks.insert((pos, locator.channel, locator.key)),
+                    "Notationszeitkarte: gleichnamige Anschlaege fallen auf Position {pos} zusammen");
+                extent = extent.max(pos.checked_add(len).ok_or_else(|| anyhow!("Notationszeitkarte: Notenende ueberlaeuft"))?);
+            }
+            ensure!(events[ordinal].replace(NotationEvent { source_ordinal: ordinal, pos, len, kind }).is_none(),
+                "Notationszeitkarte: doppelter Eintrag fuer Quellnote {ordinal}");
+        }
+        let (beats, pickup) = meter.ok_or_else(|| anyhow!("Notationszeitkarte: Taktkopf fehlt"))?;
+        ensure!(!attacks.is_empty(), "Notationszeitkarte: keine regulaere notierte Note");
+        ensure!(source.time_signatures.is_empty() || source.time_signatures == [(beats, 4)],
+            "MIDI-Taktart und Notationszeitkarte widersprechen sich");
+        for ordinal in 0..events.len() {
+            let event = events[ordinal].as_ref()
+                .ok_or_else(|| anyhow!("Notationszeitkarte: Eintrag fuer Quellnote {ordinal} fehlt"))?;
+            if let NotationEventKind::Grace { host } = event.kind {
+                let host = events.get(host).and_then(Option::as_ref)
+                    .filter(|event| event.kind == NotationEventKind::Regular)
+                    .ok_or_else(|| anyhow!("Notationszeitkarte: Vorschlag {ordinal} hat keine regulaere Hauptnote"))?;
+                let attack = locators[ordinal].expect("bound grace");
+                let host_attack = locators[host.source_ordinal].expect("bound host");
+                ensure!(attack.tick < host_attack.tick && (attack.track_index, attack.channel) == (host_attack.track_index, host_attack.channel),
+                    "Notationszeitkarte: Vorschlag {ordinal} und Hauptnote sind nicht zeitlich und stimmlich gebunden");
+                let host_pos = host.pos;
+                events[ordinal].as_mut().expect("bound grace").pos = host_pos;
+            }
+        }
+        let events = events.into_iter().flatten().collect();
+        Ok(Self {
+            source_domain: source.time_domain,
+            metric: MetricTimeline::from_written_meter(beats, pickup, extent)?,
+            events,
+            source_events: originals,
+            timing_authority: TimingAuthority::PerformanceNotes,
+        })
+    }
+
     fn from_performance(source: &DecodedMidiSource) -> Result<Self> {
         let timing = PerformanceTiming::read(&source.timing_markers)?;
         ensure!(
@@ -453,6 +536,7 @@ impl NotationTimePlan {
             bytes.extend_from_slice(&e.len.to_le_bytes());
             match e.kind {
                 NotationEventKind::Regular => bytes.push(0),
+                NotationEventKind::PlaybackOnly => bytes.push(2),
                 NotationEventKind::Grace { host } => {
                     bytes.push(1);
                     bytes.extend_from_slice(&(host as u64).to_le_bytes());
@@ -485,6 +569,8 @@ impl NotationTimePlan {
     pub(crate) fn written_sustain_interval(&self, ordinal: usize) -> Result<std::ops::Range<i64>> {
         let (onset, length) = if self.timing_authority != TimingAuthority::ExactMidi {
             let note = self.event(ordinal)?;
+            ensure!(note.kind != NotationEventKind::PlaybackOnly,
+                "Wiedergabeereignis besitzt kein notiertes Dauerintervall");
             (note.pos, note.len)
         } else {
             let note = self.source_event(ordinal)?;

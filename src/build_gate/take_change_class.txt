@@ -1,10 +1,10 @@
 schema_version=1
-change_class=GovernedChange
+change_class=MusicMutation
 from_version=0.10.1839
 to_version=0.10.1839
-reason=Resolve the feasible hand span at the initial MIDI seed split
-music_effect=declared|Project the existing aligned split before committing hand assignments
-change=modified|ZIP_KIND.txt|fnv64:e6c36fe2bdbccc2c
-change=added|docs/selector_derivation_contract_initial_aligned_hand_split.md|fnv64:2994478ba56a9e5c
-change=modified|src/midi_seed.rs|fnv64:f31c00200c8ae5ae
-change=modified|tests/unit/midi_seed_rhythmic_course_creation.rs|fnv64:8e684009ec49e67c
+reason=PreserveRepeatedAccompaniment
+change=modified|ZIP_KIND.txt|fnv64:0dfcb85a50f7c5a2
+change=added|docs/selector_derivation_contract_repeated_accompaniment_hand_implementation.md|fnv64:b05a9d72282ee7f3
+change=modified|src/midi_seed.rs|fnv64:5ef6fe14df0db338
+change=modified|src/source_selection.rs|fnv64:5c60b4bc10b98c61
+change=modified|tests/unit/midi_seed_rhythmic_course_creation.rs|fnv64:01ef20154941ea26

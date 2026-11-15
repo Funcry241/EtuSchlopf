@@ -43,3 +43,21 @@ playability repair preserve visible attacks at their written onset and pitch.
 For simultaneous groups with no bound source voices, the seed can redistribute
 notes if both hands meet the validator's span and key-count limits. It prefers
 fewer staff changes, then the smaller maximum span.
+
+## Embedded note timing (v2)
+
+Embedded note evidence also supports a `v2 meter <beats> pickup <units>`
+marker at MIDI tick zero. Exactly one `v2 note <ordinal> <channel> <key>
+<onset> <duration>` or `v2 grace <ordinal> <channel> <key> <host-ordinal>`
+marker at the performed attack tick is required for each decoded note.
+Notated values are in 96 units per quarter. The owner validates the exact
+source binding, positive grid durations, meter, and a preceding same-track
+grace attack with a regular host. Missing or contradictory evidence causes
+refusal. This path reads explicit score values from the MIDI while keeping
+the original performed note events for source custody.
+
+A `v2 playback <ordinal> <channel> <key>` marker at the performed attack
+tick declares a source event heard in the performance with no written
+note. The exact MIDI event remains in the source ledger. The notation seed
+records its explicit exclusion and does not assign it a voice, duration
+or printed note. A grace marker still requires a regular written host.

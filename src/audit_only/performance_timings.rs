@@ -139,6 +139,53 @@ impl<const N: usize> Drop for CallTiming<'_, '_, N> {
     }
 }
 
+/// Observation for targeted variants. Counts are summed once per seed.
+pub(crate) struct HumanPotentialTimings<'a> {
+    pub(crate) phases: BatchTimings<'a, 5>,
+    trials: AtomicU64,
+    measure_visits: AtomicU64,
+    reused_measures: AtomicU64,
+    polish_visits: AtomicU64,
+    polish_hits: AtomicU64,
+}
+
+impl<'a> HumanPotentialTimings<'a> {
+    pub(crate) fn new(project: &'a str, batch: &'a str, sequence: usize) -> Self {
+        Self {
+            phases: BatchTimings::new(project, batch, sequence,
+                ["DiscoveryArrangement", "TrialBookkeeping", "TargetedArrangement",
+                 "VariantEvaluation", "LocalHintRepairEvaluation"]),
+            trials: AtomicU64::new(0),
+            measure_visits: AtomicU64::new(0),
+            reused_measures: AtomicU64::new(0),
+            polish_visits: AtomicU64::new(0),
+            polish_hits: AtomicU64::new(0),
+        }
+    }
+
+    pub(crate) fn record_completed_seed(&self, trials: usize, measure_visits: usize, reused: usize,
+        (polish_visits, polish_hits): (usize, usize),
+    ) {
+        self.trials.fetch_add(trials as u64, Ordering::Relaxed);
+        self.measure_visits.fetch_add(measure_visits as u64, Ordering::Relaxed);
+        self.reused_measures.fetch_add(reused as u64, Ordering::Relaxed);
+        self.polish_visits.fetch_add(polish_visits as u64, Ordering::Relaxed);
+        self.polish_hits.fetch_add(polish_hits as u64, Ordering::Relaxed);
+    }
+}
+
+impl Drop for HumanPotentialTimings<'_> {
+    fn drop(&mut self) {
+        let visits = self.measure_visits.load(Ordering::Relaxed);
+        let reused = self.reused_measures.load(Ordering::Relaxed);
+        let _ = writeln!(std::io::stderr().lock(),
+            "ETUSCHLOPF: HumanPotentialMeasureReuse: schema=1; project={:?}; batch={:?}; sequence={}; completed_seed_trials={}; measure_visits={visits}; reused_measures={reused}; recomputed_measures={}; polish_measure_visits={}; polish_reused_measures={}; authority=none",
+            self.phases.project, self.phases.batch, self.phases.sequence,
+            self.trials.load(Ordering::Relaxed), visits.saturating_sub(reused),
+            self.polish_visits.load(Ordering::Relaxed), self.polish_hits.load(Ordering::Relaxed));
+    }
+}
+
 /// Sequential components within one existing pipeline stage. Nested worker
 /// totals are separate inclusive observations and must not be added again.
 pub(crate) struct SequentialTimings<'a> {

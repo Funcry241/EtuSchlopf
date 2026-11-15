@@ -121,6 +121,8 @@ keine Rechte an eingelesenen Aufnahmen, Aufführungsdaten oder fremden
 Notenausgaben. Bei Veröffentlichung von Ein- oder Ausgaben sind die Rechte an
 den jeweils enthaltenen Werken, Aufnahmen und Ausgaben zu berücksichtigen.
 
+Die [Quellen, Bearbeitungen und Lizenzangaben für Bach, Chopin und Schubert](examples/README.md#quellen-und-rechte) stehen bei den Notenbildern.
+
 ### Chopin, Etüde E-Dur op. 10 Nr. 3, Aufführung p01
 
 Die WAV-Aufnahme und das Performance-MIDI stammen aus demselben eingespielten

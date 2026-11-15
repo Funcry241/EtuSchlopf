@@ -109,8 +109,8 @@ pub(super) fn base_candidate() -> SolverCandidate {
     let signature = build_reference_signature(&reference, &score);
     let variant = evaluate_arrangement_variant("SyntheticBirth", arrangement, &reference, &signature,
         &CheckOptions { strict: true }, Some(2),
-        &crate::audit_only::performance_timings::BatchTimings::new(
-            "Synthetic", "DirectTestCall", 0, ["TestPhase"; 9])).unwrap();
+        (&crate::audit_only::performance_timings::BatchTimings::new(
+            "Synthetic", "DirectTestCall", 0, ["TestPhase"; 9]), None)).unwrap();
     SolverCandidate { iteration: 0, profile_name: "SyntheticBirth".into(), profile_contract: profile.clone(),
         profile_lineage: CandidateLineage::from_profile(&profile), final_result: variant.final_result,
         master_state: variant.master_state, midi_seed_stats: seed, midi_seed_genesis,
@@ -285,4 +285,76 @@ fn direct_candidate_handoff_transports_original_receipts_and_keeps_unknown_first
             master_state_identity::OwnerReceipts::default(), "MissingOriginalReceipt");
     }));
     assert!(refusal.is_err());
+}
+
+#[test]
+fn normalizer_carries_outer_ties_and_supplies_forward_rows() {
+    for measure_label in [4_usize, 11] {
+        let xml = format!(concat!(
+            "<score-partwise><part id=\"Synthetic\"><measure number=\"{}\">",
+            "<attributes><divisions>96</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>",
+            "<note><pitch><step>D</step><octave>4</octave></pitch><duration>120</duration>",
+            "<tie type=\"stop\"/><tie type=\"start\"/><voice>1</voice><staff>1</staff></note>",
+            "</measure></part></score-partwise>",
+        ), measure_label);
+        let normalized = arrangement::normalize_visible_rhythm_musicxml(&xml);
+        let mut origin = material_fragments_from_xml(&xml).unwrap().remove(0);
+        origin.source_event_id = Some(MaterialSourceEventId(4));
+        origin.attack_id = Some(SoundingAttackId(4));
+        let mut after = material_fragments_from_xml(&normalized.xml).unwrap();
+        let mut rows = normalized.stats.representation_lineage_rows;
+        rows.retain(|row| row.pre_ledger_raw_note_index == origin.raw_note_index);
+        rows.sort_by_key(|row| row.fragment_ordinal);
+        let indices = rows.iter().map(|row| {
+            after.iter().position(|note| note.raw_note_index == row.post_ledger_raw_note_index).unwrap()
+        }).collect::<Vec<_>>();
+        carry_visible_rhythm_split(&origin, &mut after, &indices).unwrap();
+        assert!(indices.iter().all(|&index| after[index].tie_start && after[index].tie_stop));
+        assert_eq!(normalized.xml.matches("<tie type=\"stop\"").count(), indices.len());
+        assert_eq!(normalized.xml.matches("<tie type=\"start\"").count(), indices.len());
+    }
+}
+
+
+#[test]
+fn atomic_transfer_input_keeps_exact_receipt_and_material_evidence() {
+    for label in ["Synthetic", "Örtlich"] {
+        let source = note("901", 96);
+        let anchor = note("202", 96);
+        let before = document(&format!("{source}{anchor}"), label);
+        let before_note_start = before.find(&source).unwrap();
+        let before_note_end = before_note_start + source.len();
+        let anchor_end = before.find(&anchor).unwrap() + anchor.len();
+        let carrier = CandidateMaterialRepresentationTransferCarrier {
+            before_note_start,
+            before_note_end,
+            after_measure: label.into(),
+            after_onset: 96,
+            after_pitch: 60,
+            after_staff: "2".into(),
+            after_voice: "202".into(),
+            after_is_chord: true,
+        };
+        let patch = AtomicPatch {
+            name: "SyntheticTransfer".into(),
+            note_start: before_note_start,
+            note_end: before_note_end,
+            target_staff: carrier.after_staff.clone(),
+            target_voice: carrier.after_voice.clone(),
+            staff_value_range: None,
+            voice_value_range: None,
+            action: AtomicPatchAction::SafeTransferChord,
+            insert_after: Some(anchor_end),
+            anchor_duration: Some(96),
+            material_transfer_carrier: Some(carrier.clone()),
+        };
+        let inputs = atomic_patches_to_candidate_inputs(vec![patch], &before);
+        let [input] = inputs.as_slice() else { panic!("expected one transferred candidate"); };
+        let effects = input.material_declared_effects.unwrap();
+        assert_eq!(input.material_transfer_carriers, [carrier]);
+        assert!(effects.staff && effects.voice);
+        assert!(!effects.attack_existence && !effects.attack_onset && !effects.sounding_end && !effects.pitch);
+        let births = input.lineage_receipts.physical_birth_readback(&before, &input.xml).unwrap();
+        assert_eq!(births[0].count(), 2);
+    }
 }

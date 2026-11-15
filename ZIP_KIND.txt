@@ -1,6 +1,6 @@
 kind=EtuSchlopfTake
 version=0.10.1839
-revision=r1792
-name=InitialHandSpanSplit
-parent_revision=r1791
-change_class=GovernedChange
+revision=r1872
+name=PreserveRepeatedAccompaniment
+parent_revision=r1871
+change_class=MusicMutation

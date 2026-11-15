@@ -14,7 +14,7 @@ fn measure(body: &str) -> String {
 fn run(xml: &str, context: RhythmContext, enabled: bool) -> String {
     let mut stats = VisibleLedgerStats::default();
     let (out, origins) = if enabled {
-        normalize_visible_note_values(xml, context, &mut stats, None)
+        normalize_visible_note_values(xml, context, &mut stats, None, false)
     } else {
         r1537_normalize_visible_note_values(xml, context, &mut stats, None)
     };
@@ -746,4 +746,28 @@ fn half_bar_independent_pedal_offsets_keep_absolute_time() {
     assert!(output.contains(direction));
     assert_eq!(sound(&xml),sound(&output));
     assert_eq!(half_bar_pitch_count(&output,48),1);
+}
+
+#[test]
+fn rhythm_normalization_keeps_unbound_chord_members_on_their_head() {
+    for lead in [48, 72] {
+        for head in [pitched("C", 4, 96, "1", 1, ""), rest(96)] {
+            let member = pitched("E", 4, 72, "1", 1, "<chord/>")
+                .replacen("<note>", "<note print-object=\"no\">", 1);
+            let xml = measure(&format!("{}{head}{member}", rest(lead)));
+            let (out, stats) = apply_visible_rhythm_ledger(&xml, RhythmContext::default(), None, true, true);
+            assert_preserved(&xml, &out);
+            let (staged, _) = apply_visible_rhythm_ledger(&xml, RhythmContext::default(), None, true, false);
+            assert_ne!(sound(&xml), sound(&staged));
+            let raw = collect_raw_notes(&out);
+            let head_rows = stats.fragment_lineage_rows.iter().filter(|row| row.pre_raw_idx == 1)
+                .collect::<Vec<_>>();
+            let member_rows = stats.fragment_lineage_rows.iter().filter(|row| row.pre_raw_idx == 2)
+                .collect::<Vec<_>>();
+            assert_eq!(head_rows.len(), 1);
+            assert_eq!(member_rows.len(), 1);
+            assert!(raw[member_rows[0].post_raw_idx].text.contains("print-object=\"no\""));
+            assert_eq!(member_rows[0].post_raw_idx, head_rows[0].post_raw_idx + 1);
+        }
+    }
 }

@@ -32,6 +32,7 @@ pub(crate) enum ExistingSourceSelectionRemovalReason {
     TrajectoryZigzag,
     ResidualCriticalSpan,
     ResidualCriticalJump,
+    DeclaredPlaybackOnly,
 }
 
 impl ExistingSourceSelectionRemovalReason {
@@ -42,6 +43,7 @@ impl ExistingSourceSelectionRemovalReason {
             Self::TrajectoryZigzag => "trajectory_zigzag_reduction",
             Self::ResidualCriticalSpan => "residual_critical_span_reduction",
             Self::ResidualCriticalJump => "residual_critical_jump_reduction",
+            Self::DeclaredPlaybackOnly => "declared_playback_only",
         }
     }
 
@@ -54,6 +56,7 @@ impl ExistingSourceSelectionRemovalReason {
             Self::TrajectoryZigzag => 4,
             Self::ResidualCriticalSpan => 5,
             Self::ResidualCriticalJump => 6,
+            Self::DeclaredPlaybackOnly => 7,
         }
     }
 }
@@ -82,6 +85,8 @@ pub(crate) enum SourceSelectionDecisionPass {
     ResidualCriticalJump,
     PostResidualWideSimultaneity,
     AlignedHandSpanSplit,
+    RepeatedAccompanimentHand,
+    DeclaredPlaybackOnly,
 }
 
 impl SourceSelectionDecisionPass {
@@ -102,6 +107,8 @@ impl SourceSelectionDecisionPass {
             Self::ResidualCriticalJump => "residual_critical_jump",
             Self::PostResidualWideSimultaneity => "post_residual_wide_simultaneity",
             Self::AlignedHandSpanSplit => "aligned_hand_span_split",
+            Self::RepeatedAccompanimentHand => "repeated_accompaniment_hand",
+            Self::DeclaredPlaybackOnly => "declared_playback_only",
         }
     }
 
@@ -125,6 +132,8 @@ impl SourceSelectionDecisionPass {
             Self::ResidualCriticalJump => 13,
             Self::PostResidualWideSimultaneity => 14,
             Self::AlignedHandSpanSplit => 17,
+            Self::RepeatedAccompanimentHand => 19,
+            Self::DeclaredPlaybackOnly => 18,
         }
     }
 }

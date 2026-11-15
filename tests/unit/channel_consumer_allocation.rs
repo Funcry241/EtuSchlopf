@@ -410,19 +410,19 @@ fn tests_support_unreadable_case() -> (CanonicalFinalChordStructuralPlan, Vec<Fr
 
 #[test]
 fn hidden_cursor_only_notes_are_not_required_and_do_not_register() {
-    let model = ChannelConsumerModel {
-        notes: vec![
-            ChannelConsumerNote { staff: 1, chordrest: false, required: false, class: Some(1), label: "1".into() },
-            ChannelConsumerNote { staff: 1, chordrest: true, required: true, class: Some(2), label: "1".into() },
-        ],
-    };
+    let notes = vec![
+        ChannelConsumerNote { staff: 1, chordrest: false, required: false, class: Some(1), label: "1".into() },
+        ChannelConsumerNote { staff: 1, chordrest: true, required: true, class: Some(2), label: "1".into() },
+    ];
+    let model = ChannelConsumerModel::new(notes.clone());
     let roles = [(1, SerializedVoicePresentationRole::UpperPrimary), (2, SerializedVoicePresentationRole::UpperSecondary)]
         .into_iter()
         .collect::<std::collections::BTreeMap<_, _>>();
     let by_class = [(1, 1), (2, 2)].into_iter().collect::<std::collections::BTreeMap<_, _>>();
     assert!(channel_consumer_overflow(&model, &by_class, &roles).is_ok());
-    let mut required = model.clone();
-    required.notes[0].required = true;
+    let mut required = notes;
+    required[0].required = true;
+    let required = ChannelConsumerModel::new(required);
     // A required note whose voice registers no pitched chordrest is unreserved.
     assert_eq!(channel_consumer_overflow(&required, &by_class, &roles), Err([1].into_iter().collect()));
 }
@@ -441,13 +441,32 @@ fn unknown_lexical_and_numeric_alias_keys_are_not_admission_evidence() {
 
 #[test]
 fn a_head_on_the_other_staff_is_not_an_own_staff_registration_guarantee() {
-    let model = ChannelConsumerModel { notes: vec![
+    let model = ChannelConsumerModel::new(vec![
         ChannelConsumerNote { staff: 1, chordrest: true, required: true, class: Some(1), label: "1".into() },
         ChannelConsumerNote { staff: 2, chordrest: false, required: true, class: Some(1), label: "1".into() },
-    ] };
+    ]);
     let roles = [(1, SerializedVoicePresentationRole::UpperPrimary)].into_iter().collect();
     let classes = [(1, 1)].into_iter().collect();
     assert_eq!(channel_consumer_overflow(&model, &classes, &roles), Err([2].into_iter().collect()));
+}
+
+#[test]
+fn a_rest_alias_counts_once_and_cannot_reserve_a_pitched_voice() {
+    let role = SerializedVoicePresentationRole::UpperPrimary;
+    let roles = [(29, role)].into_iter().collect();
+    let classes = [(83, 29)].into_iter().collect();
+    let mut notes = vec![ChannelConsumerNote {
+        staff: 1, chordrest: true, required: true, class: Some(83), label: "1".into(),
+    }];
+    for label in ["1", "11", "17", "23"] {
+        notes.push(ChannelConsumerNote {
+            staff: 1, chordrest: true, required: false, class: None, label: label.into(),
+        });
+    }
+    assert_eq!(channel_consumer_overflow(&ChannelConsumerModel::new(notes.clone()), &classes, &roles), Ok(()));
+    notes[0].chordrest = false;
+    assert_eq!(channel_consumer_overflow(&ChannelConsumerModel::new(notes), &classes, &roles),
+        Err([1].into_iter().collect()));
 }
 
 #[test]
@@ -519,7 +538,7 @@ fn productive_consumer_seal_rejects_foreign_binding_and_admits_repaired_partitio
 
 #[test]
 fn shared_partition_check_checks_edges_before_capacity() {
-    let model = ChannelConsumerModel { notes: Vec::new() };
+    let model = ChannelConsumerModel::new(Vec::new());
     let role = SerializedVoicePresentationRole::UpperPrimary;
     let class_role = [(1, role), (2, role)].into_iter().collect();
     let role_by_channel = [(1, role)].into_iter().collect();

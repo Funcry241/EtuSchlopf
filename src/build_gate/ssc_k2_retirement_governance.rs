@@ -319,10 +319,10 @@ pub(crate) fn validate_population(root: &Path) -> Result<(), String> {
                     if !cursor_temporal::installed(root) { return Err(fail("cursor retirement requires complete checked successor")); }
                     cursor_temporal::validate_tree(root)?;
                 }
-                "28" => predicate(root, "wav_pending_28")?,
+                "28" => predicate(root, "wav_pending_28", None)?,
                 "55" => validate_s55(root)?,
-                "57" => validate_render57_positive(root)?,
-                "67" => predicate(root, "deferred_render_67")?,
+                "57" => validate_render57_positive(root, false)?,
+                "67" => predicate(root, "deferred_render_67", None)?,
                 _ => return Err(fail("unnamed status transition")),
             }
         }
@@ -725,7 +725,34 @@ const WAV_METRONOME_USES: &[(&str, &str, usize)] = &[
 fn validate_wav_metronome_positive(
     root: &Path,
     sources: &[(String, String)],
+    runtime_proven: bool,
 ) -> Result<(), String> {
+    // The separate score-tempo owner is admitted as one exact construction.
+    // The duration estimate and its existing writer remain bound below.
+    let authored_path = "src/pipeline_shards/authored_opening_tempo.rs";
+    let authored = root.join(authored_path).is_file();
+    if authored {
+        for (path, kind, name, expected) in [
+            ("src/pipeline_shards/pipeline_orchestrator_project_setup_stages.rs", "struct",
+             "MasterNotationAndSalienceStageInputs", 0x8b76d1383e97b683),
+            ("src/pipeline_shards/pipeline_orchestrator_report_compaction.rs", "fn",
+             "real_main", 0x569c9b6925e5dfe4),
+        ] {
+            let source = read(root, path)?;
+            if crate::rust_source_scan_primitives::fnv1a64(item(&source, kind, name)?.as_bytes()) != expected {
+                return Err(fail(format!("authored opening tempo input binding changed: {path}::{name}")));
+            }
+        }
+        if crate::sha256::hex(read(root, authored_path)?.as_bytes())
+            != "8ee4104e3aecc3143f16bcf557fbd00de3bf61049b69e150696eae4222ddd14c"
+        {
+            return Err(fail("authored opening tempo construction changed"));
+        }
+        let producer = "src/pipeline_shards/composer_recovery_octave_beam_export_tail.rs";
+        if !read(root, producer)?.ends_with(concat!("include!(\"authored_opening_tempo.rs\");", "\n")) {
+            return Err(fail("authored opening tempo include missing"));
+        }
+    }
     for (path, kind, name, expected) in WAV_METRONOME_ITEMS {
         let source = read(root, path)?;
         let actual = crate::rust_source_scan_primitives::fnv1a64(item(&source, kind, name)?.as_bytes());
@@ -733,11 +760,18 @@ fn validate_wav_metronome_positive(
         // The complete replacement still pins its tempo calculation and writer call.
         let tempo_only_expression = *name == "apply_expression_polish"
             && actual == 0xccd42782d0c8217c;
-        if actual != *expected && !tempo_only_expression {
+        let authored_branch = authored && (
+            (*name == "run_master_notation_and_salience_stage" && actual == 0x8b5346af8c2af485)
+            || (*name == "apply_expression_polish" && actual == 0x371f81d232259d6f));
+        if (authored && matches!(*name, "run_master_notation_and_salience_stage" | "apply_expression_polish") && !authored_branch)
+            || (actual != *expected && !tempo_only_expression && !authored_branch)
+        {
             return Err(fail(format!("positive WAV metronome construction changed: {path}::{name}")));
         }
     }
-    validate_proof_firewall(root)?;
+    if !runtime_proven {
+        validate_proof_firewall(root)?;
+    }
     // Protect actual uses as well as definitions: a new tempo input/caller cannot
     // acquire authority by leaving the sealed producer and writer unchanged.
     let mut actual = std::collections::BTreeMap::new();
@@ -764,7 +798,10 @@ fn validate_wav_metronome_positive(
         "mint_articulation_fragment_receipt", "run_salience_weighted_candidate_gate",
         "run_discrete_action_salience_translator", "run_conflict_staff_split_proof_trial",
     ])?;
-    validate_runtime(root)
+    if !runtime_proven {
+        validate_runtime(root, None)?;
+    }
+    Ok(())
 }
 
 // Exact one-way admission for the independent P2 no-op identity continuation.
@@ -924,7 +961,7 @@ const R57_POSITIVE_ITEMS: &[(&str, &str, &str, u64)] = &[
     // block transition check cannot drift behind an unchanged wrapper.
     ("src/master_state_identity.rs", "impl", "BlockTransformationReceipt", 0x669e110149ca2403),
 ];
-fn validate_render57_positive(root: &Path) -> Result<(), String> {
+fn validate_render57_positive(root: &Path, runtime_proven: bool) -> Result<(), String> {
     for (path, kind, name, expected) in R57_POSITIVE_ITEMS {
         let source = read(root, path)?;
         let actual = crate::rust_source_scan_primitives::fnv1a64(item(&source, kind, name)?.as_bytes());
@@ -949,13 +986,28 @@ fn validate_render57_positive(root: &Path) -> Result<(), String> {
             return Err(fail(format!("#57 accepted construction/adoption/test binding changed: {path}")));
         }
     }
-    validate_runtime(root)
+    if !runtime_proven {
+        validate_runtime(root, None)?;
+    }
+    Ok(())
 }
 
-fn predicate(root: &Path, id: &str) -> Result<(), String> {
-    let sources = runtime_sources(root)?;
+fn predicate(
+    root: &Path,
+    id: &str,
+    validated_sources: Option<&[(String, String)]>,
+) -> Result<(), String> {
+    let runtime_proven = validated_sources.is_some();
+    let owned_sources;
+    let sources = match validated_sources {
+        Some(sources) => sources,
+        None => {
+            owned_sources = runtime_sources(root)?;
+            &owned_sources
+        }
+    };
     match id {
-        "deferred_render_57" => validate_render57_positive(root),
+        "deferred_render_57" => validate_render57_positive(root, runtime_proven),
         "deferred_render_67" => {
             if status(root, "67")? != "READY" {
                 return Err(fail("#67 not READY"));
@@ -978,7 +1030,7 @@ fn predicate(root: &Path, id: &str) -> Result<(), String> {
                 return Err(fail("#28 not retired status"));
             }
             absent(
-                &sources,
+                sources,
                 &[
                     "apply_bound_articulation_batch_authorized",
                     "RenderRow28ExactMint",
@@ -986,10 +1038,10 @@ fn predicate(root: &Path, id: &str) -> Result<(), String> {
                     "ArticulationBatch",
                 ],
             )?;
-            predicate(root, "wav_accent_productive")
+            predicate(root, "wav_accent_productive", validated_sources)
         }
         "wav_accent_productive" => absent(
-            &sources,
+            sources,
             &[
                 "apply_wav_truth_binding_clear_tiny_accent_render_write",
                 "WavTruthAccent",
@@ -1001,16 +1053,16 @@ fn predicate(root: &Path, id: &str) -> Result<(), String> {
             ],
         ),
         "wav_salience_master_adoptions" => absent(
-            &sources,
+            sources,
             &[
                 "run_salience_weighted_candidate_gate",
                 "run_discrete_action_salience_translator",
                 "run_conflict_staff_split_proof_trial",
             ],
         ),
-        "wav_metronome" => validate_wav_metronome_positive(root, &sources),
+        "wav_metronome" => validate_wav_metronome_positive(root, sources, runtime_proven),
         "e031_tenuto" => absent(
-            &sources,
+            sources,
             &[
                 "add_tenuto_to_note_fragment_authorized",
                 "TenutoFragment",
@@ -1021,7 +1073,7 @@ fn predicate(root: &Path, id: &str) -> Result<(), String> {
             ],
         ),
         "ra5_accent_reserve" => absent(
-            &sources,
+            sources,
             &[
                 "apply_accent_reserve_top_six_micro_write_candidate",
                 "write_accent_reserve_checkpoint_authorized",
@@ -1068,7 +1120,7 @@ fn predicate(root: &Path, id: &str) -> Result<(), String> {
                 ),
                 _ => return Err(fail("unknown K2 obligation")),
             };
-            absent(&sources, &[owner, variant])
+            absent(sources, &[owner, variant])
         }
     }
 }
@@ -1211,9 +1263,19 @@ fn is_surface_v4(root: &Path, proof: &str) -> Result<bool, String> {
     }
     Ok(true)
 }
-pub(crate) fn validate_runtime(root: &Path) -> Result<(), String> {
+pub(crate) fn validate_runtime(
+    root: &Path,
+    loaded_sources: Option<&[(String, String)]>,
+) -> Result<(), String> {
     let v2 = is_v2(root)?;
-    let sources = runtime_sources(root)?;
+    let owned_sources;
+    let sources = match loaded_sources {
+        Some(sources) => sources,
+        None => {
+            owned_sources = runtime_sources(root)?;
+            &owned_sources
+        }
+    };
     if !v2 {
         return Err(fail("pre-V2 SSC proof surface is older than the epoch base"));
     }
@@ -1304,7 +1366,7 @@ pub(crate) fn validate_runtime(root: &Path) -> Result<(), String> {
     {
         return Err(fail("A4 not invoked by report"));
     }
-    for (p, s) in &sources {
+    for (p, s) in sources {
         let masked = mask_non_code(s);
         for name in UNIQUE_V1 {
             if contains_token(&masked, name) {
@@ -1462,9 +1524,11 @@ pub(crate) fn validate_tree(root: &Path) -> Result<(), String> {
     if !open.is_subset(&baseline) {
         return Err(fail("K2 unknown open ID"));
     }
-    validate_runtime(root)?;
+    // All closed obligations check the same tree in this validation.
+    let sources = runtime_sources(root)?;
+    validate_runtime(root, Some(&sources))?;
     for id in baseline.difference(&open) {
-        predicate(root, id)?;
+        predicate(root, id, Some(&sources))?;
     }
     validate_exit_closure(root)?;
     validate_population(root)

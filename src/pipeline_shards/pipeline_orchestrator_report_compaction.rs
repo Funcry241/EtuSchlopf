@@ -389,6 +389,7 @@ fn real_main() -> anyhow::Result<i32> {
     }));
     stage_clock = pipeline_stage_timing(&timing_label, "ArrangementSolver", stage_clock);
 
+    let opening_tempo = observed_project_try!(read_authored_opening_tempo(&midi_path));
     runtime_observation.enter_project_stage(observation::ProjectStage::MasterNotationAndSalience);
     runtime_observation_transport.publish_current(&runtime_observation);
     etuschlopf::console_status_record::emit_project_stage(&runtime_observation);
@@ -400,6 +401,7 @@ fn real_main() -> anyhow::Result<i32> {
                 best,
                 next_iteration,
                 options: &options,
+                opening_tempo: opening_tempo.as_ref(),
             }
         ));
     drop(master_timing_context);

@@ -54,6 +54,27 @@ fn transport(before: &str, after: &str, edits: Vec<(Range<usize>, String)>) -> R
 }
 
 #[test]
+fn identity_transport_requires_actual_empty_steps_bound_to_the_same_bytes() {
+    let original = document(24, "synthetic");
+    let equivalent = original.clone();
+    assert!(transport(&original, &equivalent, vec![]).is_identity_for(&original));
+    assert!(!transport(&original, &equivalent, vec![]).is_identity_for(&document(48, "synthetic")));
+    assert!(!transport(&original, &original, vec![(0..0, String::new())]).is_identity_for(&original));
+    let missing = RhythmicRepresentationTransport { permits_plain_stem_change: false, steps: vec![] };
+    assert!(!missing.is_identity_for(&original));
+    let changed = document(48, "synthetic");
+    let return_to_original = RhythmicRepresentationTransport {
+        permits_plain_stem_change: false,
+        steps: vec![
+            RepresentationStep::recorded(&original, &changed, vec![(0..original.len(), changed.clone())]),
+            RepresentationStep::recorded(&changed, &original, vec![(0..changed.len(), original.clone())]),
+        ],
+    };
+    assert_eq!(return_to_original.recorded_documents().unwrap(), (original.as_str(), original.as_str()));
+    assert!(!return_to_original.is_identity_for(&original));
+}
+
+#[test]
 fn missing_actual_operation_cannot_transport_a_changed_state() {
     assert!(transport("abc", "axbc", vec![]).carry("abc", "axbc", std::iter::once(1..2).collect()).is_err());
 }

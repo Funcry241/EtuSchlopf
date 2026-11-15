@@ -305,6 +305,17 @@ impl ChordGestureDistributionCapability {
             {
                 return None;
             }
+            let predecessor = crate::arrangement::physical_births::PhysicalRhythmicBirths::gesture_predecessor(source, edit.start).ok()?;
+            let predecessor = roxmltree::Document::parse(source.get(predecessor)?).ok()?;
+            let member = roxmltree::Document::parse(&edit.replacement).ok()?;
+            let duration = |node: roxmltree::Node<'_, '_>| -> Option<i64> {
+                node.children().find(|child| child.has_tag_name("duration"))?
+                    .text()?.trim().parse().ok()
+            };
+            let actual = duration(predecessor.root_element())?;
+            if actual <= 0 || duration(member.root_element())? != actual {
+                return None;
+            }
             inserted_pitches.push(pitch_fragment(&edit.replacement)?.to_string());
         }
         removed_pitches.sort();

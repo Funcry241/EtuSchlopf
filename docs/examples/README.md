@@ -20,9 +20,9 @@ Klicke auf einen Ausschnitt, um das vollständige EtuSchlopf-PDF zu öffnen.
 
 ### Franz Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15
 
-[![Notenausschnitt aus Schuberts Deutschem Tanz As-Dur D. 783 Nr. 15](../images/schubert-d783-no15-p18-r1871-ausschnitt.png)](schubert-d783-no15-p18-r1871.pdf)
+[![Notenausschnitt aus Schuberts Deutschem Tanz As-Dur D. 783 Nr. 15](../images/schubert-d783-no15-p18-r1872-ausschnitt.png)](schubert-d783-no15-p18-r1872.pdf)
 
-[PDF · 2 Seiten · Windows r1871](schubert-d783-no15-p18-r1871.pdf) · [Druckvorlage](https://imslp.org/wiki/18_German_Dances_and_Esoccaises,_D.783_(Schubert,_Franz))
+[PDF · 2 Seiten · Windows r1872](schubert-d783-no15-p18-r1872.pdf) · [Druckvorlage](https://imslp.org/wiki/18_German_Dances_and_Esoccaises,_D.783_(Schubert,_Franz))
 
 ## Quellen und Rechte
 
@@ -46,7 +46,7 @@ Klicke auf einen Ausschnitt, um das vollständige EtuSchlopf-PDF zu öffnen.
 - **Bearbeitungen für den Import.** Die Import-MIDI ergänzt Taktart, Tonart und Tempoverlauf und bindet Auftakt und Notationszeiten. Sie kennzeichnet Vorschläge und reine Wiedergabeereignisse. Die WAV-Arbeitsfassung wurde zeitlich ausgerichtet. Dazu wurde der Vorlauf gekürzt und Stille für die leeren Auftaktviertel vorangestellt.
 - **Druckvorlage.** Franz Schubert, *Deutsche Tänze und Ecossaisen*, herausgegeben von Julius Epstein, Breitkopf & Härtel, Leipzig 1889, Platte F.S. 126. Nr. 15 steht unten auf PDF-Seite 5 und oben auf Seite 6. Gemeinfrei. [IMSLP, Scan Nr. 03143](https://imslp.org/wiki/18_German_Dances_and_Esoccaises,_D.783_(Schubert,_Franz)).
 
-- **Erzeugter Notensatz.** Das EtuSchlopf-PDF aus dem Windows-Lauf r1871 basiert auf der für den Import bearbeiteten Aufführung p18. Die Namensnennung und Lizenzlinks für das Ausgangsmaterial stehen oben. [EtuSchlopf-PDF r1871](schubert-d783-no15-p18-r1871.pdf).
+- **Erzeugter Notensatz.** Das EtuSchlopf-PDF aus dem Windows-Lauf r1872 basiert auf der für den Import bearbeiteten Aufführung p18. Die Namensnennung und Lizenzlinks für das Ausgangsmaterial stehen oben. [EtuSchlopf-PDF r1872](schubert-d783-no15-p18-r1872.pdf).
 
 ## Weitergabe
 

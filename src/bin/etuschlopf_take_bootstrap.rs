@@ -662,6 +662,15 @@ fn format_bootstrap_step_duration(elapsed: std::time::Duration) -> String {
     }
 }
 
+fn bootstrap_cargo_jobs() -> usize {
+    if env::var("ETUSCHLOPF_LOW_RAM").as_deref() == Ok("1") {
+        return 1;
+    }
+    std::thread::available_parallelism()
+        .map(|parallelism| parallelism.get().saturating_sub(1).max(1))
+        .unwrap_or(1)
+}
+
 fn main() -> ExitCode {
     match run() {
         Ok(code) => ExitCode::from(normalize_bootstrap_exit_code(code)),
@@ -3407,9 +3416,7 @@ impl TakeTransaction {
         let _root_lock_timing = startup_timing::Phase::new("RootCargoLockCheck");
         let root_lock_step = bootstrap_step("root_lock", "Cargo.lock und Kodex-Gates werden geprüft (cargo check)");
         let cargo = env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
-        let jobs = std::thread::available_parallelism()
-            .map(|parallelism| parallelism.get().saturating_sub(1).max(1))
-            .unwrap_or(1);
+        let jobs = bootstrap_cargo_jobs();
         let status = Command::new(cargo)
             .current_dir(project_root)
             .arg("check")
@@ -4246,11 +4253,7 @@ fn validate_changed_watch_project(source_root: &Path, project_root: &Path) -> Ap
         ));
     }
 
-    let jobs = std::thread::available_parallelism()
-        .map(std::num::NonZero::get)
-        .unwrap_or(1)
-        .saturating_sub(1)
-        .max(1);
+    let jobs = bootstrap_cargo_jobs();
     let cargo = env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
     let target_dir = source_root
         .parent()

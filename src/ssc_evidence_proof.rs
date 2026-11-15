@@ -1116,10 +1116,22 @@ fn containment_form(xml: &str, row: &EnvelopeRow) -> Option<ContainmentForm> {
     let document = roxmltree::Document::parse(xml).ok()?;
     Some(containment_form_of(&document, row))
 }
+/// Write the same quoted bytes as string Debug. Plain printable ASCII
+/// needs no escaping. All other strings retain Rust's Debug escaping.
+fn push_containment_quoted(out: &mut String, value: &str) {
+    use std::fmt::Write;
+    if value.bytes().all(|byte| matches!(byte, b' '..=b'~') && !matches!(byte, b'"' | b'\\')) {
+        out.push('"');
+        out.push_str(value);
+        out.push('"');
+    } else {
+        let _ = write!(out, "{value:?}");
+    }
+}
+
 // r1290: same canonical bytes as before, written into one buffer instead of one allocation
 // per element, attribute and text node; the parsed document is shared with the edit check.
 fn containment_form_of(document: &roxmltree::Document<'_>, row: &EnvelopeRow) -> ContainmentForm {
-    use std::fmt::Write;
     fn serialize(node: roxmltree::Node<'_, '_>, out: &mut String) {
         if node.is_element() {
             let name = node.tag_name().name();
@@ -1128,7 +1140,10 @@ fn containment_form_of(document: &roxmltree::Document<'_>, row: &EnvelopeRow) ->
             let mut attrs: Vec<_> = node.attributes().map(|a| (a.name(), a.value())).collect();
             attrs.sort_unstable();
             for (attr, value) in attrs {
-                let _ = write!(out, "|{attr}={value:?}");
+                out.push('|');
+                out.push_str(attr);
+                out.push('=');
+                push_containment_quoted(out, value);
             }
             out.push('>');
             for child in node.children() {
@@ -1140,7 +1155,7 @@ fn containment_form_of(document: &roxmltree::Document<'_>, row: &EnvelopeRow) ->
         } else if node.is_text()
             && let Some(text) = node.text().filter(|text| !text.trim().is_empty())
         {
-            let _ = write!(out, "{text:?}");
+            push_containment_quoted(out, text);
         }
     }
     fn visit(node: roxmltree::Node<'_, '_>, row: &EnvelopeRow, form: &mut ContainmentForm) {
@@ -1168,7 +1183,10 @@ fn containment_form_of(document: &roxmltree::Document<'_>, row: &EnvelopeRow) ->
                 .collect();
             attrs.sort_unstable();
             for (attr, value) in attrs {
-                let _ = write!(form.canonical, "|{attr}={value:?}");
+                form.canonical.push('|');
+                form.canonical.push_str(attr);
+                form.canonical.push('=');
+                push_containment_quoted(&mut form.canonical, value);
             }
             form.canonical.push('>');
             for child in node.children() {
@@ -1180,7 +1198,7 @@ fn containment_form_of(document: &roxmltree::Document<'_>, row: &EnvelopeRow) ->
         } else if node.is_text()
             && let Some(text) = node.text().filter(|text| !text.trim().is_empty())
         {
-            let _ = write!(form.canonical, "{text:?}");
+            push_containment_quoted(&mut form.canonical, text);
         }
     }
     let mut form = ContainmentForm { canonical: String::new(), whole: Vec::new() };

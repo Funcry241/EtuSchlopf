@@ -939,3 +939,91 @@ fn rest_edge_readback_separates_written_extension_from_metric_owner_plan() {
     assert_eq!(bridges.len(), 2, "{report}");
     assert!(bridges.iter().all(|line| line.contains("before_e050=Missing; metric_plan=OutsideCapturedPlan")), "{report}");
 }
+
+#[test]
+fn clef_revision_replaces_complete_groups_and_carries_unaffected_groups() {
+    let clef = "<attributes><clef><sign>F</sign><line>4</line></clef></attributes>";
+    let group = ["A", "B", "C", "D"].into_iter().map(|step| format!(
+        "<note><pitch><step>{step}</step><octave>4</octave></pitch><duration>24</duration><voice>3</voice><type>16th</type><staff>1</staff></note>\n"
+    )).collect::<Vec<_>>();
+    let before = input().replace("<note><rest/><duration>288</duration><voice>3</voice><type>half</type><dot/><staff>1</staff></note>",
+        &format!("{}{clef}{}<note><rest/><duration>192</duration><voice>3</voice><type>half</type><staff>1</staff></note>",
+            group[0], group[1..].concat()));
+    let (before, _, capture) = execute(&before);
+    let start = before.find(clef).unwrap();
+    let source = before.replacen(clef, "", 1);
+    let locate = |range: &std::ops::Range<usize>| Some(if range.start < start {
+        range.clone()
+    } else {
+        range.start - clef.len()..range.end - clef.len()
+    });
+    let continued = capture.carried(
+        &source, capture.occurrences(&before).unwrap().iter().filter_map(|(range, _)| locate(range)).collect(),
+        Ok(Vec::new()), false, locate,
+    ).unwrap();
+    let plan = prepare_clef_beam_revision(&before, &source).unwrap();
+    assert_eq!(plan.len(), 1);
+    let (after, input) = realize_clef_beam_revision(&source, &continued, &plan).unwrap();
+    let (receipt, revised) = input.into_parts_for_test();
+    let revised = revised.unwrap().unwrap();
+    revised.course_carry_births(&receipt.unwrap()).unwrap();
+    let rows = revised.occurrences(&after).unwrap();
+    let old_rows = capture.occurrences(&before).unwrap();
+    assert_eq!(rows.len(), 8);
+    assert_eq!(
+        rows[4..].iter().map(|(_, levels)| levels).collect::<Vec<_>>(),
+        old_rows[4..].iter().map(|(_, levels)| levels).collect::<Vec<_>>(),
+    );
+    for (row, kind) in rows[..4].iter().zip(["begin", "continue", "continue", "end"]) {
+        assert_eq!(row.1[0].2.as_deref(), Some(kind));
+        assert_eq!(row.1[1].2.as_deref(), Some(kind));
+    }
+    let restored = after.replacen("</note>\n", &format!("</note>\n{clef}"), 1);
+    let split = prepare_clef_beam_revision(&after, &restored).unwrap();
+    assert!(split.iter().any(|decision| decision.members.len() == 1 && decision.edits.is_empty()));
+}
+
+#[test]
+fn sustained_head_extends_only_its_bound_contiguous_tail() {
+    let source = input().replace(
+        "<note><rest/><duration>288</duration><voice>3</voice><type>half</type><dot/><staff>1</staff></note>",
+        "",
+    ).replacen(
+        "<duration>24</duration><voice>3</voice><type>16th</type><staff>1</staff></note>",
+        "<duration>24</duration>\n<tie type=\"stop\"/><voice>3</voice><type>16th</type><staff>1</staff><notations><tied type=\"stop\"/></notations></note>",
+        1,
+    );
+    let validator = schemaschlopf::compile_bound_instance_validator(
+        schemaschlopf::MUSICXML40_SCHEMA_DIR,
+    ).expect("bound MusicXML 4.0 schema");
+    validator.validate_bytes(source.as_bytes()).expect("valid tied input");
+    let notes = partial_beat_raw_notes(&source);
+    let (head, tail) = notes.split_first().unwrap();
+    let mut input = source.clone();
+    let mut expected = BTreeMap::new();
+    for (note, kind) in tail.iter().zip(["begin", "continue", "end"]).rev() {
+        let replacement = partial_beat_insert_beam_tags(&note.text, &[(1, kind), (2, kind)]);
+        input.replace_range(note.start..note.end, &replacement);
+        expected.insert(note.start, BTreeMap::from([(1, kind.to_owned()), (2, kind.to_owned())]));
+    }
+    let starts = partial_beat_raw_notes(&input).iter().map(|note| note.start).collect::<Vec<_>>();
+    let owns = |members: &[usize], written: &BTreeMap<usize, BTreeMap<u8, String>>| {
+        members == starts && starts[1..].iter().zip(expected.values())
+            .all(|(start, states)| written.get(start) == Some(states))
+    };
+    assert!(extend_bound_sustain_beam_group(&input, &BTreeSet::new(), owns, None).unwrap().is_none());
+    let generated = BTreeSet::from([head.start]);
+    assert!(extend_bound_sustain_beam_group(&input, &generated, |_, _| false, None).unwrap().is_none());
+    let (post, receipt) = extend_bound_sustain_beam_group(&input, &generated, owns, None).unwrap().unwrap();
+    validator.validate_bytes(post.as_bytes()).expect("beam emission respects MusicXML note order");
+    let (receipt, capture) = receipt.into_parts_for_test();
+    let bound = capture.unwrap().unwrap();
+    assert_eq!(bound.occurrences(&post).unwrap().len(), 4);
+    let pitches = partial_beat_raw_notes(&post);
+    for (note, kind) in pitches.iter().zip(["begin", "continue", "continue", "end"]) {
+        let parsed = roxmltree::Document::parse(&note.text).unwrap();
+        assert_eq!(actual_beam_written_states(parsed.root_element()).unwrap(),
+            BTreeMap::from([(1, kind.to_owned()), (2, kind.to_owned())]));
+    }
+    bound.course_carry_births(&receipt.unwrap()).unwrap();
+}

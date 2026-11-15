@@ -92,6 +92,46 @@ pub(crate) fn apply_joint_reading_course<C: JointReadingCandidate>(
         render_receipts.push_preserving(receipt, &render_post);
         ensure!(master_post == expected_master && render_post == expected_render,
             "Existing owners diverged from the complete C3 preparations");
+        // Close the affected E053 decisions before either document is committed.
+        let mut revise = || {
+            let master_plan = crate::pipeline::prepare_clef_beam_revision(
+                prepared.master_octaves.source.as_ref(), &master_post)?;
+            let render_plan = crate::pipeline::prepare_clef_beam_revision(
+                prepared.render_octaves.source.as_ref(), &render_post)?;
+            let master_revision = if master_plan.is_empty() {
+                None
+            } else {
+                let prior = best.joint_master_state().actual_beam_capture();
+                let carried = master_receipts.observe_actual_beam_continuation(prior);
+                let capture = carried.as_ref().ok_or_else(|| anyhow!("Missing Master E053 capture"))?
+                    .as_ref().map_err(|error| anyhow!("{error}"))?;
+                Some(crate::pipeline::realize_clef_beam_revision(&master_post, capture, &master_plan)?)
+            };
+            let render_revision = if render_plan.is_empty() {
+                None
+            } else {
+                let context = crate::pipeline::joint_render_custody_context()
+                    .ok_or_else(|| anyhow!("Missing original Render context"))?;
+                let carried = render_receipts.observe_actual_beam_continuation(context.beams.as_ref());
+                let capture = carried.as_ref().ok_or_else(|| anyhow!("Missing Render E053 capture"))?
+                    .as_ref().map_err(|error| anyhow!("{error}"))?;
+                Some(crate::pipeline::realize_clef_beam_revision(&render_post, capture, &render_plan)?)
+            };
+            Ok::<_, anyhow::Error>((master_revision, render_revision))
+        };
+        match revise() {
+            Ok((master_revision, render_revision)) => {
+                if let Some((post, receipt)) = master_revision {
+                    master_post = post;
+                    master_receipts.push_block(receipt);
+                }
+                if let Some((post, receipt)) = render_revision {
+                    render_post = post;
+                    render_receipts.push_block(receipt, &render_post);
+                }
+            }
+            Err(error) => println!("ClefBeamRevision: unchanged; {error:#}"),
+        }
         // Fatal Master lineage checks finish on a copy before any Render write.
         let mut master = best.joint_master_state().clone();
         master.adopt_materialized_document(master_post.clone(), master_receipts,

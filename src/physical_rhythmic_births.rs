@@ -245,6 +245,16 @@ impl PhysicalRhythmicBirths {
         births.validate_binding(before, after)?; Ok(births)
     }
 
+    pub(crate) fn gesture_predecessor(source: &str, end: usize) -> Result<Range<usize>> {
+        let prefix = source.get(..end).ok_or_else(|| anyhow::anyhow!("Relocation insertion is outside its source"))?;
+        // Match the note start tag, never a nested notehead element.
+        let start = prefix.rmatch_indices("<note")
+            .map(|(index, _)| index)
+            .find(|index| matches!(source.as_bytes().get(index + 5), Some(b'>' | b' ' | b'\t' | b'\r' | b'\n')))
+            .ok_or_else(|| anyhow::anyhow!("Relocation anchor is not a note"))?;
+        captured_note_range(source, start..end)
+    }
+
     /// Captures the actual ConsensusGesture relocation of row 26 from the owner's
     /// own input pairs: each pair removes one note `(start, end, "")` and inserts its
     /// chord-member clone at the end of a visible note `(pos, pos, clone)`. Any other
@@ -270,17 +280,12 @@ impl PhysicalRhythmicBirths {
                 "Relocation pair is not one removal followed by one insertion");
             // The second edit belongs to this pair even when its bytes repeat.
             let at = output_start[&(2 * pair_index + 1)];
-            // Match the note start tag, never a nested notehead element.
-            let anchor_start = before[..*pos].rmatch_indices("<note")
-                .map(|(index, _)| index)
-                .find(|index| matches!(before.as_bytes().get(index + 5), Some(b'>' | b' ' | b'\t' | b'\r' | b'\n')))
-                .ok_or_else(|| anyhow::anyhow!("Relocation anchor is not a note"))?;
             records.push(PhysicalBirth {
                 creation: RhythmicCreationIdentity::gesture_relocation_birth(owner)?,
                 kind: PhysicalBirthKind::GestureRelocated,
                 input: Some(captured_note_range(before, *start..*end)?),
                 output: captured_note_range(after, at..at + clone.len())?,
-                anchor: Some(captured_note_range(before, anchor_start..*pos)?),
+                anchor: Some(Self::gesture_predecessor(before, *pos)?),
             });
         }
         let births = Self { before: Arc::from(before), after: Arc::from(after), records, consolidations: Vec::new(), carried: Vec::new(), original_visible_execution: None };

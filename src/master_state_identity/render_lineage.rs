@@ -663,6 +663,12 @@ impl RenderTransitionReceipts {
         self.steps.is_empty()
     }
 
+    pub(crate) fn observe_actual_beam_continuation(&self,
+        previous: Option<&Result<std::sync::Arc<crate::pipeline::ActualCanonicalBeamCapture>, String>>,
+    ) -> Option<Result<std::sync::Arc<crate::pipeline::ActualCanonicalBeamCapture>, String>> {
+        carry_actual_beams(&self.steps, previous)
+    }
+
     fn push(
         &mut self,
         receipt: Option<TransformationReceipt>,
@@ -1374,6 +1380,54 @@ impl BlockTransformationReceipt {
     }
 }
 
+fn carry_actual_beams(steps: &[RenderStep],
+        previous: Option<&Result<std::sync::Arc<crate::pipeline::ActualCanonicalBeamCapture>, String>>,
+    ) -> Option<Result<std::sync::Arc<crate::pipeline::ActualCanonicalBeamCapture>, String>> {
+    let mut observed = previous.cloned();
+    for step in steps {
+        if let Some(capture) = &step.original_beam { observed = Some(capture.clone()); continue; }
+        let Some(Ok(capture)) = observed.as_ref() else { continue; };
+        let next = match (&step.placement, &step.receipt) {
+            (StepPlacement::Document, TransformationReceipt::Exact(receipt))
+                if receipt.descriptor == &FINAL_CHORD_ENCODING_EXACT => (|| {
+                    let emitted = receipt.final_chord_capture()
+                        .ok_or_else(|| anyhow::anyhow!("Missing original Render FinalChord emissions"))?
+                        .as_ref().map_err(|error| anyhow::anyhow!("{error}"))?;
+                    let after = emitted.validate_execution(receipt, capture.current_document())?;
+                    let single_emissions = emitted.rows().iter().filter_map(|row| {
+                        let [(range, false)] = row.outputs() else { return None; };
+                        Some((row.input(), range))
+                    });
+                    capture.carry_final_chord(after, single_emissions)
+                })(),
+            (StepPlacement::Document, TransformationReceipt::Exact(receipt)) => capture.carry_exact(receipt),
+            (StepPlacement::Document, TransformationReceipt::Preserving(receipt)) =>
+                receipt.recorded_representation().ok_or_else(|| anyhow::anyhow!("Missing original Render preserving journal"))
+                    .and_then(|transport| {
+                        if receipt.is_metric_rest_bridge() {
+                            capture.carry_rest_bridge(receipt, transport)
+                        } else {
+                            capture.carry_recorded(transport)
+                        }
+                    }),
+            (StepPlacement::Document, TransformationReceipt::Block(receipt))
+                if receipt.descriptor == &RENDER_ROW_66_BLOCK =>
+            {
+                receipt.original_render_notes()
+                    .ok_or_else(|| anyhow::anyhow!("Missing original Render respelling journal"))
+                    .and_then(|transport| transport.as_ref().map_err(|error| anyhow::anyhow!("{error}")))
+                    .and_then(|transport| capture.carry_respelling(transport))
+            }
+            (StepPlacement::Document, TransformationReceipt::Block(_)) => step.original_transport.as_ref()
+                .ok_or_else(||anyhow::anyhow!("Missing original Render block transport"))
+                .and_then(|transport|capture.carry_recorded(transport)),
+            _ => Err(anyhow::anyhow!("Render owner has no original beam continuation journal")),
+        };
+        observed = Some(next.map(std::sync::Arc::new).map_err(|error| error.to_string()));
+    }
+    observed
+}
+
 impl VerifiedRenderTransition {
     /// Read-only custody continuation evaluated on the verified owner chain.
     /// A missing operation map is UNKNOWN; only a newly executed E053 emitter
@@ -1381,49 +1435,7 @@ impl VerifiedRenderTransition {
     pub(crate) fn observe_actual_beam_continuation(&self,
         previous: Option<&Result<std::sync::Arc<crate::pipeline::ActualCanonicalBeamCapture>, String>>,
     ) -> Option<Result<std::sync::Arc<crate::pipeline::ActualCanonicalBeamCapture>, String>> {
-        let mut observed = previous.cloned();
-        for step in &self.steps {
-            if let Some(capture) = &step.original_beam { observed = Some(capture.clone()); continue; }
-            let Some(Ok(capture)) = observed.as_ref() else { continue; };
-            let next = match (&step.placement, &step.receipt) {
-                (StepPlacement::Document, TransformationReceipt::Exact(receipt))
-                    if receipt.descriptor == &FINAL_CHORD_ENCODING_EXACT => (|| {
-                        let emitted = receipt.final_chord_capture()
-                            .ok_or_else(|| anyhow::anyhow!("Missing original Render FinalChord emissions"))?
-                            .as_ref().map_err(|error| anyhow::anyhow!("{error}"))?;
-                        let after = emitted.validate_execution(receipt, capture.current_document())?;
-                        let single_emissions = emitted.rows().iter().filter_map(|row| {
-                            let [(range, false)] = row.outputs() else { return None; };
-                            Some((row.input(), range))
-                        });
-                        capture.carry_final_chord(after, single_emissions)
-                    })(),
-                (StepPlacement::Document, TransformationReceipt::Exact(receipt)) => capture.carry_exact(receipt),
-                (StepPlacement::Document, TransformationReceipt::Preserving(receipt)) =>
-                    receipt.recorded_representation().ok_or_else(|| anyhow::anyhow!("Missing original Render preserving journal"))
-                        .and_then(|transport| {
-                            if receipt.is_metric_rest_bridge() {
-                                capture.carry_rest_bridge(receipt, transport)
-                            } else {
-                                capture.carry_recorded(transport)
-                            }
-                        }),
-                (StepPlacement::Document, TransformationReceipt::Block(receipt))
-                    if receipt.descriptor == &RENDER_ROW_66_BLOCK =>
-                {
-                    receipt.original_render_notes()
-                        .ok_or_else(|| anyhow::anyhow!("Missing original Render respelling journal"))
-                        .and_then(|transport| transport.as_ref().map_err(|error| anyhow::anyhow!("{error}")))
-                        .and_then(|transport| capture.carry_respelling(transport))
-                }
-                (StepPlacement::Document, TransformationReceipt::Block(_)) => step.original_transport.as_ref()
-                    .ok_or_else(||anyhow::anyhow!("Missing original Render block transport"))
-                    .and_then(|transport|capture.carry_recorded(transport)),
-                _ => Err(anyhow::anyhow!("Render owner has no original beam continuation journal")),
-            };
-            observed = Some(next.map(std::sync::Arc::new).map_err(|error| error.to_string()));
-        }
-        observed
+        carry_actual_beams(&self.steps, previous)
     }
 
     /// Source/attack ancestry carried from the real early Master→Render fork.

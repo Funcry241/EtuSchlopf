@@ -78,6 +78,52 @@
         stats: PolishStats,
     }
     
+    /// One reference snapshot of the measure-local work per seed trial series.
+    /// Only relative edits travel through this cache. Each full document owns
+    /// its clef readback, transport and preserving receipt.
+    #[derive(Default)]
+    pub(super) struct PolishMeasureReuse {
+        measures: BTreeMap<usize, (String, i64, Option<PianoClef>, MeasurePolish)>,
+        remaining_bytes: usize,
+        visits: usize,
+        hits: usize,
+    }
+
+    impl PolishMeasureReuse {
+        pub(super) fn new() -> Self {
+            Self { remaining_bytes: 2 * 1024 * 1024, ..Self::default() }
+        }
+
+        pub(super) fn counts(&self) -> (usize, usize) { (self.visits, self.hits) }
+
+        fn polish(&mut self, ordinal: usize, text: &str, divisions: i64, clef: Option<PianoClef>)
+            -> anyhow::Result<MeasurePolish>
+        {
+            self.visits += 1;
+            if let Some((prior, meter, prior_clef, result)) = self.measures.get(&ordinal)
+                && *meter == divisions && *prior_clef == clef && prior == text
+            {
+                self.hits += 1;
+                return Ok(result.clone());
+            }
+            let result = polish_measure_with_stems(text, divisions, clef)?;
+            if self.remaining_bytes != 0
+                && let std::collections::btree_map::Entry::Vacant(entry) = self.measures.entry(ordinal)
+            {
+                let bytes = text.len() + result.text.len()
+                    + std::mem::size_of::<(usize, String, i64, Option<PianoClef>, MeasurePolish)>()
+                    + result.edits.iter().map(|(_, text)| {
+                        std::mem::size_of::<(std::ops::Range<usize>, String)>() + text.len()
+                    }).sum::<usize>();
+                if bytes <= self.remaining_bytes {
+                    entry.insert((text.to_owned(), divisions, clef, result.clone()));
+                    self.remaining_bytes -= bytes;
+                }
+            }
+            Ok(result)
+        }
+    }
+
     #[derive(Debug, Clone)]
     pub enum LowerStaffClefReadbackScope {
         BeamSafety,
@@ -110,6 +156,12 @@
     /// Domain werden als explizit negative, strukturell ungueltige Wahrheit
     /// entfernt. Ein fehlender positiver Plan allein erteilt kein Write-Recht.
     pub fn polish_musicxml(xml: &str) -> anyhow::Result<PolishResult> {
+        polish_musicxml_with_measure_reuse(xml, None)
+    }
+
+    pub(super) fn polish_musicxml_with_measure_reuse(
+        xml: &str, mut reuse: Option<&mut PolishMeasureReuse>,
+    ) -> anyhow::Result<PolishResult> {
         let _origin = crate::audit_only::panic_origin_observation::enter("NotationPolish", xml, None);
         let lineage_pre_xml = xml;
         // v0.10.1481 PostCleanupLedgerBoundedLowerStaffClefReadback:
@@ -159,13 +211,14 @@
         let mut total = PolishStats::default();
         let mut representation_edits = Vec::new();
     
-        for span in spans {
+        for (ordinal, span) in spans.into_iter().enumerate() {
             out.push_str(&xml[last..span.start]);
             let measure_text = &xml[span.start..span.end];
-            let polished = polish_measure_with_stems(
-                measure_text, divisions, lower_stem_clefs.get(&span.start).copied(),
-            )
-                .with_context(|| "Takt konnte für Notensatz-Politur nicht verarbeitet werden")?;
+            let clef = lower_stem_clefs.get(&span.start).copied();
+            let polished = match reuse.as_deref_mut() {
+                Some(reuse) => reuse.polish(ordinal, measure_text, divisions, clef),
+                None => polish_measure_with_stems(measure_text, divisions, clef),
+            }.context("Takt konnte für Notensatz-Politur nicht verarbeitet werden")?;
             divisions = polished.divisions;
             total.beam_groups += polished.stats.beam_groups;
             total.beamed_notes += polished.stats.beamed_notes;
@@ -2364,6 +2417,33 @@
             assert_eq!(refused.text, reversed);
             let accepted = polish_measure(&ordered, 96).expect("ordered stream is readable");
             assert_eq!(accepted.stats.beam_groups, 1);
+        }
+
+        #[test]
+        fn measure_polish_reuses_only_exact_input_and_inherited_context() {
+            let text = format!("<measure>{}{}</measure>",
+                note_on_staff("C", 24, "16th", "2", ""),
+                note_on_staff("D", 24, "16th", "2", ""));
+            let mut reuse = super::PolishMeasureReuse::new();
+            let bass = Some(super::PianoClef::BassF4);
+            let treble = Some(super::PianoClef::TrebleG2);
+            let changed = text.replace("<step>C</step>", "<step>E</step>");
+            assert_ne!(changed, text);
+            for (xml, divisions, clef) in [
+                (&text, 96, bass), (&changed, 96, bass), (&text, 48, bass),
+                (&text, 96, treble), (&text, 96, bass),
+            ] {
+                let expected = super::polish_measure_with_stems(xml, divisions, clef).unwrap();
+                let observed = reuse.polish(0, xml, divisions, clef).unwrap();
+                assert_eq!(observed.text, expected.text);
+                assert_eq!(observed.edits, expected.edits);
+                assert_eq!(observed.divisions, expected.divisions);
+                assert_eq!(format!("{:?}", observed.stats), format!("{:?}", expected.stats));
+            }
+            assert_eq!(reuse.counts(), (5, 1));
+            let mut bounded = super::PolishMeasureReuse { remaining_bytes: 1, ..Default::default() };
+            for _ in 0..2 { bounded.polish(0, &text, 96, bass).unwrap(); }
+            assert_eq!(bounded.counts(), (2, 0));
         }
 
         #[test]

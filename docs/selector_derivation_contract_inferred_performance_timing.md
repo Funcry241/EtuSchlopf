@@ -38,3 +38,10 @@ The onset must include a primary note with a release at the next onset.
 The held value must be representable as one note and cannot cover a repeated
 attack of the same pitch. The longest eligible release uses the independent
 lane when that lane is free. Exact timing retains its existing rules.
+
+A written timing declaration can explicitly classify an exact performed
+attack as playback only. The marker must bind its source ordinal, MIDI
+tick, channel and key through the decoded causal ledger. The MIDI seed
+accounts for that ordinal with a dedicated decision and retains the
+original performed event in source evidence. No written note is
+inferred for that event. Unmarked events keep the existing behavior.

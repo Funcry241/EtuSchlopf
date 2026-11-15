@@ -175,8 +175,8 @@ fn adopted(rows: &[(usize, i64, u8, i32)], measures: usize) -> ArrangementVarian
     let signature = build_reference_signature(&reference, &score);
     evaluate_arrangement_variant("SyntheticTransport", arrangement,
         &reference, &signature, &CheckOptions { strict: true }, Some(2),
-        &crate::audit_only::performance_timings::BatchTimings::new(
-            "Synthetic", "DirectTestCall", 0, ["TestPhase"; 9])).unwrap()
+        (&crate::audit_only::performance_timings::BatchTimings::new(
+            "Synthetic", "DirectTestCall", 0, ["TestPhase"; 9]), None)).unwrap()
 }
 
 #[test]
@@ -318,7 +318,7 @@ fn arrangement_variant_performance_probe() {
         let started = Instant::now();
         for arrangement in arrangements {
             let result = evaluate_arrangement_variant("SyntheticPerformance", arrangement,
-                &reference, &signature, &CheckOptions { strict: true }, Some(2), &timings).unwrap();
+                &reference, &signature, &CheckOptions { strict: true }, Some(2), (&timings, None)).unwrap();
             result.arrangement_stats.rhythmic_courses.as_ref().unwrap()
                 .validate_binding(result.master_state.document()).unwrap();
             assert!(result.master_state.lineage().lineage_continuity_holds(result.master_state.document()));

@@ -32,8 +32,8 @@ impl ActualBeamNoteMap {
     }
 }
 
-#[derive(Debug, Clone)]
-struct ActualBeamEmission {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ActualBeamEmission {
     // Source byte starts supplied by the actual group planner, resolved only
     // against the complete-note ranges of that same emitter execution.
     members: Vec<usize>,
@@ -413,6 +413,53 @@ impl ActualCanonicalBeamCapture {
             course_carry: std::sync::Arc::new(beam_map.then(rest_map).0),
         })
     }
+    fn inherit_untouched_clef_beams(
+        &mut self,
+        previous: &Self,
+        note_map: &ActualBeamNoteMap,
+        identity: &ActualBeamNoteMap,
+        emissions: &[ActualBeamEmission],
+    ) -> anyhow::Result<()> {
+        use std::collections::{BTreeMap, BTreeSet};
+        anyhow::ensure!(previous.current.as_ref() == self.before.as_ref(), "Invalid previous E053 epoch");
+        let revised = emissions.iter().flat_map(|emission| emission.members.iter().copied())
+            .collect::<BTreeSet<_>>();
+        let replaced_batches = previous.occurrences.iter().filter(|(range, _)| revised.contains(&range.start))
+            .flat_map(|(_, levels)| levels.iter().filter_map(|(_, group, _)| group.map(|(batch, _)| batch)))
+            .collect::<BTreeSet<_>>();
+        let assigned = previous.occurrences.iter().flat_map(|(_, levels)| levels.iter()
+            .filter_map(|(_, group, _)| group.map(|(batch, _)| batch))).max();
+        let offset = assigned.map_or(0, |last| last + 1);
+        for (_, levels) in &mut self.occurrences {
+            for (_, group, _) in levels {
+                if let Some((batch, _)) = group { *batch += offset; }
+            }
+        }
+        let emitted = note_map.0.iter().map(|(old, new)| ((old.start, old.end), new))
+            .collect::<BTreeMap<_, _>>();
+        for (range, levels) in &previous.occurrences {
+            if revised.contains(&range.start) { continue; }
+            anyhow::ensure!(levels.iter().all(|(_, group, _)|
+                group.is_none_or(|(batch, _)| !replaced_batches.contains(&batch))),
+                "E053 clef continuation would replace only part of an existing group");
+            let next = emitted.get(&(range.start, range.end))
+                .ok_or_else(|| anyhow::anyhow!("Missing retained beam note carry"))?;
+            anyhow::ensure!(self.before[range.clone()] == self.after[(*next).clone()],
+                "Retained E053 note changed outside revised groups");
+            self.occurrences.push(((*next).clone(), levels.clone()));
+        }
+        self.bridge_edges = previous.carry_bridge_edges(&self.after, false, |range| {
+            emitted.get(&(range.start, range.end)).map(|range| (*range).clone())
+        });
+        anyhow::ensure!(self.bridge_edges.len() == previous.bridge_edges.len(),
+            "E053 continuation would replace another owner's carried rest bridge");
+        self.occurrences.sort_by_key(|(range, _)| range.start);
+        self.chord_attachments = Ok(capture_actual_chord_beam_attachments(
+            &self.before, &self.after, note_map, identity, &self.occurrences,
+        )?);
+        Ok(())
+    }
+
     /// Course custody carry of the original E053 execution, bound to its own
     /// receipt and owner bytes. It reconstructs nothing from later output.
     pub(crate) fn course_carry_births(

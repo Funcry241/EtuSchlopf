@@ -371,6 +371,14 @@ impl RhythmicRepresentationTransport {
         Self { steps, permits_plain_stem_change: false }
     }
 
+    /// An unchanged document can keep its existing custody only when the
+    /// original journal is present and every step is an exact no-op.
+    pub(crate) fn is_identity_for(&self, xml: &str) -> bool {
+        !self.steps.is_empty() && self.steps.iter().all(|step| {
+            step.edits.is_empty() && step.before == xml && step.after == xml
+        })
+    }
+
     /// Preserve each independently mapped observation after validating the
     /// journal. A crossing edit invalidates its own range only.
     pub(crate) fn carry_observed_ranges(&self, before: &str, after: &str,

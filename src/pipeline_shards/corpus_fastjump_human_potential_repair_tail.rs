@@ -56,8 +56,10 @@ fn evaluate_arrangement_variant(
     reference_signature: &ReferenceSignature,
     options: &CheckOptions,
     layout_pages: Option<usize>,
-    detail_timings: &crate::audit_only::performance_timings::BatchTimings<'_, 9>,
+    observation: (&crate::audit_only::performance_timings::BatchTimings<'_, 9>,
+        Option<&mut notation::PolishMeasureReuse>),
 ) -> anyhow::Result<ArrangementVariant> {
+    let (detail_timings, polish_reuse) = observation;
     let mut detail = detail_timings.call();
     if let Some(courses) = &arrangement.stats.rhythmic_courses {
         courses.validate_binding(&arrangement.xml)?;
@@ -75,7 +77,7 @@ fn evaluate_arrangement_variant(
     detail.enter(1);
     let fidelity = check_reference_fidelity(reference, reference_signature, &arrangement.stats);
     detail.enter(2);
-    let polish = polish_musicxml(&arrangement.xml)
+    let polish = notation::polish_musicxml_with_measure_reuse(&arrangement.xml, polish_reuse)
         .with_context(|| format!("NotationModel/PolishEngine konnte Profil {profile_name} nicht polieren"))?;
     detail.enter(3);
     let layout_plan = layout_pages
@@ -98,7 +100,13 @@ fn evaluate_arrangement_variant(
     let _origin = crate::audit_only::panic_origin_observation::enter("ArrangementVariant/PolishAndLayout", &arrangement.xml, Some(&layout.xml));
     if let Some(courses) = &arrangement.stats.rhythmic_courses {
         let polished_courses = courses.continue_representation(&polish.xml, &polish.rhythmic_transport)?;
-        let layout_courses = polished_courses.continue_representation(&layout.xml, &layout.rhythmic_transport)?;
+        let layout_courses = if polish.xml == layout.xml
+            && layout.rhythmic_transport.is_identity_for(&layout.xml)
+        {
+            polished_courses
+        } else {
+            polished_courses.continue_representation(&layout.xml, &layout.rhythmic_transport)?
+        };
         arrangement.stats.owned_rhythm = Some(std::sync::Arc::new(
             crate::arrangement::OwnedRhythmicContinuation::receive(&layout_courses, &layout.xml)?));
         arrangement.stats.rhythmic_courses = Some(std::sync::Arc::new(layout_courses));
@@ -153,7 +161,12 @@ fn evaluate_arrangement_variant(
     let checked_score = parse_musicxml(master_state.document())
         .with_context(|| format!("Polierte/Layout-MusicXML Profil {profile_name} konnte nicht geprüft werden"))?;
     detail.enter(7);
-    let mut checked = run_checks(&checked_score, options);
+    let written_staff = arrangement.stats.rhythmic_courses.as_ref()
+        .map(|courses| courses.written_staff_only_events(&checked_score))
+        .transpose()?.unwrap_or_default();
+    let mut checked = crate::rules::run_checks_with_written_staff(
+        &checked_score, options, false, &written_staff,
+    );
     detail.enter(8);
     // v0.1.116: CandidateAudit-Basis bleibt unverfälscht. Die globale
     // Notationspolitur wird hier nicht vorweggenommen, damit Baseline und
@@ -449,16 +462,15 @@ fn run_corpus_driven_hand_rhythm_primary_repair(
             if best.final_result.summary.warnings == 0 || critical_count(&best.final_result) == 0 {
                 break;
             }
-            let variants = corpus_hand_rhythm_repair_variants(best.layout_xml(), &best.final_result, 96);
-            if variants.is_empty() {
+            let inputs = corpus_hand_rhythm_repair_variants(best.layout_xml(), &best.final_result, 96);
+            if inputs.is_empty() {
                 break;
             }
             console_progress(format!(
                 "CorpusDrivenHandRhythmPrimaryRepair: Hand/Rhythmus-Runde {} prüft {} handkurvennahe Varianten",
                 round + 1,
-                variants.len()
+                inputs.len()
             ));
-            let inputs = final_variants_to_candidate_inputs(variants, best.layout_xml());
             let evaluated = evaluate_patched_candidates_parallel(
                 "CorpusDrivenHandRhythmPrimaryRepair/Hand",
                 inputs,
@@ -540,19 +552,23 @@ fn corpus_overfull_repair_variants(xml: &str, report: &CheckReport, limit: usize
     variants
 }
 
-fn corpus_hand_rhythm_repair_variants(xml: &str, report: &CheckReport, limit: usize) -> Vec<PatchVariant> {
-    let mut variants = Vec::new();
-    let mut seen = BTreeSet::new();
+fn corpus_hand_rhythm_repair_variants(xml: &str, report: &CheckReport, limit: usize) -> Vec<PatchedCandidateInput> {
     let notes = parse_atomic_notes(xml);
+    let mut inputs = Vec::new();
+    let mut seen = BTreeSet::new();
     for issue in report.issues.iter().filter(|issue| issue.issue_type == "PIANO_FAST_LARGE_JUMP").take(24) {
         for patch in hand_rhythm_jump_patches(&notes, issue, 8) {
-            let (patched, patch_receipt) = apply_atomic_patch(xml, &patch);
-                    let patched = PatchedXml::with_exact(patched, patch_receipt);
-            push_corpus_variant(&mut variants, &mut seen, format!("corpus_han_rhy_{}", patch.name), xml, patched, limit);
-            if variants.len() >= limit { return variants; }
+            let (patched_xml, patch_receipt) = apply_atomic_patch(xml, &patch);
+            if patched_xml == xml || !seen.insert(patched_xml.clone()) {
+                continue;
+            }
+            let mut input = atomic_patch_input(inputs.len(), patch, patched_xml, patch_receipt);
+            input.name = format!("corpus_han_rhy_{}", input.name);
+            inputs.push(input);
+            if inputs.len() >= limit { return inputs; }
         }
     }
-    variants
+    inputs
 }
 
 fn hand_rhythm_jump_patches(notes: &[AtomicNote], issue: &Issue, limit: usize) -> Vec<AtomicPatch> {
@@ -724,30 +740,35 @@ fn atomic_patches_to_candidate_inputs(patches: Vec<AtomicPatch>, base_xml: &str)
     let mut inputs = Vec::new();
     for (source_index, patch) in patches.into_iter().enumerate() {
         let (patched_xml, patch_receipt) = apply_atomic_patch(base_xml, &patch);
-        let mut lineage_receipts = crate::master_state_identity::OwnerReceipts::default();
-        lineage_receipts.push_exact(patch_receipt);
         if patched_xml == base_xml {
             continue;
         }
-        let material_declared_effects = match patch.action {
-            AtomicPatchAction::MoveStaff => CandidateMaterialDeclaredEffects::staff_relocation(),
-            AtomicPatchAction::SafeTransferChord => {
-                CandidateMaterialDeclaredEffects::staff_voice_relocation()
-            }
-            AtomicPatchAction::RestifyHidden => {
-                CandidateMaterialDeclaredEffects::attack_existence_only()
-            }
-        };
-        inputs.push(PatchedCandidateInput {
-            source_index,
-            name: patch.name,
-            xml: patched_xml,
-            material_declared_effects: Some(material_declared_effects),
-            material_transfer_carriers: patch.material_transfer_carrier.into_iter().collect(),
-            lineage_receipts,
-        });
+        inputs.push(atomic_patch_input(source_index, patch, patched_xml, patch_receipt));
     }
     inputs
+}
+
+fn atomic_patch_input(
+    source_index: usize,
+    patch: AtomicPatch,
+    xml: String,
+    patch_receipt: Option<ExactTransformationReceipt>,
+) -> PatchedCandidateInput {
+    let material_declared_effects = match patch.action {
+        AtomicPatchAction::MoveStaff => CandidateMaterialDeclaredEffects::staff_relocation(),
+        AtomicPatchAction::SafeTransferChord => CandidateMaterialDeclaredEffects::staff_voice_relocation(),
+        AtomicPatchAction::RestifyHidden => CandidateMaterialDeclaredEffects::attack_existence_only(),
+    };
+    let mut lineage_receipts = crate::master_state_identity::OwnerReceipts::default();
+    lineage_receipts.push_exact(patch_receipt);
+    PatchedCandidateInput {
+        source_index,
+        name: patch.name,
+        xml,
+        material_declared_effects: Some(material_declared_effects),
+        material_transfer_carriers: patch.material_transfer_carrier.into_iter().collect(),
+        lineage_receipts,
+    }
 }
 
 fn final_variants_to_candidate_inputs(variants: Vec<PatchVariant>, base_xml: &str) -> Vec<PatchedCandidateInput> {
@@ -1136,7 +1157,10 @@ fn build_atomic_candidate(
     // Patch-XML geschlossen und erst danach representation-only gegen das
     // normalisierte XML. So beweist ein Move-/Transfer-Carrier ausschließlich
     // den AtomicPatch und wird nicht für zusätzliche Ledger-Deltas missbraucht.
-    let mut normalized = normalize_visible_rhythm_musicxml(&xml);
+    let mut normalized = {
+        let _onset_scope = crate::arrangement::require_atomic_chord_onset(material_declared_effects.is_some());
+        normalize_visible_rhythm_musicxml(&xml)
+    };
     detail.enter(1);
     // Original owner capture, independent of CandidateMaterial matching.
     // These identities supply no missing course, role or adoption authority.

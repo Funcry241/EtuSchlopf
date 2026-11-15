@@ -24,9 +24,34 @@ pub(crate) fn vergleiche_gebundene_lesekurse(
     }
     let mut proof = original.beweis.clone().ok_or("GemeinsamerLesekurs: original proposal missing")??;
     let old_fingerprint = proof.plan_fingerabdruck.clone();
+    let mut rows = Vec::new();
+    let count = proof.plaene.len();
+    let mut upper_voices = BTreeSet::new();
+    let mut lower_voices = BTreeMap::<_, BTreeSet<_>>::new();
+    let mut by_id = BTreeMap::new();
+    for event in &proof.ereignisse {
+        let bar = (event.teil.as_str(), event.takt_ordinal);
+        match event.system.as_str() {
+            "1" => { upper_voices.insert((bar, event.stimme.as_str())); }
+            "2" => { lower_voices.entry(bar).or_default().insert(event.stimme.as_str()); }
+            _ => {}
+        }
+        by_id.insert(&event.id, event);
+    }
+    // A lower staff with simultaneous independent bass and a voice crossing
+    // from above cannot give just that crossing voice an octave direction.
+    proof.plaene.retain(|plan| plan.system.trim() != "2" || !plan.betroffene_ereignisse
+        .iter().filter_map(|id| by_id.get(id)).any(|event| {
+            let bar = (event.teil.as_str(), event.takt_ordinal);
+            upper_voices.contains(&(bar, event.stimme.as_str()))
+                && lower_voices.get(&bar).is_some_and(|voices| voices.len() > 1)
+        }));
+    if proof.plaene.len() != count {
+        proof.plan_fingerabdruck = plan_fingerabdruck(&proof.plaene);
+        rows.push(format!("JointReadingOwner: CrossStaffOmittedCompleteSpans {}.", count - proof.plaene.len()));
+    }
     let parts = proof.plaene.iter().filter(|p| p.system.trim() == "2")
         .map(|p| p.teil.clone()).collect::<BTreeSet<_>>();
-    let mut rows = Vec::new();
     for part in parts {
         let Some(baseline) = evaluate(&sichtauftrag_fuer_beweis(&proof, materialisierungsauftrag_fuer_beweis(&proof)?)?).and_then(|costs| costs.get(&part).cloned()) else {
             rows.push(format!("JointReadingOwner: PartHex {}; Status UNKNOWN; CompleteCourseUnavailable; MusicalDecision none.", hex(part.as_bytes())));

@@ -762,24 +762,25 @@ struct ThreadPlan {
     logical_threads: usize,
     cargo_jobs: usize,
     pipeline_auto_hint_workers: usize,
+    low_ram: bool,
 }
 
 impl ThreadPlan {
     fn detect() -> Self {
-        let logical_threads = thread::available_parallelism()
-            .map(|value| value.get())
-            .unwrap_or(1)
-            .max(1);
-        let reserved_for_ui = usize::from(logical_threads >= 4);
-        let cargo_jobs = logical_threads.saturating_sub(reserved_for_ui).max(1);
-        let pipeline_auto_hint_workers = logical_threads.saturating_sub(1).max(1);
-        Self {
-            logical_threads,
-            cargo_jobs,
-            pipeline_auto_hint_workers,
-        }
+        let low_ram = std::env::var("ETUSCHLOPF_LOW_RAM").as_deref() == Ok("1");
+        Self::for_host(
+            thread::available_parallelism().map_or(1, std::num::NonZero::get),
+            low_ram,
+        )
     }
 
+    fn for_host(logical_threads: usize, low_ram: bool) -> Self {
+        let logical_threads = logical_threads.max(1);
+        let reserved_for_ui = usize::from(logical_threads >= 4);
+        let cargo_jobs = if low_ram { 1 } else { logical_threads.saturating_sub(reserved_for_ui).max(1) };
+        let pipeline_auto_hint_workers = logical_threads.saturating_sub(1).max(1);
+        Self { logical_threads, cargo_jobs, pipeline_auto_hint_workers, low_ram }
+    }
     fn summary_label(&self) -> String {
         format!(
             "System {} | CargoJobs {} | PipelineAutoHint {}",
@@ -2105,6 +2106,9 @@ fn execute_normal_run(
     debug_assert_ne!(plan.validation, ValidationPlan::DeepClippy);
     let mut state = initialize_run_state(launcher, request, plan);
     announce_integrated_visual_preflight_gate(launcher, request);
+    if launcher.thread_plan.low_ram {
+        println!("[EtuSchlopf] RAM-Modus: Cargo 1 Job, Strict-Tests 1 Thread, kein paralleler Test-Vorbau.");
+    }
     launcher.enter_observation_stage(observation::LauncherStage::Building);
     let test_prewarm = StrictTestPrewarm::start(launcher, &state, request.launcher_tests);
     materialize_launcher_build(launcher, &mut state, request, plan.build)?;
@@ -2241,7 +2245,11 @@ fn run_integrated_launcher_tests(
     if prewarm_timing_report.is_none() {
         test_args.extend(["--timings".to_string(), "--color".to_string(), "never".to_string()]);
     }
-    test_args.extend(["--".to_string(), "--show-output".to_string()]);
+    test_args.extend(
+        strict_test_harness_args(launcher.thread_plan.low_ram)
+            .iter()
+            .map(|arg| (*arg).to_string()),
+    );
     let os_args: Vec<OsString> = test_args.iter().map(OsString::from).collect();
     let test_result = invoke_logged_program_with_env(
         launcher,
@@ -2291,6 +2299,23 @@ fn run_integrated_launcher_tests(
         Some((&receipt_before, &receipt_after)),
     )?;
     Ok(())
+}
+
+fn strict_test_harness_args(low_ram: bool) -> &'static [&'static str] {
+    if low_ram {
+        &["--", "--show-output", "--test-threads=1"]
+    } else {
+        &["--", "--show-output"]
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn low_ram_limits_cargo_and_test_threads() {
+    assert_eq!(ThreadPlan::for_host(20, false).cargo_jobs, 19);
+    assert_eq!(ThreadPlan::for_host(20, true).cargo_jobs, 1);
+    assert_eq!(strict_test_harness_args(true), &["--", "--show-output", "--test-threads=1"]);
+    assert_eq!(strict_test_harness_args(false), &["--", "--show-output"]);
 }
 
 fn strict_test_cargo_args(cargo_jobs: usize) -> Vec<String> {
@@ -2361,7 +2386,8 @@ impl StrictTestPrewarm {
         state: &RunState,
         launcher_tests: LauncherTestPlan,
     ) -> Option<Self> {
-        if !should_run_integrated_launcher_tests(state.validation, launcher_tests)
+        if launcher.thread_plan.low_ram
+            || !should_run_integrated_launcher_tests(state.validation, launcher_tests)
             || strict_test_validation_receipt_matches(&launcher.version, &state.target_exe)
         {
             return None;
@@ -6442,6 +6468,7 @@ warning: `etuschlopf` (bin "etuschlopf") generated 2 warnings
             logical_threads: 20,
             cargo_jobs: 19,
             pipeline_auto_hint_workers: 19,
+            low_ram: false,
         };
         let header = format!(
             "[EtuSchlopf v{}] {} · {}",

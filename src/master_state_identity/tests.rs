@@ -281,6 +281,32 @@ fn preserving_receipt_admits_presentation_only_changes() {
 }
 
 #[test]
+fn variant_conservation_requires_exact_verified_output_of_the_original_owner() {
+    let pre = score(&format!("<print new-system=\"yes\"/>{TWO_EIGHTHS}"));
+    let post = score(TWO_EIGHTHS);
+    let mut receipt = PreservingTransformationReceipt::mint_preserving_receipt(
+        ProbePianistLayout, &pre, &post,
+    ).expect("print removal preserves the notes");
+    assert!(receipt.verified_variant_output.is_some());
+    let independent_copy = post.clone();
+    receipt.validate_preserving_transition::<ProbePianistLayout>(&pre, &independent_copy).unwrap();
+    assert!(receipt.validate_preserving_transition::<ProbeNotationPolish>(&pre, &independent_copy).is_err());
+
+    let changed_post = independent_copy.replace("<step>C</step>", "<step>F</step>");
+    assert_ne!(changed_post, independent_copy);
+    // Simulate equal fingerprints without requiring a collision in the hash.
+    receipt.post_fingerprint = fingerprint(&changed_post);
+    let error = receipt.validate_preserving_transition::<ProbePianistLayout>(&pre, &changed_post)
+        .unwrap_err();
+    assert_eq!(error.to_string(), "PreservingTransformationReceipt: exact post-state drift");
+    // A distinct type with the same descriptor still runs its own projection.
+    let error = receipt.validate_preserving_transition::<crate::layout::PianistLayoutPreservingMint>(
+        &pre, &changed_post,
+    ).unwrap_err();
+    assert_eq!(error.to_string(), "PreservingTransformationReceipt: conserved content drift");
+}
+
+#[test]
 fn preserving_receipt_refuses_any_conserved_change() {
     let pre = score(TWO_EIGHTHS);
     for changed in [

@@ -411,6 +411,7 @@ fn audit_candidate_material_lineage_gap(
             &mut after_fragments,
             declared,
             &[],
+            &[],
             true,
         ) {
             Ok(()) => "mapped".to_string(),
@@ -937,15 +938,137 @@ fn carry_candidate_fragment_lineage(
     Ok(())
 }
 
+// A split maps one written fragment to an ordered chain of the same attack.
+struct BoundVisibleRhythmSplit {
+    before_index: usize,
+    after_indices: Vec<usize>,
+}
+
+fn carry_visible_rhythm_split(
+    before: &CandidateMaterialFragmentState,
+    after: &mut [CandidateMaterialFragmentState],
+    indices: &[usize],
+) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        before.source_event_id.is_some() && before.attack_id.is_some()
+            && before.pitch.is_some() && !before.is_grace && before.duration > 0
+            && indices.len() > 1,
+        "VisibleRhythm split lacks a bound, duration-bearing pitched fragment"
+    );
+    let mut onset = before.onset;
+    for (ordinal, &index) in indices.iter().enumerate() {
+        let fragment = after.get(index)
+            .ok_or_else(|| anyhow!("VisibleRhythm split index is outside the fragment inventory"))?;
+        anyhow::ensure!(
+            fragment.source_event_id.is_none() && fragment.attack_id.is_none()
+                && fragment.measure == before.measure && fragment.onset == onset && fragment.duration > 0
+                && fragment.pitch == before.pitch && fragment.staff == before.staff
+                && fragment.voice == before.voice && fragment.visible == before.visible
+                && fragment.is_chord == before.is_chord && !fragment.is_grace
+                && fragment.tie_stop == (ordinal > 0 || before.tie_stop)
+                && fragment.tie_start == (ordinal + 1 < indices.len() || before.tie_start),
+            "VisibleRhythm split does not preserve the bound fragment and its ties"
+        );
+        onset = onset.checked_add(fragment.duration)
+            .ok_or_else(|| anyhow!("VisibleRhythm split end overflows"))?;
+    }
+    anyhow::ensure!(
+        Some(onset) == before.onset.checked_add(before.duration),
+        "VisibleRhythm split changes the end of the bound fragment"
+    );
+    for &index in indices {
+        carry_candidate_fragment_lineage(before, &mut after[index])?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod owned_rhythm_split_tests {
+    use super::*;
+
+    fn fragment(onset: i64, duration: i64, tie_stop: bool, tie_start: bool) -> CandidateMaterialFragmentState {
+        CandidateMaterialFragmentState {
+            is_grace: false, measure: 3, raw_note_index: 0, onset, duration,
+            pitch: Some(62), staff: "1".into(), voice: "v".into(),
+            visible: true, is_chord: false, tie_start, tie_stop,
+            source_event_id: None, attack_id: None,
+        }
+    }
+
+    #[test]
+    fn bound_split_carries_one_attack_across_independent_tied_chains() {
+        let mut first = fragment(12, 36, false, false);
+        first.source_event_id = Some(MaterialSourceEventId(1));
+        first.attack_id = Some(SoundingAttackId(1));
+        let head = fragment(12, 24, false, true);
+        let tail = fragment(36, 12, true, false);
+        let split = BoundVisibleRhythmSplit { before_index: 0, after_indices: vec![0, 1] };
+        let mut single = vec![head.clone(), tail.clone()];
+        map_candidate_material_fragments_forward_with_explicit_pairs(
+            &[first.clone()], &mut single, CandidateMaterialDeclaredEffects::representation_only(),
+            &[], &[split], false,
+        ).unwrap();
+        assert_eq!(single.iter().filter(|note| note.is_sounding_attack_fragment()).count(), 1);
+        assert!(single.iter().all(|note| note.source_event_id == first.source_event_id && note.attack_id == first.attack_id));
+
+        let mut second = first.clone();
+        second.measure += 1;
+        second.source_event_id = Some(MaterialSourceEventId(2));
+        second.attack_id = Some(SoundingAttackId(2));
+        let mut second_head = head.clone();
+        let mut second_tail = tail.clone();
+        second_head.measure += 1;
+        second_tail.measure += 1;
+        let mut duplicate = vec![head, tail, second_head, second_tail];
+        map_candidate_material_fragments_forward_with_explicit_pairs(
+            &[first, second.clone()], &mut duplicate, CandidateMaterialDeclaredEffects::representation_only(),
+            &[], &[
+                BoundVisibleRhythmSplit { before_index: 0, after_indices: vec![0, 1] },
+                BoundVisibleRhythmSplit { before_index: 1, after_indices: vec![2, 3] },
+            ], false,
+        ).unwrap();
+        assert_eq!(&duplicate[..2], single.as_slice());
+        assert!(duplicate[2..].iter().all(|note| note.source_event_id == second.source_event_id && note.attack_id == second.attack_id));
+    }
+
+    #[test]
+    fn bound_split_refuses_gap_duration_and_lost_continuation() {
+        let mut origin = fragment(12, 36, true, true);
+        origin.source_event_id = Some(MaterialSourceEventId(7));
+        origin.attack_id = Some(SoundingAttackId(7));
+        let head = fragment(12, 24, true, true);
+        let tail = fragment(36, 12, true, true);
+        for wrong in [fragment(37, 12, true, true), fragment(36, 11, true, true),
+                      fragment(36, 12, false, true), fragment(36, 12, true, false)] {
+            let mut after = vec![head.clone(), wrong];
+            assert!(carry_visible_rhythm_split(&origin, &mut after, &[0, 1]).is_err());
+            assert!(after.iter().all(|note| note.source_event_id.is_none()));
+        }
+        let mut after = vec![head, tail];
+        carry_visible_rhythm_split(&origin, &mut after, &[0, 1]).unwrap();
+        assert!(after.iter().all(|note| !note.is_sounding_attack_fragment()));
+    }
+}
+
 fn map_candidate_material_fragments_forward_with_explicit_pairs(
     before: &[CandidateMaterialFragmentState],
     after: &mut [CandidateMaterialFragmentState],
     declared: CandidateMaterialDeclaredEffects,
     explicit_pairs: &[(usize, usize)],
+    visible_rhythm_splits: &[BoundVisibleRhythmSplit],
     allow_raw_position_transition: bool,
 ) -> anyhow::Result<()> {
     let mut explicit_old = BTreeSet::<usize>::new();
     let mut explicit_new = BTreeSet::<usize>::new();
+    for split in visible_rhythm_splits {
+        anyhow::ensure!(explicit_old.insert(split.before_index), "Duplicate VisibleRhythm split origin");
+        for &index in &split.after_indices {
+            anyhow::ensure!(explicit_new.insert(index), "Duplicate VisibleRhythm split destination");
+        }
+        let origin = before.get(split.before_index)
+            .ok_or_else(|| anyhow!("VisibleRhythm split origin is outside the fragment inventory"))?;
+        carry_visible_rhythm_split(origin, after, &split.after_indices)?;
+    }
     for (old_index, new_index) in explicit_pairs.iter().copied() {
         if old_index >= before.len() || new_index >= after.len() {
             return Err(anyhow!(
@@ -1211,6 +1334,7 @@ fn reconcile_candidate_material_lineage_with_pairs(
     owner: &str,
     declared: CandidateMaterialDeclaredEffects,
     explicit_pairs: &[(usize, usize)],
+    visible_rhythm_splits: &[BoundVisibleRhythmSplit],
     allow_raw_position_transition: bool,
 ) -> anyhow::Result<()> {
     if !candidate.material_lineage.authority_bound {
@@ -1230,6 +1354,7 @@ fn reconcile_candidate_material_lineage_with_pairs(
         &mut after_fragments,
         declared,
         explicit_pairs,
+        visible_rhythm_splits,
         allow_raw_position_transition,
     )
     .with_context(|| format!("CandidateMaterialLineageSpine owner={owner}"))?;
@@ -1725,6 +1850,7 @@ fn reconcile_candidate_material_lineage_with_visible_rhythm_forward_rows(
     }
 
     let mut pairs = Vec::<(usize, usize)>::new();
+    let mut splits = Vec::new();
     for (old_index, before) in before_fragments.iter().enumerate() {
         if before.source_event_id.is_none() {
             continue;
@@ -1738,26 +1864,24 @@ fn reconcile_candidate_material_lineage_with_visible_rhythm_forward_rows(
                     before.raw_note_index
                 )
             })?;
-        if lineage_rows.len() != 1 || lineage_rows[0].fragment_ordinal != 0 {
-            return Err(anyhow!(
-                "CandidateMaterialLineageSpine: AMBIGUOUS_FAIL_CLOSED VisibleRhythm one-to-many source-bound split at measure {} pre raw index {} requires dedicated tie-preserving continuation lineage; target_count={}",
-                before.measure,
-                before.raw_note_index,
-                lineage_rows.len()
-            ));
-        }
-        let row = lineage_rows[0];
-        let new_index = after_index_by_raw
-            .get(&(row.measure_ordinal, row.post_ledger_raw_note_index))
-            .copied()
-            .ok_or_else(|| {
-                anyhow!(
+        let mut ordered = lineage_rows.clone();
+        ordered.sort_unstable_by_key(|row| row.fragment_ordinal);
+        let mut indices = Vec::with_capacity(ordered.len());
+        for (ordinal, row) in ordered.into_iter().enumerate() {
+            anyhow::ensure!(row.fragment_ordinal == ordinal, "VisibleRhythm fragment ordinals are not contiguous");
+            let index = after_index_by_raw
+                .get(&(row.measure_ordinal, row.post_ledger_raw_note_index))
+                .copied()
+                .ok_or_else(|| anyhow!(
                     "CandidateMaterialLineageSpine: VisibleRhythm forward target missing at measure {} raw index {}",
-                    row.measure_ordinal,
-                    row.post_ledger_raw_note_index
-                )
-            })?;
-        pairs.push((old_index, new_index));
+                    row.measure_ordinal, row.post_ledger_raw_note_index
+                ))?;
+            indices.push(index);
+        }
+        match indices.as_slice() {
+            &[index] => pairs.push((old_index, index)),
+            _ => splits.push(BoundVisibleRhythmSplit { before_index: old_index, after_indices: indices }),
+        }
     }
 
     // r689: VisibleRhythm Representation-Onset Diagnostic Audit.
@@ -1879,6 +2003,7 @@ fn reconcile_candidate_material_lineage_with_visible_rhythm_forward_rows(
         owner,
         CandidateMaterialDeclaredEffects::representation_only(),
         &pairs,
+        &splits,
         false,
     )
 }
@@ -1890,7 +2015,7 @@ fn reconcile_candidate_material_lineage(
     declared: CandidateMaterialDeclaredEffects,
 ) -> anyhow::Result<()> {
     let _detail = crate::audit_only::performance_timings::ScopedCallTiming::current("MaterialReconcile", owner);
-    reconcile_candidate_material_lineage_with_pairs(candidate, owner, declared, &[], true)
+    reconcile_candidate_material_lineage_with_pairs(candidate, owner, declared, &[], &[], true)
 }
 
 
@@ -2125,6 +2250,7 @@ fn reconcile_candidate_material_lineage_with_representation_transfers(
         owner,
         declared,
         &pairs,
+        &[],
         true,
     )
 }
@@ -2246,7 +2372,7 @@ fn reconcile_candidate_material_lineage_with_exact_note_moves(
         }
     }
 
-    reconcile_candidate_material_lineage_with_pairs(candidate, owner, declared, &pairs, false)
+    reconcile_candidate_material_lineage_with_pairs(candidate, owner, declared, &pairs, &[], false)
 }
 
 

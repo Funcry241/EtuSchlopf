@@ -294,11 +294,7 @@ fn actual_gesture_move_cannot_reconstruct_source_identity_from_equal_pitch() {
     let moved = state.snapshot[input.bytes.clone()].replacen(" print-object=\"no\"", "", 1);
     let (post, receipt) = crate::structural_write_authority::apply_chord_gesture_distribution_batch_authorized(
         state.document(), vec![(input.bytes.start, input.bytes.end, String::new()), (anchor.bytes.end, anchor.bytes.end, moved)]);
-    let (post, _) = post.unwrap(); let receipt = receipt.unwrap();
-    assert_eq!(receipt.realize_post_document(state.document()).as_deref(), Some(post.as_str()));
-    let mut receipts = OwnerReceipts::default(); receipts.push_exact(Some(receipt));
-    let error = receipts.continue_owned_rhythm(&state, &post).unwrap_err().to_string();
-    assert!(error.contains("PopulationRow=26"));
+    assert!(post.is_none() && receipt.is_none());
 }
 
 

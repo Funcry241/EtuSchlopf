@@ -26,11 +26,20 @@ pub(crate) fn run_checks_with_hand_geometry(
     options: &CheckOptions,
     has_declared_source_voices: bool,
 ) -> CheckReport {
+    run_checks_with_written_staff(score, options, has_declared_source_voices, &BTreeMap::new())
+}
+
+pub(crate) fn run_checks_with_written_staff(
+    score: &Score,
+    options: &CheckOptions,
+    has_declared_source_voices: bool,
+    projections: &BTreeMap<usize, BTreeSet<usize>>,
+) -> CheckReport {
     let mut issues = Vec::new();
 
     for part in &score.parts {
         let hand_geometry_confirmed = has_declared_source_voices && two_hand_geometry_fits(part);
-        for measure in &part.measures {
+        for (index, measure) in part.measures.iter().enumerate() {
             check_measure_cursor(part, measure, &mut issues);
             check_voice_durations(part, measure, options, &mut issues);
             check_visible_voice_durations(part, measure, &mut issues);
@@ -43,9 +52,22 @@ pub(crate) fn run_checks_with_hand_geometry(
             // Hand-/Sprunglogik nachvollziehbarer.
             let visible_measure_note_events: Vec<&Event> = visible_note_events(measure).collect();
             check_piano_range(part, measure, &visible_measure_note_events, &mut issues);
-            check_piano_chords(part, measure, &visible_measure_note_events, hand_geometry_confirmed, &mut issues);
+            let hand_events = projections.get(&(index + 1)).map(|written| {
+                measure.events.iter().enumerate()
+                    .filter(|(_, event)| event.visible && event.kind == EventKind::Note)
+                    .map(|(ordinal, event)| {
+                        let mut note = event.clone();
+                        if written.contains(&(ordinal + 1)) {
+                            note.staff = "1".to_string();
+                        }
+                        note
+                    }).collect::<Vec<_>>()
+            });
+            let hand_notes = hand_events.as_ref().map(|events| events.iter().collect::<Vec<_>>());
+            let hand_notes = hand_notes.as_deref().unwrap_or(&visible_measure_note_events);
+            check_piano_chords(part, measure, hand_notes, hand_geometry_confirmed, &mut issues);
             if !hand_geometry_confirmed {
-                check_piano_jumps(part, measure, &visible_measure_note_events, &mut issues);
+                check_piano_jumps(part, measure, hand_notes, &mut issues);
             }
             check_staff_register(part, measure, &visible_measure_note_events, &mut issues);
         }
@@ -186,8 +208,12 @@ fn check_voice_durations(
     // getrennte Staff/Voice-Takte über- oder unterfüllt gelten.
     let cross_staff_voices = cross_staff_voices_in_measure(measure);
     let mut by_voice: BTreeMap<(String, String), Vec<(i64, i64)>> = BTreeMap::new();
-    for event in &measure.events {
-        if event.duration <= 0 {
+    for (index, event) in measure.events.iter().enumerate() {
+        // A covered chord member adds no interval beyond its physical head.
+        // Its staff stays available to the independent playability checks.
+        if event.duration <= 0
+            || measure.covered_cross_staff_chord_members.binary_search(&index).is_ok()
+        {
             continue;
         }
         let start = event.start;
@@ -779,6 +805,7 @@ fn check_piano_chords(
 struct JumpPoint<'a> {
     event: &'a Event,
     midi: i32,
+    opposite_midi: i32,
 }
 
 fn check_piano_jumps(part: &Part, measure: &crate::model::Measure, note_events: &[&Event], issues: &mut Vec<Issue>) {
@@ -866,20 +893,25 @@ where
             continue;
         }
         let Some(pitch) = event.pitch.as_ref() else { continue; };
-        let point = JumpPoint { event, midi: pitch.midi };
         by_start
             .entry(event.start)
             .and_modify(|current| {
-                let replace = if take_highest {
-                    point.midi > current.midi
+                if take_highest {
+                    current.opposite_midi = current.opposite_midi.min(pitch.midi);
                 } else {
-                    point.midi < current.midi
+                    current.opposite_midi = current.opposite_midi.max(pitch.midi);
+                }
+                let replace = if take_highest {
+                    pitch.midi > current.midi
+                } else {
+                    pitch.midi < current.midi
                 };
                 if replace {
-                    *current = point;
+                    current.event = event;
+                    current.midi = pitch.midi;
                 }
             })
-            .or_insert(point);
+            .or_insert(JumpPoint { event, midi: pitch.midi, opposite_midi: pitch.midi });
     }
     by_start.into_values().collect()
 }
@@ -922,6 +954,12 @@ fn check_jump_line(
         let b = pair[1];
         let (Some(pa), Some(pb)) = (a.event.pitch.as_ref(), b.event.pitch.as_ref()) else { continue; };
         let interval = pb.midi.abs_diff(pa.midi);
+        // An outer attack can move when a chord opens or closes. Only an
+        // unbroken register displacement in both bounds establishes this
+        // line's large jump. An independent voice still has its own bounds.
+        let interval_direction = pb.midi.cmp(&pa.midi);
+        let opposite_interval = b.opposite_midi.abs_diff(a.opposite_midi);
+        let opposite_direction = b.opposite_midi.cmp(&a.opposite_midi);
         let temporal_edge = canonical_han03_temporal_edge(a.event, b.event);
         let time_gap = temporal_edge.onset_delta.abs();
         // HAN03 owns only large jumps whose source endpoint leaves no positive
@@ -932,6 +970,8 @@ fn check_jump_line(
         // Overlap and contiguous attacks stay
         // in HAN03 because release_to_attack_gap <= 0.
         if interval < PIANO_FAST_JUMP_MIN_INTERVAL
+            || opposite_interval < PIANO_FAST_JUMP_MIN_INTERVAL
+            || interval_direction != opposite_direction
             || time_gap > measure.divisions.max(1)
             || temporal_edge.release_to_attack_gap > 0
         {
@@ -1241,7 +1281,7 @@ mod han03_attack_semantics_tests {
         assert!(!edge.direct_attack_successor);
     }
 
-    fn han03_issues_for_pair(first: &Event, second: &Event) -> Vec<Issue> {
+    fn han03_issues_for_attacks(attacks: &[&Event]) -> Vec<Issue> {
         let part = Part {
             id: "P1".to_string(),
             name: "Piano".to_string(),
@@ -1256,8 +1296,9 @@ mod han03_attack_semantics_tests {
             cursor_min: 0,
             cursor_max: 384,
             events: Vec::new(),
+            covered_cross_staff_chord_members: Vec::new(),
         };
-        let line = build_extreme_line([first, second].into_iter(), true);
+        let line = build_extreme_line(attacks.iter().copied(), true);
         let mut emitted = BTreeSet::new();
         let mut issues = Vec::new();
         check_jump_line(
@@ -1282,14 +1323,14 @@ mod han03_attack_semantics_tests {
         let edge = canonical_han03_temporal_edge(&first, &second);
         assert_eq!(edge.onset_delta, 96);
         assert_eq!(edge.release_to_attack_gap, 48);
-        assert!(han03_issues_for_pair(&first, &second).is_empty());
+        assert!(han03_issues_for_attacks(&[&first, &second]).is_empty());
     }
 
     #[test]
     fn han03_keeps_contiguous_large_jump_warning() {
         let first = event(48, 44, false);
         let second = event(96, 68, false);
-        let issues = han03_issues_for_pair(&first, &second);
+        let issues = han03_issues_for_attacks(&[&first, &second]);
         assert_eq!(issues.len(), 1);
         let identity = issues[0]
             .han03_jump_identity
@@ -1299,16 +1340,55 @@ mod han03_attack_semantics_tests {
     }
 
     #[test]
+    fn han03_distinguishes_chord_expansion_from_register_displacement() {
+        let first = event(0, 32, false);
+        let nearest = event(48, 44, false);
+        let farthest = event(48, 56, false);
+        assert!(han03_issues_for_attacks(&[&first, &nearest, &farthest]).is_empty());
+
+        let shifted_high = event(48, 68, false);
+        let issues = han03_issues_for_attacks(&[&first, &farthest, &shifted_high]);
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
     fn han03_keeps_overlapping_large_jump_warning() {
         let mut first = event(48, 44, false);
         first.duration = 96;
         let second = event(96, 68, false);
-        let issues = han03_issues_for_pair(&first, &second);
+        let issues = han03_issues_for_attacks(&[&first, &second]);
         assert_eq!(issues.len(), 1);
         let identity = issues[0]
             .han03_jump_identity
             .as_ref()
             .expect("HAN03 warning must carry canonical jump identity");
         assert_eq!(identity.temporal_edge.release_to_attack_gap, -48);
+    }
+}
+
+#[cfg(test)]
+mod cross_staff_chord_duration_tests {
+    use super::*;
+
+    #[test]
+    fn only_a_covered_member_of_the_same_physical_voice_uses_its_heads_duration() {
+        let head = "<note><pitch><step>A</step><octave>4</octave></pitch><duration>96</duration><voice>melody</voice><type>quarter</type><staff>1</staff></note>";
+        let member = "<note><chord/><pitch><step>D</step><octave>4</octave></pitch><duration>48</duration><voice>melody</voice><type>eighth</type><staff>2</staff></note>";
+        for (prefix, chord, bound) in [
+            ("", member.to_string(), true),
+            ("", member.replace("melody", "independent"), false),
+            ("<backup><duration>48</duration></backup>", member.to_string(), false),
+            ("", member.replace("<duration>48</duration>", "<duration>144</duration>"), false),
+        ] {
+            let xml = format!("<score-partwise><part id=\"synthetic\"><measure number=\"alpha\"><attributes><divisions>96</divisions><time><beats>1</beats><beat-type>4</beat-type></time></attributes>{head}{prefix}{chord}</measure></part></score-partwise>");
+            let score = crate::musicxml::parse_musicxml(&xml).unwrap();
+            let measure = &score.parts[0].measures[0];
+            assert_eq!(measure.events[1].staff, "2");
+            assert_eq!(measure.covered_cross_staff_chord_members.as_slice(), if bound { &[1][..] } else { &[] });
+            let report = run_checks(&score, &CheckOptions { strict: true });
+            assert_eq!(report.issues.iter().any(|issue| {
+                issue.staff.as_deref() == Some("2") && issue.issue_type.starts_with("VOICE_DURATION_")
+            }), !bound);
+        }
     }
 }

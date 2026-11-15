@@ -72,15 +72,15 @@ predicates. The final guard is non-monotone: refusing an incomplete assignment
 cannot prune all possible completions. Only a full consumer-admissible compatible
 partition is productive; missing evidence retains the accepted assignment.
 
-Original explicit cursors remain protected. Alignment forwards emitted by the
-existing canonical producer may follow the technical channel only when the
-original producer document contains no forward on that presentation staff;
-a source forward without a staff protects both staff resources. This is a
-conservative provenance condition, not a musical selector or a missing-origin
-promotion. The complete generated forward sequence must retain every byte except
-its voice scalar. Backups and rests remain byte-exact; no duration, rest obligation
-or source cursor is normalized or discarded. A source cursor on an independent
-other staff does not remove admission from the first staff's reuse candidates.
+Original and rest-derived cursors remain protected by their exact output bytes.
+The canonical FinalChord producer identifies alignment forwards inside its own
+auxiliary-lane insertion. Both projection edit scripts must transport the
+complete insertion to the exact emitted bytes. The sharing check may compare
+those forward elements without their technical voice scalar. Duration, staff,
+element sequence, every rest and every original cursor remain bound to the
+existing complete-partition guards. No classification relies on the presence
+or absence of a forward elsewhere on the staff. Missing insertion evidence
+leaves the complete forward byte-exact and its bound channel protected.
 
 An unchanged quarter-or-longer note type with no beam tag in the exact canonical
 producer source may supply a separate NonBeamable applicability witness. This

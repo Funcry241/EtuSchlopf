@@ -577,6 +577,9 @@ fn build_candidate_batch(
         input_label, &variant_label, start_iteration,
         ["InitialCustodyAndGenesis", "Fidelity", "Polish", "Layout", "OwnedRhythmContinuation",
          "ReceiptValidationAndAdoption", "ParseMusicXml", "RunChecks", "FinalizeHints"]);
+    let human_potential_label = format!("{label}/HumanPotential");
+    let human_potential_timings = crate::audit_only::performance_timings::HumanPotentialTimings::new(
+        input_label, &human_potential_label, start_iteration);
     let mut detail = crate::audit_only::performance_timings::SequentialTimings::new(input_label,
         label, "PrepareSeeds");
     let worker_count = parallel.workers.min(total).max(1);
@@ -676,7 +679,7 @@ fn build_candidate_batch(
                 options,
                 layout_pages,
                 no_polish,
-                (&finalization_timings, &variant_timings),
+                (&finalization_timings, &variant_timings, &human_potential_timings),
             );
             let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
             if should_report_progress_tick(done, unique_total) {
@@ -775,9 +778,10 @@ fn finish_solver_candidate_from_seed(
     layout_pages: Option<usize>,
     no_polish: bool,
     timings: (&crate::audit_only::performance_timings::BatchTimings<'_, 8>,
-        &crate::audit_only::performance_timings::BatchTimings<'_, 9>),
+        &crate::audit_only::performance_timings::BatchTimings<'_, 9>,
+        &crate::audit_only::performance_timings::HumanPotentialTimings<'_>),
 ) -> anyhow::Result<SolverCandidate> {
-    let (finalization_timings, variant_timings) = timings;
+    let (finalization_timings, variant_timings, human_potential_timings) = timings;
     let mut detail = finalization_timings.call();
     let iteration = seed.iteration;
     let profile = &seed.profile;
@@ -849,7 +853,7 @@ fn finish_solver_candidate_from_seed(
         &reference_signature,
         options,
         layout_pages,
-        variant_timings,
+        (variant_timings, None),
     )?;
     detail.enter(6);
     if reference.guard_active() {
@@ -861,6 +865,7 @@ fn finish_solver_candidate_from_seed(
         // lokalen, reparierbaren Notationshinweisen, bekommt er eine lokale
         // RepairTrial-Zwischenstufe und anschließend denselben strengen Guard.
         let max_global_attempts = parallel.human_potential_budget.clamp(1, 24);
+        let mut human_detail = human_potential_timings.phases.call();
         let diagnostic_arrangement = arrange_piano_musicxml_with_profile(xml, ArrangementProfile {
         rhythmic_courses: Some(&midi_seed_stats.rhythmic_courses),
             preserve_reference: true,
@@ -868,12 +873,18 @@ fn finish_solver_candidate_from_seed(
             human_potential_candidate_budget: parallel.human_potential_budget,
             human_potential_max_moves: parallel.human_potential_max_moves,
             human_potential_structural_target: None,
+            human_potential_measure_reuse: None,
         });
+        human_detail.enter(1);
         let mut diagnostic_stats = diagnostic_arrangement.stats;
         let targets = collect_human_potential_targets(&diagnostic_stats, max_global_attempts);
         let mut accepted_human_variant: Option<ArrangementVariant> = None;
         let mut global_checked = 0usize;
+        let measure_reuse = crate::arrangement::HumanPotentialMeasureReuse::new(xml, &midi_seed_stats.rhythmic_courses);
+        let mut polish_reuse = notation::PolishMeasureReuse::new();
+        let mut measure_visits = 0;
         for target in targets.iter().copied() {
+            human_detail.enter(2);
             let human_arrangement = arrange_piano_musicxml_with_profile(xml, ArrangementProfile {
         rhythmic_courses: Some(&midi_seed_stats.rhythmic_courses),
                 preserve_reference: true,
@@ -881,7 +892,10 @@ fn finish_solver_candidate_from_seed(
                 human_potential_candidate_budget: parallel.human_potential_budget,
                 human_potential_max_moves: parallel.human_potential_max_moves,
                 human_potential_structural_target: Some(target),
+                human_potential_measure_reuse: Some(&measure_reuse),
             });
+            human_detail.enter(1);
+            measure_visits += human_arrangement.stats.measures_seen;
             if human_arrangement.stats.human_potential_candidates_checked == 0
                 || human_arrangement.stats.human_potential_notes_moved == 0
             {
@@ -889,6 +903,7 @@ fn finish_solver_candidate_from_seed(
             }
             global_checked += 1;
             let attempt_idx = global_checked.saturating_sub(1);
+            human_detail.enter(3);
             let human_variant = evaluate_arrangement_variant(
                 profile.display_name(),
                 human_arrangement,
@@ -896,8 +911,9 @@ fn finish_solver_candidate_from_seed(
                 &reference_signature,
                 options,
                 layout_pages,
-                variant_timings,
+                (variant_timings, Some(&mut polish_reuse)),
             )?;
+            human_detail.enter(1);
             diagnostic_stats.human_potential_global_candidates_checked = global_checked;
             let mut decision_variant = human_variant;
             let mut repair_logged = false;
@@ -905,12 +921,14 @@ fn finish_solver_candidate_from_seed(
             if reject_reason == Some(HumanPotentialGlobalGuardReject::Hints) {
                 let added_hints = added_hint_issues(&chosen_variant.final_result, &decision_variant.final_result);
                 if added_hints_are_locally_repairable(&added_hints, target) {
+                    human_detail.enter(4);
                     let repaired_variant = evaluate_human_potential_local_hint_repair(
                         profile.display_name(),
                         &decision_variant,
                         target,
                         options,
                     )?;
+                    human_detail.enter(1);
                     let repaired_reject = human_potential_variant_reject_reason(&repaired_variant, &chosen_variant);
                     let repair_result = repaired_reject
                         .map_or_else(|| "accepted".to_string(), |reason| format!("rejected_{}", describe_human_potential_reject_reason(reason)));
@@ -972,6 +990,9 @@ fn finish_solver_candidate_from_seed(
                 accepted_human_variant = Some(decision_variant);
             }
         }
+        human_potential_timings.record_completed_seed(
+            targets.len(), measure_visits, measure_reuse.hits(), polish_reuse.counts(),
+        );
         if let Some(mut human_variant) = accepted_human_variant {
             let accepted_measures = human_variant.arrangement_stats.human_potential_measures;
             let accepted_notes = human_variant.arrangement_stats.human_potential_notes_moved;
@@ -1006,6 +1027,7 @@ fn finish_solver_candidate_from_seed(
         } else {
             copy_rejected_human_potential_stats(&mut chosen_variant.arrangement_stats, &diagnostic_stats);
         }
+        human_detail.reached_tail();
     }
     detail.enter(7);
     if has_declared_source_voices {

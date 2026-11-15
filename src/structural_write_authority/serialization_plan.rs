@@ -1048,6 +1048,7 @@ pub(crate) struct FinalChordProjectionResult {
     pub(crate) provenance: Vec<FinalChordProjectionProvenanceRow>,
     // Exact transaction-local transport, not canonical identity or role authority.
     pub(crate) non_pitched_continuations: Vec<FinalChordNonPitchedContinuation>,
+    generated_alignment_forwards: std::collections::BTreeSet<(usize, usize)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1124,6 +1125,7 @@ struct FinalChordTransactionLocalOutputAlphaReceipt {
 struct CanonicalProjectedFinalChord {
     xml: String,
     non_pitched_continuations: Vec<FinalChordNonPitchedContinuation>,
+    generated_alignment_forwards: std::collections::BTreeSet<(usize, usize)>,
     receipt: FinalChordTransactionLocalOutputAlphaReceipt,
 }
 
@@ -5839,8 +5841,9 @@ fn build_frozen_serialization_voice_channels_inner<'owner>(
     // finite alternative. Only if the consumer would leave a required channel unreserved
     // does the search continue, under exactly the same edges and roles.
     drop(greedy_timing);
+    let consumer_model = channel_consumer_model(written, &class_by_source);
     let (mut channel_by_class, mut channel_role, mut consumer_allocation) =
-        match channel_consumer_model(written, &class_by_source) {
+        match consumer_model.as_ref() {
             None => (
                 channel_by_class,
                 channel_role,
@@ -5850,7 +5853,7 @@ fn build_frozen_serialization_voice_channels_inner<'owner>(
             ),
             Some(model) => {
                 let input = ChannelSearchInput {
-                    model: &model,
+                    model,
                     class_order: &class_order_for_search,
                     class_role: &class_role,
                     sounding_different: allocation_sounding,
@@ -5890,10 +5893,10 @@ fn build_frozen_serialization_voice_channels_inner<'owner>(
             },
         };
     let mut label_continuation = None;
-    if let (Some(observation), Some(model)) = (original_beams, channel_consumer_model(written, &class_by_source))
-        && channel_consumer_overflow(&model, &channel_by_class, &channel_role).is_err()
+    if let (Some(observation), Some(model)) = (original_beams, consumer_model.as_ref())
+        && channel_consumer_overflow(model, &channel_by_class, &channel_role).is_err()
     {
-        let input = ChannelSearchInput { model: &model, class_order: &class_order_for_search,
+        let input = ChannelSearchInput { model, class_order: &class_order_for_search,
             class_role: &class_role, sounding_different: allocation_sounding,
             written_different: &written_different };
         let context = cross_role_channel_sharing::SharingContext::new(
@@ -6086,12 +6089,39 @@ struct ChannelConsumerNote {
 #[derive(Debug, Clone)]
 struct ChannelConsumerModel {
     notes: Vec<ChannelConsumerNote>,
+    classes: std::collections::BTreeMap<usize, ConsumerStaffUse>,
+    unpitched: std::collections::BTreeMap<String, ConsumerStaffUse>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-enum ChannelConsumerVoice {
-    Channel(usize),
-    Free(String),
+#[derive(Debug, Clone, Copy, Default)]
+struct ConsumerStaffUse {
+    present: u8,
+    heads: u8,
+    required: u8,
+    head_count: usize,
+}
+
+impl ChannelConsumerModel {
+    fn new(notes: Vec<ChannelConsumerNote>) -> Self {
+        let mut classes = std::collections::BTreeMap::<_, ConsumerStaffUse>::new();
+        let mut unpitched = std::collections::BTreeMap::<_, ConsumerStaffUse>::new();
+        for note in &notes {
+            let usage = match note.class {
+                Some(class) => classes.entry(class).or_default(),
+                None => unpitched.entry(note.label.clone()).or_default(),
+            };
+            let staff = 1 << (note.staff - 1);
+            usage.present |= staff;
+            if note.chordrest {
+                usage.heads |= staff;
+                usage.head_count += 1;
+            }
+            if note.required {
+                usage.required |= staff;
+            }
+        }
+        Self { notes, classes, unpitched }
+    }
 }
 
 fn channel_consumer_label_key(raw: &str) -> Option<String> {
@@ -6158,7 +6188,7 @@ fn channel_consumer_model(
             });
         }
     }
-    (claimed == class_by_note.len()).then_some(ChannelConsumerModel { notes })
+    (claimed == class_by_note.len()).then(|| ChannelConsumerModel::new(notes))
 }
 
 fn channel_reserved_label_owners(
@@ -6193,62 +6223,60 @@ fn channel_consumer_overflow_with_labels(
     channel_role: &std::collections::BTreeMap<usize, SerializedVoicePresentationRole>,
     voices: Option<&FrozenSerializedVoicePlan>,
 ) -> Result<(), std::collections::BTreeSet<u8>> {
-    let owners = voices.map_or_else(
-        || channel_reserved_label_owners(channel_role).into_iter()
-            .map(|(label, channel)| (label.to_string(), channel)).collect(),
-        |voices| voices.channel_to_label.iter().map(|(&channel, label)| (label.clone(), channel)).collect::<std::collections::BTreeMap<_, _>>(),
-    );
-    let mut presence = std::collections::BTreeMap::<ChannelConsumerVoice, [bool; 2]>::new();
-    let mut pitched_presence = std::collections::BTreeMap::<usize, [bool; 2]>::new();
-    let mut failing = std::collections::BTreeSet::<u8>::new();
-    let mut resolved = Vec::with_capacity(model.notes.len());
-    for note in &model.notes {
-        let voice = match note.class {
-            Some(class) => match channel_by_class.get(&class) {
-                Some(&channel) => ChannelConsumerVoice::Channel(channel),
-                None => {
-                    failing.insert(note.staff);
-                    resolved.push(None);
-                    continue;
-                }
-            },
-            None => owners.get(note.label.as_str()).map_or_else(
-                || ChannelConsumerVoice::Free(note.label.clone()),
-                |&channel| ChannelConsumerVoice::Channel(channel),
-            ),
-        };
-        let staff_index = usize::from(note.staff - 1);
-        if note.chordrest {
-            presence.entry(voice.clone()).or_default()[staff_index] = true;
-            if let ChannelConsumerVoice::Channel(channel) = voice
-                && note.class.is_some()
-            {
-                pitched_presence.entry(channel).or_default()[staff_index] = true;
-            }
-        }
-        resolved.push(Some(voice));
+    let _timing = crate::audit_only::voice_allocation_timing::Timer::probe("ConsumerCapacity");
+    let owners: std::collections::BTreeMap<&str, usize> = match voices {
+        Some(voices) => voices.channel_to_label.iter()
+            .map(|(&channel, label)| (label.as_str(), channel)).collect(),
+        None => channel_reserved_label_owners(channel_role),
+    };
+    #[derive(Default)]
+    struct ChannelStaffUse {
+        pitched_heads: u8,
+        unpitched_heads: u8,
+        required: u8,
     }
-    for staff in [1_u8, 2] {
-        let index = usize::from(staff - 1);
-        if presence.values().filter(|staves| staves[index]).count() > CONSUMER_VOICES_PER_STAFF {
-            failing.insert(staff);
+    let mut by_channel = std::collections::BTreeMap::<usize, ChannelStaffUse>::new();
+    let mut failing = 0_u8;
+    for (class, usage) in &model.classes {
+        if let Some(&channel) = channel_by_class.get(class) {
+            let channel = by_channel.entry(channel).or_default();
+            channel.pitched_heads |= usage.heads;
+            channel.required |= usage.required;
+        } else {
+            failing |= usage.present;
         }
     }
-    for (note, voice) in model.notes.iter().zip(&resolved) {
-        let Some(ChannelConsumerVoice::Channel(channel)) = voice else {
-            continue;
-        };
-        if !note.required {
-            continue;
+    let mut registered = [0; 2];
+    let mut count_staves = |heads: u8| {
+        for (index, count) in registered.iter_mut().enumerate() {
+            *count += usize::from(heads & (1 << index) != 0);
         }
-        let own = pitched_presence.get(channel).copied().unwrap_or_default();
-        // Require an own-staff pitched head even if a free rest label later
-        // aliases this channel or is split away by an existing notation owner.
-        if !own[usize::from(note.staff - 1)] {
-            failing.insert(note.staff);
+    };
+    for (label, usage) in &model.unpitched {
+        if let Some(&channel) = owners.get(label.as_str()) {
+            let channel = by_channel.entry(channel).or_default();
+            channel.unpitched_heads |= usage.heads;
+            channel.required |= usage.required;
+        } else {
+            count_staves(usage.heads);
         }
     }
-    if failing.is_empty() { Ok(()) } else { Err(failing) }
+    // Unpitched heads may register a label, but only pitched heads satisfy a
+    // required occurrence's own-staff reservation.
+    for usage in by_channel.into_values() {
+        count_staves(usage.pitched_heads | usage.unpitched_heads);
+        failing |= usage.required & !usage.pitched_heads;
+    }
+    for (index, count) in registered.into_iter().enumerate() {
+        if count > CONSUMER_VOICES_PER_STAFF {
+            failing |= 1 << index;
+        }
+    }
+    if failing == 0 {
+        Ok(())
+    } else {
+        Err([1_u8, 2].into_iter().filter(|staff| failing & (1 << (staff - 1)) != 0).collect())
+    }
 }
 
 // Keep the two edge sets distinct through every consumer of the channel policy.
@@ -6296,13 +6324,16 @@ impl ChannelSearchInput<'_> {
         roles: &std::collections::BTreeMap<usize, SerializedVoicePresentationRole>,
         voices: Option<&FrozenSerializedVoicePlan>,
     ) -> Result<(), ChannelPartitionRefusal> {
-        if self.written_different.pairs.iter().chain(&self.sounding_different.pairs)
-            .any(|(left, right)| channels.get(left) == channels.get(right))
-        {
+        if self.has_internal_conflict(channels) {
             return Err(ChannelPartitionRefusal::Conflict);
         }
         channel_consumer_overflow_with_labels(self.model, channels, roles, voices)
             .map_err(ChannelPartitionRefusal::Capacity)
+    }
+
+    fn has_internal_conflict(&self, channels: &std::collections::BTreeMap<usize, usize>) -> bool {
+        self.written_different.pairs.iter().chain(&self.sounding_different.pairs)
+            .any(|(left, right)| channels.get(left) == channels.get(right))
     }
 
     fn conflicts(&self, left: usize, right: usize) -> bool {
@@ -7858,16 +7889,35 @@ fn bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound
     }
     let source = FinalChordBindingSource::parse(candidate_xml)?;
     bind_canonical_final_chord_encoding_plan_from_parsed_source(
-        &source, canonical, voice_plan, render_omissions,
+        &source, &FinalChordFragmentIndex::new(canonical), voice_plan, render_omissions,
     )
+}
+
+// The maps borrow their owner so a lookup cannot be paired with another
+// canonical plan. Candidate-specific binding and output receipts stay local.
+struct FinalChordFragmentIndex<'a> {
+    canonical: &'a CanonicalFinalChordStructuralPlan,
+    actions: std::collections::BTreeMap<usize, &'a FinalChordCanonicalActionRow>,
+    locators: std::collections::BTreeMap<usize, &'a FinalChordCanonicalSourceLocator>,
+}
+
+impl<'a> FinalChordFragmentIndex<'a> {
+    fn new(canonical: &'a CanonicalFinalChordStructuralPlan) -> Self {
+        Self {
+            canonical,
+            actions: canonical.actions.iter().map(|row| (row.fragment_id, row)).collect(),
+            locators: canonical.source_locators.iter().map(|row| (row.fragment_id, row)).collect(),
+        }
+    }
 }
 
 fn bind_canonical_final_chord_encoding_plan_from_parsed_source(
     source: &FinalChordBindingSource<'_>,
-    canonical: &CanonicalFinalChordStructuralPlan,
+    fragments: &FinalChordFragmentIndex<'_>,
     voice_plan: &FrozenSerializedVoicePlan,
     render_omissions: Option<&std::collections::BTreeSet<RenderPrunedFinalChordOmissionKey>>,
 ) -> io::Result<CanonicalBoundFinalChordEncodingPlan> {
+    let canonical = fragments.canonical;
     if !canonical.voice_free_evidence_sufficiency_green() || !voice_plan.is_bound() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -7877,16 +7927,8 @@ fn bind_canonical_final_chord_encoding_plan_from_parsed_source(
     let candidate_xml = source.xml;
     let measures = &source.measures;
     let allow_render_occurrence_witness = render_omissions.is_some();
-    let action_by_fragment = canonical
-        .actions
-        .iter()
-        .map(|action| (action.fragment_id, action))
-        .collect::<std::collections::BTreeMap<_, _>>();
-    let locator_by_fragment = canonical
-        .source_locators
-        .iter()
-        .map(|locator| (locator.fragment_id, locator))
-        .collect::<std::collections::BTreeMap<_, _>>();
+    let action_by_fragment = &fragments.actions;
+    let locator_by_fragment = &fragments.locators;
 
     let mut edits = Vec::<FinalChordEncodingEdit>::new();
     let mut forward_materializations = Vec::<FinalChordForwardMaterializationAuditRow>::new();
@@ -8342,8 +8384,9 @@ fn final_chord_shift_projection_offset(value: usize, delta: i128) -> io::Result<
     })
 }
 
-fn final_chord_non_pitched_continuations(
+fn final_chord_non_pitched_continuations_from_measures(
     source_xml: &str,
+    source_measures: &[FinalChordBindingMeasure],
     plan: &FinalChordEncodingPlan,
     rest_edits: &[FinalChordEncodingEdit],
     projected_xml: &str,
@@ -8362,8 +8405,8 @@ fn final_chord_non_pitched_continuations(
         .map(|node| (node.range().start, node.range().end))
         .collect::<std::collections::BTreeMap<_, _>>();
     let mut rows = Vec::new();
-    for measure in final_chord_parse_binding_measures(source_xml)? {
-        for note in measure.notes {
+    for measure in source_measures {
+        for note in &measure.notes {
             if !note.rest_like && note.pitch_midi.is_some() {
                 continue;
             }
@@ -8460,38 +8503,78 @@ pub(crate) fn project_final_chord_encoding_plan_with_provenance_with_receipts(
     plan: &FinalChordEncodingPlan,
     receipts: &mut crate::master_state_identity::RenderTransitionReceipts,
 ) -> io::Result<FinalChordProjectionResult> {
-    // The ordinary projector remains the sole byte-materialization path. This closure only
-    // derives a transaction-local receipt from the already-bound plan; it does not
-    // introduce a second XML projector or a second semantic owner.
-    //
-    // The canonical visible-rest interval projection is a byte-only post-projection of
-    // the already-bound FinalChord plan. Provenance therefore has to carry existing
-    // pitched-note offsets through those rest-only edits as well. The edits themselves
-    // are re-derived from the exact pre-rest projection and remain non-authoritative here.
-    let visible_rest_interval_edits = if plan.visible_rest_interval_projection_authorized {
-        let mut pre_rest_plan = plan.clone();
-        pre_rest_plan.visible_rest_interval_projection_authorized = false;
-        let (pre_rest_result, probe_receipt) = project_final_chord_encoding_plan(candidate_xml, &pre_rest_plan);
-        let mut probe = crate::master_state_identity::RenderTransitionReceipts::new();
-        probe.push_exact(probe_receipt);
-        probe.discard_unadopted(crate::master_state_identity::RenderDiscardReason::ReadOnlyProbe);
-        let pre_rest_xml = pre_rest_result?;
-        final_chord_plan_visible_rest_interval_edits(&pre_rest_xml)?
-    } else {
-        Vec::new()
+    project_final_chord_with_binding_measures(candidate_xml, plan, receipts, None)
+        .map(|(projection, _)| projection)
+}
+
+fn project_final_chord_with_binding_measures(
+    candidate_xml: &str,
+    plan: &FinalChordEncodingPlan,
+    receipts: &mut crate::master_state_identity::RenderTransitionReceipts,
+    parsed_source: Option<&FinalChordBindingSource<'_>>,
+) -> io::Result<(FinalChordProjectionResult, Vec<FinalChordBindingMeasure>)> {
+    // Provenance consumes the exact rest edits applied by the projection owner.
+    let mut visible_rest_interval_edits = Vec::new();
+    let (result, mut receipt) =
+        execute_final_chord_encoding_plan(candidate_xml, plan, &mut visible_rest_interval_edits);
+    let collected = result.and_then(|out| {
+        collect_final_chord_execution(
+            candidate_xml, plan, &visible_rest_interval_edits, out, parsed_source, &mut receipt,
+        )
+    });
+    let (projection, binding_measures) = match collected {
+        Ok((projection, measures)) => (Ok(projection), measures),
+        Err(error) => (Err(error), Vec::new()),
     };
-    let (result, mut receipt) = project_final_chord_encoding_plan(candidate_xml, plan);
-    let projection = result.and_then(|out|
-        final_chord_collect_original_projection(candidate_xml, plan, &visible_rest_interval_edits, out));
     course_capture::record_render_projection(&mut receipt, candidate_xml, &projection);
     receipts.push_exact(receipt);
-    projection
+    projection.map(|projection| (projection, binding_measures))
+}
+
+fn collect_final_chord_execution(
+    source_xml: &str, plan: &FinalChordEncodingPlan,
+    rest_edits: &[FinalChordEncodingEdit], out: String,
+    parsed_source: Option<&FinalChordBindingSource<'_>>,
+    receipt: &mut Option<ExactTransformationReceipt>,
+) -> io::Result<(FinalChordProjectionResult, Vec<FinalChordBindingMeasure>)> {
+    let owned_source;
+    let source = match parsed_source {
+        Some(source) => Ok(source),
+        None => match FinalChordBindingSource::parse(source_xml) {
+            Ok(source) => {
+                owned_source = source;
+                Ok(&owned_source)
+            }
+            Err(error) => Err(error),
+        },
+    };
+    let collected = source.and_then(|source| {
+        if !std::ptr::eq(source.xml, source_xml) {
+            return Err(io::Error::new(io::ErrorKind::InvalidData,
+                "FinalChord projection has a foreign parsed source"));
+        }
+        let (projection, measures) =
+            final_chord_collect_original_projection(source, plan, rest_edits, out)?;
+        Ok((projection, measures, source))
+    });
+    if let Some(receipt) = receipt.as_mut()
+        && plan.original_course_bindings.is_some()
+    {
+        let capture = match &collected {
+            Ok((projection, _, source)) => course_capture::capture_original_execution(
+                &FinalChordEncodingExactMint { _sealed: () }, receipt, source, plan, projection,
+            ),
+            Err(error) => Err(anyhow::anyhow!("{error}")),
+        };
+        receipt.record_final_chord_capture(capture);
+    }
+    collected.map(|(projection, measures, _)| (projection, measures))
 }
 
 fn final_chord_collect_original_projection(
-    candidate_xml: &str, plan: &FinalChordEncodingPlan,
+    source: &FinalChordBindingSource<'_>, plan: &FinalChordEncodingPlan,
     visible_rest_interval_edits: &[FinalChordEncodingEdit], out: String,
-) -> io::Result<FinalChordProjectionResult> {
+) -> io::Result<(FinalChordProjectionResult, Vec<FinalChordBindingMeasure>)> {
     let mut generated_provenance = Vec::<FinalChordProjectionProvenanceRow>::new();
     for edit in &plan.edits {
         let delta = edit.replacement.len() as i128
@@ -8544,8 +8627,9 @@ fn final_chord_collect_original_projection(
         .map(|row| (row.source_note_start, row.source_note_end))
         .collect::<std::collections::BTreeSet<_>>();
     let mut provenance = generated_provenance;
-    for measure in final_chord_parse_binding_measures(candidate_xml)? {
-        for note in measure.notes {
+    let source_measures = &source.measures;
+    for measure in source_measures {
+        for note in &measure.notes {
             if note.rest_like || note.pitch_midi.is_none() {
                 continue;
             }
@@ -8599,9 +8683,9 @@ fn final_chord_collect_original_projection(
         }
     }
 
-    let projected_pitched_ranges = final_chord_parse_binding_measures(&out)?
-        .into_iter()
-        .flat_map(|measure| measure.notes)
+    let binding_measures = final_chord_parse_binding_measures(&out)?;
+    let projected_pitched_ranges = binding_measures.iter()
+        .flat_map(|measure| &measure.notes)
         .filter(|note| !note.rest_like && note.pitch_midi.is_some())
         .map(|note| (note.range.start, note.range.end))
         .collect::<std::collections::BTreeMap<_, _>>();
@@ -8690,13 +8774,63 @@ fn final_chord_collect_original_projection(
         }
     }
     provenance.sort_by_key(|row| row.projected_note_start);
-    let non_pitched_continuations = final_chord_non_pitched_continuations(
-        candidate_xml, plan, visible_rest_interval_edits, &out)?;
-    Ok(FinalChordProjectionResult {
+    let non_pitched_continuations = final_chord_non_pitched_continuations_from_measures(
+        source.xml, source_measures, plan, visible_rest_interval_edits, &out)?;
+    let generated_alignment_forwards =
+        final_chord_generated_alignment_forwards(plan, visible_rest_interval_edits, &out);
+    Ok((FinalChordProjectionResult {
         xml: out,
         provenance,
         non_pitched_continuations,
-    })
+        generated_alignment_forwards,
+    }, binding_measures))
+}
+
+// Both auxiliary-lane emitters append a complete, new lane in one insertion.
+// Carry that insertion's own byte span through the exact edit scripts. The
+// normalized evidence covers only forward elements inside an intact insertion.
+fn final_chord_generated_alignment_forwards(
+    plan: &FinalChordEncodingPlan,
+    rest_edits: &[FinalChordEncodingEdit],
+    projected_xml: &str,
+) -> std::collections::BTreeSet<(usize, usize)> {
+    let mut forwards = std::collections::BTreeSet::new();
+    for (index, insertion) in plan.edits.iter().enumerate() {
+        if insertion.start != insertion.end
+            || insertion.generated_fragments.is_empty()
+            || !insertion.generated_fragments.iter().all(|fragment|
+                matches!(fragment.kind, FinalChordForwardMaterializationKind::AuxiliaryLane))
+        {
+            continue;
+        }
+        let original = (insertion.start, insertion.start + insertion.replacement.len());
+        let Some((start, end)) = plan.edits[index + 1..].iter().chain(rest_edits)
+            .try_fold(original, |(start, end), edit| {
+                if edit.end <= start {
+                    let delta = edit.replacement.len() as i128 - (edit.end - edit.start) as i128;
+                    Some((
+                        final_chord_shift_projection_offset(start, delta).ok()?,
+                        final_chord_shift_projection_offset(end, delta).ok()?,
+                    ))
+                } else {
+                    (edit.start >= end).then_some((start, end))
+                }
+            })
+        else {
+            continue;
+        };
+        if projected_xml.get(start..end) != Some(insertion.replacement.as_str()) {
+            continue;
+        }
+        const OPEN: &str = "<lane>";
+        let wrapped = format!("{OPEN}{}</lane>", insertion.replacement);
+        let Ok(lane) = roxmltree::Document::parse(&wrapped) else { continue; };
+        for forward in lane.root_element().children().filter(|node| node.has_tag_name("forward")) {
+            let range = forward.range();
+            forwards.insert((start + range.start - OPEN.len(), start + range.end - OPEN.len()));
+        }
+    }
+    forwards
 }
 
 
@@ -8744,8 +8878,18 @@ fn project_canonical_bound_final_chord_encoding_plan_for_transaction_output_alph
     canonical: &CanonicalFinalChordStructuralPlan,
     bound: &CanonicalBoundFinalChordEncodingPlan,
 ) -> io::Result<CanonicalProjectedFinalChord> {
+    project_canonical_final_chord_probe(candidate_xml, &FinalChordFragmentIndex::new(canonical), bound, None)
+        .map(|(projection, _)| projection)
+}
+
+fn project_canonical_final_chord_probe(
+    candidate_xml: &str,
+    fragments: &FinalChordFragmentIndex<'_>,
+    bound: &CanonicalBoundFinalChordEncodingPlan,
+    parsed_source: Option<&FinalChordBindingSource<'_>>,
+) -> io::Result<(CanonicalProjectedFinalChord, Vec<FinalChordBindingMeasure>)> {
     let mut receipts = crate::master_state_identity::RenderTransitionReceipts::new();
-    let result = project_canonical_bound_final_chord_encoding_plan_for_transaction_output_alpha_with_receipts(candidate_xml, canonical, bound, &mut receipts);
+    let result = project_canonical_final_chord_with_binding_measures(candidate_xml, fragments, bound, &mut receipts, parsed_source);
     receipts.discard_unadopted(crate::master_state_identity::RenderDiscardReason::ReadOnlyProbe);
     result
 }
@@ -8756,13 +8900,27 @@ fn project_canonical_bound_final_chord_encoding_plan_for_transaction_output_alph
     bound: &CanonicalBoundFinalChordEncodingPlan,
     receipts: &mut crate::master_state_identity::RenderTransitionReceipts,
 ) -> io::Result<CanonicalProjectedFinalChord> {
+    project_canonical_final_chord_with_binding_measures(
+        candidate_xml, &FinalChordFragmentIndex::new(canonical), bound, receipts, None,
+    )
+        .map(|(projection, _)| projection)
+}
+
+fn project_canonical_final_chord_with_binding_measures(
+    candidate_xml: &str,
+    fragments: &FinalChordFragmentIndex<'_>,
+    bound: &CanonicalBoundFinalChordEncodingPlan,
+    receipts: &mut crate::master_state_identity::RenderTransitionReceipts,
+    parsed_source: Option<&FinalChordBindingSource<'_>>,
+) -> io::Result<(CanonicalProjectedFinalChord, Vec<FinalChordBindingMeasure>)> {
+    let canonical = fragments.canonical;
     if !canonical.voice_free_evidence_sufficiency_green() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "FinalChord transaction-local Output-Alpha projection requires sealed canonical structure",
         ));
     }
-    let projection = project_final_chord_encoding_plan_with_provenance_with_receipts(candidate_xml, &bound.plan, receipts)?;
+    let (projection, measures) = project_final_chord_with_binding_measures(candidate_xml, &bound.plan, receipts, parsed_source)?;
 
     let mut owner_by_source_range = std::collections::BTreeMap::<
         (usize, usize),
@@ -8782,7 +8940,6 @@ fn project_canonical_bound_final_chord_encoding_plan_for_transaction_output_alph
         }
     }
 
-    let measures = final_chord_parse_binding_measures(&projection.xml)?;
     let output_topology_fingerprint_fnv64 =
         final_chord_transaction_output_alpha_topology_fingerprint(&measures);
     let mut occurrence_by_projected_range = std::collections::BTreeMap::<
@@ -8811,16 +8968,8 @@ fn project_canonical_bound_final_chord_encoding_plan_for_transaction_output_alph
         }
     }
 
-    let locator_by_fragment = canonical
-        .source_locators
-        .iter()
-        .map(|locator| (locator.fragment_id, locator))
-        .collect::<std::collections::BTreeMap<_, _>>();
-    let action_by_fragment = canonical
-        .actions
-        .iter()
-        .map(|action| (action.fragment_id, action))
-        .collect::<std::collections::BTreeMap<_, _>>();
+    let locator_by_fragment = &fragments.locators;
+    let action_by_fragment = &fragments.actions;
 
     let mut occurrences = Vec::<FinalChordTransactionOutputOccurrenceWitness>::new();
     let mut claimed_output_occurrences = std::collections::BTreeSet::<(usize, usize)>::new();
@@ -8980,9 +9129,10 @@ fn project_canonical_bound_final_chord_encoding_plan_for_transaction_output_alph
 
     let rest_bridge_extension_course = canonical.rest_bridge_extension_course.as_ref()
         .map(|course| course.projected(candidate_xml, &projection.xml, &occurrences)).transpose()?;
-    Ok(CanonicalProjectedFinalChord {
+    Ok((CanonicalProjectedFinalChord {
         xml: projection.xml,
         non_pitched_continuations: projection.non_pitched_continuations,
+        generated_alignment_forwards: projection.generated_alignment_forwards,
         receipt: FinalChordTransactionLocalOutputAlphaReceipt {
             rest_bridge_extension_course,
             phrase_origin: std::sync::Arc::new(()),
@@ -8994,7 +9144,7 @@ fn project_canonical_bound_final_chord_encoding_plan_for_transaction_output_alph
             certified_omitted_fragment_ids: bound.certified_omitted_fragment_ids.clone(),
             original_beam_voice_groups: canonical.original_beam_voice_groups.clone(),
         },
-    })
+    }, measures))
 }
 
 #[cfg(test)]
@@ -9063,6 +9213,7 @@ pub(crate) fn advance_canonical_final_chord_render_occurrence_after_final_notati
     let mut projected = source.projected;
     let checkpoint_measures = final_chord_parse_binding_measures(checkpoint_xml)?;
     projected.xml = checkpoint_xml.to_string();
+    projected.generated_alignment_forwards.clear();
     projected.receipt.output_topology_fingerprint_fnv64 =
         final_chord_transaction_output_alpha_topology_fingerprint(&checkpoint_measures);
     verify_canonical_final_chord_transaction_local_output_alpha(
@@ -9084,6 +9235,7 @@ fn final_chord_transaction_output_alpha_map(
     Ok(CanonicalProjectedFinalChord {
         xml: final_chord_map_all_voice_elements(&projected.xml, mapping)?,
         non_pitched_continuations: Vec::new(),
+        generated_alignment_forwards: std::collections::BTreeSet::new(),
         receipt: projected.receipt.clone(),
     })
 }
@@ -10164,6 +10316,7 @@ pub(crate) fn bind_primary_beam_voice_partition_plan(
     let added = original_beam_voice_alignment::append_proven_alignment(
         original_beam_voice_alignment::AlignmentInput {
             source_xml, source: source_continuation, voices: voice_plan, classification_xml,
+            current: &source_measures, classification: &classification_measures,
             visible_fragments: renderer_visible_fragments_by_metric_line_id,
         },
         original_beam_voice_alignment::AlignmentOutput {
@@ -10175,7 +10328,9 @@ pub(crate) fn bind_primary_beam_voice_partition_plan(
     eprintln!("OriginalBeamVoiceAlignment: origin_components={}; prepared_components={}; authority=original_owner_and_pre_lane_relation; phase=prepared_not_committed; report_reentry=none",
         source_continuation.receipt.original_beam_voice_groups.len(), added.len());
     if !added.is_empty() {
-        original_beam_voice_alignment::validate_batch_occupancy(source_xml, &edits)?;
+        original_beam_voice_alignment::validate_batch_occupancy_with_measures(
+            source_xml, &source_measures, &edits,
+        )?;
     }
     edits.sort_by_key(|edit| (edit.voice_text_start, edit.voice_text_end));
     if edits
@@ -10979,13 +11134,35 @@ pub(crate) fn project_final_chord_encoding_plan(
     candidate_xml: &str,
     plan: &FinalChordEncodingPlan,
 ) -> (io::Result<String>, Option<ExactTransformationReceipt>) {
+    project_final_chord_xml(candidate_xml, plan)
+}
+
+fn project_final_chord_xml(
+    source_xml: &str, plan: &FinalChordEncodingPlan,
+) -> (io::Result<String>, Option<ExactTransformationReceipt>) {
+    let mut rest_edits = Vec::new();
+    let (projected, mut receipt) = execute_final_chord_encoding_plan(source_xml, plan, &mut rest_edits);
+    if let (Some(_), Ok(out)) = (&receipt, &projected)
+        && plan.original_course_bindings.is_some()
+    {
+        let _ = collect_final_chord_execution(
+            source_xml, plan, &rest_edits, out.clone(), None, &mut receipt,
+        );
+    }
+    (projected, receipt)
+}
+
+fn execute_final_chord_encoding_plan(
+    candidate_xml: &str,
+    plan: &FinalChordEncodingPlan,
+    original_rest_edits: &mut Vec<FinalChordEncodingEdit>,
+) -> (io::Result<String>, Option<ExactTransformationReceipt>) {
     // Two-phase owner: phase 1 applies the bound plan edits to the pre bytes,
     // phase 2 the visible-rest interval edits bound against the phase-1 state.
     // Both scripts are known at origin and composed into one pre-coordinate
     // EXACT script; no post-state diff is taken.
     let mut phase_one_script = Vec::<(usize, usize, String)>::new();
     let mut phase_two_script = Vec::<(usize, usize, String)>::new();
-    let mut original_rest_edits = Vec::new();
     let projected = (|| -> io::Result<String> {
         if candidate_xml.len() != plan.source_len || fingerprint(candidate_xml) != plan.source_fingerprint {
             return Err(io::Error::new(
@@ -11018,7 +11195,7 @@ pub(crate) fn project_final_chord_encoding_plan(
         if plan.visible_rest_interval_projection_authorized {
             let pitched_before = final_chord_pitched_timeline_signature(&out)?;
             let rest_edits = final_chord_plan_visible_rest_interval_edits(&out)?;
-            original_rest_edits = rest_edits.clone();
+            original_rest_edits.clone_from(&rest_edits);
             let mut rest_last_start = usize::MAX;
             for edit in rest_edits {
                 if edit.start > edit.end || edit.end > out.len() || edit.start > rest_last_start {
@@ -11048,7 +11225,7 @@ pub(crate) fn project_final_chord_encoding_plan(
 
         Ok(out)
     })();
-    let mut receipt = projected.as_ref().ok().and_then(|post| {
+    let receipt = projected.as_ref().ok().and_then(|post| {
         let composed = crate::master_state_identity::compose_exact_edit_scripts(
             candidate_xml,
             crate::master_state_identity::exact_script_from_descending_application(
@@ -11065,14 +11242,6 @@ pub(crate) fn project_final_chord_encoding_plan(
             composed,
         )
     });
-    if let (Some(receipt), Ok(post)) = (receipt.as_mut(), projected.as_ref())
-        && plan.original_course_bindings.is_some() {
-            let capture = course_capture::capture_original_execution(
-                &FinalChordEncodingExactMint { _sealed: () }, receipt,
-                candidate_xml, post, plan, &original_rest_edits,
-            );
-            receipt.record_final_chord_capture(capture);
-    }
     let _ = projected.as_ref().inspect(|post| {
         crate::audit_only::voice_run_collision_origin::observe_final_chord_projection(
             candidate_xml, post,
@@ -13636,14 +13805,25 @@ mod tests {
         );
         let xml = final_chord_score(&body);
         let plan = plan_final_chord_encoding(&xml).expect("plan");
-        let out = project_final_chord_encoding_plan(&xml, &plan).0.expect("materialize");
-        assert_eq!(final_chord_temp_upper_aux_voice_count(&out), 8);
+        let projection = project_final_chord_encoding_plan_with_provenance(&xml, &plan)
+            .expect("materialize with exact cursor provenance");
+        let out = &projection.xml;
+        assert_eq!(final_chord_temp_upper_aux_voice_count(out), 8);
         assert_eq!(out.matches("<chord/>").count(), 5);
         assert_eq!(out.matches("<backup>").count(), 1);
         let expected_forward = format!(
             "<forward><duration>8</duration><voice>{FINAL_CHORD_TEST_TEMP_UPPER_AUX_VOICE}</voice><staff>1</staff></forward>"
         );
         assert!(out.contains(expected_forward.as_str()));
+        let document = roxmltree::Document::parse(out).unwrap();
+        let forwards = document.descendants().filter(|node| node.has_tag_name("forward"))
+            .map(|node| node.range()).collect::<Vec<_>>();
+        assert_eq!(forwards.len(), 4);
+        assert_eq!(projection.generated_alignment_forwards.len(), 2);
+        for range in forwards {
+            let generated = projection.generated_alignment_forwards.contains(&(range.start, range.end));
+            assert_eq!(generated, out[range].contains("<voice>"));
+        }
         for step in ["C", "D", "E", "F", "G", "A"] {
             let expected_pitch = format!("<step>{step}</step>");
             assert_eq!(out.matches(expected_pitch.as_str()).count(), 1);
@@ -14086,6 +14266,7 @@ mod tests {
             let xml = non_pitched_continuation_score(&body, measure)
                 .replace("<divisions>96</divisions>", &format!("<divisions>{}</divisions>", 96 * scale));
             let projection = non_pitched_continuation_projection(&xml, true);
+            assert!(projection.generated_alignment_forwards.is_empty());
             assert_eq!(projection.provenance.len(), 1);
             let rows = &projection.non_pitched_continuations;
             assert_eq!(rows.len(), 2);
@@ -14152,11 +14333,12 @@ mod tests {
         let xml = non_pitched_continuation_score(r#"<note><rest/><duration>96</duration><voice>1</voice><staff>1</staff></note>"#, 901);
         let plan = final_chord_finalize_bound_plan(&xml, Vec::new(), Vec::new(), false).unwrap();
         let missing = non_pitched_continuation_score("<forward><duration>96</duration></forward>", 901);
-        assert!(final_chord_non_pitched_continuations(&xml, &plan, &[], &missing).is_err());
+        let source = FinalChordBindingSource::parse(&xml).unwrap();
+        assert!(final_chord_non_pitched_continuations_from_measures(source.xml, &source.measures, &plan, &[], &missing).is_err());
         let extra = xml.replace("</measure>", "<note><rest/><duration>24</duration></note></measure>");
-        assert!(final_chord_non_pitched_continuations(&xml, &plan, &[], &extra).is_err());
+        assert!(final_chord_non_pitched_continuations_from_measures(source.xml, &source.measures, &plan, &[], &extra).is_err());
         let same_length_stale = xml.replace("<voice>1</voice>", "<voice>9</voice>");
-        assert!(final_chord_non_pitched_continuations(&xml, &plan, &[], &same_length_stale).is_err());
+        assert!(final_chord_non_pitched_continuations_from_measures(source.xml, &source.measures, &plan, &[], &same_length_stale).is_err());
         assert!(project_final_chord_encoding_plan_with_provenance(&extra, &plan).is_err());
     }
 

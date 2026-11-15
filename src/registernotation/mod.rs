@@ -2607,6 +2607,7 @@ mod pruefungen {
             cursor_min: 0,
             cursor_max,
             events,
+            covered_cross_staff_chord_members: Vec::new(),
         }
     }
 

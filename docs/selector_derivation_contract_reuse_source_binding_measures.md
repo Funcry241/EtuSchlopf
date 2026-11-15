@@ -1,0 +1,27 @@
+# Wiederverwendung der gebundenen MusicXML-Quelle
+
+SelectorDerivationContract: causal_class_first_v1
+SelectorChange: yes
+SelectorRole: repair_scope
+KnownWitnessUsedForFeatureDerivation: no
+TargetConditionedFeatureNarrowing: no
+ClassDefinitionPrecedesCorpusDistribution: yes
+UniquenessIsOutcomeNotGoal: yes
+RepairSelectorSeparatedFromErrorClass: yes
+CausalFeatureNecessityReview: complete
+CorpusDistributionPurpose: measurement_only
+CorpusDistributionMayRefineClassToKnownWitness: no
+MultiplicityInvarianceContract: candidate_duplication_v1
+IndependentCandidateDuplicationInvariant: yes
+ScorewideMultiplicityAsWriteAuthority: forbidden
+GlobalRankingOfIndependentCandidates: forbidden
+MultiplicityDecisionScope: local_candidate_or_explicit_conflict_group
+CandidateDuplicationProbe: required_before_productive_write
+ParentErrorClassContract: docs/selector_derivation_contract_semantic_obligation_accounting_failure.md
+ScopeNarrowingBasis: authority_or_safety_only
+DiscriminativeContextOnlyNarrowing: forbidden
+CausalFeature: pitched and non-pitched provenance consume the binding measures of the same immutable original MusicXML
+CausalFeature: a reused source binding carries the exact input slice so offsets and continuation checks stay in their original byte domain
+NonCausalContextExcluded: work, measure address, pitch, staff, voice, corpus prevalence and elapsed time
+
+Der Bindungs-Owner gibt die bereits eingelesenen Takte an beide Herkunftsprüfungen weiter. Wiederverwendung setzt dieselbe unveränderliche Quellreferenz voraus. Die Prüfungen für Tonfragmente, Pausen, Cursorbewegungen und das tatsächlich geschriebene MusicXML bleiben bestehen.

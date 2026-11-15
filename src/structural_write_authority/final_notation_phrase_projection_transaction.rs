@@ -118,6 +118,7 @@ struct ResolvedPhraseSlur {
     end_note_end: usize,
     number: usize,
     crosses_system: bool,
+    above: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -424,6 +425,7 @@ fn build_phrase_slur_edit_plan_with_course(
 
     let notes = parse_render_note_events(source_xml);
     let system_starts = collect_system_start_ordinals(source_xml);
+    let pickup = super::phrase_notation_policy::select_connected_pickup_phrase(source_xml)?;
     let mut resolved = Vec::<ResolvedPhraseSlur>::new();
 
     for (intent_index, intent) in intents.iter().enumerate() {
@@ -483,6 +485,10 @@ fn build_phrase_slur_edit_plan_with_course(
             end_note_end: end_note.note_end,
             number: 0,
             crosses_system: crosses_materialized_system(intent, &system_starts),
+            above: pickup.as_ref().is_some_and(|(_, start, end)| {
+                *start == (start_note.note_start..start_note.note_end)
+                    && *end == (end_note.note_start..end_note.note_end)
+            }),
         });
     }
 
@@ -542,25 +548,25 @@ fn build_phrase_slur_edit_plan_with_course(
         return Ok(None);
     }
 
-    let mut marker_map = BTreeMap::<usize, (usize, Vec<(bool, usize)>)>::new();
+    let mut marker_map = BTreeMap::<usize, (usize, Vec<(bool, usize, bool)>)>::new();
     let mut expected_pairs = BTreeMap::<usize, usize>::new();
     for candidate in &numbered {
         marker_map
             .entry(candidate.start_note_start)
             .or_insert_with(|| (candidate.start_note_end, Vec::new()))
             .1
-            .push((true, candidate.number));
+            .push((true, candidate.number, candidate.above));
         marker_map
             .entry(candidate.end_note_start)
             .or_insert_with(|| (candidate.end_note_end, Vec::new()))
             .1
-            .push((false, candidate.number));
+            .push((false, candidate.number, false));
         *expected_pairs.entry(candidate.number).or_insert(0) += 1;
     }
 
     let mut insertions = Vec::<PhraseSlurInsertion>::new();
     for (note_start, (note_end, mut markers)) in marker_map {
-        markers.sort_by_key(|(start, number)| (if *start { 1usize } else { 0usize }, *number));
+        markers.sort_by_key(|(start, number, _)| (if *start { 1usize } else { 0usize }, *number));
         let fragment = source_xml
             .get(note_start..note_end)
             .ok_or_else(|| anyhow::anyhow!("phrase-slur anchor fragment escaped source bounds"))?;
@@ -799,16 +805,17 @@ fn render_note_fingerprint(notes: &[RenderNoteEvent]) -> Vec<RenderNoteFingerpri
 fn slur_insertion_for_note(
     note_start: usize,
     fragment: &str,
-    markers: &[(bool, usize)],
+    markers: &[(bool, usize, bool)],
 ) -> Option<PhraseSlurInsertion> {
     if fragment.contains("<slur") {
         return None;
     }
     let marker_text = markers
         .iter()
-        .map(|(start, number)| {
+        .map(|(start, number, above)| {
+            let placement = if *above { " placement=\"above\"" } else { "" };
             format!(
-                "          <slur type=\"{}\" number=\"{}\"/>\n",
+                "          <slur type=\"{}\" number=\"{}\"{placement}/>\n",
                 if *start { "start" } else { "stop" },
                 number,
             )

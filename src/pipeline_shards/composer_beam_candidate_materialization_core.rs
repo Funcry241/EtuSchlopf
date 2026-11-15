@@ -31,9 +31,13 @@ fn partial_beat_insert_beam_text_tags(note_text: &str, states: &[(usize, String)
             .filter_map(|marker| note_text.find(marker))
             .min()
             .unwrap_or(close_pos);
+        // Reuse indentation only if the anchor starts its own line. A compact
+        // tail can carry tie, voice, type or staff on that same line.
         let insert_pos = note_text[..insert_pos]
             .rfind('\n')
-            .map_or(insert_pos, |line_break| line_break + 1);
+            .map(|line_break| line_break + 1)
+            .filter(|&line_start| note_text[line_start..insert_pos].trim().is_empty())
+            .unwrap_or(insert_pos);
         let mut beams = String::new();
         let mut ordered = states.to_vec();
         ordered.sort_by_key(|(level, _)| *level);

@@ -16,13 +16,13 @@ Leg beide Dateien in denselben Ordner und zieh die MIDI-Datei auf EtuSchlopf. **
 
 Der Name darf dich zum Schmunzeln bringen. Die Mathematik dahinter nehmen wir ernst. Probier EtuSchlopf mit deinem eigenen Stück aus oder schau dir an, wie es arbeitet. [Die Mathematik hinter EtuSchlopf](docs/MATHEMATIK.md)
 
-**[Windows-EXE herunterladen · Testversion r1792](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1792-windows-preview/EtuSchlopf-Windows-x64.exe)** · [Vorherige Testversion r1749](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1749-windows-preview)
+**[Windows-Testversion r1872 · EXE und Startbeispiel](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1872-windows-preview)** · [Windows-Testversion r1792](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1792-windows-preview)
 
 Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI und WAV als Eingabe
 
-Der Quellstand auf `main` ist **r1792**. Der Windows-Lauf für Chopin op. 10 Nr. 3, p01 endete mit Exitcode 0, ohne Warnungen und mit 100 % Notenerhalt. Build, Strict Clippy, 3.066 Tests und PDF-Export bestanden. Vier Tests waren ignoriert. [Stand und Prüfumfang](docs/evidence/r1792/README.md)
+Der Quellstand auf `main` ist **r1872**. Der Windows-Einzellauf für Schubert D. 783 Nr. 15, p18 endete mit Exitcode 0, ohne Warnungen und mit 100 % Notenerhalt. Build, Strict Clippy, 3.097 Tests und PDF-Freigabe bestanden. Vier Tests waren ignoriert. [Stand und Prüfumfang](docs/evidence/r1872/README.md)
 
-[Versionshinweise und Prüfsumme](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1792-windows-preview) ·
+[Versionshinweise und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1872-windows-preview) ·
 [Erstes Stück](#dein-erstes-stück) · [Grenzen der Testversion](#aktueller-stand) ·
 [Technische Dokumentation](docs/DEVELOPMENT.md) · [Mathematik dahinter](docs/MATHEMATIK.md)
 
@@ -30,15 +30,15 @@ Der Quellstand auf `main` ist **r1792**. Der Windows-Lauf für Chopin op. 10 Nr.
 
 ## Ein Blick auf die Noten
 
-Die beiden Referenzen zeigen den von EtuSchlopf erzeugten Notensatz. Beide Vorschauen öffnen das jeweilige PDF.
+Die drei Vorschauen öffnen die von EtuSchlopf erzeugten Noten-PDFs.
 
-| Johann Sebastian Bach | Frédéric Chopin |
-| :---: | :---: |
-| **Fuge c-Moll, BWV 847** | **Etüde E-Dur, op. 10 Nr. 3 · Aufführung p01** |
-| [![Ausschnitt aus der Fuge BWV 847](docs/images/bwv847-fuge-r1749-ausschnitt.png)](docs/examples/bwv847-fuge-r1749.pdf) | [![Ausschnitt aus Chopins Etüde op. 10 Nr. 3](docs/images/chopin-op10-no3-p01-r1792-ausschnitt.png)](docs/examples/chopin-op10-no3-p01-r1792.pdf) |
-| Windows-Lauf r1749 · [PDF, 4 Seiten](docs/examples/bwv847-fuge-r1749.pdf) · [Prüfbelege](docs/evidence/r1749/README.md) | Windows-Lauf r1792 · [PDF, 1 Seite](docs/examples/chopin-op10-no3-p01-r1792.pdf) · [Prüfbelege](docs/evidence/r1792/README.md) |
+| Johann Sebastian Bach | Frédéric Chopin | Franz Schubert |
+| :---: | :---: | :---: |
+| Fuge c-Moll, BWV 847 | Etüde E-Dur, op. 10 Nr. 3 · p01 | Deutscher Tanz As-Dur, D. 783 Nr. 15 · p18 |
+| [![Notenausschnitt Bach](docs/images/bwv847-fuge-r1749-ausschnitt.png)](docs/examples/bwv847-fuge-r1749.pdf) | [![Notenausschnitt Chopin](docs/images/chopin-op10-no3-p01-r1792-ausschnitt.png)](docs/examples/chopin-op10-no3-p01-r1792.pdf) | [![Notenausschnitt Schubert](docs/images/schubert-d783-no15-p18-r1872-ausschnitt.png)](docs/examples/schubert-d783-no15-p18-r1872.pdf) |
+| [Windows r1749](docs/evidence/r1749/README.md) | [Windows r1792](docs/evidence/r1792/README.md) | [Windows r1872](docs/evidence/r1872/README.md) |
 
-Die Chopin-Referenz ist ein eingespielter Ausschnitt aus Werner Goebls *Vienna 4x22 Piano Corpus* (mdw, 2017). MIDI und WAV stammen aus derselben Aufführung. EtuSchlopf erhielt im Windows-Lauf **100 % der Noten** und erzeugte das PDF **ohne Warnungen**. Die genaue Zeitzuordnung zwischen MIDI und WAV bleibt offen. Das PDF und die Vorschau sind aus der Einspielung erzeugte Ausgaben. [Korpus und DOI](https://doi.org/10.21939/4X22) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) · [Namensnennung](docs/THIRD_PARTY_NOTICES.md#chopin-etüde-e-dur-op-10-nr-3-aufführung-p01)
+[Alle Notenbilder, Druckvorlagen und Lizenzen](docs/examples/README.md#notenbilder)
 
 Das Projekt ist experimentell und privat gepflegt. Prüfe am eigenen Stück,
 ob dir die Fassung bei der weiteren Arbeit hilft. Musikalische Nachbearbeitung
@@ -46,7 +46,7 @@ kann erforderlich sein.
 
 ## Dein erstes Stück
 
-**[Kleines Startbeispiel herunterladen](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1792-windows-preview/EtuSchlopf-Beispiel-r1792.zip)** – synthetisches MIDI/WAV-Paar mit der PDF, die die veröffentlichte r1792-EXE daraus erzeugt hat.
+**[Kleines Startbeispiel und Windows-EXE](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1872-windows-preview)**. Das Startbeispiel enthält ein synthetisches MIDI/WAV-Paar und die daraus erzeugte PDF.
 
 1. Lade die Windows-EXE herunter. Für die PDF-Ausgabe brauchst du außerdem **[MuseScore](https://musescore.org/de/download)**.
 2. Lege MIDI und WAV in denselben Ordner. Die Namen vor der Dateiendung müssen übereinstimmen: `Mein Stück.mid` und `Mein Stück.wav`.
@@ -90,26 +90,21 @@ Laufbericht zusammentragen. Unbekannte technische Angaben kannst du offenlassen.
 
 ## Aktueller Stand
 
-Die Windows-Testversion enthält **Engine r1792 / 0.10.1839** und den
+Die Windows-Testversion enthält **Engine r1872 / 0.10.1839** und den
 eigenständigen Windows-Starter. Unterstützt sind 2/4, 3/4 und 4/4 sowie
 Taktwechsel an Taktgrenzen. Andere Taktarten, Triolen und Wechsel mitten
 im Takt bleiben offen.
 
 Der Paketlauf prüft den isolierten Start ohne Entwickler-PATH und rendert
 das synthetische MIDI/WAV-Startbeispiel mit MuseScore. Die
-[Versionshinweise und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1792-windows-preview)
-verlinken den Paketlauf. Die native musikalische Abnahme dokumentiert
-BWV 847. Prüfe Lesbarkeit und Spielbarkeit am eigenen Stück.
+[Versionshinweise und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1872-windows-preview)
+verlinken den Paketlauf. Die [native musikalische Abnahme](docs/evidence/r1872/README.md) dokumentiert den Schubert-Einzellauf. Prüfe Lesbarkeit und Spielbarkeit am eigenen Stück.
 
 ## Quellstand und Beiträge
 
-Auf `main` liegt der veröffentlichte Quellstand **r1792 / 0.10.1839**. Der [Windows-Prüfstand r1792](docs/evidence/r1792/README.md) dokumentiert den Chopin-Lauf. Der historische [Vollkorpuslauf r1684](docs/evidence/r1684/README.md) umfasst zehn Etüden.
+Auf `main` liegt der veröffentlichte Quellstand **r1872 / 0.10.1839**. Der [Windows-Prüfstand r1872](docs/evidence/r1872/README.md) dokumentiert den Schubert-Lauf. Der historische [Vollkorpuslauf r1684](docs/evidence/r1684/README.md) umfasst zehn Etüden.
 
-Die Download-Engine wurde aus dem angenommenen nativen Stand **r1792** gebaut.
-Der [zum geprüften Build gehörende r1792-Quellbaum](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1792-windows-preview/EtuSchlopf-r1792-source.zip)
-und das Dateiprüfsummen-Manifest stehen beim Release bereit. Für den exakten
-Engine-Build ist dieser Snapshot maßgeblich; der zugehörige Prüfzweig enthält
-den Starter und die Skripte zur vollständigen Rekonstruktion und Verifikation.
+Der [Windows-Release](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1872-windows-preview) enthält den Quellbaum des Paketlaufs und seine Prüfsummen.
 
 Für die Arbeit am Quellcode gelten die [technische Referenz](docs/DEVELOPMENT.md)
 und die [Beitragsregeln](docs/CONTRIBUTING.md). Der [Dokumentationswegweiser](docs/README.md)
@@ -124,4 +119,4 @@ Meldung und – bei einem Notationsfehler – die betroffene Stelle.
 
 ## Lizenz
 
-Der eigene EtuSchlopf-Code steht unter der [MIT-Lizenz](LICENSE). Für Fremdkomponenten gelten die jeweiligen Lizenzbedingungen. Die externe Chopin-Referenz (WAV und MIDI) steht unter CC BY 4.0. [Fremdkomponenten, Referenzdaten und Namensnennung](docs/THIRD_PARTY_NOTICES.md).
+Der eigene EtuSchlopf-Code steht unter der [MIT-Lizenz](LICENSE). Für Fremdkomponenten gelten die jeweiligen Lizenzbedingungen. [Fremdkomponenten](docs/THIRD_PARTY_NOTICES.md) · [Musikreferenzen und Namensnennung](docs/examples/README.md#quellen-und-rechte).

@@ -457,6 +457,45 @@ fn simultaneous_sustains_keep_one_attack_each_across_a_barline() {
 }
 
 #[test]
+fn last_attack_keeps_its_exact_release_across_a_barline() {
+    let metric = MetricTimeline::from_written_meter(2, 48, 624).unwrap();
+    let notes = [
+        MidiSeedNote { midi: 77, len: 192, ..note(0, 0, 1) },
+        MidiSeedNote { midi: 65, len: 48, ..note(1, 192, 1) },
+        MidiSeedNote { midi: 74, len: 192, ..note(2, 384, 1) },
+        MidiSeedNote { midi: 67, len: 48, ..note(3, 576, 1) },
+    ];
+    let mut plan = MidiSeedRhythmicCourses::create_metric_presentations(&notes, &metric, None, true)
+        .unwrap();
+    let (xml, _, attacks) = build_musicxml("Synthetic", &notes, metric.len(), &mut plan, None)
+        .unwrap();
+    assert_eq!(attacks.len(), notes.len());
+    for (source, start, boundary, release) in [(0, 0, 48, 192), (2, 384, 432, 576)] {
+        let fragments = plan.planned.iter().filter(|fragment| fragment.source == Some(source))
+            .map(|fragment| (fragment.interval.clone(), fragment.tie_start, fragment.tie_stop))
+            .collect::<Vec<_>>();
+        assert_eq!(fragments, [(start..boundary, true, false), (boundary..release, false, true)]);
+    }
+    plan.validate_seed_binding(&xml).unwrap();
+    let arrangement = crate::arrangement::arrange_piano_musicxml_with_profile(
+        &xml,
+        crate::arrangement::ArrangementProfile {
+            rhythmic_courses: Some(&plan),
+            preserve_reference: true,
+            ..Default::default()
+        },
+    );
+    let arranged = crate::musicxml::parse_musicxml(&arrangement.xml).unwrap();
+    for (bar, pitch) in [(1, 77), (3, 74)] {
+        let duration: i64 = arranged.parts[0].measures[bar].events.iter()
+            .filter(|event| event.tie_stop && event.pitch.as_ref().is_some_and(|p| p.midi == pitch))
+            .map(|event| event.duration)
+            .sum();
+        assert_eq!(duration, 144);
+    }
+}
+
+#[test]
 fn simultaneous_upper_notes_keep_distinct_releases() {
     let metric = MidiSeedRhythmicCourses::create_primary_presentations(&[], 2, 192).unwrap().metric;
     let notes = [
@@ -617,4 +656,226 @@ fn attack_preserving_seed_commits_the_feasible_onset_split_directly() {
     );
     assert_eq!(notes, expected);
     assert_eq!(decisions.len(), 1);
+}
+
+#[test]
+fn repeated_accompaniment_hand_preserves_attacks_and_refuses_conflicts() {
+    let chord = [
+        MidiSeedNote { midi: 52, len: 72, ..note(0, 72, 2) },
+        MidiSeedNote { midi: 61, len: 72, ..note(1, 72, 1) },
+        MidiSeedNote { midi: 52, len: 48, ..note(2, 144, 2) },
+        MidiSeedNote { midi: 61, len: 48, ..note(3, 144, 2) },
+        MidiSeedNote { midi: 69, len: 120, ..note(4, 48, 1) },
+    ];
+    let surrounding = [
+        MidiSeedNote { midi: 45, len: 12, ..note(5, 120, 2) },
+        MidiSeedNote { midi: 52, len: 72, ..note(5, 0, 1) },
+        MidiSeedNote { midi: 61, len: 72, ..note(6, 0, 1) },
+    ];
+    let copy = chord.iter().map(|n| MidiSeedNote {
+        source_ordinal: n.source_ordinal + chord.len(),
+        pos: n.pos + 384,
+        midi: n.midi + 4,
+        ..*n
+    });
+    let mut notes: Vec<_> = chord.into_iter().chain(copy).collect();
+    let mut trace = Vec::new();
+    restore_repeated_accompaniment_hand(&mut notes, &mut trace);
+    assert_eq!(notes[1].staff, 2);
+    assert_eq!(notes[6].staff, 2);
+    assert_eq!(trace.len(), 2);
+    assert!(trace.iter().all(|decision| decision.pass == SourceSelectionDecisionPass::RepeatedAccompanimentHand));
+    assert_eq!((notes[1].pos, notes[1].len, notes[1].midi), (72, 72, 61));
+
+    for extra in [&surrounding[..1], &surrounding[1..]] {
+        let mut notes: Vec<_> = chord.into_iter().chain(extra.iter().copied()).collect();
+        restore_repeated_accompaniment_hand(&mut notes, &mut Vec::new());
+        assert_eq!(notes[1].staff, 1);
+    }
+    let mut different_release = chord;
+    different_release[1].len -= 12;
+    restore_repeated_accompaniment_hand(&mut different_release, &mut Vec::new());
+    assert_eq!(different_release[1].staff, 1);
+}
+
+#[test]
+fn initial_split_keeps_held_keys_in_the_hand_geometry() {
+    let metric = MetricTimeline::from_midi(
+        crate::midi::source_time::SourceTimeDomain { source_ppq: 96, divisions: 96 },
+        &[],
+        768,
+    ).unwrap();
+    let profile = CandidateProfile::span12();
+    let fixture = [
+        (0, 41, 2, 48), (0, 65, 1, 24),
+        (24, 56, 2, 24), (24, 63, 1, 24),
+        (48, 56, 2, 24), (48, 63, 1, 24),
+    ];
+    let duplicated = fixture.into_iter().chain(fixture.map(|(onset, pitch, staff, length)| {
+        (onset + 384, pitch + 2, staff, length)
+    })).collect::<Vec<_>>();
+    let mut notes = jump_fixture(&duplicated);
+    let source = notes.clone();
+    let mut decisions = Vec::new();
+    redistribute_midi_seed_hands_for_piano(&metric, &mut notes, &profile, None, true, &mut decisions);
+
+    let mut expected = source;
+    expected[2].staff = 1;
+    expected[8].staff = 1;
+    assert_eq!(notes, expected);
+    assert_eq!(decisions.iter().map(|decision| (decision.source_ordinal, decision.observed_primary))
+        .collect::<Vec<_>>(), vec![(2, 15), (8, 15)]);
+}
+
+#[test]
+fn tied_chord_stays_together_on_the_continuing_melodic_course() {
+    let metric = MidiSeedRhythmicCourses::create_primary_presentations(&[], 4, 192).unwrap().metric;
+    let fixture = [
+        (96, 79, 1, 120), (96, 75, 1, 120), (96, 64, 1, 24), (120, 67, 1, 24),
+        (192, 65, 1, 24), (216, 81, 1, 24), (216, 69, 1, 24),
+        (240, 81, 1, 24), (240, 67, 1, 24), (264, 79, 1, 24), (264, 65, 1, 24),
+    ];
+    let duplicate = fixture.map(|(pos, pitch, staff, len)| (pos + 384, pitch - 2, staff, len));
+    let notes = jump_fixture(&[fixture, duplicate].concat());
+    let mut plan = MidiSeedRhythmicCourses::create_metric_presentations(&notes, &metric, None, true).unwrap();
+    let (xml, _, attacks) = build_musicxml("Synthetic", &notes, 4, &mut plan, None).unwrap();
+    plan.validate_seed_binding(&xml).unwrap();
+    assert_eq!(attacks.len(), notes.len());
+    assert_eq!(plan.source_voice_continuation_slots().len(), 4);
+    for (source, start) in [(0, 192), (fixture.len(), 576)] {
+        let tails = plan.planned.iter().filter(|note| note.tie_stop && note.interval.start == start)
+            .map(|note| (note.source, note.chord, note.independent, note.interval.end)).collect::<Vec<_>>();
+        assert_eq!(tails, [
+            (Some(source + 1), false, false, start + 24),
+            (Some(source), true, false, start + 24),
+        ]);
+        let melodic_attacks = plan.planned.iter().filter(|note| {
+            !note.independent && !note.tie_stop && note.source.is_some()
+                && (start..start + 96).contains(&note.interval.start)
+        }).map(|note| note.source.unwrap()).collect::<Vec<_>>();
+        assert_eq!(melodic_attacks, [source + 5, source + 7, source + 9]);
+    }
+}
+
+#[test]
+fn a_single_tied_tail_joins_the_melody_over_a_complete_lower_course() {
+    let metric = MidiSeedRhythmicCourses::create_primary_presentations(&[], 2, 192)
+        .unwrap()
+        .metric;
+    let mut notes = jump_fixture(&[
+        (96, 81, 1, 120),
+        (96, 66, 1, 48),
+        (144, 68, 1, 48),
+        (192, 70, 1, 24),
+        (216, 79, 1, 24),
+        (216, 71, 1, 24),
+        (240, 77, 1, 48),
+        (240, 69, 1, 48),
+    ]);
+
+    for compatible in [true, false] {
+        if !compatible {
+            notes[5].len = 12;
+        }
+        let mut plan = MidiSeedRhythmicCourses::create_metric_presentations(
+            &notes, &metric, None, true,
+        ).unwrap();
+        let (xml, _, attacks) = build_musicxml("Synthetic", &notes, 2, &mut plan, None).unwrap();
+        let tail = plan.planned.iter().find(|occurrence| occurrence.tie_stop).unwrap();
+        assert_eq!(tail.source, Some(0));
+        assert_eq!(tail.interval, 192..216);
+        assert_eq!(tail.independent, !compatible);
+        if compatible {
+            for source in [3, 5, 7] {
+                let lower = plan.planned.iter()
+                    .find(|occurrence| occurrence.source == Some(source)).unwrap();
+                assert!(lower.independent && lower.opposite_stem);
+            }
+            for source in [4, 6] {
+                let melody = plan.planned.iter()
+                    .find(|occurrence| occurrence.source == Some(source)).unwrap();
+                assert!(!melody.independent && !melody.chord);
+            }
+        }
+        assert_eq!(attacks.len(), notes.len());
+        plan.validate_seed_binding(&xml).unwrap();
+    }
+}
+
+#[test]
+fn independent_accompaniment_keeps_its_playing_hand_across_staff_projection() {
+    let figure = [
+        (96, 65, 1, 120),
+        (96, 54, 1, 48),
+        (144, 56, 1, 48),
+        (192, 55, 1, 24),
+        (216, 64, 1, 24),
+        (216, 57, 1, 24),
+        (240, 62, 1, 48),
+        (240, 55, 1, 48),
+        (288, 64, 1, 96),
+        (192, 36, 2, 96),
+        (288, 43, 2, 96),
+    ];
+    for copies in [1, 2] {
+        let notes = jump_fixture(&(0..copies).flat_map(|copy| {
+            figure.map(|(time, pitch, staff, duration)| (time + copy * 384, pitch, staff, duration))
+        }).collect::<Vec<_>>());
+        let measures = usize::try_from(copies * 2).unwrap();
+        let metric = MidiSeedRhythmicCourses::create_primary_presentations(&[], measures, 192)
+            .unwrap().metric;
+        let mut plan = MidiSeedRhythmicCourses::create_metric_presentations(&notes, &metric, None, true)
+            .unwrap();
+        let (xml, _, _) = build_musicxml("Synthetic", &notes, measures, &mut plan, None).unwrap();
+        let arranged = crate::arrangement::arrange_piano_musicxml_with_profile(
+            &xml, crate::arrangement::ArrangementProfile {
+                rhythmic_courses: Some(&plan),
+                preserve_reference: true,
+                ..Default::default()
+            },
+        );
+        let mut score = crate::musicxml::parse_musicxml(&arranged.xml).unwrap();
+        let written = arranged.stats.rhythmic_courses.as_ref().unwrap()
+            .written_staff_only_events(&score).unwrap();
+        assert_eq!(written.len(), usize::try_from(copies).unwrap());
+        let options = crate::rules::CheckOptions { strict: true };
+        let hand_warnings = |report: &crate::model::CheckReport| {
+            report.issues.iter().filter(|issue| issue.issue_type == "PIANO_HAND_SPAN_LARGE").count()
+        };
+        assert!(hand_warnings(&crate::rules::run_checks(&score, &options)) > 0);
+        let actual = crate::rules::run_checks_with_written_staff(&score, &options, false, &written);
+        assert_eq!(actual.summary.blockers, 0);
+        assert!(hand_warnings(&actual) < hand_warnings(&crate::rules::run_checks(&score, &options)));
+        let index = *written[&2].first().unwrap() - 1;
+        let event = &mut score.parts[0].measures[1].events[index];
+        event.pitch = Some(crate::model::Pitch::new("C".into(), 0, 7));
+        assert!(hand_warnings(&crate::rules::run_checks_with_written_staff(
+            &score, &options, false, &written,
+        )) > hand_warnings(&actual));
+    }
+}
+
+#[test]
+fn adjacent_split_keeps_the_upper_line_and_its_metric_release() {
+    let metric = MetricTimeline::from_written_meter(2, 0, 192).unwrap();
+    let profile = CandidateProfile::span12();
+    let source = jump_fixture(&[
+        (48, 42, 2, 24), (48, 58, 2, 24),
+        (72, 53, 2, 24), (72, 59, 2, 24),
+        (96, 48, 2, 24), (120, 65, 1, 24),
+    ]);
+    for (step, expected_staff) in [(59, 1), (63, 2)] {
+        let mut notes = source.clone();
+        notes[3].midi = step;
+        let mut decisions = Vec::new();
+        redistribute_midi_seed_hands_for_piano(&metric, &mut notes, &profile, None, true, &mut decisions);
+        assert_eq!(notes[3].staff, expected_staff);
+        assert_eq!(notes[3].len, 24);
+        if expected_staff == 1 {
+            let plan = MidiSeedRhythmicCourses::create_metric_presentations(&notes, &metric, None, true).unwrap();
+            let note = plan.planned.iter().find(|note| note.source == Some(3)).unwrap();
+            assert_eq!(note.interval, 72..96);
+            assert!(!note.tie_start);
+        }
+    }
 }

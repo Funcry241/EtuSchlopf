@@ -307,14 +307,14 @@ const _: () = assert!(DESTRUCTIVE_TRANSFORMATION_EXCLUSIONS_V1_FNV1A64 == 0x2fa1
 const _: () = assert!(DESTRUCTIVE_TRANSFORMATION_SURFACE_BASELINE_V1_FNV1A64 == 0xcc02d2ddd91aa3dc);
 const _: () = assert!(THIRTY_SURFACE_BATCH_SCAN_FNV1A64 == 0xf7cb74bb1ed893ec);
 const _: () = assert!(KODEX_GATE_CORE_OWNERSHIP_FNV1A64 == 0xa928770e3293682a);
-const _: () = assert!(TAKE_BOOTSTRAP_FNV1A64 == 0x2220c1fb22f6fb2c);
-const _: () = assert!(LAUNCHER_FNV1A64 == 0x6ed59e5b928f8d8c);
+const _: () = assert!(TAKE_BOOTSTRAP_FNV1A64 == 0x27b08e1c9eee388c);
+const _: () = assert!(LAUNCHER_FNV1A64 == 0xbbddf6d9d946ee41);
 const _: () = assert!(LAUNCHER_ASSISTANT_EXPORT_FNV1A64 == 0xab2690e552cd2391);
 const _: () = assert!(LAUNCHER_INVENTORY_EXPORT_FNV1A64 == 0x633282e2d752a97e);
 const _: () = assert!(LAUNCHER_NEURO_EVIDENCE_EXPORT_FNV1A64 == 0x15ccc748a3a502bd);
 const _: () = assert!(PUBLIC_ARTIFACT_RECOVERY_FNV1A64 == 0x6e8088e300ca8a66);
 const _: () = assert!(FORMAL_GREEN_CONTRACT_FNV1A64 == 0xd59a1810a0692951);
-const _: () = assert!(RUN_CMD_FNV1A64 == 0x3dfb3ce26934c140);
+const _: () = assert!(RUN_CMD_FNV1A64 == 0x39e8ace2dee3a3d0);
 
 pub fn append_identity_gate_trust_anchor_section(out: &mut String) {
     crate::push_static_section_header_v793(
@@ -497,10 +497,10 @@ const _: () = assert!(SSC_CONTRACT_6_FNV1A64 == 0x2d1738807d14f4ce);
 // r1242 compiled governance additions
 const K2_CLOSED_0_BYTES: &[u8] = include_bytes!("build_gate/ssc_k2_retirement_governance.rs");
 const K2_CLOSED_0_FNV1A64: u64 = fnv1a64(K2_CLOSED_0_BYTES);
-const _: () = assert!(K2_CLOSED_0_FNV1A64 == 0xd9f0e5e72571174d);
+const _: () = assert!(K2_CLOSED_0_FNV1A64 == 0x55f27fdeb003f252);
 const K2_CLOSED_1_BYTES: &[u8] = include_bytes!("build_gate/ssc_k2_retirement_governance_tests.rs");
 const K2_CLOSED_1_FNV1A64: u64 = fnv1a64(K2_CLOSED_1_BYTES);
-const _: () = assert!(K2_CLOSED_1_FNV1A64 == 0xaef87c8abd65dd05);
+const _: () = assert!(K2_CLOSED_1_FNV1A64 == 0x1476dab404b2232c);
 const K2_CLOSED_2_BYTES: &[u8] = include_bytes!("build_gate/ssc_structural_erasure.rs");
 const K2_CLOSED_2_FNV1A64: u64 = fnv1a64(K2_CLOSED_2_BYTES);
 const _: () = assert!(K2_CLOSED_2_FNV1A64 == 0x0b85f088d45e4e26);
@@ -575,7 +575,7 @@ const _: () = assert!(CURSOR_TEMPORAL_RETIREMENT_FNV1A64 == 0x58934073f3dac6ec);
 
 
 const CHECKPOINT58_PREPARE_BYTES: &[u8] = include_bytes!("build_gate/render_checkpoint_prepare_kodex.rs");
-const _: () = assert!(fnv1a64(CHECKPOINT58_PREPARE_BYTES) == 0x0c17e383082021ec);
+const _: () = assert!(fnv1a64(CHECKPOINT58_PREPARE_BYTES) == 0x1dc9cf1cbee357a0);
 const CHECKPOINT58_HISTORICAL_ADOPTION: &[u8] = include_bytes!("build_gate/ssc_test_fixture_r1449_render_adopted_state.txt");
 const _: () = assert!(fnv1a64(CHECKPOINT58_HISTORICAL_ADOPTION) == 0x51997746bec0b556);
 

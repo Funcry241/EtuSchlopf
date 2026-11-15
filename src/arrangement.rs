@@ -5,7 +5,8 @@
     pub(crate) mod representation_transport;
     #[path = "arrangement_rhythmic_courses.rs"]
     mod rhythmic_courses;
-    use rhythmic_courses::{ArrangementRhythmicCourses, CourseMeasure};
+    use rhythmic_courses::{ArrangementRhythmicCourses, CourseMeasure, CourseOccurrence, CreationEdge};
+    use crate::midi_seed::{MidiSeedRhythmicCourses, RhythmicCreationIdentity};
     pub(crate) use rhythmic_courses::continuation::OwnedRhythmicContinuation;
     #[path = "physical_rhythmic_births.rs"]
     pub(crate) mod physical_births;
@@ -64,6 +65,7 @@
 
     #[derive(Debug, Clone, Default)]
     pub struct ArrangementStats {
+        
         pub(crate) rhythmic_courses: Option<std::sync::Arc<ArrangementRhythmicCourses>>,
         pub(crate) owned_rhythm: Option<std::sync::Arc<OwnedRhythmicContinuation>>,
         pub(crate) owned_rhythm_unknown: Option<String>,
@@ -148,9 +150,35 @@
         pub(crate) arrangement_source_genesis: Option<MasterGenesisIdentity>,
         pub(crate) visible_rhythm_block_identity: Option<BlockTransformationReceipt>,
     }
+    /// Reuse is local to one seed and one series of single-target trials.
+    pub(crate) struct HumanPotentialMeasureReuse<'a> {
+        xml: &'a str,
+        seed: &'a MidiSeedRhythmicCourses,
+        received: std::cell::OnceCell<ArrangementRhythmicCourses>,
+        measures: std::cell::RefCell<BTreeMap<usize, ArrangedMeasure>>,
+        hits: std::cell::Cell<usize>,
+    }
+
+    impl<'a> HumanPotentialMeasureReuse<'a> {
+        pub(crate) fn new(xml: &'a str, seed: &'a MidiSeedRhythmicCourses) -> Self {
+            Self { xml, seed, received: Default::default(), measures: Default::default(), hits: Default::default() }
+        }
+
+        pub(crate) fn hits(&self) -> usize { self.hits.get() }
+    }
+
+    #[derive(Clone)]
+    struct ArrangedMeasure {
+        xml: String,
+        stats: ArrangementStats,
+        occurrences: Vec<CourseOccurrence>,
+        history: BTreeMap<RhythmicCreationIdentity, CreationEdge>,
+    }
+
     #[derive(Clone, Copy, Default)]
     pub struct ArrangementProfile<'a> {
         pub(crate) rhythmic_courses: Option<&'a crate::midi_seed::MidiSeedRhythmicCourses>,
+        pub(crate) human_potential_measure_reuse: Option<&'a HumanPotentialMeasureReuse<'a>>,
         /// Wenn MIDI-Quellmaterial bzw. WAV-Referenzevidenz vorhanden ist, wird konservativer
         /// ausgedünnt: Die Fassung soll spielbar bleiben, aber den Klangcharakter
         /// der Quelle nicht unnötig verlieren.
@@ -288,10 +316,24 @@
     /// näher an eine spielbare Klavierfassung rückt.
     pub fn arrange_piano_musicxml_with_profile(xml: &str, profile: ArrangementProfile) -> ArrangementResult {
         let profile_contract = format!("{profile:?}");
-        let received_courses = profile.rhythmic_courses.map(|seed| {
-            ArrangementRhythmicCourses::receive(seed, xml)
-                .expect("Exact seed course custody at arrangement entry")
+        let reuse = profile.human_potential_measure_reuse.filter(|reuse| {
+            std::ptr::eq(reuse.xml, xml)
+                && profile.rhythmic_courses.is_some_and(|seed| std::ptr::eq(reuse.seed, seed))
+                && profile.preserve_reference
+                && profile.human_potential_enabled
+                && profile.human_potential_structural_target.is_some()
         });
+        // Receive the same immutable Seed custody once. Each output still
+        // builds and validates its own continuation and creation history.
+        let receive = |seed| ArrangementRhythmicCourses::receive(seed, xml)
+            .expect("Exact seed course custody at arrangement entry");
+        let received_for_call;
+        let received_courses = if let Some(reuse) = reuse {
+            Some(reuse.received.get_or_init(|| receive(reuse.seed)))
+        } else {
+            received_for_call = profile.rhythmic_courses.map(receive);
+            received_for_call.as_ref()
+        };
         let mut continued_occurrences = Vec::new();
         let mut creation_history = BTreeMap::new();
         let mut course_offset = 0;
@@ -321,17 +363,35 @@
             rhythm_context.physical_duration = profile.rhythmic_courses
                 .and_then(|seed| seed.physical_measure_duration(stats.measures_seen))
                 .or(rhythm_context.physical_duration);
-            let mut course_measure = received_courses.as_ref().map(|courses| {
-                courses.measure(measure_text, course_offset, rhythm_context.expected_duration())
-                    .expect("Complete received measure custody")
+            let ordinal = stats.measures_seen + 1;
+            let reuse = reuse.filter(|_| profile.human_potential_structural_target
+                .is_some_and(|target| target.measure_ordinal != ordinal));
+            let cached = reuse.and_then(|reuse| {
+                let cached = reuse.measures.borrow().get(&ordinal).cloned();
+                if cached.is_some() {
+                    reuse.hits.set(reuse.hits.get() + 1);
+                }
+                cached
             });
-            let (arranged, local) = arrange_measure(measure_text, profile, rhythm_context,
-                stats.measures_seen + 1, course_measure.as_mut());
-            if let Some(courses) = course_measure {
-                let (occurrences, history) = courses.take();
-                continued_occurrences.extend(occurrences);
-                creation_history.extend(history);
-            }
+            let arranged = cached.unwrap_or_else(|| {
+                let mut course_measure = received_courses.map(|courses| {
+                    courses.measure(measure_text, course_offset, rhythm_context.expected_duration())
+                        .expect("Complete received measure custody")
+                });
+                let (xml, stats) = arrange_measure(measure_text, profile, rhythm_context,
+                    ordinal, course_measure.as_mut());
+                let (occurrences, history) = course_measure.map(CourseMeasure::take).unwrap_or_default();
+                let arranged = ArrangedMeasure { xml, stats, occurrences, history };
+                // A measure with births needs a fresh execution for each candidate.
+                if let Some(reuse) = reuse
+                    && arranged.history.values().all(CreationEdge::is_received_root) {
+                    reuse.measures.borrow_mut().insert(ordinal, arranged.clone());
+                }
+                arranged
+            });
+            let ArrangedMeasure { xml: arranged, stats: local, occurrences, history } = arranged;
+            continued_occurrences.extend(occurrences);
+            creation_history.extend(history);
             course_offset += rhythm_context.expected_duration();
             stats.measures_seen += 1;
             stats.notes_seen += local.notes_seen;
@@ -439,11 +499,34 @@
             }
         }
     }
+    thread_local! {
+        static ATOMIC_CHORD_ONSET_REQUIRED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+
+    pub(crate) struct AtomicChordOnsetScope {
+        previous: bool,
+        same_thread: std::marker::PhantomData<std::rc::Rc<()>>,
+    }
+
+    impl Drop for AtomicChordOnsetScope {
+        fn drop(&mut self) {
+            ATOMIC_CHORD_ONSET_REQUIRED.with(|required| required.set(self.previous));
+        }
+    }
+
+    pub(crate) fn require_atomic_chord_onset(required: bool) -> AtomicChordOnsetScope {
+        AtomicChordOnsetScope {
+            previous: ATOMIC_CHORD_ONSET_REQUIRED.with(|current| current.replace(required)),
+            same_thread: std::marker::PhantomData,
+        }
+    }
+
     /// VisibleRhythmLedger v0.1.68: normalisiert eine bereits arrangierte oder
     /// atomar gepatchte MusicXML-Datei erneut auf sichtbare rhythmische Lesbarkeit.
     /// Das ist absichtlich separat von der Pianistik: erst wird repariert/normalisiert,
     /// danach darf der harte Validator blockieren.
     pub fn normalize_visible_rhythm_musicxml(xml: &str) -> ArrangementResult {
+        let preserve_chord_onsets = ATOMIC_CHORD_ONSET_REQUIRED.with(std::cell::Cell::get);
         let spans = find_measure_spans(xml);
         if spans.is_empty() {
             let visible_rhythm_block_identity = BlockTransformationReceipt::mint_block_receipt(
@@ -468,7 +551,7 @@
             out.push_str(&xml[last..span.start]);
             let measure_text = &xml[span.start..span.end];
             rhythm_context = rhythm_context.update_from_measure(measure_text);
-            let (rebuilt, ledger_stats) = apply_visible_rhythm_ledger(measure_text, rhythm_context, None, true);
+            let (rebuilt, ledger_stats) = apply_visible_rhythm_ledger(measure_text, rhythm_context, None, true, preserve_chord_onsets);
             births.append_measure(ledger_stats.births.clone(), span.start, out.len());
             stats.measures_seen += 1;
             stats.representation_lineage_rows.extend(
@@ -593,6 +676,11 @@
         } else {
             HumanPotentialSelection::default()
         };
+        let lower_presentation = if preserve_attacks && !bound_source_voices {
+            lower_opening_accompaniment(&metas, &raw_notes, &independent, rhythm_context.beat_duration())
+        } else {
+            BTreeSet::new()
+        };
         let human_potential_moves = human_potential.moves.clone();
         let human_potential_active = !human_potential_moves.is_empty();
         stats.human_potential_budget = human_potential.budget;
@@ -628,12 +716,13 @@
             // in v0.1.109 MEASURE_CURSOR_OVERFULL/RHYTHM_LEDGER-Blocker.
             let replaces_left_rest = false;
             let moved_by_human_potential = human_potential_moves.contains(&idx);
-            let arranged = if moved_by_human_potential {
+            let moved_for_presentation = lower_presentation.contains(&idx);
+            let arranged = if moved_for_presentation || moved_by_human_potential {
                 // v0.1.111: RestaffExistingOnly-Fix. Der vorhandene
                 // Stützton bleibt exakt an derselben MusicXML-Timeline-Position
                 // und wird nur auf das untere System geschrieben. Keine Duplikatnote,
                 // kein zusätzlicher backup/voice-Block, keine zusätzliche Dauer.
-                move_note_to_left_system_for_human_potential(&arranged)
+                move_note_to_left_system_for_human_potential(&arranged, moved_for_presentation)
             } else if replaces_left_rest {
                 // Die ursprünglichen Pausen der leeren linken Hand werden durch die
                 // neue HumanPotential-Stimme ersetzt. So erscheinen nicht zugleich
@@ -686,7 +775,7 @@
                 } else {
                     ArrangementMaterialDispositionKind::VisiblePitched
                 };
-                let projected_staff = if moved_by_human_potential {
+                let projected_staff = if moved_by_human_potential || moved_for_presentation {
                     2
                 } else {
                     match meta.staff {
@@ -695,7 +784,7 @@
                     }
                 };
                 if let Some(courses) = course_measure.as_deref_mut() {
-                    courses.disposition(idx, &arranged, disposition, projected_staff, moved_by_human_potential)
+                    courses.disposition(idx, &arranged, disposition, projected_staff, moved_by_human_potential || moved_for_presentation, moved_for_presentation)
                         .expect("Source-bound arrangement disposition");
                 }
                 stats
@@ -712,7 +801,7 @@
             last = note.end;
         }
         rebuilt.push_str(&text[last..]);
-        let (ledger_rebuilt, ledger_stats) = apply_visible_rhythm_ledger(&rebuilt, rhythm_context, course_measure, false);
+        let (ledger_rebuilt, ledger_stats) = apply_visible_rhythm_ledger(&rebuilt, rhythm_context, course_measure, false, false);
         rebuilt = ledger_rebuilt;
         stats.representation_lineage_rows.extend(
             ledger_stats
@@ -743,6 +832,56 @@
         }
         (rebuilt, stats)
     }
+    // The tied melody keeps its own cursor. Present a complete lower chord
+    // course above the bass when its written pitches lie closer to that staff.
+    fn lower_opening_accompaniment(
+        notes: &[NoteMeta],
+        raw: &[RawNote],
+        independent: &BTreeSet<usize>,
+        beat: i64,
+    ) -> BTreeSet<usize> {
+        use crate::clef_readability_observation::{observe_pitch, PianoClef};
+        let upper = |note: &&NoteMeta| note.staff == PianoStaff::Right && note.start < beat;
+        if !notes.iter().filter(upper).any(|note| {
+            note.start == 0 && !independent.contains(&note.raw_idx)
+                && raw[note.raw_idx].text.contains("<tie type=\"stop\"")
+        }) {
+            return BTreeSet::new();
+        }
+        let accompaniment = notes.iter().filter(upper)
+            .filter(|note| independent.contains(&note.raw_idx))
+            .collect::<Vec<_>>();
+        let mut end = 0;
+        let mut ledger_saving = 0;
+        let mut chord_head = None;
+        for note in &accompaniment {
+            let xml = &raw[note.raw_idx].text;
+            let (Some(midi), Some(pitch)) = (note.midi, observe_pitch(xml)) else {
+                return BTreeSet::new();
+            };
+            if note.duration == 0 || xml.contains("<tie")
+                || notes.iter().any(|other| {
+                    other.staff == PianoStaff::Left && other.start < note.start + note.duration
+                        && note.start < other.start + other.duration
+                        && (other.voice == note.voice || other.midi.is_some_and(|bass| bass >= midi))
+                })
+            {
+                return BTreeSet::new();
+            }
+            ledger_saving += PianoClef::TrebleG2.ledger_lines(pitch)
+                - PianoClef::BassF4.ledger_lines(pitch);
+            if note.is_chord {
+                if chord_head != Some((note.start, note.duration)) { return BTreeSet::new(); }
+            } else {
+                if note.start != end { return BTreeSet::new(); }
+                end += note.duration;
+                chord_head = Some((note.start, note.duration));
+            }
+        }
+        if end != beat || ledger_saving <= 0 { return BTreeSet::new(); }
+        accompaniment.iter().map(|note| note.raw_idx).collect()
+    }
+
     fn collect_note_metas(measure_text: &str, raw_notes: &[RawNote]) -> Vec<NoteMeta> {
         let mut infos = Vec::new();
         let metric = std::cell::OnceCell::new();
@@ -1993,7 +2132,7 @@
         out = sync_note_type_and_dots(&out);
         (out, changed)
     }
-    fn move_note_to_left_system_for_human_potential(note_text: &str) -> String {
+    fn move_note_to_left_system_for_human_potential(note_text: &str, separate_voice: bool) -> String {
         if note_text.contains("<rest") || note_text.contains("<rest/") {
             return note_text.to_string();
         }
@@ -2001,10 +2140,11 @@
         // Dadurch bleibt die MusicXML-Zeitachse exakt dieselbe; Voice 2 wird nicht
         // zusätzlich gefüllt und kann nicht überlaufen.
         let mut out = ensure_child_text_value_local(note_text, "staff", PianoStaff::Left.number());
+        let stem = if separate_voice { "up" } else { PianoStaff::Left.stem() };
         if contains_simple_tag(&out, "stem") {
-            out = ensure_child_text_value_local(&out, "stem", PianoStaff::Left.stem());
+            out = ensure_child_text_value_local(&out, "stem", stem);
         } else if contains_simple_tag(&out, "type") {
-            out = insert_after_type_or_before_end(&out, &format!("    <stem>{}</stem>\n", PianoStaff::Left.stem()));
+            out = insert_after_type_or_before_end(&out, &format!("    <stem>{stem}</stem>\n"));
         }
         out
     }
@@ -2131,11 +2271,11 @@
             .filter_map(|(voice, staffs)| if staffs.len() > 1 { Some(voice) } else { None })
             .collect()
     }
-    fn apply_visible_rhythm_ledger(measure_text: &str, rhythm_context: RhythmContext, mut course_measure: Option<&mut CourseMeasure>, capture_births: bool) -> (String, VisibleLedgerStats) {
+    fn apply_visible_rhythm_ledger(measure_text: &str, rhythm_context: RhythmContext, mut course_measure: Option<&mut CourseMeasure>, capture_births: bool, preserve_chord_onsets: bool) -> (String, VisibleLedgerStats) {
         let expected = rhythm_context.expected_duration();
         let mut stats = VisibleLedgerStats { capture_births, ..VisibleLedgerStats::default() };
         let (normalized, normalized_origins) =
-            normalize_visible_note_values(measure_text, rhythm_context, &mut stats, course_measure.as_deref_mut());
+            normalize_visible_note_values(measure_text, rhythm_context, &mut stats, course_measure.as_deref_mut(), preserve_chord_onsets);
         let raw_notes = collect_raw_notes(&normalized);
         if raw_notes.len() != normalized_origins.len() {
             stats.post_raw_note_count = raw_notes.len();
@@ -2356,7 +2496,7 @@
     }
     fn normalize_visible_note_values(
         measure_text: &str, rhythm_context: RhythmContext, stats: &mut VisibleLedgerStats,
-        mut course_measure: Option<&mut CourseMeasure>,
+        mut course_measure: Option<&mut CourseMeasure>, preserve_chord_onsets: bool,
     ) -> (String, Vec<VisibleLedgerNormalizedOrigin>) {
         let beat_duration = rhythm_context.beat_duration();
         let raw_notes = collect_raw_notes(measure_text);
@@ -2425,7 +2565,10 @@
                     continue;
                 }
                 let must_split = parts.len() > 1 || !is_exact_notation_duration(duration);
-                if must_split {
+                // Sequential head fragments would re-anchor any unsplit chord member.
+                let needs_cohort = parts.len() > 1
+                    && meta_by_raw.get(&(idx + 1)).is_some_and(|next| next.is_chord);
+                if must_split && (!preserve_chord_onsets || !needs_cohort || course_measure.is_some()) {
                     if let Some(courses) = course_measure.as_deref_mut() {
                         let mut end = idx + 1;
                         while end < raw_notes.len() && meta_by_raw.get(&end).is_some_and(|m| m.is_chord) {
@@ -2516,20 +2659,21 @@
         if parts.len() <= 1 {
             return sync_note_type_and_dots(note_text);
         }
+        let Ok(note) = roxmltree::Document::parse(note_text) else {
+            return note_text.to_string();
+        };
+        let has_tie = |kind| note.root_element().children()
+            .any(|node| node.has_tag_name("tie") && node.attribute("type") == Some(kind));
+        let incoming_tie = has_tie("stop");
+        let outgoing_tie = has_tie("start");
+        let untied = remove_child_blocks(note_text, "tie");
         let mut out = String::new();
         for (idx, part_duration) in parts.iter().copied().enumerate() {
-            let mut block = ensure_child_text_value_local(note_text, "duration", &part_duration.to_string());
+            let mut block = ensure_child_text_value_local(&untied, "duration", &part_duration.to_string());
             block = remove_child_blocks(&block, "beam");
             block = remove_child_blocks(&block, "notations");
-            block = remove_child_blocks(&block, "tie");
             block = sync_note_type_and_dots(&block);
-            if idx == 0 {
-                block = add_tie_markup(&block, true, false);
-            } else if idx + 1 == parts.len() {
-                block = add_tie_markup(&block, false, true);
-            } else {
-                block = add_tie_markup(&block, true, true);
-            }
+            block = add_tie_markup(&block, idx + 1 < parts.len() || outgoing_tie, idx > 0 || incoming_tie);
             out.push_str(&block);
             if !out.ends_with('\n') {
                 out.push('\n');
@@ -2654,6 +2798,12 @@
         text.matches("<note").count()
     }
     fn child_block_range(text: &str, tag: &str) -> Option<(usize, usize)> {
+        if tag == "tie" {
+            let note = roxmltree::Document::parse(text).ok()?;
+            let range = note.root_element().children()
+                .find(|node| node.has_tag_name("tie"))?.range();
+            return Some((range.start, range.end));
+        }
         let open_plain = format!("<{tag}>");
         let open_attr = format!("<{tag} ");
         let open_start = text.find(&open_plain).or_else(|| text.find(&open_attr))?;
@@ -2732,25 +2882,28 @@ fn source_bound_metric_note_parts(
     courses: Option<&CourseMeasure>,
 ) -> Option<Vec<i64>> {
     let (Some(courses), Some(host)) = (courses, metas.get(&idx)) else { return None; };
-    if context.divisions != 96 || context.beats != 4 || context.beat_type != 4 {
+    if context.divisions != 96 || context.beat_type != 4 {
         return None;
     }
-    let aligned_long_value = crate::midi_seed::aligned_long_tie_value(
+    let initial_dotted_tie = host.start == 0 && crate::midi_seed::initial_dotted_quarter_tie_value(
+        host.duration, context.expected_duration(), context.beat_duration(),
+    );
+    let aligned_long_value = context.beats == 4 && crate::midi_seed::aligned_long_tie_value(
         host.start, host.duration, context.expected_duration(), context.beat_duration(),
     );
     // A quarter on the second eighth of a half-bar may span its weak beat.
     // Keep the subdivision visible at the stronger boundary between halves.
     let half_bar = context.expected_duration() / 2;
-    let syncopated_quarter = host.duration == context.beat_duration()
+    let syncopated_quarter = context.beats == 4 && host.duration == context.beat_duration()
         && (0..context.expected_duration()).contains(&host.start)
         && host.start % half_bar == context.beat_duration() / 2;
     // A held note starting with a complete half-bar can show that group
     // as a half note and tie only its short remainder across the midpoint.
     let tail = host.duration - half_bar;
-    let crosses_midpoint = host.start == 0
+    let crosses_midpoint = context.beats == 4 && host.start == 0
         && (1..context.beat_duration()).contains(&tail)
         && is_exact_notation_duration(tail);
-    if !aligned_long_value && !syncopated_quarter && !crosses_midpoint {
+    if !initial_dotted_tie && !aligned_long_value && !syncopated_quarter && !crosses_midpoint {
         return None;
     }
 
@@ -2766,12 +2919,14 @@ fn source_bound_metric_note_parts(
         ["<tie", "<notations", "<grace", "<time-modification", "<lyric", "<beam"]
             .iter().all(|tag| !note.contains(tag))
     };
-    let keeps_long_tie = aligned_long_value && (idx..end).all(|member| {
+    let keeps_long_tie = (idx..end).all(|member| {
         raw.get(member).is_some_and(|note| {
-            note.text.contains("<tie type=\"start\"/>") || note.text.contains("<tie type=\"stop\"/>")
+            ((initial_dotted_tie || aligned_long_value) && note.text.contains("<tie type=\"stop\"/>"))
+                || (aligned_long_value && note.text.contains("<tie type=\"start\"/>"))
         })
     });
-    let keeps_plain_value = (host.duration == half_bar || syncopated_quarter || crosses_midpoint)
+    let keeps_plain_value = context.beats == 4
+        && (host.duration == half_bar || syncopated_quarter || crosses_midpoint)
         && raw[idx..end].iter().all(|note| is_plain(&note.text));
     let bound_cohort = (idx..end).all(|member| {
         let Some((note, meta)) = raw.get(member).zip(metas.get(&member)) else { return false; };

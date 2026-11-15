@@ -746,6 +746,65 @@ impl SustainProof {
 }
 
 impl FinalPdfSourceOccurrenceContinuation {
+    pub(crate) fn extend_source_sustain_beam(
+        &self,
+        canonical: &CanonicalFinalChordStructuralPlan,
+        voice_plan: &FrozenSerializedVoicePlan,
+        omissions: &BTreeSet<RenderPrunedFinalChordOmissionKey>,
+        carried: Option<&crate::pipeline::ActualCanonicalBeamCapture>,
+    ) -> anyhow::Result<Option<(Self, crate::master_state_identity::CapturedBlockReceiptInput)>> {
+        let Some(proof) = &self.sustain_proof else { return Ok(None); };
+        anyhow::ensure!(self.xml() == proof.written.as_ref(), "Sustain beam input is not the actual FinalChord output");
+        let before = self.receipt.occurrences.iter()
+            .map(|row| (row.fragment_id, row.fragment_ordinal)).collect::<BTreeSet<_>>();
+        let measures = final_chord_parse_binding_measures(self.xml())?;
+        let mut generated = BTreeSet::new();
+        let mut by_start = BTreeMap::new();
+        for row in self.current_occurrences() {
+            let note = final_chord_transaction_output_occurrence_note(&measures, row)?;
+            if !before.contains(&(row.fragment_id, row.fragment_ordinal)) && !note.chord_member {
+                anyhow::ensure!(note.tie_stop, "Sustain generated a head without its tied origin");
+                generated.insert(note.range.start);
+            }
+            anyhow::ensure!(by_start.insert(note.range.start, (row, note)).is_none(),
+                "Sustain beam input has ambiguous physical occurrences");
+        }
+        let authorize = |members: &[usize], levels: &BTreeMap<usize, BTreeMap<u8, String>>| {
+            let Some((first, tail)) = members.split_first() else { return false; };
+            let Some((head, head_note)) = by_start.get(first) else { return false; };
+            let Some(label) = voice_plan.label_for_source(head.source_event_id) else { return false; };
+            if !generated.contains(first) || label != head_note.voice { return false; }
+            let mut original = BTreeMap::new();
+            for start in tail {
+                let Some((row, note)) = by_start.get(start) else { return false; };
+                let Some(written) = levels.get(start) else { return false; };
+                if generated.contains(start) || written.is_empty()
+                    || voice_plan.label_for_source(row.source_event_id) != Some(label)
+                    || note.staff != head_note.staff || note.voice != label
+                    || original.insert((row.source_event_id, row.attack_id, row.fragment_id), written.clone()).is_some()
+                { return false; }
+            }
+            let Some((_, last)) = tail.last().and_then(|start| by_start.get(start)) else { return false; };
+            let end = last.onset + last.duration;
+            if by_start.iter().any(|(start, (_, other))|
+                other.measure == head_note.measure && other.voice == label && !other.chord_member
+                    && !members.contains(start) && other.onset < end
+                    && head_note.onset < other.onset + other.duration) {
+                return false;
+            }
+            self.receipt.original_beam_voice_groups.iter()
+                .filter(|group| group.owns_complete_sustain_beam_tail(&original)).count() == 1
+        };
+        let Some((post, receipt)) = crate::pipeline::extend_bound_sustain_beam_group(
+            self.xml(), &generated, authorize, carried)? else { return Ok(None); };
+        final_chord_verify_pitched_sequence_transition(self.xml(), &post, false)?;
+        let mut next = self.clone();
+        next.beam_surface = current_occurrence_beam_surface(&post)?;
+        next.xml = post;
+        verify_final_pdf_source_occurrence_continuation(next.xml(), canonical, voice_plan, Some(omissions), &next)?;
+        Ok(Some((next, receipt)))
+    }
+
     pub(crate) fn with_source_sustain_inputs(&self, time: &NotationTimePlan) -> Self {
         let mut result = self.clone();
         if time.metric.divisions == crate::source_event::CANONICAL_DIVISIONS {

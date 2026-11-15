@@ -17,7 +17,7 @@ fn fixture(midis: &[i32]) -> Score {
     Score { title: None, parts: vec![Part { id: "Local".into(), name: "Probe".into(),
         measures: vec![Measure { number: "SyntheticAlpha".into(), divisions: 96,
             beats: 8, beat_type: 4, expected: ExpectedDuration::new(96, 8, 4),
-            cursor_min: 0, cursor_max: 768, events }] }] }
+            cursor_min: 0, cursor_max: 768, events, covered_cross_staff_chord_members: Vec::new() }] }] }
 }
 
 fn coherent() -> Score { fixture(&[90, 90, 90, 90, 102, 102, 90, 90]) }

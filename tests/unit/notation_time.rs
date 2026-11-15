@@ -314,3 +314,197 @@ fn a_steady_pulse_without_distinct_accents_is_insufficient() {
     let source = decoded(&notes, 384, &[]);
     assert!(NotationTimePlan::from_inferred_performance(&source).is_err());
 }
+
+#[test]
+fn outer_line_can_continue_to_the_quarter_when_played_release_runs_short() {
+    let mut notes = Vec::new();
+    for index in 0..44 {
+        let onset = 20 + 100 * index;
+        let phase = index % 4;
+        let bass = if phase == 0 { 43 } else { 55 };
+        notes.push((0, onset, 75, bass));
+        if phase == 0 {
+            let length = if index == 20 { 280 } else if matches!(index, 8 | 16 | 32) { 310 } else { 76 };
+            notes.push((0, onset + 4, length, 76));
+        }
+        if index == 34 {
+            notes.push((0, onset + 4, 75, 77));
+        }
+    }
+    let source = decoded(&notes, 384, &[]);
+    let plan = NotationTimePlan::from_midi(&source).unwrap();
+
+    for (group, duration) in [(8, 96), (16, 96), (20, 72), (24, 24), (32, 72)] {
+        let raw = source.notes.iter()
+            .find(|note| note.pos * 384 == (24 + 100 * group) * source.time_domain.divisions && note.midi == 76)
+            .unwrap();
+        assert_eq!(plan.event(raw.source_ordinal).unwrap().len, duration, "group {group}");
+    }
+    for original in source.notes {
+        assert_eq!(plan.source_event(original.source_ordinal).unwrap(), original);
+    }
+}
+
+#[test]
+fn moving_bass_with_overlapping_releases_uses_the_next_subdivision() {
+    for (companion, written) in [(72, 24), (74, 72)] {
+        let mut notes = Vec::new();
+        for index in 0..40 {
+            let onset = 20 + 100 * index;
+            let phase = index % 4;
+            let (bass, length, treble) = match phase {
+                0 => (40, 270, 72),
+                2 => (46, 74, companion),
+                _ => (52, 74, 76),
+            };
+            notes.push((0, onset, length, bass));
+            notes.push((0, onset + 4, 76, treble));
+        }
+        let source = decoded(&notes, 384, &[]);
+        let plan = NotationTimePlan::from_midi(&source).unwrap();
+        let bass = source.notes.iter().filter(|note| note.midi == 40)
+            .min_by_key(|note| note.pos).unwrap();
+        // The first group has no earlier attack. Check the interior figures.
+        assert_eq!(plan.event(bass.source_ordinal).unwrap().len, 72);
+        for attack in source.notes.iter().filter(|note| note.midi == 40 && note.pos > bass.pos) {
+            assert_eq!(plan.event(attack.source_ordinal).unwrap().len, written);
+            assert_eq!(plan.source_event(attack.source_ordinal).unwrap(), *attack);
+        }
+    }
+}
+
+#[test]
+fn short_release_in_a_continuing_bass_line_can_write_a_quarter() {
+    for (companion, written) in [(60, 96), (62, 48)] {
+        let mut notes = Vec::new();
+        for group in 0..41 {
+            let onset = 20 + 100 * group;
+            let (bass, length, upper) = match group % 4 {
+                0 => {
+                    let short_release = group % 8 == 4;
+                    (if short_release { 42 } else { 40 },
+                     if short_release { 220 } else { 320 }, 64)
+                }
+                1 => (54, 75, 60),
+                2 => (57, 75, 65),
+                _ => (56, 75, companion),
+            };
+            notes.push((0, onset, length, bass));
+            notes.push((0, onset + 4, 75, upper));
+        }
+        let source = decoded(&notes, 384, &[]);
+        let plan = NotationTimePlan::from_midi(&source).unwrap();
+        for attack in source.notes.iter().filter(|note| note.midi == 42) {
+            assert_eq!(plan.event(attack.source_ordinal).unwrap().len, written);
+            assert_eq!(plan.source_event(attack.source_ordinal).unwrap(), *attack);
+        }
+    }
+}
+
+#[test]
+fn repeated_chord_member_uses_next_subdivision_despite_overlapping_release() {
+    for (returning_pitch, written) in [(72, 24), (75, 48)] {
+        let mut notes = Vec::new();
+        for group in 0..40 {
+            let onset = 20 + 100 * group;
+            let bass = if group % 4 == 0 { 43 } else { 55 };
+            let pitch = match group {
+                17 => 77,
+                18 => returning_pitch,
+                _ => 72,
+            };
+            let length = if group == 16 { 140 } else { 76 };
+            notes.push((0, onset, 75, bass));
+            notes.push((0, onset + 3, 75, 61));
+            notes.push((0, onset + 6, 75, 67));
+            notes.push((0, onset + 9, length, pitch));
+        }
+        let source = decoded(&notes, 384, &[]);
+        let plan = NotationTimePlan::from_midi(&source).unwrap();
+        let attack = source.notes.iter().find(|note| note.midi == 72
+            && note.pos * 384 == 1629 * source.time_domain.divisions).unwrap();
+        assert_eq!(plan.event(attack.source_ordinal).unwrap().len, written);
+        assert_eq!(plan.source_event(attack.source_ordinal).unwrap(), *attack);
+    }
+}
+
+#[test]
+fn offbeat_melody_can_hold_a_quarter_over_alternating_accompaniment() {
+    for (returning_pitch, written) in [(74, 96), (76, 72)] {
+        let mut notes = Vec::new();
+        for group in 0..40 {
+            let onset = 20 + 100 * group;
+            let bass = if group % 4 == 0 { 43 } else { 55 };
+            notes.push((0, onset, 75, bass));
+            match group {
+                14 => notes.push((0, onset + 4, 310, 72)),
+                15 | 17 => notes.push((0, onset + 4, 75, 63)),
+                18 => {
+                    notes.push((0, onset + 15, 25, returning_pitch + 2));
+                    notes.push((0, onset + 40, 84, returning_pitch));
+                }
+                _ => {}
+            }
+        }
+        let source = decoded(&notes, 384, &[]);
+        let plan = NotationTimePlan::from_midi(&source).unwrap();
+        let attack = source.notes.iter().find(|note| note.midi == 72).unwrap();
+        let grace = source.notes.iter().find(|note| note.midi == i32::from(returning_pitch) + 2).unwrap();
+        let host = source.notes.iter().find(|note| note.midi == i32::from(returning_pitch)).unwrap();
+        assert_eq!(plan.event(attack.source_ordinal).unwrap().len, written);
+        assert_eq!(plan.source_event(attack.source_ordinal).unwrap(), *attack);
+        assert_eq!(plan.event(grace.source_ordinal).unwrap().kind,
+            NotationEventKind::Grace { host: host.source_ordinal });
+    }
+}
+
+#[test]
+fn embedded_note_evidence_binds_a_freely_played_triple_meter_pickup() {
+    for shift in [0, 384] {
+        let notes = [(0, 127 + shift, 553, 72), (0, 698 + shift, 45, 73), (0, 757 + shift, 677, 74)];
+        let markers = [
+            (0, "v2 meter 3 pickup 96"),
+            (127 + shift, "v2 note 0 0 72 0 96"),
+            (698 + shift, "v2 grace 1 0 73 2"),
+            (757 + shift, "v2 note 2 0 74 96 288"),
+        ];
+        let source = decoded_with_markers(&notes, 384, &[(0, 3, 2)], &markers);
+        let plan = NotationTimePlan::from_midi(&source).unwrap();
+        assert!(plan.preserves_attacks());
+        assert_eq!(plan.measure(0).unwrap().end, 96);
+        assert_eq!(plan.measure(1).unwrap().end, 384);
+        assert_eq!(plan.event(1).unwrap().kind, NotationEventKind::Grace { host: 2 });
+        assert_eq!((plan.event(1).unwrap().pos, plan.event(1).unwrap().len), (96, 0));
+        assert_eq!(plan.source_event(0).unwrap().pos, source.notes[0].pos);
+
+        for invalid in [
+            (vec![markers[0], markers[1], markers[3]], "Quellnote 1"),
+            (vec![markers[0], (128 + shift, markers[1].1), markers[2], markers[3]], "MIDI-Tick"),
+            (vec![markers[0], markers[1], (698 + shift, "v2 grace 1 0 73 1"), markers[3]], "Hauptnote"),
+        ] {
+            let source = decoded_with_markers(&notes, 384, &[(0, 3, 2)], &invalid.0);
+            assert!(NotationTimePlan::from_midi(&source).unwrap_err().to_string().contains(invalid.1));
+        }
+    }
+}
+
+#[test]
+fn playback_only_marker_keeps_the_source_event_without_written_time() {
+    let notes = [(0, 127, 350, 72), (0, 698, 45, 73), (0, 757, 677, 74)];
+    let markers = [
+        (0, "v2 meter 3 pickup 96"),
+        (127, "v2 note 0 0 72 0 96"),
+        (698, "v2 playback 1 0 73"),
+        (757, "v2 note 2 0 74 96 288"),
+    ];
+    let source = decoded_with_markers(&notes, 384, &[(0, 3, 2)], &markers);
+    let plan = NotationTimePlan::from_midi(&source).unwrap();
+    assert_eq!(plan.event(1).unwrap().kind, NotationEventKind::PlaybackOnly);
+    assert!(plan.written_sustain_interval(1).is_err());
+    assert_eq!(plan.source_event(1).unwrap(), source.notes[1]);
+    assert_eq!(plan.measure(0).unwrap().end, 96);
+    let mut wrong = markers;
+    wrong[2].1 = "v2 playback 1 0 76";
+    let source = decoded_with_markers(&notes, 384, &[(0, 3, 2)], &wrong);
+    assert!(NotationTimePlan::from_midi(&source).unwrap_err().to_string().contains("MIDI-Tick"));
+}

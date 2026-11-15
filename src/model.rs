@@ -28,6 +28,9 @@ pub(crate) mod metric_rest_notation;
         pub cursor_min: i64,
         pub cursor_max: i64,
         pub events: Vec<Event>,
+        /// Sorted event indices of cross-staff members whose duration is
+        /// already covered by their physical head in the same voice.
+        pub(crate) covered_cross_staff_chord_members: Vec<usize>,
     }
     
     #[derive(Debug, Clone, Copy)]

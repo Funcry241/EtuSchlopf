@@ -17,6 +17,7 @@ pub(super) struct CourseOccurrence {
     note: String,
     restified: bool,
     restaffed: bool,
+    written_staff_only: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +27,12 @@ pub(super) struct CreationEdge {
     course: RhythmicCreationIdentity,
     source: Option<usize>,
     interval: Range<i64>,
+}
+
+impl CreationEdge {
+    pub(super) fn is_received_root(&self) -> bool {
+        self.parent.is_none()
+    }
 }
 
 impl CourseOccurrence {
@@ -145,7 +152,7 @@ impl ArrangementRhythmicCourses {
                 creation: origin.creation, parent: None, root: origin.creation,
                 course: origin.course, interval: origin.interval,
                 source: origin.source, note: note.text,
-                restified: false, restaffed: false,
+                restified: false, restaffed: false, written_staff_only: false,
             });
         }
         let roots = occurrences.iter().map(|o| (o.creation, o.clone())).collect();
@@ -190,6 +197,31 @@ impl ArrangementRhythmicCourses {
         };
         state.validate_binding(xml)?;
         Ok(state)
+    }
+
+    pub(crate) fn written_staff_only_events(
+        &self, score: &crate::model::Score,
+    ) -> Result<BTreeMap<usize, BTreeSet<usize>>> {
+        if !self.occurrences.iter().any(|note| note.written_staff_only) {
+            return Ok(BTreeMap::new());
+        }
+        let [part] = score.parts.as_slice() else { return Err(anyhow!("Expected a piano part")); };
+        let mut occurrences = self.occurrences.iter();
+        let mut written = BTreeMap::<usize, BTreeSet<usize>>::new();
+        for (bar, measure) in part.measures.iter().enumerate() {
+            for (ordinal, event) in measure.events.iter().enumerate() {
+                let note = occurrences.next().ok_or_else(|| anyhow!("Missing written occurrence"))?;
+                if note.written_staff_only {
+                    ensure!(event.staff == "2" && event.pitch.as_ref().map(|p| p.midi)
+                        == midi_from_note_text(&note.note)
+                        && event.duration == note.interval.end - note.interval.start,
+                        "Written staff differs from the bound occurrence");
+                    written.entry(bar + 1).or_default().insert(ordinal + 1);
+                }
+            }
+        }
+        ensure!(occurrences.next().is_none(), "Incomplete written occurrence population");
+        Ok(written)
     }
 
     pub(crate) fn validate_binding(&self, xml: &str) -> Result<()> {
@@ -357,7 +389,7 @@ impl CourseMeasure {
 
     pub(super) fn disposition(
         &mut self, index: usize, note: &str, action: ArrangementMaterialDispositionKind,
-        projected_staff: u8, moved: bool,
+        projected_staff: u8, moved: bool, written_staff_only: bool,
     ) -> Result<()> {
         let occurrence = self.incoming.get_mut(index).ok_or_else(|| anyhow!("Missing owner origin"))?;
         let old_staff = extract_first_i64(&occurrence.note, "staff").unwrap_or(0);
@@ -372,6 +404,7 @@ impl CourseMeasure {
             ensure!(occurrence.source.is_some() && old_staff == 1 && projected_staff == 2,
                 "Staff transition lacks source-bound owner action");
             occurrence.restaffed = true;
+            occurrence.written_staff_only = written_staff_only;
         } else {
             ensure!(old_staff == i64::from(projected_staff), "Implicit course staff transition");
         }

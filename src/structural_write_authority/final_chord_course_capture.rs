@@ -49,18 +49,18 @@ impl OriginalCourseBindings {
 
 pub(super) fn capture_original_execution(
     owner: &FinalChordEncodingExactMint, receipt: &ExactTransformationReceipt,
-    before: &str, after: &str, plan: &FinalChordEncodingPlan,
-    rest_edits: &[FinalChordEncodingEdit],
+    source: &FinalChordBindingSource<'_>, plan: &FinalChordEncodingPlan,
+    projection: &FinalChordProjectionResult,
 ) -> Result<FinalChordCourseCapture> {
     let bindings = plan.original_course_bindings.as_ref()
         .ok_or_else(|| anyhow::anyhow!("Missing original FinalChord canonical binding"))?
         .as_ref().map_err(|error| anyhow::anyhow!("Original canonical course capture: {error}"))?;
-    let projection = final_chord_collect_original_projection(before, plan, rest_edits, after.to_owned())?;
-    let original_notes = final_chord_parse_binding_measures(before)?.into_iter()
-        .flat_map(|measure| measure.notes).map(|note| ((note.range.start, note.range.end), note))
+    let after = &projection.xml;
+    let original_notes = source.measures.iter()
+        .flat_map(|measure| &measure.notes).map(|note| ((note.range.start, note.range.end), note))
         .collect::<BTreeMap<_, _>>();
     let mut rows = BTreeMap::<(usize, usize), FinalChordCourseRow>::new();
-    for emitted in projection.provenance {
+    for emitted in &projection.provenance {
         let input = emitted.source_note_start..emitted.source_note_end;
         let (binding, action, original_offset) = bindings.rows.iter().find(|(binding, _, _)|
             binding.source_note_start == input.start && binding.source_note_end == input.end)
@@ -89,7 +89,7 @@ pub(super) fn capture_original_execution(
         row.ordinals.push(emitted.fragment_ordinal);
         row.outputs.push((emitted.projected_note_start..emitted.projected_note_end, false));
     }
-    for emitted in projection.non_pitched_continuations {
+    for emitted in &projection.non_pitched_continuations {
         let input = emitted.source_note_start..emitted.source_note_end;
         ensure!(original_notes.get(&(input.start, input.end)).is_some_and(|note| note.rest_like),
             "Non-pitched continuation is not an original rest");
@@ -113,7 +113,7 @@ pub(super) fn capture_original_execution(
             range.start < range.end && range.end <= after.len() &&
             outputs.insert((range.start, range.end))), "Ambiguous original course emission");
     }
-    FinalChordCourseCapture::recorded(owner, receipt, before, after, rows.into_values().collect())
+    FinalChordCourseCapture::recorded(owner, receipt, source.xml, after, rows.into_values().collect())
 }
 
 /// Render's projection already carries the writer's original note geometry.

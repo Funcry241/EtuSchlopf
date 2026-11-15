@@ -126,12 +126,12 @@ fn owner_transition(restify: bool) {
     let index = measure.incoming.iter().position(|o| o.source.is_some() && !o.note.contains("<chord")).unwrap();
     let source = measure.incoming[index].source;
     let note = if restify { restify_note_for_rhythm_ledger(&raw[index].text) }
-        else { move_note_to_left_system_for_human_potential(&raw[index].text) };
+        else { move_note_to_left_system_for_human_potential(&raw[index].text, false) };
     measure.disposition(index, &note, if restify { ArrangementMaterialDispositionKind::RestifiedPitched }
-        else { ArrangementMaterialDispositionKind::VisiblePitched }, if restify { 1 } else { 2 }, !restify).unwrap();
+        else { ArrangementMaterialDispositionKind::VisiblePitched }, if restify { 1 } else { 2 }, !restify, false).unwrap();
     let mut changed = original.to_owned();
     changed.replace_range(raw[index].start..raw[index].end, &note);
-    let (normalized, stats) = apply_visible_rhythm_ledger(&changed, RhythmContext::default(), Some(&mut measure), false);
+    let (normalized, stats) = apply_visible_rhythm_ledger(&changed, RhythmContext::default(), Some(&mut measure), false, false);
     assert_eq!(stats.chord_cohorts_source_bound_split, 1);
     let mut final_xml = xml.clone();
     final_xml.replace_range(span.start..span.end, &normalized);
@@ -169,4 +169,54 @@ fn actual_received_note_refusal_exposes_bytes_without_replacing_its_origin() {
     assert!(refusal.contains("expected_sha256=") && refusal.contains("observed_context_hex="));
     received.validate_binding(&xml).unwrap();
     received.measure(original, 0, 384).unwrap();
+}
+
+#[test]
+fn single_target_trials_reuse_only_received_roots_and_keep_the_full_arrangement() {
+    use crate::midi_seed::rhythmic_course_creation_tests::arrangement_source_lengths_fixture;
+    for bars in [3, 4] {
+        let mut rows = [60, 72, 64, 76, 67, 79, 65, 77].into_iter().enumerate()
+            .map(|(i, pitch)| (i + 1, i as i64 * 48, 48, 1, pitch))
+            .collect::<Vec<_>>();
+        for (index, onset) in [384, 480, 576, 672].into_iter().enumerate() {
+            rows.extend([(21 + index, onset, 96, 1, 72), (31 + index, onset, 96, 2, 48)]);
+        }
+        rows.extend([(41, 768, 384, 2, 50), (42, 768, 384, 2, 53)]);
+        let (xml, seed) = arrangement_source_lengths_fixture(&rows, bars);
+        let profile = ArrangementProfile {
+            rhythmic_courses: Some(&seed), preserve_reference: true,
+            human_potential_enabled: true, ..Default::default()
+        };
+        let discovery = arrange_piano_musicxml_with_profile(&xml, profile);
+        let target = *discovery.stats.human_potential_structural_targets.first().unwrap();
+        let trial = ArrangementProfile { human_potential_structural_target: Some(target), ..profile };
+        let expected = arrange_piano_musicxml_with_profile(&xml, trial);
+        let reuse = HumanPotentialMeasureReuse::new(&xml, &seed);
+        let cached_trial = ArrangementProfile { human_potential_measure_reuse: Some(&reuse), ..trial };
+        let separate_input = xml.clone();
+        let foreign = arrange_piano_musicxml_with_profile(&separate_input, cached_trial);
+        assert_eq!(foreign.xml, expected.xml);
+        assert!(reuse.received.get().is_none());
+        let first = arrange_piano_musicxml_with_profile(&xml, cached_trial);
+        let received = reuse.received.get().expect("exact input custody received");
+        assert_eq!(reuse.hits(), 0);
+        let second = arrange_piano_musicxml_with_profile(&xml, cached_trial);
+        assert!(std::ptr::eq(received, reuse.received.get().unwrap()));
+        assert_eq!(reuse.hits(), reuse.measures.borrow().len());
+        assert!(reuse.measures.borrow().contains_key(&2));
+        assert!(!reuse.measures.borrow().contains_key(&3));
+        assert!(!reuse.measures.borrow().contains_key(&target.measure_ordinal()));
+        assert_eq!(first.xml, expected.xml);
+        assert_eq!(second.xml, expected.xml);
+        assert_eq!(second.stats.material_disposition_rows, expected.stats.material_disposition_rows);
+        assert_eq!(second.stats.representation_lineage_rows, expected.stats.representation_lineage_rows);
+        let a = first.stats.rhythmic_courses.unwrap();
+        let b = second.stats.rhythmic_courses.unwrap();
+        b.validate_binding(&second.xml).unwrap();
+        for (old, new) in a.occurrences.iter().zip(&b.occurrences) {
+            assert_eq!(old.root, new.root);
+            assert_eq!(old.interval, new.interval);
+            assert_eq!(old.creation == new.creation, old.parent.is_none());
+        }
+    }
 }

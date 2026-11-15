@@ -2,7 +2,8 @@
 use super::*;
 use super::actual_source_beam_binding::BoundOccurrence;
 use super::original_beam_voice_alignment::actual_beam_levels;
-use std::collections::BTreeMap;
+use std::borrow::Cow;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write as _;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -159,7 +160,14 @@ pub(super) fn read_projected_owner_edges(
     measures: &[FinalChordBindingMeasure],
     witnesses: &[FinalChordTransactionOutputOccurrenceWitness],
     edges: &[OwnerEdge<'_>],
+    pitched_levels: &HashMap<(usize, usize), &BTreeMap<u8, String>>,
 ) -> Vec<OwnerEdgeReadback> {
+    let levels = |note: &FinalChordEncodingNote| {
+        pitched_levels.get(&(note.range.start, note.range.end)).map_or_else(
+            || actual_beam_levels(xml, note).map(Cow::Owned),
+            |levels| Some(Cow::Borrowed(*levels)),
+        )
+    };
     let mut locations = BTreeMap::new();
     for (measure_index, measure) in measures.iter().enumerate() {
         for (ordinal, (index, _)) in measure.notes.iter().enumerate()
@@ -184,12 +192,13 @@ pub(super) fn read_projected_owner_edges(
             return OwnerEdgeReadback::Unknown;
         };
         if measure != other { return OwnerEdgeReadback::Unknown; }
-        read_projected_edge(xml, &measures[measure].notes, left, right, edge.level)
+        read_projected_edge(&measures[measure].notes, left, right, edge.level, &levels)
     }).collect()
 }
 
-fn read_projected_edge(
-    xml: &str, notes: &[FinalChordEncodingNote], left: usize, right: usize, level: u8,
+fn read_projected_edge<'a>(
+    notes: &[FinalChordEncodingNote], left: usize, right: usize, level: u8,
+    levels: &impl Fn(&FinalChordEncodingNote) -> Option<Cow<'a, BTreeMap<u8, String>>>,
 ) -> OwnerEdgeReadback {
     let (a, b) = (&notes[left], &notes[right]);
     if left >= right || a.staff != b.staff || a.voice.is_empty() || b.voice.is_empty()
@@ -206,7 +215,7 @@ fn read_projected_edge(
         if !note.rest_like && note.pitch_midi.is_some() { pitched_ordinal += 1; }
         if note.staff != a.staff || note.voice != a.voice { continue; }
         if note.rest_like {
-            match actual_beam_levels(xml, note) {
+            match levels(note) {
                 Some(levels) if levels.contains_key(&level) => return OwnerEdgeReadback::MarkedRest { note_index: index },
                 Some(_) => continue,
                 None => return OwnerEdgeReadback::Unknown,
@@ -226,7 +235,7 @@ fn read_projected_edge(
         if note.pitch_midi.is_none() || note.duration <= 0 { return OwnerEdgeReadback::Unknown; }
         return OwnerEdgeReadback::Interrupted { pitched_ordinal: ordinal };
     }
-    let (Some(left), Some(right)) = (actual_beam_levels(xml, a), actual_beam_levels(xml, b)) else {
+    let (Some(left), Some(right)) = (levels(a), levels(b)) else {
         return OwnerEdgeReadback::Unknown;
     };
     match endpoint_readback(left.get(&level).map(String::as_str), right.get(&level).map(String::as_str)) {
@@ -312,7 +321,21 @@ mod tests {
         let xml = |measure, middle: &str| format!(r#"<score-partwise version="4.0"><part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list><part id="P1"><measure number="{measure}"><attributes><divisions>2</divisions></attributes>{first}{chord}{middle}{last}</measure></part></score-partwise>"#);
         let read = |doc: &str| {
             let measures = final_chord_parse_binding_measures(doc).unwrap();
-            read_projected_edge(doc, &measures[0].notes, 0, 3, 1)
+            let notes = &measures[0].notes;
+            let read_from_xml = |note: &FinalChordEncodingNote| actual_beam_levels(doc, note).map(Cow::Owned);
+            let endpoint_levels = [actual_beam_levels(doc, &notes[0]), actual_beam_levels(doc, &notes[3])];
+            let reuse_endpoints = |note: &FinalChordEncodingNote| {
+                if note.range == notes[0].range {
+                    endpoint_levels[0].as_ref().map(Cow::Borrowed)
+                } else if note.range == notes[3].range {
+                    endpoint_levels[1].as_ref().map(Cow::Borrowed)
+                } else {
+                    read_from_xml(note)
+                }
+            };
+            let result = read_projected_edge(notes, 0, 3, 1, &reuse_endpoints);
+            assert_eq!(result, read_projected_edge(notes, 0, 3, 1, &read_from_xml));
+            result
         };
         for measure in [17, 83] {
             let before = xml(measure, middle);

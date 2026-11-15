@@ -128,10 +128,13 @@
         let mut cursor_min = 0_i64;
         let mut cursor_max = 0_i64;
         let mut last_non_chord_start = 0_i64;
-        let mut events = Vec::new();
+        let mut events: Vec<Event> = Vec::new();
+        let mut chord_head = None::<usize>;
+        let mut covered_cross_staff_chord_members = Vec::new();
     
         for child in measure_node.children().filter(|n| n.is_element()) {
             if is_el(child, "attributes") {
+                chord_head = None;
                 if let Some(d) = child_text(child, "divisions").and_then(|s| parse_i64(&s)) {
                     divisions = d.max(1);
                 }
@@ -144,6 +147,7 @@
                     }
                 }
             } else if is_el(child, "backup") {
+                chord_head = None;
                 let duration = child_text(child, "duration")
                     .and_then(|s| parse_i64(&s))
                     .unwrap_or(0)
@@ -152,6 +156,7 @@
                 cursor_min = cursor_min.min(cursor);
                 cursor_max = cursor_max.max(cursor);
             } else if is_el(child, "forward") {
+                chord_head = None;
                 let duration = child_text(child, "duration")
                     .and_then(|s| parse_i64(&s))
                     .unwrap_or(0)
@@ -187,7 +192,17 @@
                     .map(|s| normalize_ws(&s))
                     .filter(|s| !s.is_empty());
                 let dots = child.children().filter(|n| is_el(*n, "dot")).count();
-    
+                if is_chord && pitch.is_some() && duration > 0
+                    && let Some(head) = chord_head.map(|index| &events[index])
+                    && head.pitch.is_some() && head.voice == voice && head.staff != staff
+                    && head.start == start && head.duration >= duration
+                {
+                    covered_cross_staff_chord_members.push(events.len());
+                }
+                if !is_chord {
+                    chord_head = Some(events.len());
+                }
+
                 events.push(Event {
                     kind,
                     staff,
@@ -232,6 +247,7 @@
             cursor_min,
             cursor_max,
             events,
+            covered_cross_staff_chord_members,
         })
     }
     

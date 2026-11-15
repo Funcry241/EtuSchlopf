@@ -1,3 +1,4 @@
+include!("corpus_memory_capacity.rs");
 fn compact_current_report_preamble_v0101536(current_preamble: &str) -> String {
     let mut out = current_preamble.trim_end().to_string();
     out.push('\n');
@@ -39,20 +40,22 @@ struct CorpusExecutionPlan {
 }
 
 impl CorpusExecutionPlan {
-    fn bounded(project_count: usize, parallel: &ParallelPlan) -> Self {
+    fn bounded(project_count: usize, parallel: &ParallelPlan, memory: Option<&CorpusMemory>) -> Self {
         // Most project stages run on one thread; only the arrangement solver
         // fans out. A third project process is opened once each process still
-        // receives six solver workers, so serial stages overlap instead of
-        // leaving most logical threads idle. Worker counts change only
-        // throughput: per-project budgets come from the separate budget basis
-        // and parallel results are reassembled in index order.
+        // would receive six solver workers under the CPU-only ceiling.
+        // Automatic mode also checks the available memory before scheduling.
+        // Candidate budgets are independent of worker counts.
         let concurrent_projects = match parallel.workers {
             0..=3 => 1,
             4..=17 => 2,
             _ => 3,
         }
         .min(project_count.max(1));
-        let solver_workers_per_project = (parallel.workers / concurrent_projects).max(1);
+        let (concurrent_projects, solver_workers_per_project) = memory.map_or(
+            (concurrent_projects, (parallel.workers / concurrent_projects).max(1)),
+            |memory| memory.plan(parallel.workers, concurrent_projects),
+        );
         let assigned_solver_workers = solver_workers_per_project * concurrent_projects;
         Self {
             requested_jobs: parallel.requested.clone(),
@@ -268,7 +271,19 @@ fn run_all_batch_orchestrator(corpus_out: &Path, jobs: &str, writer_trace: Optio
 
     let batch_started = Instant::now();
     let project_count = pairs.len();
-    let parallel = observed_corpus_try!(resolve_parallel_plan(jobs, None));
+    let corpus_jobs_override = if jobs.eq_ignore_ascii_case("auto") {
+        observed_corpus_try!(std::env::var("ETUSCHLOPF_CORPUS_JOBS")
+            .map(Some)
+            .or_else(|error| match error {
+                std::env::VarError::NotPresent => Ok(None),
+                other => Err(other.into()),
+            }))
+    } else {
+        None
+    };
+    let parallel = observed_corpus_try!(resolve_parallel_plan(
+        corpus_jobs_override.as_deref().unwrap_or(jobs), None,
+    ));
     // Validate every selected input before any batch output or manifest is reset.
     let mut input_paths = Vec::new();
     let mut output_paths = vec![corpus_out.to_path_buf(), PathBuf::from(CORPUS_RUN_MANIFEST_FILE)];
@@ -279,7 +294,8 @@ fn run_all_batch_orchestrator(corpus_out: &Path, jobs: &str, writer_trace: Optio
         output_paths.extend(source.output_paths());
     }
     observed_corpus_try!(crate::source::validate_file_targets(&input_paths, &output_paths));
-    let execution_plan = CorpusExecutionPlan::bounded(project_count, &parallel);
+    let memory = parallel.requested.eq_ignore_ascii_case("auto").then(detect_corpus_memory);
+    let execution_plan = CorpusExecutionPlan::bounded(project_count, &parallel, memory.as_ref());
     runtime_observation.enter_corpus_stage(
         observation::CorpusStage::PreparingProjects,
         observation::SourceProgress {
@@ -312,6 +328,12 @@ fn run_all_batch_orchestrator(corpus_out: &Path, jobs: &str, writer_trace: Optio
 
     println!("ETUSCHLOPF-BATCH v{}", env!("CARGO_PKG_VERSION"));
     println!("Modus: --all | Projekte: {} | pro Projekt eigene .musicxml/.render.musicxml/.pdf/.result.txt | Korpus-Emergenz am Ende", pairs.len());
+    if let Some(memory) = memory {
+        println!("{}", memory.report());
+    } else {
+        let source = if corpus_jobs_override.is_some() { "ETUSCHLOPF_CORPUS_JOBS" } else { "--jobs" };
+        println!("KorpusMemory: explicit {source} {}", parallel.requested);
+    }
     println!("{}", execution_plan.report_line());
 
     let phases = [
@@ -661,7 +683,7 @@ mod corpus_execution_plan_tests {
 
     #[test]
     fn auto_budget_on_twenty_threads_runs_three_projects_with_six_workers_each() {
-        let plan = CorpusExecutionPlan::bounded(10, &parallel_plan("auto", 19, 20));
+        let plan = CorpusExecutionPlan::bounded(10, &parallel_plan("auto", 19, 20), None);
         assert_eq!(plan.concurrent_projects, 3);
         assert_eq!(plan.solver_workers_per_project, 6);
         assert_eq!(plan.candidate_budget_workers_per_project, 19);
@@ -670,7 +692,7 @@ mod corpus_execution_plan_tests {
 
     #[test]
     fn medium_worker_budget_runs_two_projects() {
-        let plan = CorpusExecutionPlan::bounded(10, &parallel_plan("11", 11, 12));
+        let plan = CorpusExecutionPlan::bounded(10, &parallel_plan("11", 11, 12), None);
         assert_eq!(plan.concurrent_projects, 2);
         assert_eq!(plan.solver_workers_per_project, 5);
         assert_eq!(plan.reserved_threads, 2);
@@ -678,21 +700,21 @@ mod corpus_execution_plan_tests {
 
     #[test]
     fn two_projects_never_open_a_third_slot() {
-        let plan = CorpusExecutionPlan::bounded(2, &parallel_plan("auto", 19, 20));
+        let plan = CorpusExecutionPlan::bounded(2, &parallel_plan("auto", 19, 20), None);
         assert_eq!(plan.concurrent_projects, 2);
         assert_eq!(plan.solver_workers_per_project, 9);
     }
 
     #[test]
     fn small_worker_budget_stays_single_project() {
-        let plan = CorpusExecutionPlan::bounded(10, &parallel_plan("3", 3, 20));
+        let plan = CorpusExecutionPlan::bounded(10, &parallel_plan("3", 3, 20), None);
         assert_eq!(plan.concurrent_projects, 1);
         assert_eq!(plan.solver_workers_per_project, 3);
     }
 
     #[test]
     fn single_project_never_opens_a_second_slot() {
-        let plan = CorpusExecutionPlan::bounded(1, &parallel_plan("max", 20, 20));
+        let plan = CorpusExecutionPlan::bounded(1, &parallel_plan("max", 20, 20), None);
         assert_eq!(plan.concurrent_projects, 1);
         assert_eq!(plan.solver_workers_per_project, 20);
     }

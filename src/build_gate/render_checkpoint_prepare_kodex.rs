@@ -45,6 +45,7 @@ fn read(root: &Path, path: &str) -> Result<Vec<u8>, String> {
 // below may succeed the accepted pins; every other #58 binding stays exact.
 fn phrase_transport_successor(path: &str, digest: &str) -> bool {
     const EXACT: &[(&str, &str)] = &[
+        ("src/structural_write_authority/final_notation_phrase_projection_transaction.rs", "c0576f715e0e38e9a70873f719069fead8b19be426c83ef8a2a5017254b09397"),
         ("src/structural_write_authority/mod.rs", "5d550e4ca788a368e740c65c76ff92d8194caf9bdba9638f5e4ed04c2d402b44"),
         ("src/structural_write_authority/final_notation_phrase_projection_transaction.rs", "dfda2487c5f9e6306f498b17454d60b7052a6b192254f721f0d030dbaf20a168"),
         ("src/structural_write_authority/final_notation_phrase_projection_transaction.rs", "c174c1d328c01d0628fd1675043bc856db5b735c96f29047017a89e01c899057"),

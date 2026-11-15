@@ -278,6 +278,25 @@ impl OriginalBeamVoiceGroup {
             closed_primary(&origin.states) && origin.members.is_subset(authored))
             .map(|(index,origin)|(index,origin.members.clone())).collect()
     }
+    pub(super) fn owns_complete_sustain_beam_tail(
+        &self,
+        tail: &BTreeMap<OriginalBeamOccurrenceKey, BTreeMap<u8, String>>,
+    ) -> bool {
+        self.positive_origins.iter().any(|origin| {
+            origin.members.len() == tail.len() && closed_primary(&origin.states)
+                && origin.members.iter().all(|key| {
+                    let Some(observed) = tail.get(key) else { return false; };
+                    self.members.iter().zip(&self.fragments).zip(&self.levels)
+                        .find(|(((source, attack), fragment), _)| (*source, *attack, **fragment) == *key)
+                        .is_some_and(|(_, levels)| {
+                            levels.iter().filter_map(|(level, _, state)| {
+                                state.clone().map(|value| (*level, value))
+                            }).collect::<BTreeMap<_, _>>() == *observed
+                        })
+                })
+        })
+    }
+
     pub(super) fn bridge_component_occurrences(&self) -> BTreeSet<(usize,usize,usize)> {
         self.members.iter().zip(&self.fragments).map(|(&(source,attack),&fragment)|(source,attack,fragment)).collect()
     }
@@ -449,6 +468,8 @@ pub(super) struct AlignmentInput<'a> {
     pub(super) source: &'a FinalPdfSourceOccurrenceContinuation,
     pub(super) voices: &'a FrozenSerializedVoicePlan,
     pub(super) classification_xml: &'a str,
+    pub(super) current: &'a [FinalChordBindingMeasure],
+    pub(super) classification: &'a [FinalChordBindingMeasure],
     pub(super) visible_fragments: &'a BTreeMap<String, usize>,
 }
 
@@ -468,6 +489,8 @@ pub(super) fn append_proven_alignment(
         source,
         voices,
         classification_xml,
+        current,
+        classification,
         visible_fragments,
     } = input;
     let AlignmentOutput {
@@ -479,13 +502,14 @@ pub(super) fn append_proven_alignment(
     if !source.has_authentic_beam_surface()? {
         return Ok(Vec::new());
     }
-    let current = final_chord_parse_binding_measures(source_xml)?;
-    let classification = final_chord_parse_binding_measures(classification_xml)?;
     let claimed = selected
         .iter()
         .map(|row| (row.source_event_id, row.attack_id))
         .collect::<BTreeSet<_>>();
-    if validate_batch_occupancy(source_xml, edits).is_err() {
+    let Ok(baseline) = batch_occupancy_baseline(source_xml, current) else {
+        return Ok(Vec::new());
+    };
+    if validate_batch_against_baseline(source_xml, current, &baseline, edits).is_err() {
         return Ok(Vec::new());
     }
     // MuseScore's voice slots are allocated over the whole part. Closing a
@@ -668,7 +692,7 @@ pub(super) fn append_proven_alignment(
             eprintln!("OriginalBeamAllocationRejection: group={}; canonical_allocation={}; source_and_channel_roles={:?}; authority=none",group.id,voices.has_canonical_role_allocation(),group.members.iter().zip(&notes).map(|(&(id,_),note)|(voices.role_for_source(id),channel_role(note))).collect::<Vec<_>>());
             observe("no_existing_congruent_staff_anchor"); continue;
         }
-        let Some(resources) = bound_chord_resources(BoundChordResourceContext { source, classification_xml, group, current: &current, classification: &classification, voices, claimed: &claimed, bridge_occurrences: bridges.iter().flat_map(|proof| proof.occurrences()).collect() }, &notes, &rows) else {
+        let Some(resources) = bound_chord_resources(BoundChordResourceContext { source, classification_xml, group, current, classification, voices, claimed: &claimed, bridge_occurrences: bridges.iter().flat_map(|proof| proof.occurrences()).collect() }, &notes, &rows) else {
             observe("chord_resource_closure"); continue;
         };
         if resources.iter().map(|(note,_)|note.voice.trim()).collect::<BTreeSet<_>>().len()<=1 {
@@ -701,7 +725,7 @@ pub(super) fn append_proven_alignment(
                     expected_old_label: note.voice.trim().to_owned(), target_label: target_label.to_owned() });
             }
             let mut trial = edits.clone(); trial.extend(group_edits.clone());
-            let (collisions, lost_registration) = new_batch_conflicts(source_xml,&trial)?;
+            let (collisions, lost_registration) = new_batch_conflicts(source_xml, current, &baseline, &trial)?;
             let unusual = beam_diagnostics::record(Observation::Admission {
                 scalar_changes: group_edits.len(),
                 collisions: !collisions.is_empty(),
@@ -710,14 +734,19 @@ pub(super) fn append_proven_alignment(
             if unusual || beam_diagnostics::detail_requested_for_measure(group.measure) {
                 eprintln!("OriginalBeamTargetResourceAdmission: group={}; target={target_label}; scalar_changes={}; collisions={collisions:?}; lost_registration={lost_registration:?}; authority=none",group.id,group_edits.len());
             }
+            // The initial batch check already proved both the unchanged
+            // source and the existing edits admissible.
+            let occupancy_admissible = collisions.is_empty() && lost_registration.is_empty();
+            let trial_import_admissible = occupancy_admissible
+                && projected_import_profile_admissible(source_xml, &trial);
             if beam_diagnostics::detail_requested_for_measure(group.measure) {
                 eprintln!("BeamImportProfileTrial: group={}; measure={}; target={target_label}; existing_edits={}; candidate_edits={:?}; occupancy_admissible={}",
                     group.id, group.measure, edits.len(), group_edits.iter().map(|edit|
                         (edit.measure, edit.pitched_ordinal, &edit.expected_old_label, &edit.target_label)
-                    ).collect::<Vec<_>>(), collisions.is_empty() && lost_registration.is_empty());
-                let _ = validate_batch_import_profile(source_xml, edits, Some("existing_edits"));
-                if collisions.is_empty() && lost_registration.is_empty() {
-                    let _ = validate_batch_import_profile(source_xml, &trial, Some("trial"));
+                    ).collect::<Vec<_>>(), occupancy_admissible);
+                eprintln!("BeamImportProfile: stage=existing_edits; source=true; projected=true");
+                if occupancy_admissible {
+                    eprintln!("BeamImportProfile: stage=trial; source=true; projected={trial_import_admissible}");
                 }
             }
             // Each existing channel is assessed against the complete written
@@ -726,8 +755,7 @@ pub(super) fn append_proven_alignment(
             if !collisions.is_empty() && lost_registration.is_empty() && !voices.has_canonical_role_allocation() {
                 break;
             }
-            if collisions.is_empty() && lost_registration.is_empty()
-                && validate_batch_import_profile(source_xml, &trial, None).is_ok() {
+            if trial_import_admissible {
                 let improves = admitted_target.as_ref().is_none_or(|(_,_,_,prior): &(usize,usize,String,Vec<PrimaryBeamVoicePartitionBoundEdit>)|group_edits.len()<prior.len());
                 if improves { admitted_target = Some((target_index,target_channel,target_label.to_owned(),group_edits)); }
                 // All options retain exactly the original musical membership.
@@ -759,7 +787,7 @@ pub(super) fn append_proven_alignment(
         for (_, _, _, _, proposed, _, _) in &proposals {
             batch.extend(proposed.clone());
         }
-        let (conflicts, headless) = new_batch_conflicts(source_xml, &batch)?;
+        let (conflicts, headless) = new_batch_conflicts(source_xml, current, &baseline, &batch)?;
         if conflicts.is_empty() && headless.is_empty() {
             break;
         }
@@ -818,10 +846,11 @@ pub(super) fn append_proven_alignment(
 
 fn occupancy_conflicts(
     xml: &str,
+    measures: &[FinalChordBindingMeasure],
     labels: &BTreeMap<(usize, usize), String>,
 ) -> io::Result<BTreeSet<(usize, usize, usize)>> {
     let mut result = BTreeSet::new();
-    for measure in final_chord_parse_binding_measures(xml)? {
+    for measure in measures {
         let heads = measure
             .notes
             .iter()
@@ -860,12 +889,25 @@ fn occupancy_conflicts(
     Ok(result)
 }
 
+// Both sets describe the same immutable source before any trial relabeling.
+fn batch_occupancy_baseline(
+    source: &str,
+    measures: &[FinalChordBindingMeasure],
+) -> io::Result<ChannelSafety> {
+    let labels = BTreeMap::new();
+    Ok((
+        occupancy_conflicts(source, measures, &labels)?,
+        headless_labels_from_measures(source, measures, &labels),
+    ))
+}
+
 fn new_batch_conflicts(
     source: &str,
+    measures: &[FinalChordBindingMeasure],
+    baseline: &ChannelSafety,
     edits: &[PrimaryBeamVoicePartitionBoundEdit],
 ) -> io::Result<ChannelSafety> {
-    let before = occupancy_conflicts(source, &BTreeMap::new())?;
-    let measures = final_chord_parse_binding_measures(source)?;
+    let (before_conflicts, before_headless) = baseline;
     let mut labels = BTreeMap::new();
     let mut edits = edits.iter().collect::<Vec<_>>();
     edits.sort_by_key(|edit| edit.voice_text_start);
@@ -919,13 +961,13 @@ fn new_batch_conflicts(
             ));
         }
     }
-    let new_headless = headless_labels(source, &labels)?
-        .difference(&headless_labels(source, &BTreeMap::new())?)
+    let new_headless = headless_labels_from_measures(source, measures, &labels)
+        .difference(before_headless)
         .cloned()
         .collect();
     Ok((
-        occupancy_conflicts(source, &labels)?
-            .difference(&before)
+        occupancy_conflicts(source, measures, &labels)?
+            .difference(before_conflicts)
             .copied()
             .collect(),
         new_headless,
@@ -936,39 +978,52 @@ pub(super) fn validate_batch_occupancy(
     source: &str,
     edits: &[PrimaryBeamVoicePartitionBoundEdit],
 ) -> io::Result<()> {
-    let (conflicts, headless) = new_batch_conflicts(source, edits)?;
+    let measures = final_chord_parse_binding_measures(source)?;
+    validate_batch_occupancy_with_measures(source, &measures, edits)
+}
+
+pub(super) fn validate_batch_occupancy_with_measures(
+    source: &str,
+    measures: &[FinalChordBindingMeasure],
+    edits: &[PrimaryBeamVoicePartitionBoundEdit],
+) -> io::Result<()> {
+    let baseline = batch_occupancy_baseline(source, measures)?;
+    validate_batch_against_baseline(source, measures, &baseline, edits)
+}
+
+fn validate_batch_against_baseline(
+    source: &str,
+    measures: &[FinalChordBindingMeasure],
+    baseline: &ChannelSafety,
+    edits: &[PrimaryBeamVoicePartitionBoundEdit],
+) -> io::Result<()> {
+    let (conflicts, headless) = new_batch_conflicts(source, measures, baseline, edits)?;
     if !conflicts.is_empty() || !headless.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "original beam alignment introduces a channel occupancy conflict",
         ));
     }
-    validate_batch_import_profile(source, edits, None)
+    if !crate::audit_only::import_channel_profile_readback::partwide_import_channels_admissible(source)
+        || !projected_import_profile_admissible(source, edits)
+    {
+        return Err(io::Error::new(io::ErrorKind::InvalidData,
+            "original beam alignment violates the complete partwide import-channel profile"));
+    }
+    Ok(())
 }
 
-fn validate_batch_import_profile(
+fn projected_import_profile_admissible(
     source: &str,
     edits: &[PrimaryBeamVoicePartitionBoundEdit],
-    trace_stage: Option<&str>,
-) -> io::Result<()> {
+) -> bool {
     let mut projected = source.to_owned();
     let mut ordered = edits.iter().collect::<Vec<_>>();
     ordered.sort_by_key(|edit| std::cmp::Reverse(edit.voice_text_start));
     for edit in ordered {
         projected.replace_range(edit.voice_text_start..edit.voice_text_end, &edit.target_label);
     }
-    if let Some(stage) = trace_stage {
-        use crate::audit_only::import_channel_profile_readback::partwide_import_channels_admissible;
-        eprintln!("BeamImportProfile: stage={stage}; source={}; projected={}",
-            partwide_import_channels_admissible(source), partwide_import_channels_admissible(&projected));
-    }
-    if !crate::audit_only::import_channel_profile_readback::partwide_import_channels_admissible(source)
-        || !crate::audit_only::import_channel_profile_readback::partwide_import_channels_admissible(&projected)
-    {
-        return Err(io::Error::new(io::ErrorKind::InvalidData,
-            "original beam alignment violates the complete partwide import-channel profile"));
-    }
-    Ok(())
+    crate::audit_only::import_channel_profile_readback::partwide_import_channels_admissible(&projected)
 }
 
 pub(super) fn validate_late_groups(
@@ -1099,14 +1154,24 @@ fn same_owned_levels(
         .all(|(level, _, state)| written.get(level).copied() == state.as_deref())
 }
 
+#[cfg(test)]
 fn headless_labels(
     xml: &str,
     labels: &BTreeMap<(usize, usize), String>,
 ) -> io::Result<BTreeSet<String>> {
+    let measures = final_chord_parse_binding_measures(xml)?;
+    Ok(headless_labels_from_measures(xml, &measures, labels))
+}
+
+fn headless_labels_from_measures(
+    xml: &str,
+    measures: &[FinalChordBindingMeasure],
+    labels: &BTreeMap<(usize, usize), String>,
+) -> BTreeSet<String> {
     let mut registered = BTreeSet::new();
     let mut required = BTreeSet::new();
-    for measure in final_chord_parse_binding_measures(xml)? {
-        for note in measure.notes {
+    for measure in measures {
+        for note in &measure.notes {
             if note.duration <= 0 || xml[note.range.clone()].contains("print-spacing=\"no\"") {
                 continue;
             }
@@ -1122,7 +1187,7 @@ fn headless_labels(
             }
         }
     }
-    Ok(required.difference(&registered).cloned().collect())
+    required.difference(&registered).cloned().collect()
 }
 
 #[cfg(test)]

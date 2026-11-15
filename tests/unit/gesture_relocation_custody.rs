@@ -105,12 +105,13 @@ fn other_edit_shapes_produce_no_capture() {
 }
 
 #[test]
-fn clone_outside_anchor_support_or_without_chord_marker_is_not_continued() {
+fn owner_rejects_a_different_duration_or_missing_chord_marker() {
     let state = received(&[(11, 0, 1), (13, 0, 1), (21, 0, 2)], 11);
     let (moved, anchor) = (by_source(&state, 11), by_source(&state, 21));
     let longer = chord_clone(&state, &moved, &anchor, None).replace("<duration>", "<duration>1");
-    let (post, receipts) = relocate(&state, &moved, &anchor, longer);
-    assert!(receipts.continue_owned_rhythm(&state, &post).unwrap_err().to_string().contains("chord member of its anchor"));
+    let (post, receipt) = apply_chord_gesture_distribution_batch_authorized(state.document(),
+        vec![(moved.bytes.start, moved.bytes.end, String::new()), (anchor.bytes.end, anchor.bytes.end, longer)]);
+    assert!(post.is_none() && receipt.is_none());
     let plain = chord_clone(&state, &moved, &anchor, None).replace("<chord/>", "");
     let (post, receipt) = apply_chord_gesture_distribution_batch_authorized(state.document(),
         vec![(moved.bytes.start, moved.bytes.end, String::new()), (anchor.bytes.end, anchor.bytes.end, plain)]);

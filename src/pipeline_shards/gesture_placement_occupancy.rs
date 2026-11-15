@@ -167,6 +167,8 @@ impl GesturePlacementOccupancy {
             || anchor.measure.parse::<usize>().ok()? != slot.measure
             || slot.measure != tone.measure
             || anchor.start != slot.start_tick
+            || anchor.duration <= 0
+            || anchor.duration != slot.duration
             || anchor.staff != slot.staff.to_string()
             || anchor.voice != slot.voice
             || anchor.pitch.as_ref().map(|p| p.midi) != slot.midi
@@ -174,8 +176,9 @@ impl GesturePlacementOccupancy {
         {
             return None;
         }
-        // The existing serializer writes slot.duration.max(1), not necessarily
-        // the duration of the atomic chord member behind which it inserts.
+        // The serializer inserts directly after this bound note. A longer
+        // duration inherited from the chord head cannot use a shorter member
+        // as the relocation predecessor.
         slot.start_tick.checked_add(slot.duration.max(1))?;
         Some((
             index,

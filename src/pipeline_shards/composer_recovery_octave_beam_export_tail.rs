@@ -1796,6 +1796,196 @@ pub(crate) struct BeatScopedBeamingBlockMint {
     _sealed: (),
 }
 
+/// E053 re-evaluates its own grouping against an adopted candidate clef course.
+/// All note ranges in the plan belong to the post-clef document.
+pub(crate) fn prepare_clef_beam_revision(before: &str, source: &str) -> anyhow::Result<Vec<ActualBeamEmission>> {
+    let original = partial_beat_measure_spans(before);
+    let updated = partial_beat_measure_spans(source);
+    anyhow::ensure!(original.len() == updated.len(), "Clef owner changed beam measure topology");
+    let mut divisions = 1;
+    let mut result = Vec::new();
+    for (old, new) in original.into_iter().zip(updated) {
+        let pre = &before[old.start..old.end];
+        let post = &source[new.start..new.end];
+        divisions = partial_beat_first_i64(post, "divisions").unwrap_or(divisions).max(1);
+        if pre == post {
+            continue;
+        }
+        let (Some(old_cuts), Some(new_cuts)) =
+            (metric_beam_clef_boundaries(pre), metric_beam_clef_boundaries(post))
+        else { anyhow::bail!("Unresolved clef boundary at E053 continuation"); };
+        if old_cuts == new_cuts {
+            continue;
+        }
+        let notes = partial_beat_raw_notes(post);
+        anyhow::ensure!(partial_beat_raw_notes(pre).iter().map(|note| &note.text)
+            .eq(notes.iter().map(|note| &note.text)), "Clef transition changed a beam note container");
+        let infos = partial_beat_note_infos(post, &notes);
+        let plan = |cuts| {
+            let mut stats = BeatScopedBeamPatchStats::default();
+            add_beat_scoped_beam_groups(&infos, divisions, cuts,
+                &mut BTreeMap::new(), &mut BTreeSet::new(), &mut stats);
+            stats.actual_beam_emissions
+        };
+        let old_plan = plan(&old_cuts);
+        let new_plan = plan(&new_cuts);
+        let mut changed = new_plan.iter().filter(|emission| !old_plan.contains(emission))
+            .cloned().collect::<Vec<_>>();
+        let replaced = old_plan.iter().filter(|emission| !new_plan.contains(emission))
+            .flat_map(|emission| emission.members.iter().copied()).collect::<BTreeSet<_>>();
+        let planned = changed.iter().flat_map(|emission| emission.members.iter().copied())
+            .collect::<BTreeSet<_>>();
+        changed.extend(replaced.difference(&planned).map(|index| ActualBeamEmission::negative(*index)));
+        for mut emission in changed {
+            emission.lift(new.start);
+            result.push(emission);
+        }
+    }
+    validate_revised_beam_register_boundaries(source, &result)?;
+    Ok(result)
+}
+
+fn validate_revised_beam_register_boundaries(source: &str, emissions: &[ActualBeamEmission]) -> anyhow::Result<()> {
+    if emissions.iter().any(|emission| emission.members.len() > 1) {
+        let clock = c3_adapter::observe_clock(source).map_err(|error| anyhow!("{error:?}"))?;
+        let course = c3_adapter::read_register_courses(source).map_err(|error| anyhow!("{error:?}"))?;
+        let doc = roxmltree::Document::parse(source)?;
+        let staff = doc.descendants().filter(|node| node.has_tag_name("note"))
+            .map(|note| (note.range().start, beam_note_field(note, "staff").unwrap_or("1")))
+            .collect::<BTreeMap<_, _>>();
+        for emission in emissions.iter().filter(|emission| emission.members.len() > 1) {
+            let first = emission.members[0];
+            let last = *emission.members.last().expect("positive group has members");
+            let from = clock.times.get(&(first, false)).ok_or_else(|| anyhow!("Missing beam onset"))?;
+            let to = clock.times.get(&(last, false)).ok_or_else(|| anyhow!("Missing beam endpoint"))?;
+            let staff = staff.get(&first).ok_or_else(|| anyhow!("Missing beam staff"))?;
+            let states = course.get(*staff).ok_or_else(|| anyhow!("Missing beam register course"))?;
+            anyhow::ensure!(c3_adapter::course_state_at(states, *from).is_some()
+                && states.iter().all(|(at, _)| at <= from || at > to),
+                "E053 continuation would cross a retained clef or octave boundary");
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn realize_clef_beam_revision(
+    source: &str,
+    previous: &ActualCanonicalBeamCapture,
+    emissions: &[ActualBeamEmission],
+) -> anyhow::Result<(String, crate::master_state_identity::CapturedBlockReceiptInput)> {
+    let old = previous.occurrences(source)?.iter()
+        .map(|(range, levels)| (range.start, levels)).collect::<BTreeMap<_, _>>();
+    realize_metric_beam_revision(source, Some(previous), emissions, |start, written| {
+        let owned = old.get(&start).into_iter().flat_map(|levels| levels.iter())
+            .filter_map(|(level, _, state)| state.as_ref().map(|state| (*level, state.clone())))
+            .collect::<BTreeMap<_, _>>();
+        *written == owned
+    })
+}
+
+fn realize_metric_beam_revision(
+    source: &str,
+    previous: Option<&ActualCanonicalBeamCapture>,
+    emissions: &[ActualBeamEmission],
+    verifies_written: impl Fn(usize, &BTreeMap<u8, String>) -> bool,
+) -> anyhow::Result<(String, crate::master_state_identity::CapturedBlockReceiptInput)> {
+    let mut edits = BTreeMap::<usize, Vec<(usize, String)>>::new();
+    for emission in emissions {
+        for &member in &emission.members {
+            anyhow::ensure!(edits.insert(member, Vec::new()).is_none(), "Ambiguous revised beam member");
+        }
+        for (ordinal, level, state) in &emission.edits {
+            edits.get_mut(&emission.members[*ordinal]).expect("declared emission member")
+                .push((usize::from(*level), state.clone()));
+        }
+    }
+    let mut output = String::with_capacity(source.len());
+    let mut map = ActualBeamNoteMap::default();
+    let mut cursor = 0;
+    for note in partial_beat_raw_notes(source) {
+        output.push_str(&source[cursor..note.start]);
+        let start = output.len();
+        if let Some(states) = edits.remove(&note.start) {
+            let original = roxmltree::Document::parse(&note.text)?;
+            let written = actual_beam_written_states(original.root_element())?;
+            anyhow::ensure!(verifies_written(note.start, &written), "E053 continuation overlaps another owner's beam");
+            let desired = states.iter().map(|(level, state)| (*level as u8, state.clone())).collect();
+            if written == desired {
+                output.push_str(&note.text);
+            } else {
+                output.push_str(&partial_beat_insert_beam_text_tags(&partial_beat_strip_beam_tags(&note.text), &states));
+            }
+        } else {
+            output.push_str(&note.text);
+        }
+        map.0.push((note.start..note.end, start..output.len()));
+        cursor = note.end;
+    }
+    anyhow::ensure!(edits.is_empty(), "Revised beam plan refers outside complete source notes");
+    output.push_str(&source[cursor..]);
+    let Some(receipt) = BlockTransformationReceipt::mint_block_receipt(
+        BeatScopedBeamingBlockMint { _sealed: () }, source, &output, None,
+    ) else { return Ok((output, None.into())); };
+    let identity = ActualBeamNoteMap::unchanged(&partial_beat_raw_notes(&output));
+    let mut capture = ActualCanonicalBeamCapture::at_owner(&receipt, source, &output, &map, &identity, emissions)?;
+    if let Some(previous) = previous {
+        capture.inherit_untouched_clef_beams(previous, &map, &identity, emissions)?;
+    }
+    capture.course_carry_births(&receipt)?;
+    Ok((output, crate::master_state_identity::CapturedBlockReceiptInput::observed_beam(receipt, Ok(capture))))
+}
+
+/// A generated tied head may extend a complete, already-owned metric group.
+/// The caller binds the written tail and final voice to actual owner records.
+pub(crate) fn extend_bound_sustain_beam_group(
+    source: &str,
+    generated: &BTreeSet<usize>,
+    authorized: impl Fn(&[usize], &BTreeMap<usize, BTreeMap<u8, String>>) -> bool,
+    previous: Option<&ActualCanonicalBeamCapture>,
+) -> anyhow::Result<Option<(String, crate::master_state_identity::CapturedBlockReceiptInput)>> {
+    if generated.is_empty() { return Ok(None); }
+    let mut divisions = 1;
+    let mut emissions = Vec::new();
+    let mut verified = BTreeMap::new();
+    for span in partial_beat_measure_spans(source) {
+        let measure = &source[span.start..span.end];
+        divisions = partial_beat_first_i64(measure, "divisions").unwrap_or(divisions).max(1);
+        if generated.range(span.start..span.end).next().is_none() { continue; }
+        let Some(cuts) = metric_beam_clef_boundaries(measure) else { continue; };
+        let raw_notes = partial_beat_raw_notes(measure);
+        let infos = partial_beat_note_infos(measure, &raw_notes);
+        let raw = raw_notes.iter().map(|note| (note.start, note)).collect::<BTreeMap<_, _>>();
+        let by_start = infos.iter().map(|note| (note.index, note)).collect::<BTreeMap<_, _>>();
+        let mut stats = BeatScopedBeamPatchStats::default();
+        add_beat_scoped_beam_groups(&infos, divisions, &cuts,
+            &mut BTreeMap::new(), &mut BTreeSet::new(), &mut stats);
+        for mut emission in stats.actual_beam_emissions {
+            let Some(&head) = emission.members.first() else { continue; };
+            if emission.members.len() < 3 || !generated.contains(&(span.start + head))
+                || emission.members.windows(2).any(|pair| {
+                    let left = by_start[&pair[0]];
+                    let right = by_start[&pair[1]];
+                    left.start + left.duration != right.start
+                }) { continue; }
+            let levels = emission.members.iter().map(|start| {
+                let note = roxmltree::Document::parse(&raw[start].text)?;
+                Ok((span.start + *start, actual_beam_written_states(note.root_element())?))
+            }).collect::<anyhow::Result<BTreeMap<_, _>>>()?;
+            if !levels[&(span.start + head)].is_empty() { continue; }
+            emission.lift(span.start);
+            if authorized(&emission.members, &levels) {
+                verified.extend(levels);
+                emissions.push(emission);
+            }
+        }
+    }
+    if emissions.is_empty() { return Ok(None); }
+    validate_revised_beam_register_boundaries(source, &emissions)?;
+    realize_metric_beam_revision(source, previous, &emissions, |start, written| {
+        verified.get(&start) == Some(written)
+    }).map(Some)
+}
+
 fn enforce_beat_scoped_beaming_in_xml(xml: &mut String) -> BeatScopedBeamPatchStats {
     let spans = partial_beat_measure_spans(xml);
     if spans.is_empty() {
@@ -4092,14 +4282,23 @@ fn extract_first_text_from_fragment(text: &str, tag: &str) -> Option<String> {
 fn apply_expression_polish(
     xml: &mut String,
     estimated_bpm: Option<f64>,
-) -> (String, master_state_identity::OwnerReceipts) {
+    opening_tempo: Option<&AuthoredOpeningTempo>,
+) -> anyhow::Result<(String, master_state_identity::OwnerReceipts)> {
     let mut inserted = 0_usize;
     let mut receipts = master_state_identity::OwnerReceipts::default();
+
+    if let Some(mark) = opening_tempo {
+        let (locator, direction) = authored_opening_tempo_direction(xml, mark)?;
+        let (_, receipt) = insert_direction_into_measure(xml, &locator, &direction);
+        let receipt = receipt.ok_or_else(|| anyhow!("Anfangstempo wurde nicht in die Partitur übernommen"))?;
+        receipts.push_additive(Some(receipt));
+        return Ok(("Partiturtempo übernommen".to_string(), receipts));
+    }
 
     let Some(first_measure) =
         crate::structural_write_authority::first_structural_measure_locator(xml)
     else {
-        return ("ExpressionPolish v0.1.162: keine Takte gefunden; keine Tempo-/Spiel-/Dynamikangaben gesetzt; keine Pedalzeichen eingefügt.".to_string(), receipts);
+        return Ok(("ExpressionPolish v0.1.162: keine Takte gefunden; keine Tempo-/Spiel-/Dynamikangaben gesetzt; keine Pedalzeichen eingefügt.".to_string(), receipts));
     };
 
     let tempo_bpm = estimated_bpm
@@ -4117,9 +4316,9 @@ fn apply_expression_polish(
             || "Tempo nicht gesetzt, weil kein plausibler WAV-Tempo-Schätzwert vorlag".to_string(),
             |bpm| format!("Tempo als echtes Metronomzeichen sichtbar: Viertel={bpm} aus WAV-Signatur"),
         );
-    (format!(
+    Ok((format!(
         "ExpressionPolish: {inserted} Tempoangaben ergänzt. {tempo_fragment}."
-    ), receipts)
+    ), receipts))
 }
 
 
@@ -4843,3 +5042,6 @@ fn parent_preview(
 
 #[cfg(test)]
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/structural_write_authority/projected_rest_bridge_owner_tests.rs"));
+
+
+include!("authored_opening_tempo.rs");

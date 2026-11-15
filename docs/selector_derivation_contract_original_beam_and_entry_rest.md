@@ -31,3 +31,9 @@ canonical projection and original writer. Existing written edges and every
 non-rest obligation remain protected. Each independently bound component
 receives its own proof. A split rest continuation or unrelated cursor change
 cannot act as a witness.
+
+Source entry-rest eligibility and exact qualified source gaps are indexed
+once against the immutable source and its sealed voice-gap evidence.
+Each candidate still proves the continuation independently against its
+own projected note or forward, comparing byte ranges and the existing
+duration, voice, staff and provenance evidence.

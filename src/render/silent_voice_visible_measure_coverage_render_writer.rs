@@ -2107,6 +2107,25 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
             &effective_voice_plan, render_pruned_final_chord_omissions) {
             Ok(Some((next, receipt))) => {
                 receipts.push_exact(Some(receipt));
+                let carried = crate::pipeline::joint_render_custody_context().and_then(|context| {
+                    receipts.observe_actual_beam_continuation(context.beams.as_ref())
+                });
+                let capture = carried.as_ref().and_then(|result| result.as_ref().ok());
+                let next = match next.extend_source_sustain_beam(
+                    final_chord_structural_plan, &effective_voice_plan,
+                    render_pruned_final_chord_omissions, capture.map(std::sync::Arc::as_ref),
+                ) {
+                    Ok(Some((beam_output, beam_receipt))) => {
+                        receipts.push_block(beam_receipt, beam_output.xml());
+                        eprintln!("CrossBarSourceSustainBeam: linked generated continuations; authority=E053");
+                        beam_output
+                    }
+                    Ok(None) => next,
+                    Err(error) => {
+                        eprintln!("CrossBarSourceSustainBeam: retained incumbent; {error:#}");
+                        next
+                    }
+                };
                 final_candidate = next.xml().to_owned();
                 candidate_occurrence_continuation = Ok(next);
                 source_sustain_written = true;
