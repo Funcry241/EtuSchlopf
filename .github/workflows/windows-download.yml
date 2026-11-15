@@ -36,7 +36,7 @@ jobs:
           }
           if ((Get-FileHash docs/evidence/r1872/native_acceptance.txt -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'f0f2ca8fd5060c1b67d7a243841950ffec549b6570c517cbc8ffc017698bdd54') { throw 'Native acceptance record checksum mismatch' }
           if ((Get-FileHash docs/evidence/r1872/accepted_source_sha256.tsv -Algorithm SHA256).Hash.ToLowerInvariant() -ne '3a9af263c4057bc122c05d8a0a4905d0970f6c107af4577d62faeafa223f538f') { throw 'Accepted source inventory checksum mismatch' }
-          if ((Get-FileHash docs/evidence/r1872/github_projection_sha256.tsv -Algorithm SHA256).Hash.ToLowerInvariant() -ne '93aa5d7196954c54ca2e990621f4d33b3aca057cc20bdf84646ff6252cf3640b') { throw 'Public documentation projection checksum mismatch' }
+          if ((Get-FileHash docs/evidence/r1872/github_projection_sha256.tsv -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'ac5df03796739a5c89f609da60ce780eebdbcffb130be145fba3090611532fb7') { throw 'Public documentation projection checksum mismatch' }
           $projection = @{}
           Get-Content docs/evidence/r1872/github_projection_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
             $parts = $_ -split "`t"
@@ -52,7 +52,7 @@ jobs:
             $sourceCount++
           }
           if ($sourceCount -ne 2166) { throw 'Accepted source inventory is incomplete' }
-          if ($projection.Count -ne 5) { throw 'Unexpected public documentation projection' }
+          if ($projection.Count -ne 6) { throw 'Unexpected public documentation projection' }
       - name: Build accepted engine
         run: |
           rustup toolchain install 1.98.0 --profile minimal

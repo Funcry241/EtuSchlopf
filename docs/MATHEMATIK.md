@@ -1,10 +1,10 @@
 # Mathematik in EtuSchlopf
 
-**Quellstand r1748 / 0.10.1839.** C4 bewertet Registerzeichen vor Köpfen mit drei Hilfslinien. Der [Projektstatus](assistant_memory/050_aktueller_stand.md) nennt die belegten Windows- und lokalen Prüfstände.
+**Quellstand r1872 / 0.10.1839.** Der jüngste veröffentlichte Windows-Einzellauf prüft Schuberts Deutschen Tanz D. 783 Nr. 15. Zur Freigabe gehören der [native Prüfbeleg](evidence/r1872/README.md) und der [Windows-Paketlauf](https://github.com/Funcry241/EtuSchlopf/actions/runs/43755526495). Alle drei musikalischen Referenzen sind mit Notenbild und Druckvorlage in der [Galerie](examples/README.md#notenbilder) dokumentiert.
 
 EtuSchlopf verwendet Mathematik für musikalische Entscheidungen, Darstellungsentscheidungen, Messungen und technische Beweise. Diese Aufgaben sind verschieden: Eine Erhaltungsbilanz beweist keine Lesbarkeit; ein lesbarer Registerkurs beweist keine menschliche Spielbarkeit; eine bestandene Prüfung erlaubt nur den Übergang, dessen Bedingungen sie tatsächlich abdeckt.
 
-Diese Seite ist eine **nach Aufgaben gegliederte Bestandsaufnahme** der überprüften Verfahrensfamilien. Sie ersetzt weder die kanonischen Verträge noch ein vollständiges Funktionsinventar. Die frühere Liste von 21 Themen war unvollständig. Insbesondere fehlten eigenständige Beschreibungen der Tonartbewertung, Phrasen- und Wiederholungsanalyse, Belegungsgraphen, WAV-Puls- und Spektralanalyse, vorhandenen Systemumbruchplanung und exakten Suchbeschleunigungen. Auch diese erweiterte Seite behauptet nicht, jede arithmetische Operation jeder Abhängigkeit aufzulisten.
+Diese Bestandsaufnahme verknüpft die Verfahren mit ihrem Einsatz im Code und den dazugehörigen Prüfbelegen. Den Umfang einer konkreten Entscheidung legen die ausführbaren Verträge fest.
 
 ## Wie die Aussagen zu lesen sind
 
@@ -48,7 +48,7 @@ $$\min_{x\in\mathcal F}(\text{Seitenzahl}(x),\text{übermäßige Dehnung}(x),\te
 
 $\mathcal F$ müsste die tatsächlich lesbaren und materialisierbaren Kandidaten enthalten. Lesbarkeit ist darin Voraussetzung. Horizontale Taktprofile, vertikale Systemhüllen und Seitenbelegung sind getrennte Größen; die Systemreihenfolge bleibt erhalten.
 
-**Status:** Diese Gesamtformel ist nicht als vollständiger Seitenoptimierer implementiert. Die bestehende horizontale Systemplanung ist davon zu unterscheiden. Seitenverdichtung bleibt zurückgestellt, bis sichtbare Mindestabstände und die zugehörige Vergleichsgrundlage festgelegt sind. Aus einer großen beobachteten Lücke folgt weder ein Mindestabstand noch automatisch die Erlaubnis zum Zusammenrücken.
+**Status:** Diese Gesamtformel ist nicht als vollständiger Seitenoptimierer implementiert. Die horizontale Systemplanung und der begrenzte gemeinsame Seiten- und Systemplan sind bereits implementiert. Für eine allgemeine Seitenverdichtung fehlen belegte sichtbare Mindestabstände und eine durchgängige Vergleichsgrundlage. Aus einer großen beobachteten Lücke folgt weder ein Mindestabstand noch automatisch die Erlaubnis zum Zusammenrücken.
 
 Quelle: [Fehlerklasse zur unnötig beibehaltenen Seite](selector_derivation_contract_redundant_page_retention.md), [Projektstatus und Arbeitsrahmen](assistant_memory/050_aktueller_stand.md).
 
@@ -102,6 +102,10 @@ Die Quellstellen nennen die jeweiligen Implementierungsstellen, nicht automatisc
 | 32 | Beobachtungsäquivalenz und reduzierte Aufbewahrung | Technische Erhaltung unter nachgewiesenen Leserabhängigkeiten. | [solver_candidate_retention.rs](../src/pipeline_shards/solver_candidate_retention.rs) |
 | 33 | Fingerprints und Hashfunktionen: FNV-1a, SHA-256 | Integritäts- und Bindungsprüfungen mit jeweiligen Kollisionsannahmen. Kein eigenständiger musikalischer Identitätsbeweis. | [SHA-256](../src/build_gate/sha256.rs), [Herkunft](../src/master_state_identity.rs) |
 | 34 | Externe Versionsvergleiche, vereinfachte Weglass-Untergrenzen und Regressionsmodelle | Historische Diagnosewerkzeuge. Keine produktive musikalische Autorität. | historische r1556-Auswertung der früheren Seitenfassung |
+| 35 | Notationszeit, Taktgrenzen und exakt gebundene Haltefortsetzungen | Entscheidet im MIDI-Seed unter Quell- und Metrikbindung. | [Notationszeit](../src/notation_time.rs), [MIDI-Seed](../src/midi_seed.rs) |
+| 36 | Wiederholungsakkorde und belegte Handzuordnung über klingende Zeitintervalle | Entscheidet bei eindeutiger Wiederholung und zulässiger Tastenbelegung. | [Handzuordnung](selector_derivation_contract_repeated_accompaniment_hand_implementation.md), [Warnungsprüfung](../src/rules.rs) |
+| 37 | Begrenzter gemeinsamer Seiten- und Systemplan mit Renderer-Rückmeldung | Entscheidet und prüft innerhalb zugelassener Seitenzahlen und Kapazitäten. | [Planung](../src/pipeline_shards/horizontal_layout_global_page_system.rs), [Partitionssuche](../src/pipeline_shards/renderer_exact_partition_search.rs) |
+| 38 | Speicherabschätzung für parallele Korpusprojekte | Plant Prozesse und Solver-Worker mit festgesetzten Schätzwerten. | [Korpus-Speicherplanung](../src/pipeline_shards/corpus_memory_capacity.rs) |
 
 ## Zentrale Formeln und ihre Beweisgrenzen
 
@@ -125,6 +129,22 @@ Für den dadurch erzeugten Intervallgraphen gilt:
 $$\chi(G)=\omega(G).$$
 
 Die maximale Überlappung ist damit die minimale Farbzahl **dieses Graphen**. Musikalische Linien, ursprüngliche Balkengruppen, Pausenpflichten, Akkordbindungen und technische Importkanäle besitzen zusätzliche Bedingungen. Aus der Graphzahl allein folgt keine erlaubte Zusammenlegung solcher Rollen. Der aktuelle `VoiceModel`-Bericht nennt diese Grenze ausdrücklich.
+
+### Notationszeit, Haltebögen und Handzuordnung
+
+Bei einem gebundenen Anschlag mit Einsatz $t$, Ende $e$ in der Notationszeit und einer Taktgrenze $b$ mit $t<b<e$ kann der MIDI-Seed das Zeitintervall in zwei Fragmente teilen:
+
+$$[t,e)=[t,b)\cup[b,e),\qquad e-t=(b-t)+(e-b).$$
+
+Der Haltebogen verbindet beide Fragmente mit demselben Anschlag. Der Pfad prüft unter anderem exakte Notenwerte, die belegte Taktgrenze und konkurrierende Anschläge derselben Tonhöhe. In Schuberts Auftakt ergibt die gebundene Dauer $240=96+144$ Ticks, also eine Viertel am Auftakt und eine punktierte Viertel am Beginn des Folgetakts. [MIDI-Seed](../src/midi_seed.rs) · [Windows-Notenbild](examples/schubert-d783-no15-p18-r1872.pdf).
+
+Für einen durch die bisherige Handgrenze geteilten Akkord vergleicht r1872 die Menge der MIDI-Tasten mit zeitlich direkt angrenzenden Akkordgruppen. Ein Zeuge muss vor der Korrektur vollständig derselben Hand zugeordnet sein. Widersprechen sich die Zeugen, bleibt die Einteilung bestehen. Für jede Hand $h$ und jede geprüfte Anschlagsgrenze $u$ verlangt der Code für die klingende Tastenmenge $K_h(u)$:
+
+$$|K_h(u)|\le 5,\qquad \max K_h(u)-\min K_h(u)\le 12\quad\text{für }K_h(u)\ne\varnothing.$$
+
+Sind beide Hände belegt, muss die höchste linke Taste unter der tiefsten rechten liegen. Konkurrierende Anschläge derselben Akkordtaste schließen den Wechsel aus. Die Grenzwerte gehören zum Modell der Handzuordnung. Sie liefern weder einen Fingersatz noch einen Nachweis individueller Spielbarkeit. [Regel für Wiederholungsakkorde](selector_derivation_contract_repeated_accompaniment_hand_implementation.md) · [Quellcode](../src/midi_seed.rs).
+
+Die Sprungwarnung prüft zusätzlich, ob sich beide Tonhöhengrenzen aufeinanderfolgender Anschläge in dieselbe Richtung bewegen und jeweils mindestens 19 Halbtöne zurücklegen. Der bestehende Test der Zeitkante bleibt Teil der Warnung. Ein Akkord kann sich aufspreizen oder zusammenziehen, ohne dass beide Grenzen einen solchen Sprung ausführen. [Prüfregel](../src/rules.rs).
 
 ### Quadratische Verteilungskosten
 
@@ -202,13 +222,15 @@ $$s_j=x_j+2\cos(\omega)s_{j-1}-s_{j-2},\qquad \omega=2\pi f/f_s.$$
 
 Die Frequenzzuordnung der Probe verwendet $f(m)=440\cdot2^{(m-69)/12}$: gleichstufige Stimmung mit A4 = 440 Hz ist hier eine Modellannahme. Der Code normiert die berechnete Energie durch das Quadrat der Fensterlänge. Dies ist gezielte Frequenzanalyse, keine Behauptung, dass im Projekt eine allgemeine FFT-Pipeline implementiert sei. Ein hoher Wert kann auch von Obertönen oder überlagerten Klängen stammen. Basic Pitch ist zusätzlich ein fremder neuronaler Sensor; beide Beobachtungen erhalten keine automatische musikalische Schreibbefugnis.
 
-### Systemplanung ist nicht Seitenoptimierung
+### Horizontaler Umbruch und begrenzte gemeinsame Planung
 
-Der vorhandene globale horizontale Reflow vergleicht endliche Systempartitionen unter seinen Kapazitätsbedingungen. Sein Vergleichsschlüssel enthält in dieser Reihenfolge Systemzahl, Einzel-Takt-Systeme, erzwungene Überkapazitäts-Einzelplätze, quadratische Restkapazität und den deterministischen Partitionsvergleich. Die Seitenzuordnung bleibt an die vorhandene Autorität gebunden.
+Der horizontale Reflow vergleicht endliche Systempartitionen unter seinen Kapazitätsbedingungen. Sein Vergleichsschlüssel betrachtet zuerst Systemzahl, Ein-Takt-Systeme, erzwungene Überkapazitäts-Einzelplätze und quadratische Restkapazität. Ein deterministischer Partitionsvergleich löst Gleichstände. [Horizontaler Reflow](../src/pipeline_shards/horizontal_layout_global_reflow.rs).
+
+Für einen gebundenen Bereich zulässiger Seitenzahlen kann der Renderer-Pfad auch Seiten- und Systemgrenzen gemeinsam planen. Er berücksichtigt Systemlast, Abstandsanforderungen, das Limit für Systeme je Seite und bereits verworfene Partitionen. Der Schubert-Lauf r1872 bestätigte eine Kombination aus zwei Seiten und sieben Systemen. Diese Bestätigung betrifft die konkret gerenderte Partition. [Gemeinsame Planung](../src/pipeline_shards/horizontal_layout_global_page_system.rs) · [Exakte Partitionssuche](../src/pipeline_shards/renderer_exact_partition_search.rs).
 
 Die geometrischen Readbacks untersuchen tatsächliche Hüllen und Abstände, soweit PDF-Syntax und Zuordnung unterstützt sind. Daraus folgt weder eine vollständige Kollisionsfreiheit aller denkbaren Zeichen noch eine implementierte Schlöpfchen-Seitenoptimierung.
 
-### Exakte Beschleunigung ist keine neue Musikentscheidung
+### Beschleunigung mit gleichen Entscheidungen
 
 Für additive Passagenkosten können Präfixsummen dieselbe Summe liefern:
 
@@ -217,6 +239,19 @@ $$\sum_{i=a}^{b-1}c_i=P_b-P_a.$$
 Die Indizes entstehen aus der exakten halboffenen Zeitbedingung, nicht aus einer geratenen Notennähe. Die Umordnung muss Kosten, Kandidaten und Gleichstandsregeln erhalten.
 
 Die Bogenprüfung verwendet einen anderen Index: Für jede Nummer beantworten erster sichtbarer Anfang und letzter sichtbarer Schluss dieselben Existenzfragen wie die frühere Vollsuche. Das ist kein allgemeines globales Matching aller möglichen Bögen. Eine solche Erweiterung wäre eine eigene musikalische Entscheidung.
+
+### Speicherplanung für den Korpus
+
+Im Automatikmodus schätzt EtuSchlopf die Zahl paralleler Projekte und Solver-Worker. Für $p$ Projekte und den ermittelten verfügbaren Speicher $M$ in MiB lautet die speicherbezogene Worker-Grenze pro Projekt:
+
+$$
+w_{\mathrm{Speicher}}(p)=
+\left\lfloor
+\frac{\max\!\left(\left\lfloor\max(M-512,0)/p\right\rfloor-1536,0\right)}{256}
+\right\rfloor.
+$$
+
+Die Planung probiert die Projektzahl absteigend innerhalb der CPU-Grenze und begrenzt die Worker zusätzlich durch das CPU-Budget. Bei unbekanntem verfügbarem Speicher oder fehlender passender Aufteilung startet sie mit einem Projekt und einem Solver-Worker. Die drei Speichergrößen sind Schätzwerte für Reserve, Projektprozess und zusätzlichen Solver-Worker. Der Kandidatenumfang besitzt ein getrenntes Budget. [Speichermodell](../src/pipeline_shards/corpus_memory_capacity.rs) · [Korpusplanung](../src/pipeline_shards/rest_glyph_retention_batch_corpus_tail.rs).
 
 ### Projektion und Integrität
 
@@ -230,7 +265,13 @@ Hashes sind davon getrennt: Sie binden Bytes unter ihren jeweiligen Kollisionsan
 
 ## Prüfstände und verbleibende Grenzen
 
-Für BWV 847 bestätigt der Windows-Export r1747 mit 3.041 bestandenen und vier ignorierten Tests. Der Notenwert-Abgleich wurde in r1745 unter Windows abgenommen. Alle 754 Notenansätze, geschriebenen Notenwerte und Haltebögen stimmen mit der geprüften Referenz überein. Für r1748 ist lokal belegt, dass beide MusicXML-Dateien bytegleich mit r1747 sind und der gerenderte Vergleich auf allen vier Seiten dasselbe Bild ergibt.
+| Referenz | Veröffentlichter Windows-Prüfbeleg |
+|---|---|
+| Bach, Fuge c-Moll BWV 847 | r1749, Exitcode 0, 3.041 bestandene und vier ignorierte Tests. Der frühere Abgleich von r1745 erfasste 754 Notenansätze, geschriebene Notenwerte und Haltebögen. [Abnahme r1749](evidence/r1749/README.md). |
+| Chopin, Etüde op. 10 Nr. 3, p01 | r1792, Exitcode 0, 0 Warnungen, 100 % im Notenerhaltsmaß und ein gerendertes Notenbild. Die MIDI-WAV-Zeitzuordnung blieb wegen geringer gemeinsamer Anschlagsdeckung offen. [Abnahme r1792](evidence/r1792/README.md). |
+| Schubert, Deutscher Tanz D. 783 Nr. 15, p18 | r1872, Exitcode 0, 0 Blocker, 0 Warnungen und 100 % im Notenerhaltsmaß. 3.097 Tests bestanden, vier waren ignoriert. Der Windows-Renderer gab das zweiseitige Notenbild frei. [Abnahme r1872](evidence/r1872/README.md). |
+
+Die drei Zeilen belegen Einzelläufe. Für r1872 liegt hier kein aktueller Vollkorpusvergleich vor. Das Notenerhaltsmaß folgt der im Lauf definierten Grundgesamtheit. Es bewertet weder den Abgleich aller Notenwerte mit der Druckvorlage noch das Notenbild als Ganzes.
 
 ### Historischer Vollkorpuslauf r1683
 
