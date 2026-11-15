@@ -1,20 +1,40 @@
 # Native Windows-Abnahme r1872
 
-Windows nahm EtuSchlopf **r1872 / 0.10.1839** am 15. November 2026 nach r1871 an.
-Der Einzellauf für Schuberts Deutschen Tanz As-Dur D. 783 Nr. 15, Aufführung p18,
-endete mit Exitcode 0, 0 Blockern, 0 Warnungen und 100 % Notenerhalt.
-Build, Strict Clippy und MuseScore-PDF-Freigabe bestanden. Von den Rust-Tests
-bestanden 3.097, vier waren ignoriert.
+Die Windows-Abnahme vom 15. November 2026 dokumentiert den Schritt von r1871
+auf **r1872 / 0.10.1839** anhand von Schuberts Deutschem Tanz As-Dur D. 783
+Nr. 15, Aufführung p18.
 
-Im ersten vollen Takt gehört das E wieder als Viertel zum linken Begleitakkord.
-Das [zweiseitige Notenbild](../../examples/schubert-d783-no15-p18-r1872.pdf) stammt
-aus diesem Lauf. [Druckvorlage und Lizenzhinweise](../../examples/README.md#schubert--deutscher-tanz-as-dur-d-783-nr-15-aufführung-p18).
+| Prüfung | Ergebnis |
+| --- | --- |
+| Schubert-Einzellauf | Exitcode 0, keine Blocker, Warnungen oder Hinweise |
+| Build und Strict Clippy | Bestanden |
+| Rust-Tests | 3.097 bestanden, vier ignoriert |
+| PDF-Ausgabe | Renderer-Freigabe für zwei Seiten mit sieben Systemen |
+
+## Notenbild
+
+Im ersten vollen Takt steht das E wieder als Viertel im linken Begleitakkord.
+Der [Notenvergleich r1871 und r1872](../../examples/README.md#schubert-im-vergleich)
+zeigt die Stelle im Zusammenhang. Das [vollständige PDF](../../examples/schubert-d783-no15-p18-r1872.pdf) stammt aus diesem Windows-Lauf.
+
+## Notenerhalt und Quellauswahl
+
+Der Abschlussbericht weist **100 % Notenerhalt nach dem Erhaltsmaß des Laufs**
+aus. Die Quellauswahl zählt die Ereignisse an einem eigenen Prüfpunkt. Ihr mit
+diesem Lauf verknüpfter Messbeleg (CMS-1) erfasst 330 kanonische Quellereignisse,
+von denen der Auswahlplan 323 übernimmt und sieben ausschließt. Die 100 % sind
+eine Erhaltskennzahl mit eigener Bezugsmenge. Wie das Verfahren und die
+Prüfgrenzen zusammenhängen, erläutert die [Mathematik-Seite](../../MATHEMATIK.md#prüfstände-und-verbleibende-grenzen).
+
+## Belege
 
 - [Annahmebeleg](native_acceptance.txt)
 - [Laufergebnis](run_outcome_audit.txt)
 - [Prüfsummen des nativen Quellstands](accepted_source_sha256.tsv)
 - [Prüfsummen der GitHub-Dokumentation](github_projection_sha256.tsv)
 
-SHA-256 des vollständigen Windows-Quell-Snapshots: `e82644eb5b1e0278b5520cb49349a44ed51fbfd5df446ca795565399d44c1398`.
-Die native Abnahme betrifft den Schubert-Einzellauf. Der GitHub-Workflow prüft
-zusätzlich den eigenständigen Windows-Download und das synthetische Startbeispiel.
+Der vollständige Windows-Quell-Snapshot hat den SHA-256-Wert
+`e82644eb5b1e0278b5520cb49349a44ed51fbfd5df446ca795565399d44c1398`.
+Der separate [GitHub-Paketlauf](https://github.com/Funcry241/EtuSchlopf/actions/runs/43755526495)
+prüft die eigenständige Windows-EXE und das synthetische Startbeispiel.
+[Windows-Testversion r1872](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1872-windows-preview)

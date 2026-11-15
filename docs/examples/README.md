@@ -24,6 +24,17 @@ Klicke auf einen Ausschnitt, um das vollständige EtuSchlopf-PDF zu öffnen.
 
 [PDF · 2 Seiten · Windows r1872](schubert-d783-no15-p18-r1872.pdf) · [Druckvorlage](https://imslp.org/wiki/18_German_Dances_and_Esoccaises,_D.783_(Schubert,_Franz))
 
+#### Schubert im Vergleich
+
+Im ersten vollen Takt setzt r1872 das E auf dem zweiten Schlag als Viertel in
+den Akkord der linken Hand. Die Ausschnitte führen zum jeweiligen vollständigen PDF.
+
+| r1871 | r1872 |
+| --- | --- |
+| [![Schubert r1871, Beginn mit Auftakt und linkem Begleitakkord](../images/schubert-d783-no15-p18-r1871-ausschnitt.png)](schubert-d783-no15-p18-r1871.pdf) | [![Schubert r1872, Beginn mit E im linken Begleitakkord](../images/schubert-d783-no15-p18-r1872-ausschnitt.png)](schubert-d783-no15-p18-r1872.pdf) |
+
+[Windows-Abnahme und Messwerte](../evidence/r1872/README.md) · [Quelle und Lizenz der Aufführung](#schubert--deutscher-tanz-as-dur-d-783-nr-15-aufführung-p18)
+
 ## Quellen und Rechte
 
 ### Bach · Fuge c-Moll BWV 847
@@ -45,7 +56,6 @@ Klicke auf einen Ausschnitt, um das vollständige EtuSchlopf-PDF zu öffnen.
 - **Aufnahme, MIDI und Zuordnung.** Werner Goebl, *The Vienna 4×22 Piano Corpus*, Version 1.0 (2017), mdw – Universität für Musik und darstellende Kunst Wien. Die Zuordnungsdatei nennt C. Zeilinger als Interpret. Die Audio-Onset-Liste nennt Siying Wang als Annotatorin. [Datensatz, DOI 10.21939/4X22](https://doi.org/10.21939/4X22) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 - **Bearbeitungen für den Import.** Die Import-MIDI ergänzt Taktart, Tonart und Tempoverlauf und bindet Auftakt und Notationszeiten. Sie kennzeichnet Vorschläge und reine Wiedergabeereignisse. Die WAV-Arbeitsfassung wurde zeitlich ausgerichtet. Dazu wurde der Vorlauf gekürzt und Stille für die leeren Auftaktviertel vorangestellt.
 - **Druckvorlage.** Franz Schubert, *Deutsche Tänze und Ecossaisen*, herausgegeben von Julius Epstein, Breitkopf & Härtel, Leipzig 1889, Platte F.S. 126. Nr. 15 steht unten auf PDF-Seite 5 und oben auf Seite 6. Gemeinfrei. [IMSLP, Scan Nr. 03143](https://imslp.org/wiki/18_German_Dances_and_Esoccaises,_D.783_(Schubert,_Franz)).
-
 - **Erzeugter Notensatz.** Das EtuSchlopf-PDF aus dem Windows-Lauf r1872 basiert auf der für den Import bearbeiteten Aufführung p18. Die Namensnennung und Lizenzlinks für das Ausgangsmaterial stehen oben. [EtuSchlopf-PDF r1872](schubert-d783-no15-p18-r1872.pdf).
 
 ## Weitergabe
