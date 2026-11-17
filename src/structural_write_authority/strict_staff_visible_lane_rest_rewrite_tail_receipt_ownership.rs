@@ -33,16 +33,16 @@ fn apply_upper_staff_duplicate_visible_rest_suppression_with_receipts(
     let candidates_seen = candidates.len();
     let mut replacements = Vec::<(usize, usize, String)>::new();
     let mut occupied = Vec::<(usize, usize)>::new();
-    let mut per_scope_selected = BTreeMap::<usize, usize>::new();
+    let mut per_measure_selected = BTreeMap::<usize, usize>::new();
     let mut scopes = BTreeSet::<usize>::new();
     let mut total_duration = 0_i32;
     let mut selected = 0_usize;
     let mut interval_proofs = BTreeSet::<String>::new();
-    for (_score, start, end, replacement, scope, _evidence, duration, interval_proof) in candidates {
+    for (_score, start, end, replacement, scope, measure_start, duration, interval_proof) in candidates {
         if selected >= max_actions {
             break;
         }
-        if *per_scope_selected.get(&scope).unwrap_or(&0) >= 4 {
+        if *per_measure_selected.get(&measure_start).unwrap_or(&0) >= 4 {
             continue;
         }
         if occupied.iter().any(|(used_start, used_end)| start < *used_end && end > *used_start) {
@@ -50,7 +50,7 @@ fn apply_upper_staff_duplicate_visible_rest_suppression_with_receipts(
         }
         occupied.push((start, end));
         replacements.push((start, end, replacement));
-        *per_scope_selected.entry(scope).or_default() += 1;
+        *per_measure_selected.entry(measure_start).or_default() += 1;
         scopes.insert(scope);
         interval_proofs.insert(interval_proof);
         total_duration = total_duration.saturating_add(duration.max(0));
@@ -272,4 +272,33 @@ fn preview_upper_rest_duration(fragment: &str, duration: i32) -> Option<String> 
         crate::master_state_identity::RenderDiscardReason::ReadOnlyProbe,
     );
     post
+}
+
+
+#[cfg(test)]
+mod upper_duplicate_rest_measure_budget_tests {
+    use super::apply_upper_staff_duplicate_visible_rest_suppression_with_receipts;
+
+    #[test]
+    fn repeated_measure_label_does_not_share_the_local_edit_budget() {
+        let rest = "<note><rest/><duration>24</duration><voice>1</voice><type>16th</type><staff>1</staff></note>";
+        let rewind = "<backup><duration>24</duration></backup>";
+        let repeated = format!("{rest}{rewind}").repeat(4);
+        let measure = |label| format!(
+            r#"<measure number="{label}">{repeated}{rest}</measure>"#,
+        );
+        let count = |second_label| {
+            let xml = format!(
+                "<score-partwise><part>{}{}</part></score-partwise>",
+                measure(17), measure(second_label),
+            );
+            let ((after, _, selected, _, _, _), receipts) =
+                apply_upper_staff_duplicate_visible_rest_suppression_with_receipts(&xml, 8);
+            assert_eq!(after.matches("<forward>").count(), selected);
+            receipts.discard_unadopted(crate::master_state_identity::RenderDiscardReason::ReadOnlyProbe);
+            selected
+        };
+        assert_eq!(count(29), 8);
+        assert_eq!(count(17), 8);
+    }
 }

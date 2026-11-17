@@ -3118,7 +3118,13 @@ fn realize_metric_rest_continuation( xml: &str, source_label: &str, output_path:
         let beat_unit = inherited_divisions.max(1);
         let restore_rows = withdrawal.into_iter().flat_map(|rows| rows.iter())
             .filter(|(begin,end,_)| *begin >= span.start && *end <= span.end).collect::<Vec<_>>();
-        let candidate_groups = if withdrawal.is_some() { Vec::new() } else { choose_clef_bounded_rest_bridges(measure_text, &infos, beat_unit) };
+        let candidate_groups = if withdrawal.is_some() {
+            Vec::new()
+        } else {
+            choose_clef_bounded_rest_bridges(
+                measure_text, &infos, beat_unit, voice_guard.bridge_is_post_projection(),
+            )
+        };
         if candidate_groups.is_empty() && restore_rows.is_empty() {
             out.push_str(measure_text);
             last = span.end;
@@ -3321,11 +3327,12 @@ fn choose_clef_bounded_rest_bridges<'a>(
     measure: &str,
     infos: &'a [PartialBeatNoteInfo],
     beat_unit: i64,
+    projected: bool,
 ) -> Vec<MetricRestContinuationGroup<'a>> {
     let Some(boundaries) = metric_beam_clef_boundaries(measure) else {
         return Vec::new();
     };
-    choose_structural_rest_bridge_candidate_groups(infos, beat_unit)
+    let mut groups: Vec<_> = choose_structural_rest_bridge_candidate_groups(infos, beat_unit)
         .into_iter()
         .filter(|(_, staff, _, targets, _, _)| {
             let Some(boundaries) = boundaries.get(staff) else {
@@ -3335,12 +3342,63 @@ fn choose_clef_bounded_rest_bridges<'a>(
                 crosses_metric_beam_clef_boundary(boundaries, pair[0].start, pair[1].start)
             })
         })
-        .collect()
+        .collect();
+    if projected {
+        append_unclaimed_projected_rest_runs(
+            &mut groups, metric_rest_continuation_plans(infos, beat_unit, &boundaries)
+                .into_iter().map(|(run, _)| run), beat_unit,
+        );
+    }
+    groups
+}
+
+fn append_unclaimed_projected_rest_runs<'a>(
+    groups: &mut Vec<MetricRestContinuationGroup<'a>>,
+    projected_runs: impl IntoIterator<Item = Vec<&'a PartialBeatNoteInfo>>,
+    beat_unit: i64,
+) {
+    let mut claimed: BTreeSet<_> = groups.iter()
+        .flat_map(|(_, _, _, run, _, _)| run.iter().map(|note| note.index))
+        .collect();
+    for run in projected_runs {
+        if run.iter().any(|note| claimed.contains(&note.index)) {
+            continue;
+        }
+        let first = run[0];
+        claimed.extend(run.iter().map(|note| note.index));
+        groups.push((
+            first.start.div_euclid(beat_unit), first.staff.clone(), first.voice.clone(),
+            run, true, false,
+        ));
+    }
+    groups.sort_by(|a, b| (&a.0, &a.1, &a.2, a.3[0].start)
+        .cmp(&(&b.0, &b.1, &b.2, b.3[0].start)));
 }
 
 #[cfg(test)]
 mod clef_bounded_rest_bridge_tests {
     use super::*;
+
+    #[test]
+    fn projected_rest_runs_preserve_disjoint_notes_inside_an_occupied_beat() {
+        let note = |step| format!(
+            "<note><pitch><step>{step}</step><octave>4</octave></pitch><duration>12</duration><voice>synthetic</voice><type>32nd</type><staff>1</staff></note>"
+        );
+        let measure = format!("<measure>{}</measure>", ["C", "D", "E", "F", "G", "A"]
+            .into_iter().map(note).collect::<String>());
+        let infos = partial_beat_note_infos(&measure, &partial_beat_raw_notes(&measure));
+        let initial = vec![&infos[0], &infos[1]];
+        let mut groups = vec![(0, "1".to_string(), "synthetic".to_string(), initial, true, false)];
+        append_unclaimed_projected_rest_runs(&mut groups, [
+            vec![&infos[1], &infos[2]],
+            vec![&infos[3], &infos[4]],
+            vec![&infos[4], &infos[5]],
+        ], 96);
+        let starts: Vec<Vec<_>> = groups.iter().map(|group| {
+            group.3.iter().map(|note| note.start).collect()
+        }).collect();
+        assert_eq!(starts, [vec![0, 12], vec![36, 48]]);
+    }
 
     #[test]
     fn same_staff_clef_change_excludes_only_the_crossing_bridge() {
@@ -3355,7 +3413,7 @@ mod clef_bounded_rest_bridge_tests {
                     r#"<measure number="{label}">{eighth}{short}<attributes><clef number="{staff}"><sign>G</sign><line>2</line></clef></attributes>{short}{eighth}{short}{short}</measure>"#
                 );
                 let infos = partial_beat_note_infos(&measure, &partial_beat_raw_notes(&measure));
-                let actual: Vec<_> = choose_clef_bounded_rest_bridges(&measure, &infos, 96)
+                let actual: Vec<_> = choose_clef_bounded_rest_bridges(&measure, &infos, 96, false)
                     .into_iter().map(|(beat, _, _, _, _, _)| beat).collect();
                 assert_eq!(actual, expected);
             }
@@ -3424,6 +3482,43 @@ mod variant_a_decision_scope_write_footprint_tests {
     
         }
         {
+
+        // Exercise the original E050 sink with a projected, unowned course on
+        // either staff. A tied endpoint and a new attack alone do not make a run.
+        for (staff_index, staff) in ["1", "2"].into_iter().enumerate() {
+            for with_neighbor in [false, true] {
+                let ordinal = 10 * (staff_index + 1) + usize::from(with_neighbor);
+                let note = |step, tie| format!(
+                    "<note><pitch><step>{step}</step><octave>4</octave></pitch><duration>24</duration>{tie}<voice>1</voice><type>16th</type><staff>{staff}</staff></note>"
+                );
+                let second = if with_neighbor { note("D", "") } else { String::new() };
+                let rest_duration = if with_neighbor { 24 } else { 48 };
+                let input = format!(
+                    r#"<score-partwise><part-list><score-part id="P"><part-name>Piano</part-name></score-part></part-list><part id="P"><measure number="{ordinal}"><attributes><divisions>96</divisions></attributes>{}{second}<note><rest/><duration>{rest_duration}</duration><voice>1</voice><type>16th</type><staff>{staff}</staff></note>{}</measure></part></score-partwise>"#,
+                    note("C", r#"<tie type="stop"/>"#), note("E", ""),
+                );
+                let labels = if with_neighbor { vec!["1"; 3] } else { vec!["1"; 2] };
+                let (mut canonical, voices, course) = crate::structural_write_authority::CanonicalFinalChordStructuralPlan::synthetic_projected_bridge_fixture(&input, &labels).unwrap();
+                let (mut state, path) = state_for(course.xml());
+                let mut guard = canonical.bind_projected_bridge_voice_guard(&course, &voices, None, &Default::default()).unwrap();
+                guard.bind_rest_bridge_main_state(&state);
+                let ((post, audit), receipt, pending) = realize_metric_rest_continuation(course.xml(), "synthetic projected metric course", &path, &guard);
+                // Staff 2 already admits the legacy isolated pair.
+                if with_neighbor || staff == "2" {
+                    let root = state.require_state_root("projected rest continuation test");
+                    let receipt = receipt.expect("owner receipt");
+                    assert!(audit.written);
+                    state.adopt_metric_rest_continuation(root, &post, receipt).unwrap();
+                    let carried = canonical.adopt_projected_rest_bridge_output(&course, pending, &state, &voices, &Default::default()).unwrap();
+                    assert_eq!(carried.xml(), std::fs::read_to_string(&path).unwrap());
+                } else {
+                    assert!(!audit.written);
+                    assert!(receipt.is_none() && pending.is_none());
+                    assert_eq!(post, course.xml());
+                }
+                std::fs::remove_file(path).unwrap();
+            }
+        }
 
         let input=score(17,96,"2",1);let (mut canonical,voices,course)=fixture(&input,"2",1);
         let (state,path)=state_for(course.xml());

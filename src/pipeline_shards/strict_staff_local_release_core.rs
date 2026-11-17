@@ -7,11 +7,11 @@ type UpperStaffDuplicateVisibleRestSuppressionCandidate = (
     usize,
     String,
     usize,
-    String,
+    usize,
     i32,
     String,
 );
-type UpperStaffBeatLocalCoalesceCandidate = (i64, usize, usize, usize, usize, String, i32, usize);
+type UpperStaffBeatLocalCoalesceCandidate = (bool, usize, usize, usize, usize, String, i32, usize);
 
 fn build_strict_staff_local_release_completeness_readback(
     xml: &str,

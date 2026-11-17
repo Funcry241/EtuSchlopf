@@ -2,120 +2,40 @@
 
 [![Windows-Prüfung](https://github.com/Funcry241/EtuSchlopf/actions/workflows/windows-download.yml/badge.svg?branch=main)](https://github.com/Funcry241/EtuSchlopf/actions/workflows/windows-download.yml)
 [![Lizenz: MIT](https://img.shields.io/badge/Lizenz-MIT-blue.svg)](LICENSE)
-[![Rust 1.98](https://img.shields.io/badge/Rust-1.98-orange.svg)](rust-toolchain.toml)
-![Status: experimentell](https://img.shields.io/badge/Status-experimentell-red.svg)
 
-**Mach aus deiner Einspielung Klaviernoten. Zwei Dateien genügen.**
-
-EtuSchlopf ist für Musikerinnen und Musiker. Ob Etüde, Song oder eigene Komposition, spielt dabei keine Rolle.
-
-- `Mein Stück.mid` liefert die gespielten Noten und ihr Timing.
-- `Mein Stück.wav` enthält den hörbaren Klang derselben Einspielung und dient als Audioreferenz.
-
-Leg beide Dateien in denselben Ordner und zieh die MIDI-Datei auf EtuSchlopf. **Das war’s.** EtuSchlopf verwendet seine Voreinstellungen. Du bekommst ein PDF zum Lesen, Teilen und Ausdrucken und eine MusicXML-Datei zum Weiterbearbeiten in MuseScore.
-
-Der Name darf dich zum Schmunzeln bringen. Die Mathematik dahinter nehmen wir ernst. Probier EtuSchlopf mit deinem eigenen Stück aus oder schau dir an, wie es arbeitet. [Die Mathematik hinter EtuSchlopf](docs/MATHEMATIK.md)
-
-**[Windows-Testversion r1886 · EXE und Startbeispiel](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1886-windows-preview)** · [Windows-Testversion r1872](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1872-windows-preview)
-
-Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI und WAV als Eingabe
-
-Der Quellstand auf `main` ist **r1886**. Der Windows-Korpuslauf lieferte für alle 13 Stücke vollständige Ausgaben samt PDF. Build und Strict Clippy sind grün. Im Einzellauf bestanden 3.081 Tests, vier waren ignoriert. [Stand und Prüfumfang](docs/evidence/r1886/README.md)
-
-[Versionshinweise und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1886-windows-preview) ·
-[Erstes Stück](#dein-erstes-stück) · [Grenzen der Testversion](#aktueller-stand) ·
-[Technische Dokumentation](docs/DEVELOPMENT.md) · [Mathematik dahinter](docs/MATHEMATIK.md)
-
-> **In English:** EtuSchlopf turns a matching MIDI and WAV pair into piano sheet music: a PDF and a MusicXML file for further editing in MuseScore. The Windows x64 preview needs no installation besides [MuseScore](https://musescore.org/download) for the PDF. The documentation is in German; bug reports and questions in English are welcome.
-
-## Ein Blick auf die Noten
-
-Die drei Vorschauen öffnen die von EtuSchlopf erzeugten Noten-PDFs.
-
-| Johann Sebastian Bach | Frédéric Chopin | Franz Schubert |
-| :---: | :---: | :---: |
-| Fuge c-Moll, BWV 847 | Etüde E-Dur, op. 10 Nr. 3 · p01 | Deutscher Tanz As-Dur, D. 783 Nr. 15 · p18 |
-| [![Notenausschnitt Bach](docs/images/bwv847-fuge-r1886-ausschnitt.png)](docs/examples/bwv847-fuge-r1886.pdf) | [![Notenausschnitt Chopin](docs/images/chopin-op10-no3-p01-r1886-ausschnitt.png)](docs/examples/chopin-op10-no3-p01-r1886.pdf) | [![Notenausschnitt Schubert](docs/images/schubert-d783-no15-p18-r1886-ausschnitt.png)](docs/examples/schubert-d783-no15-p18-r1886.pdf) |
-
-[Alle 13 Notenbilder, Druckvorlagen und Lizenzen](docs/examples/README.md#notenbilder)
-
-Das Projekt ist experimentell und privat gepflegt. Prüfe am eigenen Stück,
-ob dir die Fassung bei der weiteren Arbeit hilft. Musikalische Nachbearbeitung
-kann erforderlich sein.
+**EtuSchlopf macht Klaviernoten aus deiner Einspielung.** Die MIDI-Datei liefert die gespielten Noten und ihr Timing. Die gleichnamige WAV-Datei liefert die Audioaufnahme derselben Einspielung. EtuSchlopf erstellt daraus ein Noten-PDF und MusicXML zur Weiterbearbeitung in MuseScore.
 
 ## Dein erstes Stück
 
-**[Kleines Startbeispiel und Windows-EXE](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1886-windows-preview)**. Das Startbeispiel enthält ein synthetisches MIDI/WAV-Paar und die daraus erzeugte PDF.
+1. Lade die [Windows-Testversion](https://github.com/Funcry241/EtuSchlopf/releases) herunter. Für die PDF-Ausgabe installiere [MuseScore](https://musescore.org/de/download).
+2. Lege MIDI und WAV in denselben Ordner. Verwende denselben Dateinamen vor der Endung, etwa `Mein Stück.mid` und `Mein Stück.wav`.
+3. Ziehe die MIDI auf die EXE oder öffne die EXE und gib den Pfad zur MIDI ein.
+4. Öffne das PDF im Ergebnisordner. Für Änderungen in MuseScore öffne `Mein Stück.render.musicxml`.
 
-1. Lade die Windows-EXE herunter. Für die PDF-Ausgabe brauchst du außerdem **[MuseScore](https://musescore.org/de/download)**.
-2. Lege MIDI und WAV in denselben Ordner. Die Namen vor der Dateiendung müssen übereinstimmen: `Mein Stück.mid` und `Mein Stück.wav`.
-3. Ziehe deine `.mid`- oder `.midi`-Datei auf die EXE. Alternativ startest du die EXE und gibst den Pfad zur MIDI-Datei ein.
-4. Öffne nach erfolgreichem Lauf die PDF im angezeigten Ergebnisordner. Zum Weiterbearbeiten öffnest du die Datei mit `.render.musicxml` in MuseScore.
+Die Testversion ist für Windows x64 und startet ohne Rust oder Cargo. Der Starter legt neben der MIDI einen neuen Laufordner unter `EtuSchlopf-Ergebnisse` an und arbeitet mit Kopien der Eingaben. Bei einem Fehler liefert die Konsole den ersten Hinweis. Ein vorhandener Ergebnisbericht trägt die Endung `.result.txt`.
 
-Du brauchst für diesen Weg keinen Repository-Download und keine Rust-Installation.
-Wähle für den ersten Versuch ein kurzes Stück, dessen Noten du kennst. So kannst
-du das Ergebnis leichter beurteilen.
+> **In English:** EtuSchlopf uses a matching MIDI and WAV pair to produce piano sheet music as PDF and MusicXML. The Windows x64 preview uses MuseScore for PDF export. Issues in English are welcome.
 
-Neben deiner MIDI entsteht der Ordner **`EtuSchlopf-Ergebnisse`**. Jeder Lauf
-bekommt darin einen neuen Unterordner. Das Programm arbeitet mit Kopien deiner
-Eingaben; Originaldateien und frühere Laufordner bleiben erhalten.
+## Notenbilder
 
-## Deine Ergebnisse
+| Bach · Fuge c-Moll BWV 847 | Chopin · Etüde op. 10 Nr. 3 | Schubert · Deutscher Tanz D. 783 Nr. 15 |
+| --- | --- | --- |
+| [![Bach](docs/images/bwv847-fuge-r1921-ausschnitt.png)](docs/examples/bwv847-fuge-r1921.pdf) | [![Chopin](docs/images/chopin-op10-no3-p01-r1921-ausschnitt.png)](docs/examples/chopin-op10-no3-p01-r1921.pdf) | [![Schubert](docs/images/schubert-d783-no15-p18-r1921-ausschnitt.png)](docs/examples/schubert-d783-no15-p18-r1921.pdf) |
 
-| Du möchtest … | Öffne … |
-| --- | --- |
-| die Noten lesen oder ausdrucken | `Mein Stück.pdf` |
-| die Noten in MuseScore bearbeiten | `Mein Stück.render.musicxml` |
-| eine Fehlermeldung genauer nachvollziehen | `Mein Stück.result.txt`, sofern der Lauf einen Bericht erzeugt hat |
+[Alle 13 Notenbilder mit PDF, Druckvorlagen und Quellen](docs/examples/README.md)
 
-Für die Bearbeitung in MuseScore ist die Datei mit **`.render.musicxml`** die
-richtige Wahl. Weitere technische Dateien können im Ergebnisordner liegen.
+## Stand auf main
 
-## Wenn der Start nicht klappt
+Der angenommene Quellstand **r1921 / 0.10.1839** erzeugte im Windows-Korpuslauf vollständige Ausgaben für alle 13 Stücke. In dieser Revision betreffen die Änderungen vor allem die Richtung der Notenhälse, die Zuordnung am Stimmeinsatz, die Registerkontinuität und den Umgang mit lokalen Pausen. [Windows-Abnahme und Prüfsummen](docs/evidence/r1921/README.md) · [Mathematik und Notationsentscheidungen](docs/MATHEMATIK.md)
 
-- **WAV fehlt:** Lege eine echte gleichnamige WAV-Datei neben die MIDI. MIDI ohne WAV wird derzeit noch nicht unterstützt.
-- **Keine PDF:** Prüfe, ob MuseScore installiert ist. Mit `EtuSchlopf-Windows-x64.exe "Mein Stück.mid" --no-pdf` kannst du nur die Notendateien anfordern.
-- **Datei wird abgelehnt:** Das kann an einer Grenze oder einem Fehler von EtuSchlopf liegen und bedeutet nicht automatisch, dass deine MIDI fehlerhaft ist. Du musst die Ursache nicht selbst herausfinden. Den Wortlaut der Meldung kannst du im [Fehlerbericht](https://github.com/Funcry241/EtuSchlopf/issues/new?template=01_fehler.md) angeben.
-- **Lauf fehlgeschlagen:** Frühere Ergebnisordner bleiben bestehen. Eine Datei aus einem fehlgeschlagenen Lauf ist noch kein freigegebenes Ergebnis.
+EtuSchlopf ist experimentell. Prüfe das Notenbild am eigenen Stück. Die bisherige Windows-Vorschau ist für 2/4, 3/4 und 4/4 sowie für Taktwechsel an Taktgrenzen ausgelegt. Als nächste Prüfvorlage ist Mozarts Andante-grazioso-Thema aus KV 331 im 6/8-Takt vorgesehen. Der Mozart-Import hat eine eigene Abnahme.
 
-## Eine falsche Note oder einen Fehler melden
+## Dokumentation und Beiträge
 
-**[Fehlerbericht öffnen](https://github.com/Funcry241/EtuSchlopf/issues/new?template=01_fehler.md)**
+[Dokumentationswegweiser](docs/README.md) · [Technische Referenz](docs/DEVELOPMENT.md) · [Mitmachen](docs/CONTRIBUTING.md) · [Fehler melden](https://github.com/Funcry241/EtuSchlopf/issues/new?template=01_fehler.md)
 
-Beschreibe, was du versucht hast und was passiert ist. Bei einem Notationsfehler
-hilft zum Beispiel: „In Takt … fehlt …; ich erwarte …“ Ein Bildausschnitt ist
-willkommen. Du musst dafür keinen Quellcode verstehen und keinen vollständigen
-Laufbericht zusammentragen. Unbekannte technische Angaben kannst du offenlassen.
-
-## Aktueller Stand
-
-Die Windows-Testversion enthält **Engine r1886 / 0.10.1839** und den
-eigenständigen Windows-Starter. Unterstützt sind 2/4, 3/4 und 4/4 sowie
-Taktwechsel an Taktgrenzen. Andere Taktarten, Triolen und Wechsel mitten
-im Takt bleiben offen.
-
-Der Paketlauf prüft den isolierten Start ohne Entwickler-PATH und rendert
-das synthetische MIDI/WAV-Startbeispiel mit MuseScore. Die
-[Versionshinweise und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1886-windows-preview)
-verlinken den Paketlauf. Die [native musikalische Abnahme](docs/evidence/r1886/README.md) dokumentiert den Korpuslauf. Prüfe Lesbarkeit und Spielbarkeit am eigenen Stück.
-
-## Quellstand und Beiträge
-
-Auf `main` liegt der veröffentlichte Quellstand **r1886 / 0.10.1839**. Der [Windows-Prüfstand r1886](docs/evidence/r1886/README.md) dokumentiert den Korpuslauf. Der historische [Vollkorpuslauf r1684](docs/evidence/r1684/README.md) umfasst zehn Etüden.
-
-Der [Windows-Release](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1886-windows-preview) enthält den Quellbaum des Paketlaufs und seine Prüfsummen.
-
-Für die Arbeit am Quellcode gelten die [technische Referenz](docs/DEVELOPMENT.md)
-und die [Beitragsregeln](docs/CONTRIBUTING.md). Der [Dokumentationswegweiser](docs/README.md)
-führt zu Architektur, Diagnose und Community-Dateien. Welche Mathematik EtuSchlopf
-wo einsetzt und was davon das Notenbild verändert, beschreibt die
-[Mathematik-Seite](docs/MATHEMATIK.md).
-
-Fehlerberichte sind willkommen. Bitte nenne die verwendete Version, die konkrete
-Meldung und – bei einem Notationsfehler – die betroffene Stelle.
-[Beiträge](docs/CONTRIBUTING.md) · [Sicherheit](docs/SECURITY.md) ·
-[Umgang miteinander](docs/CODE_OF_CONDUCT.md) · [Barrierefreiheit](docs/ACCESSIBILITY.md)
+Nenne im Fehlerbericht die Version, die Meldung und bei einem Notationsfehler die betroffene Stelle. Ein Notenausschnitt hilft bei der Zuordnung.
 
 ## Lizenz
 
-Der eigene EtuSchlopf-Code steht unter der [MIT-Lizenz](LICENSE). Für Fremdkomponenten gelten die jeweiligen Lizenzbedingungen. [Fremdkomponenten](docs/THIRD_PARTY_NOTICES.md) · [Musikreferenzen und Namensnennung](docs/examples/README.md#quellen-und-rechte).
+Der Code steht unter der [MIT-Lizenz](LICENSE). Für Fremdkomponenten und Musikdateien gelten die jeweils ausgewiesenen Rechte. [Fremdlizenzen](docs/THIRD_PARTY_NOTICES.md) · [Musikquellen und Namensnennung](docs/examples/README.md#quellen-und-rechte)

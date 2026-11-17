@@ -99,7 +99,7 @@ fn build_lower_staff_visible_rhythm_rest_lane_trial(
             upper_coalesce_duration,
             upper_cross_beat_blocked,
             upper_cross_beat_scopes,
-        ), upper_receipts) = match apply_upper_staff_initial_rest_and_beat_local_coalescing(&candidate_xml, 8) {
+        ), upper_receipts) = match apply_upper_staff_initial_rest_and_beat_local_coalescing(&candidate_xml, true) {
             Ok(prepared) => prepared,
             Err(error) => {
                 accepted_receipts.discard_unadopted(

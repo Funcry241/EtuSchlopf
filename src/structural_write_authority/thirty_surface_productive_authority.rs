@@ -417,8 +417,9 @@ fn duration_type_dots_writer(source: &str, token: DurationTypeDotsCapability) ->
     Some(out)
 }
 
-pub fn sync_arrangement_note_type_and_dots_authorized(source: &str) -> String {
-    let Some(duration) = extract_i64(source, "duration") else {
+pub fn sync_arrangement_note_type_and_dots_authorized(source: &str, divisions: i64) -> String {
+    let Some(duration) = extract_i64(source, "duration")
+        .and_then(|duration| crate::model::metric_rest_notation::scale_notation_duration(duration, divisions, 96)) else {
         return source.to_string();
     };
     let Some((note_type, dots)) = arrangement_duration_type(duration) else {
@@ -466,7 +467,7 @@ pub fn restify_rhythm_ledger_note_authorized(source: &str) -> String {
     for tag in ["stem", "beam", "notations", "chord"] {
         out = remove_child_blocks(out, tag);
     }
-    out = sync_arrangement_note_type_and_dots_authorized(&out);
+    out = sync_arrangement_note_type_and_dots_authorized(&out, 96);
     out = remove_note_start_attribute_authorized(&out, "print-object");
     remove_note_start_attribute_authorized(&out, "print-spacing")
 }
@@ -1388,7 +1389,7 @@ mod tests {
     #[test]
     fn duration_type_writer_preserves_musicxml_note_schema_order() {
         let source = "<note>\n        <pitch><step>C</step><octave>4</octave></pitch>\n        <duration>96</duration>\n        <voice>1</voice>\n        <type>eighth</type>\n        <stem>up</stem>\n        <staff>1</staff>\n      </note>";
-        let out = sync_arrangement_note_type_and_dots_authorized(source);
+        let out = sync_arrangement_note_type_and_dots_authorized(source, 96);
         let duration = out.find("</duration>").expect("duration");
         let voice = out.find("<voice>").expect("voice");
         let note_type = out.find("<type>").expect("type");
@@ -1399,7 +1400,7 @@ mod tests {
     #[test]
     fn duration_type_writer_keeps_ties_and_voice_before_type() {
         let source = "<note>\n        <pitch><step>C</step><octave>4</octave></pitch>\n        <duration>96</duration>\n        <tie type=\"start\"/>\n        <voice>1</voice>\n        <type>eighth</type>\n        <staff>1</staff>\n      </note>";
-        let out = sync_arrangement_note_type_and_dots_authorized(source);
+        let out = sync_arrangement_note_type_and_dots_authorized(source, 96);
         let duration = out.find("</duration>").expect("duration");
         let tie = out.find("<tie ").expect("tie");
         let voice = out.find("<voice>").expect("voice");

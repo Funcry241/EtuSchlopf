@@ -7,6 +7,16 @@
 const NOTATION_UNITS: [i64; 13] = [384, 288, 192, 144, 96, 72, 48, 36, 24, 18, 12, 9, 6];
 
 
+pub(crate) fn scale_notation_duration(value: i64, from: i64, to: i64) -> Option<i64> {
+    if from <= 0 || to <= 0 {
+        return None;
+    }
+    let scaled = i128::from(value) * i128::from(to);
+    let divisor = i128::from(from);
+    if scaled % divisor != 0 { return None; }
+    i64::try_from(scaled / divisor).ok()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RestSpanConsolidationProjection {
     SinglePartShortBeatLocal,

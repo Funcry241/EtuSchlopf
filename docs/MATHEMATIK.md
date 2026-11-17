@@ -1,6 +1,6 @@
 # Mathematik in EtuSchlopf
 
-**Quellstand r1886 / 0.10.1839.** Der Windows-Korpuslauf umfasst 13 Stücke mit vollständiger PDF-Ausgabe. Der [Prüfbeleg](evidence/r1886/README.md) und die [Notenbilder](examples/README.md#notenbilder) dokumentieren diesen Stand.
+**Quellstand r1921 / 0.10.1839.** Der Windows-Korpuslauf umfasst 13 Stücke mit vollständiger PDF-Ausgabe. Der [Prüfbeleg](evidence/r1921/README.md) und die [Notenbilder](examples/README.md#notenbilder) dokumentieren diesen Stand.
 
 EtuSchlopf verwendet Mathematik für musikalische Entscheidungen, Darstellungsentscheidungen, Messungen und technische Beweise. Diese Aufgaben sind verschieden: Eine Erhaltungsbilanz beweist keine Lesbarkeit; ein lesbarer Registerkurs beweist keine menschliche Spielbarkeit; eine bestandene Prüfung erlaubt nur den Übergang, dessen Bedingungen sie tatsächlich abdeckt.
 
@@ -106,6 +106,16 @@ Die Quellstellen nennen die jeweiligen Implementierungsstellen, nicht automatisc
 | 36 | Wiederholungsakkorde und belegte Handzuordnung über klingende Zeitintervalle | Entscheidet bei eindeutiger Wiederholung und zulässiger Tastenbelegung. | [Handzuordnung](selector_derivation_contract_repeated_accompaniment_hand_implementation.md), [Warnungsprüfung](../src/rules.rs) |
 | 37 | Begrenzter gemeinsamer Seiten- und Systemplan mit Renderer-Rückmeldung | Entscheidet und prüft innerhalb zugelassener Seitenzahlen und Kapazitäten. | [Planung](../src/pipeline_shards/horizontal_layout_global_page_system.rs), [Partitionssuche](../src/pipeline_shards/renderer_exact_partition_search.rs) |
 | 38 | Speicherabschätzung für parallele Korpusprojekte | Plant Prozesse und Solver-Worker mit festgesetzten Schätzwerten. | [Korpus-Speicherplanung](../src/pipeline_shards/corpus_memory_capacity.rs) |
+
+## Lokale Entscheidungen zu Pausen und Stimmen
+
+| Aufgabe | Ausgewertete Größen | Entscheidung |
+| --- | --- | --- |
+| Pausen im geschriebenen Takt | Rationale Start- und Endzeiten, metrische Gruppen sowie belegte Zeitintervalle der sichtbaren Stimme | Der Pausenplan bestimmt die freie Zeit innerhalb des lokalen Takts und bewertet ihre Zerlegung anhand der metrischen Gruppierung. [Metrische Pausen](../src/model/metric_rest_notation.rs) · [Lokale Intervalle](selector_derivation_contract_final_local_rest_intervals.md) |
+| Notenhals am Stimmeinsatz | Stimme, gleichzeitige Nachbarstimmen und bereits gebundene Balkengruppen | Die Richtung folgt den sichtbaren Beziehungen am Einsatz und innerhalb der gebundenen Gruppe. [Notenhälse](../src/notation_final_stems.rs) · [Vertrag](selector_derivation_contract_final_stem_direction.md) |
+| Registerkontinuität | Benachbarte Abschnitte, gebundene Stimmzuordnung und Lesbarkeit des Schlüsselverlaufs | Die Entscheidung berücksichtigt den Anschluss zwischen Abschnitten. Der Nachweis bindet die Darstellung an die musikalischen Ereignisse. [Register und Stimmeinsatz](selector_derivation_contract_voice_entry_and_register_continuity.md) |
+
+Der Windows-Lauf belegt die Erzeugung der 13 Partituren in diesem Korpus. Die Akzeptanz eines neuen Metrums wie 6/8 muss am entsprechenden Import und am Notenbild geprüft werden.
 
 ## Zentrale Formeln und ihre Beweisgrenzen
 
@@ -271,7 +281,7 @@ Hashes sind davon getrennt: Sie binden Bytes unter ihren jeweiligen Kollisionsan
 | Chopin, Etüde op. 10 Nr. 3, p01 | r1792, Exitcode 0, 0 Warnungen, 100 % im Notenerhaltsmaß und ein gerendertes Notenbild. Die MIDI-WAV-Zeitzuordnung blieb wegen geringer gemeinsamer Anschlagsdeckung offen. [Abnahme r1792](evidence/r1792/README.md). |
 | Schubert, Deutscher Tanz D. 783 Nr. 15, p18 | r1872, Exitcode 0, 0 Blocker, 0 Warnungen und 100 % im Notenerhaltsmaß. 3.097 Tests bestanden, vier waren ignoriert. Der Windows-Renderer gab das zweiseitige Notenbild frei. [Abnahme r1872](evidence/r1872/README.md). |
 
-Die drei Zeilen belegen Einzelläufe. Für r1886 liegt ein [Vollkorpuslauf mit 13 Stücken](evidence/r1886/README.md) vor. Das Notenerhaltsmaß folgt der im Lauf definierten Grundgesamtheit. Es bewertet weder den Abgleich aller Notenwerte mit der Druckvorlage noch das Notenbild als Ganzes.
+Die drei Zeilen belegen Einzelläufe. Für r1921 liegt ein [Vollkorpuslauf mit 13 Stücken](evidence/r1921/README.md) vor. Das Notenerhaltsmaß folgt der im Lauf definierten Grundgesamtheit. Es bewertet weder den Abgleich aller Notenwerte mit der Druckvorlage noch das Notenbild als Ganzes.
 
 ### Historischer Vollkorpuslauf r1683
 

@@ -1,41 +1,5 @@
-
-
-fn lower_dual_edge_beat_structural_group_with_voice_binding(
-    infos: &[PartialBeatNoteInfo],
-    raw_notes: &[PartialBeatRawNote],
-    offsets: &[i64; 4],
-    sixteenth: i64,
-    voice_plan: &crate::structural_write_authority::FrozenSerializedVoicePlan,
-) -> Option<[usize; 4]> {
-    let mut indices = [0_usize; 4];
-    for (slot, offset) in offsets.iter().enumerate() {
-        let matches = infos
-            .iter()
-            .filter(|info| {
-                info.staff == "2"
-                    && voice_plan.label_is_lower_dual_edge_primary(&info.voice) == Some(true)
-                    && !info.is_chord
-                    && info.start == *offset
-                    && info.duration == sixteenth
-                    && info.note_type == "16th"
-            })
-            .collect::<Vec<_>>();
-        if matches.len() != 1 {
-            return None;
-        }
-        let info = matches[0];
-        raw_notes.iter().find(|raw| raw.start == info.index)?;
-        if slot == 2 {
-            if !info.is_rest {
-                return None;
-            }
-        } else if info.is_rest {
-            return None;
-        }
-        indices[slot] = info.index;
-    }
-    Some(indices)
-}
+// Committed rest-bridge readback observes written continuity on one bound lane.
+// It does not require a bridge where the score explicitly closes the beam.
 
 pub(crate) fn lower_dual_edge_beat_regression_candidates_with_voice_binding(
     xml: &str,
@@ -44,311 +8,136 @@ pub(crate) fn lower_dual_edge_beat_regression_candidates_with_voice_binding(
     if !voice_plan.is_bound() {
         return None;
     }
+    count_written_rest_beam_errors(xml, |voice| voice_plan.role_for_label(voice).is_some())
+}
+
+fn count_written_rest_beam_errors(
+    xml: &str,
+    bound_voice: impl Fn(&str) -> bool,
+) -> Option<usize> {
     parse_musicxml(xml).ok()?;
-    let spans = partial_beat_measure_spans(xml);
-    let mut inherited_divisions = 1_i64;
     let mut candidates = 0_usize;
-    for (measure_index, span) in spans.into_iter().enumerate() {
-        let measure_text = &xml[span.start..span.end];
-        inherited_divisions = partial_beat_first_i64(measure_text, "divisions")
-            .unwrap_or(inherited_divisions)
-            .max(1);
-        let raw_notes = partial_beat_raw_notes(measure_text);
-        let infos = partial_beat_note_infos(measure_text, &raw_notes);
-        let beat_unit = inherited_divisions;
-        let sixteenth = (beat_unit / 4).max(1);
-        let first_offsets = [0_i64, sixteenth, sixteenth * 2, sixteenth * 3];
-        let last_offsets = [
-            beat_unit * 3,
-            beat_unit * 3 + sixteenth,
-            beat_unit * 3 + sixteenth * 2,
-            beat_unit * 3 + sixteenth * 3,
-        ];
-        for offsets in [&first_offsets, &last_offsets] {
-            let Some(group) = lower_dual_edge_beat_structural_group_with_voice_binding(
-                &infos,
-                &raw_notes,
-                offsets,
-                sixteenth,
-                voice_plan,
-            ) else {
-                continue;
-            };
-            if !lower_dual_edge_beat_group_matches_observed_plans(
-                measure_text, beat_unit, &infos, &raw_notes, &group,
-            ) {
-                candidates = candidates.saturating_add(1);
-                let actual = group.map(|index| {
-                    raw_notes.iter().find(|raw| raw.start == index)
-                        .map(|raw| lower_dual_edge_beat_beam_states(&raw.text))
-                });
-                let voices = group.map(|index| {
-                    infos.iter().find(|info| info.index == index)
-                        .map(|info| info.voice.as_str())
-                });
-                let expected = lower_dual_edge_beat_after_plan(&infos, &group)
-                    .map(|(plan, _)| {
-                        [
-                            beam_plan_states_for_event(&plan, 0),
-                            beam_plan_states_for_event(&plan, 1),
-                            std::collections::BTreeMap::new(),
-                            beam_plan_states_for_event(&plan, 2),
-                        ]
-                    });
-                let measure_tag = measure_text.split_once('>')
-                    .map_or("", |(tag, _)| tag);
-                eprintln!(
-                    "LowerDualEdgeReadback: measure_ordinal={}; measure_tag={measure_tag:?}; staff=2; voices={voices:?}; offsets={offsets:?}; note_byte_offsets={group:?}; expected_beams={expected:?}; actual_beams={actual:?}",
-                    measure_index + 1,
-                );
+    for span in partial_beat_measure_spans(xml) {
+        let measure = &xml[span.start..span.end];
+        let raw_notes = partial_beat_raw_notes(measure);
+        let infos = partial_beat_note_infos(measure, &raw_notes);
+        if !infos.iter().any(|note| note.is_rest && !note.is_hidden) {
+            continue;
+        }
+        let boundaries = metric_beam_clef_boundaries(measure)?;
+        let mut lanes = BTreeMap::<_, Vec<_>>::new();
+        for (info, raw) in infos.iter().zip(&raw_notes) {
+            if !info.is_chord && info.duration > 0 && bound_voice(&info.voice) {
+                lanes.entry((info.staff.as_str(), info.voice.as_str()))
+                    .or_default().push((info, raw));
+            }
+        }
+        for ((staff, _), notes) in &mut lanes {
+            notes.sort_by_key(|(note, _)| (note.start, note.index));
+            for interval in notes.chunk_by(|(left, _), (right, _)| {
+                left.start + left.duration == right.start && left.index < right.index
+            }) {
+                if interval.len() < 3 {
+                    continue;
+                }
+                let cuts = boundaries.get(*staff).map_or(&[][..], Vec::as_slice);
+                candidates += count_rest_bridge_beam_gaps(interval, cuts)?;
             }
         }
     }
     Some(candidates)
 }
 
-
-
-
-
-
-
-fn lower_dual_edge_beat_after_plan(
-    infos: &[PartialBeatNoteInfo],
-    indices: &[usize; 4],
-) -> Option<(structural_write_authority::BeamPlan, [usize; 3])> {
-    // r331: the retired LowerDualEdge readback projects the living shared
-    // metric BeamHierarchy DecisionOwner instead of preserving the historical
-    // rest-carrier state.  The rest at slot 2 remains structural gap evidence
-    // and therefore has no BeamPlan event ordinal.
-    let sounding_indices = [indices[0], indices[1], indices[3]];
-    let sounding_infos = sounding_indices
-        .iter()
-        .map(|index| infos.iter().find(|info| info.index == *index))
-        .collect::<Option<Vec<_>>>()?;
-    let plan = structural_metric_beam_hierarchy_plan(&sounding_infos, 2)?.into_plan();
-    Some((plan, sounding_indices))
-}
-
-fn lower_dual_edge_beat_group_matches_plan(
-    infos: &[PartialBeatNoteInfo],
-    raw_notes: &[PartialBeatRawNote],
-    indices: &[usize; 4],
-) -> bool {
-    let Some((plan, sounding_indices)) = lower_dual_edge_beat_after_plan(infos, indices) else {
-        return false;
-    };
-    let sounding_green = sounding_indices
-        .iter()
-        .enumerate()
-        .all(|(event_ordinal, index)| {
-            let Some(raw) = raw_notes.iter().find(|raw| raw.start == *index) else {
-                return false;
-            };
-            lower_dual_edge_beat_beam_states(&raw.text)
-                == beam_plan_states_for_event(&plan, event_ordinal)
-        });
-    if !sounding_green {
-        return false;
-    }
-    let Some(rest_raw) = raw_notes.iter().find(|raw| raw.start == indices[2]) else {
-        return false;
-    };
-    lower_dual_edge_beat_beam_states(&rest_raw.text).is_empty()
-}
-
-fn lower_dual_edge_beat_group_matches_observed_plans(
-    measure: &str,
-    beat_unit: i64,
-    infos: &[PartialBeatNoteInfo],
-    raw_notes: &[PartialBeatRawNote],
-    group: &[usize; 4],
-) -> bool {
-    if lower_dual_edge_beat_group_matches_plan(infos, raw_notes, group) {
-        return true;
-    }
-
-    let [first, second, _, last] = *group;
-    if !(first < second && second < last) {
-        return false;
-    }
-    let Some((first, last)) = infos.iter().find(|note| note.index == first)
-        .zip(infos.iter().find(|note| note.index == last))
-    else {
-        return false;
-    };
-    let Some(boundaries) = metric_beam_clef_boundaries(measure) else {
-        return false;
-    };
-    if !boundaries.get(&first.staff).is_some_and(|cuts| {
-        crosses_metric_beam_clef_boundary(cuts, first.start, last.start)
-    }) {
-        return false;
-    }
-
-    // Read the metric owner's positive and negative decisions without applying its edits.
-    let mut states = BTreeMap::new();
-    let mut ungrouped = BTreeSet::new();
-    add_beat_scoped_beam_groups(
-        infos, beat_unit, &boundaries, &mut states, &mut ungrouped,
-        &mut BeatScopedBeamPatchStats::default(),
-    );
-    group.iter().enumerate().all(|(slot, index)| {
-        let Some(raw) = raw_notes.iter().find(|note| note.start == *index) else {
-            return false;
-        };
-        let actual = lower_dual_edge_beat_beam_states(&raw.text);
-        if slot == 2 {
-            return actual.is_empty();
-        }
-        match states.get(index) {
-            Some(expected) => {
-                actual.len() == expected.len() && expected.iter().all(|&(level, value)| {
-                    u8::try_from(level).ok()
-                        .and_then(|level| actual.get(&level))
-                        .is_some_and(|state| state == value)
-                })
+fn count_rest_bridge_beam_gaps(
+    interval: &[(&PartialBeatNoteInfo, &PartialBeatRawNote)],
+    clef_cuts: &[i64],
+) -> Option<usize> {
+    let mut candidates = 0;
+    let mut left = None;
+    for (right_index, (right, right_raw)) in interval.iter().copied().enumerate() {
+        if !partial_beat_is_beam_candidate(right) {
+            if !right.is_rest || right.is_hidden {
+                left = None;
             }
-            None => ungrouped.contains(index) && actual.is_empty(),
+            continue;
         }
-    })
-}
-
-fn beam_plan_states_for_event(
-    plan: &structural_write_authority::BeamPlan,
-    event_ordinal: usize,
-) -> std::collections::BTreeMap<u8, String> {
-    plan.edits()
-        .iter()
-        .copied()
-        .filter(|edit| edit.event_ordinal() == event_ordinal)
-        .map(|edit| (edit.level(), edit.state().as_musicxml_text().to_string()))
-        .collect()
-}
-
-fn lower_dual_edge_beat_beam_states(note_text: &str) -> std::collections::BTreeMap<u8, String> {
-    let mut states = std::collections::BTreeMap::new();
-    let mut scan = 0_usize;
-    while let Some(rel_start) = note_text[scan..].find("<beam") {
-        let start = scan + rel_start;
-        let Some(open_end_rel) = note_text[start..].find('>') else {
-            break;
-        };
-        let open_end = start + open_end_rel;
-        let open_tag = &note_text[start..=open_end];
-        let Some(number_pos) = open_tag.find("number=\"") else {
-            scan = open_end + 1;
+        let previous = left.replace(right_index);
+        let Some(left_index) = previous.filter(|index| index + 1 < right_index) else {
             continue;
         };
-        let number_start = number_pos + "number=\"".len();
-        let Some(number_end_rel) = open_tag[number_start..].find('"') else {
-            scan = open_end + 1;
-            continue;
-        };
-        let number = open_tag[number_start..number_start + number_end_rel]
-            .trim()
-            .parse::<u8>()
-            .ok();
-        let content_start = open_end + 1;
-        let Some(close_rel) = note_text[content_start..].find("</beam>") else {
-            break;
-        };
-        let content_end = content_start + close_rel;
-        if let Some(level) = number {
-            states.insert(level, note_text[content_start..content_end].trim().to_string());
+        let (left, _) = interval[left_index];
+        let right_beams = partial_beat_observed_beam_states(&right_raw.text)?;
+        let rests = &interval[left_index + 1..right_index];
+        let left_beams = partial_beat_observed_beam_states(&interval[left_index].1.text)?;
+        let mut rest_beam_levels = BTreeSet::new();
+        for (_, raw) in rests {
+            rest_beam_levels.extend(
+                partial_beat_observed_beam_states(&raw.text)?.into_iter().map(|(level, _)| level),
+            );
         }
-        scan = content_end + "</beam>".len();
-    }
-    states
-}
-
-
-
-
-
-#[cfg(test)]
-fn lower_dual_edge_beat_structural_group(
-    infos: &[PartialBeatNoteInfo],
-    raw_notes: &[PartialBeatRawNote],
-    offsets: &[i64; 4],
-    sixteenth: i64,
-) -> Option<[usize; 4]> {
-    let mut indices = [0_usize; 4];
-    for (slot, offset) in offsets.iter().enumerate() {
-        let matches = infos
-            .iter()
-            .filter(|info| {
-                info.staff == "2"
-                    && info.voice == "2"
-                    && !info.is_chord
-                    && info.start == *offset
-                    && info.duration == sixteenth
-                    && info.note_type == "16th"
-            })
-            .collect::<Vec<_>>();
-        if matches.len() != 1 {
-            return None;
-        }
-        let info = matches[0];
-        raw_notes.iter().find(|raw| raw.start == info.index)?;
-        if slot == 2 {
-            if !info.is_rest {
-                return None;
-            }
-        } else if info.is_rest {
-            return None;
-        }
-        indices[slot] = info.index;
-    }
-    Some(indices)
-}
-
-#[cfg(test)]
-pub(crate) fn lower_dual_edge_beat_regression_candidates(xml: &str) -> Option<usize> {
-    parse_musicxml(xml).ok()?;
-    let spans = partial_beat_measure_spans(xml);
-    let mut inherited_divisions = 1_i64;
-    let mut candidates = 0_usize;
-    for span in spans {
-        let measure_text = &xml[span.start..span.end];
-        inherited_divisions = partial_beat_first_i64(measure_text, "divisions")
-            .unwrap_or(inherited_divisions)
-            .max(1);
-        let raw_notes = partial_beat_raw_notes(measure_text);
-        let infos = partial_beat_note_infos(measure_text, &raw_notes);
-        let beat_unit = inherited_divisions;
-        let sixteenth = (beat_unit / 4).max(1);
-        let first_offsets = [0_i64, sixteenth, sixteenth * 2, sixteenth * 3];
-        let last_offsets = [
-            beat_unit * 3,
-            beat_unit * 3 + sixteenth,
-            beat_unit * 3 + sixteenth * 2,
-            beat_unit * 3 + sixteenth * 3,
-        ];
-        for offsets in [&first_offsets, &last_offsets] {
-            let Some(group) = lower_dual_edge_beat_structural_group(
-                &infos,
-                &raw_notes,
-                offsets,
-                sixteenth,
-            ) else {
-                continue;
-            };
-            if !lower_dual_edge_beat_group_matches_observed_plans(
-                measure_text, beat_unit, &infos, &raw_notes, &group,
-            ) {
-                candidates = candidates.saturating_add(1);
+        let cut = crosses_metric_beam_clef_boundary(clef_cuts, left.start, right.start);
+        let mut malformed = false;
+        // The rest-bridge owner emits only the two lower beam levels.
+        for level in 1..=2 {
+            let incoming = right_beams.iter().any(|(number, state)| {
+                *number == level && matches!(state.as_str(), "continue" | "end")
+            });
+            let outgoing = left_beams.iter().any(|(number, state)| {
+                *number == level && matches!(state.as_str(), "begin" | "continue")
+            });
+            if incoming {
+                malformed |= cut || !outgoing || rest_beam_levels.contains(&level);
+                let mut begin = None;
+                for (note, raw) in interval[..=left_index].iter().rev() {
+                    if note.is_rest && !note.is_hidden {
+                        continue;
+                    }
+                    let beams = partial_beat_observed_beam_states(&raw.text)?;
+                    match beams.iter().find(|(number, _)| *number == level)
+                        .map(|(_, state)| state.as_str())
+                    {
+                        Some("continue") => {}
+                        Some("begin") => {
+                            begin = Some(begin.is_none());
+                            if begin == Some(false) {
+                                break;
+                            }
+                        }
+                        _ => break,
+                    }
+                }
+                malformed |= begin != Some(true);
+            } else if outgoing {
+                malformed = true;
+            } else if cut {
+                let previous_pitch = left_index.checked_sub(1)
+                    .and_then(|index| interval.get(index))
+                    .filter(|(note, _)| partial_beat_is_beam_candidate(note));
+                let unfinished_preceding_beam = if let Some((_, raw)) = previous_pitch {
+                    partial_beat_observed_beam_states(&raw.text)?.iter().any(|(number, state)| {
+                        *number == level && matches!(state.as_str(), "begin" | "continue")
+                    }) && !left_beams.iter().any(|(number, _)| *number == level)
+                } else {
+                    false
+                };
+                malformed |= unfinished_preceding_beam;
             }
         }
+        candidates += usize::from(malformed);
     }
     Some(candidates)
+}
+
+#[cfg(test)]
+fn read_fixture_rest_beam_errors(xml: &str) -> Option<usize> {
+    count_written_rest_beam_errors(xml, |_| true)
 }
 
 #[cfg(test)]
 mod lower_dual_edge_recovery_retirement_tests {
-    use super::lower_dual_edge_beat_regression_candidates;
+    use super::read_fixture_rest_beam_errors;
 
-    fn score(second_level1: &str, second_level2: &str, rest_beams: &str) -> String {
+    pub(super) fn score(second_level1: &str, second_level2: &str, rest_beams: &str) -> String {
         format!(
             r#"<?xml version="1.0"?><score-partwise version="4.0"><part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list><part id="P1"><measure number="1"><attributes><divisions>4</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes><note><pitch><step>C</step><octave>3</octave></pitch><duration>1</duration><type>16th</type><voice>2</voice><staff>2</staff><beam number="1">begin</beam><beam number="2">begin</beam></note><note><pitch><step>D</step><octave>3</octave></pitch><duration>1</duration><type>16th</type><voice>2</voice><staff>2</staff><beam number="1">{}</beam><beam number="2">{}</beam></note><note><rest/><duration>1</duration><type>16th</type><voice>2</voice><staff>2</staff>{}</note><note><pitch><step>E</step><octave>3</octave></pitch><duration>1</duration><type>16th</type><voice>2</voice><staff>2</staff><beam number="1">end</beam><beam number="2">end</beam></note></measure></part></score-partwise>"#,
             second_level1, second_level2, rest_beams
@@ -356,10 +145,10 @@ mod lower_dual_edge_recovery_retirement_tests {
     }
 
     #[test]
-    fn canonical_lower_rest_bridge_edge_is_not_a_regression() {
+    fn rest_bridge_accepts_balanced_written_beams() {
         let xml = score("continue", "continue", "");
         assert_eq!(
-            lower_dual_edge_beat_regression_candidates(&xml),
+            read_fixture_rest_beam_errors(&xml),
             Some(0)
         );
 
@@ -371,13 +160,13 @@ mod lower_dual_edge_recovery_retirement_tests {
             r#"<beam number="1">continue</beam><beam number="2">continue</beam>"#,
         );
         assert_eq!(
-            lower_dual_edge_beat_regression_candidates(&legacy_rest_carrier),
+            read_fixture_rest_beam_errors(&legacy_rest_carrier),
             Some(1)
         );
     }
 
     #[test]
-    fn a_clef_boundary_accepts_only_the_metric_owners_exact_split() {
+    fn closed_beams_allow_a_split_even_without_a_clef_boundary() {
         let before = score("end", "end", "").replace(
             "</time>",
             r#"</time><clef number="2"><sign>F</sign><line>4</line></clef>"#,
@@ -385,22 +174,32 @@ mod lower_dual_edge_recovery_retirement_tests {
         let terminal_beams = r#"<beam number="1">end</beam><beam number="2">end</beam>"#;
         let (prefix, suffix) = before.rsplit_once(terminal_beams).unwrap();
         let split = format!("{prefix}{suffix}");
-        assert_eq!(lower_dual_edge_beat_regression_candidates(&split), Some(1));
+        assert_eq!(read_fixture_rest_beam_errors(&split), Some(0));
 
         let clef = r#"<attributes><clef number="2"><sign>G</sign><line>2</line></clef></attributes>"#;
         let bounded = split.replace("<note><rest/>", &format!("{clef}<note><rest/>"));
-        assert_eq!(lower_dual_edge_beat_regression_candidates(&bounded), Some(0));
+        assert_eq!(read_fixture_rest_beam_errors(&bounded), Some(0));
         let other_staff = bounded.replace(r#"<clef number="2">"#, r#"<clef number="1">"#);
-        assert_eq!(lower_dual_edge_beat_regression_candidates(&other_staff), Some(1));
+        assert_eq!(read_fixture_rest_beam_errors(&other_staff), Some(0));
         let incomplete = bounded.replacen(terminal_beams, r#"<beam number="1">end</beam>"#, 1);
-        assert_eq!(lower_dual_edge_beat_regression_candidates(&incomplete), Some(1));
+        assert_eq!(read_fixture_rest_beam_errors(&incomplete), Some(1));
+    }
+
+    #[test]
+    fn a_written_beam_can_continue_across_multiple_rest_gaps() {
+        let second_head = "<note><pitch><step>D</step>";
+        let xml = score("continue", "continue", "").replace(
+            second_head,
+            &format!("<note><rest/><duration>1</duration><type>16th</type><voice>2</voice><staff>2</staff></note>{second_head}"),
+        );
+        assert_eq!(read_fixture_rest_beam_errors(&xml), Some(0));
     }
 
     #[test]
     fn level_two_duplicate_begin_remains_visible_after_primary_masking() {
         let xml = score("continue", "begin", "");
         assert_eq!(
-            lower_dual_edge_beat_regression_candidates(&xml),
+            read_fixture_rest_beam_errors(&xml),
             Some(1)
         );
 
@@ -412,7 +211,7 @@ mod lower_dual_edge_recovery_retirement_tests {
             1,
         );
         assert_eq!(
-            lower_dual_edge_beat_regression_candidates(&missing_begin),
+            read_fixture_rest_beam_errors(&missing_begin),
             Some(1)
         );
     }
@@ -420,14 +219,14 @@ mod lower_dual_edge_recovery_retirement_tests {
 
 #[cfg(test)]
 mod lower_dual_edge_multimeasure_detector_tests {
-    use super::lower_dual_edge_beat_regression_candidates;
+    use super::read_fixture_rest_beam_errors;
 fn note(staff: &str, voice: &str, rest: bool, beams: (&str, &str)) -> String {
         let body = if rest {
             "<rest/>".to_string()
         } else {
             "<pitch><step>C</step><octave>4</octave></pitch>".to_string()
         };
-        let beam_rows = if rest {
+        let beam_rows = if rest || beams.0.is_empty() {
             String::new()
         } else {
             format!(
@@ -451,7 +250,7 @@ fn exact_structural_measure(measure_number: usize, second_state: &str) -> String
             lower.push_str(&note("2", "2", slot == 2, *state));
         }
         for _ in 0..8 {
-            lower.push_str(&note("2", "2", false, ("begin", "begin")));
+            lower.push_str(&note("2", "2", false, ("", "")));
         }
         for (slot, state) in states.iter().enumerate() {
             lower.push_str(&note("2", "2", slot == 2, *state));
@@ -474,9 +273,9 @@ fn structural_measure_fragment(measure_number: usize, second_state: &str) -> Str
     #[test]
     fn detector_retains_green_double_begin_and_multimeasure_counts() {
         for ordinal in [11_usize, 43] {
-            assert_eq!(lower_dual_edge_beat_regression_candidates(
+            assert_eq!(read_fixture_rest_beam_errors(
                 &exact_structural_measure(ordinal, "continue")), Some(0));
-            assert_eq!(lower_dual_edge_beat_regression_candidates(
+            assert_eq!(read_fixture_rest_beam_errors(
                 &exact_structural_measure(ordinal, "begin")), Some(2));
         }
         let first = 11_usize;
@@ -485,6 +284,10 @@ fn structural_measure_fragment(measure_number: usize, second_state: &str) -> Str
         let measures = [structural_measure_fragment(first, "begin"),
             structural_measure_fragment(second, "begin")].join("");
         let combined = format!("<score-partwise><part id=\"P1\"><measure number=\"{prefix}\"><attributes><divisions>96</divisions></attributes><forward><duration>384</duration></forward></measure>{measures}</part></score-partwise>");
-        assert_eq!(lower_dual_edge_beat_regression_candidates(&combined), Some(4));
+        assert_eq!(read_fixture_rest_beam_errors(&combined), Some(4));
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/written_rest_beam_readback.rs"]
+mod written_rest_beam_readback_tests;

@@ -39,12 +39,10 @@ fn run_early_stage_case(offset: usize, copies: usize) {
     assert!(trial.consolidation_adopted > 0);
     let post = post.unwrap();
     receipts.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
-    let ((legacy, audit), receipt) = human_bound_cursor_lane_owner_transfer_xml_with_receipt(post.as_str());
-    assert!(audit.written, "the independent XML-only cursor probe must be positive");
-    assert_ne!(cursor_shape(&legacy, offset + 2), cursor_shape(&post, offset + 2));
-    let mut probe = RenderTransitionReceipts::new();
-    probe.push_preserving(receipt, &legacy);
-    probe.discard_unadopted(RenderDiscardReason::ReadOnlyProbe);
+    assert_eq!(
+        partial_beat_post_rest_lane_split_regression_candidates(&post),
+        Some(copies)
+    );
 
     let empty = structural_write_authority::CanonicalFinalChordStructuralPlan::default();
     let ((unchanged, audit), receipt) = human_bound_cursor_lane_owner_transfer_xml_with_receipt((post.as_str(), &empty));

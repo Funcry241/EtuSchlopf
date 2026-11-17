@@ -23,10 +23,9 @@ fn metric_rest_continuation_plans<'a>(
         }
         let boundaries = clef_boundaries.get(staff).map_or(&[][..], Vec::as_slice);
         let parts = notes.chunk_by(|left, right| {
-            let end = left.start + left.duration;
             partial_beat_is_beam_candidate(left) && partial_beat_is_beam_candidate(right)
                 && !crosses_metric_beam_clef_boundary(boundaries, left.start, right.start)
-                && (end == right.start || (end < right.start && visible_rests_cover_gap(infos, left, right)))
+                && metric_rest_connection_is_covered(infos, left, right)
         });
         for run in parts {
             if !beat_group_stays_inside_one_beat(run, beat_unit) {

@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 pub const CORPUS_RUN_MANIFEST_FILE: &str = "corpus_run_manifest.json";
-pub const CORPUS_RUN_MANIFEST_SCHEMA_VERSION: u32 = 6;
+pub const CORPUS_RUN_MANIFEST_SCHEMA_VERSION: u32 = 8;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CorpusRunFileEvidence {
@@ -40,6 +40,8 @@ pub struct CorpusRunProjectEvidence {
     pub rest_vertical_anchors_written: usize,
     pub ledger_bounded_clef_boundaries_written: usize,
     pub primary_beam_voice_elements_written: usize,
+    pub stem_directions_written: bool,
+    pub cursor_exchange_written: bool,
     pub clef_write_cause: bool,
     pub render_xml_write: bool,
     pub notation_mutation: bool,
@@ -353,6 +355,8 @@ impl CorpusRunManifest {
                 project.primary_beam_voice_elements_written as u64,
                 true,
             );
+            inline_bool(&mut out, "writer_final_stem_directions_written", project.stem_directions_written, true);
+            inline_bool(&mut out, "writer_cursor_exchange_written", project.cursor_exchange_written, true);
             inline_bool(&mut out, "writer_clef_write_cause", project.clef_write_cause, true);
             inline_bool(&mut out, "writer_render_xml_write_committed", project.render_xml_write, true);
             inline_bool(&mut out, "writer_render_notation_mutation", project.notation_mutation, true);
@@ -512,6 +516,8 @@ pub fn project_evidence(
         primary_beam_voice_elements_written: write_outcome
             .as_ref()
             .map_or(0, |row| row.primary_beam_voice_elements_written),
+        stem_directions_written: write_outcome.as_ref().is_some_and(|row| row.stem_directions_written),
+        cursor_exchange_written: write_outcome.as_ref().is_some_and(|row| row.cursor_exchange_written),
         clef_write_cause: write_outcome.as_ref().is_some_and(|row| row.clef_write_cause),
         render_xml_write: write_outcome.as_ref().is_some_and(|row| row.render_xml_write),
         notation_mutation: write_outcome.as_ref().is_some_and(|row| row.notation_mutation),
@@ -662,7 +668,9 @@ pub fn validate_manifest(project_root: &Path, expected_version: &str) -> CorpusR
             .saturating_add(project.source_higher_beam_notes_restored)
             .saturating_add(project.rest_vertical_anchors_written)
             .saturating_add(project.primary_beam_voice_elements_written)
-            .saturating_add(usize::from(project.clef_write_cause));
+            .saturating_add(usize::from(project.clef_write_cause))
+            .saturating_add(usize::from(project.stem_directions_written))
+            .saturating_add(usize::from(project.cursor_exchange_written));
         let forward_projection_consistent = if project.forward_nodes_replaced > 0 {
             project.forward_duration_replaced > 0
         } else {
@@ -801,7 +809,7 @@ fn project_write_outcome_failure_evidence(projects: &[CorpusRunProjectEvidence])
         .iter()
         .map(|project| {
             format!(
-                "project={};renderer={};writer={};selected={};enabled={};routes={};forward_nodes={};forward_duration={};candidate_after={};beam_candidates={};beam_written={};beam_after={};cross_staff_suppressions={};higher_beams={};rest_anchors={};clef_boundaries={};primary_beam_voice={};clef_cause={};render_write={};notation_mutation={};sounding_mutation={};music_mutation={};master_apply={}",
+                "project={};renderer={};writer={};selected={};enabled={};routes={};forward_nodes={};forward_duration={};candidate_after={};beam_candidates={};beam_written={};beam_after={};cross_staff_suppressions={};higher_beams={};rest_anchors={};clef_boundaries={};primary_beam_voice={};final_stem_directions={};cursor_exchange={};clef_cause={};render_write={};notation_mutation={};sounding_mutation={};music_mutation={};master_apply={}",
                 project.project,
                 project.renderer_outcome_observed,
                 project.writer_outcome_observed,
@@ -819,6 +827,8 @@ fn project_write_outcome_failure_evidence(projects: &[CorpusRunProjectEvidence])
                 project.rest_vertical_anchors_written,
                 project.ledger_bounded_clef_boundaries_written,
                 project.primary_beam_voice_elements_written,
+                project.stem_directions_written,
+                project.cursor_exchange_written,
                 project.clef_write_cause,
                 project.render_xml_write,
                 project.notation_mutation,
@@ -895,6 +905,16 @@ fn parse_manifest(text: &str) -> Result<CorpusRunManifest, String> {
                     json_usize_field(object, "writer_primary_beam_voice_elements_written")?
                 } else {
                     0
+                },
+                cursor_exchange_written: if schema_version >= 8 {
+                    json_bool_field(object, "writer_cursor_exchange_written")?
+                } else {
+                    false
+                },
+                stem_directions_written: if schema_version >= 7 {
+                    json_bool_field(object, "writer_final_stem_directions_written")?
+                } else {
+                    false
                 },
                 clef_write_cause: if schema_version >= 5 {
                     json_bool_field(object, "writer_clef_write_cause")?
@@ -1018,6 +1038,8 @@ struct FinalWriterOutcome {
     rest_vertical_anchors_written: usize,
     ledger_bounded_clef_boundaries_written: usize,
     primary_beam_voice_elements_written: usize,
+    stem_directions_written: bool,
+    cursor_exchange_written: bool,
     clef_write_cause: bool,
     render_xml_write: bool,
     notation_mutation: bool,
@@ -1074,6 +1096,16 @@ fn final_writer_outcome(text: &str) -> Option<FinalWriterOutcome> {
         ledger_bounded_clef_boundaries_accepted > 0 || primary_clef_projection_changed;
     let primary_beam_voice_elements_written =
         report_outcome_optional_usize(silent_line, "PrimaryBeamVoiceElementsWritten")?;
+    let stem_directions_written = match report_outcome_value(silent_line, "FinalStemDirectionsWritten") {
+        Some("ja") => true,
+        None | Some("nein") => false,
+        Some(_) => return None,
+    };
+    let cursor_exchange_written = match report_outcome_value(silent_line, "CursorExchangeWritten") {
+        Some("ja") => true,
+        None | Some("nein") => false,
+        Some(_) => return None,
+    };
     let (visible_rests_before, visible_rests_after) =
         report_outcome_usize_pair(silent_line, "VisibleRestsBeforeAfter")?;
     let (note_count_before, note_count_after) =
@@ -1120,6 +1152,8 @@ fn final_writer_outcome(text: &str) -> Option<FinalWriterOutcome> {
         || source_higher_beam_notes_restored > 0
         || rest_vertical_anchors_written > 0
         || primary_beam_voice_elements_written > 0
+        || stem_directions_written
+        || cursor_exchange_written
         || clef_write_cause;
     let beam_write = beam_lost_begin_notes_written > 0;
     let rest_write = rest_vertical_anchors_written > 0;
@@ -1172,6 +1206,8 @@ fn final_writer_outcome(text: &str) -> Option<FinalWriterOutcome> {
         rest_vertical_anchors_written,
         ledger_bounded_clef_boundaries_written,
         primary_beam_voice_elements_written,
+        stem_directions_written,
+        cursor_exchange_written,
         clef_write_cause,
         render_xml_write,
         notation_mutation,
@@ -1973,6 +2009,124 @@ RendererOutcome: observed_from_existing_writer_audit.\n",
             1,
         );
         assert!(final_writer_outcome(&malformed).is_none());
+    }
+
+    #[test]
+    fn committed_stem_directions_alone_close_the_full_corpus_write_proof() {
+        let root = test_dir("stem_directions");
+        fs::create_dir_all(&root).unwrap();
+        let version = env!("CARGO_PKG_VERSION");
+        let project = "Synthetic Score";
+        let unaccounted = result_text(
+            version,
+            project,
+            WriterFixture {
+                selected: true,
+                candidates: 0,
+                routes: 0,
+                forward_nodes: 0,
+                forward_duration: 0,
+                higher_beams: 0,
+                rest_anchors: 0,
+                clef_boundaries: 0,
+                visible_rests_before: 1,
+                visible_rests_after: 1,
+                notes_before: 4,
+                notes_after: 4,
+                render_write: true,
+                declared_music_mutation: false,
+            },
+        );
+        let cause = |value| {
+            unaccounted.replacen(
+                "; RenderXmlWrite ja;",
+                &format!("; FinalStemDirectionsWritten {value}; RenderXmlWrite ja;"),
+                1,
+            )
+        };
+        assert!(final_writer_outcome(&unaccounted).is_none());
+        assert!(final_writer_outcome(&cause("nein")).is_none());
+        assert!(final_writer_outcome(&cause("unknown")).is_none());
+        let result = cause("ja");
+        let result_path = root.join("Synthetic Score.result.txt");
+        fs::write(&result_path, &result).unwrap();
+        let report = root.join("corpus_emergence.result.txt");
+        fs::write(&report, "synthetic corpus").unwrap();
+
+        let mut manifest = CorpusRunManifest::started(
+            version,
+            "stem-direction-test".into(),
+            100,
+            vec![project.into()],
+        );
+        manifest.upsert_project(project_evidence(project, &result_path, &result, Some(0), true));
+        manifest.finalize(200, file_evidence(&report).unwrap());
+        manifest.write_atomic(&root.join(CORPUS_RUN_MANIFEST_FILE)).unwrap();
+        let checked = validate_manifest(&root, version);
+        assert!(checked.valid, "{}", checked.reason);
+        assert!(checked.manifest.projects[0].stem_directions_written);
+        assert!(!checked.manifest.sounding_event_mutation);
+        assert!(!checked.manifest.master_apply);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn committed_cursor_exchange_alone_close_the_full_corpus_write_proof() {
+        let root = test_dir("cursor_exchange");
+        fs::create_dir_all(&root).unwrap();
+        let version = env!("CARGO_PKG_VERSION");
+        let project = "Synthetic Score";
+        let unaccounted = result_text(
+            version,
+            project,
+            WriterFixture {
+                selected: true,
+                candidates: 0,
+                routes: 0,
+                forward_nodes: 0,
+                forward_duration: 0,
+                higher_beams: 0,
+                rest_anchors: 0,
+                clef_boundaries: 0,
+                visible_rests_before: 1,
+                visible_rests_after: 1,
+                notes_before: 4,
+                notes_after: 4,
+                render_write: true,
+                declared_music_mutation: false,
+            },
+        );
+        let cause = |value| {
+            unaccounted.replacen(
+                "; RenderXmlWrite ja;",
+                &format!("; CursorExchangeWritten {value}; RenderXmlWrite ja;"),
+                1,
+            )
+        };
+        assert!(final_writer_outcome(&unaccounted).is_none());
+        assert!(final_writer_outcome(&cause("nein")).is_none());
+        assert!(final_writer_outcome(&cause("unknown")).is_none());
+        let result = cause("ja");
+        let result_path = root.join("Synthetic Score.result.txt");
+        fs::write(&result_path, &result).unwrap();
+        let report = root.join("corpus_emergence.result.txt");
+        fs::write(&report, "synthetic corpus").unwrap();
+
+        let mut manifest = CorpusRunManifest::started(
+            version,
+            "cursor-exchange-test".into(),
+            100,
+            vec![project.into()],
+        );
+        manifest.upsert_project(project_evidence(project, &result_path, &result, Some(0), true));
+        manifest.finalize(200, file_evidence(&report).unwrap());
+        manifest.write_atomic(&root.join(CORPUS_RUN_MANIFEST_FILE)).unwrap();
+        let checked = validate_manifest(&root, version);
+        assert!(checked.valid, "{}", checked.reason);
+        assert!(checked.manifest.projects[0].cursor_exchange_written);
+        assert!(!checked.manifest.sounding_event_mutation);
+        assert!(!checked.manifest.master_apply);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

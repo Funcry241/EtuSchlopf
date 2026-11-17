@@ -1,26 +1,28 @@
 # Musikreferenzen und Lizenzhinweise
 
-Hier stehen die Quellen und Rechte der drei Musikreferenzen von EtuSchlopf. Die [Fremdlizenzhinweise zum Programm](../THIRD_PARTY_NOTICES.md) führen zu dieser Seite. Für die Referenzdateien gelten die unten genannten Rechte und Lizenzen.
+Hier stehen die Quellen und Rechte der Musikreferenzen von EtuSchlopf. Die [Fremdlizenzhinweise zum Programm](../THIRD_PARTY_NOTICES.md) führen zu dieser Seite. Für die Referenzdateien gelten die unten genannten Rechte und Lizenzen.
 
 ## Notenbilder
 
-Die folgenden PDFs stammen aus dem [Windows-Korpuslauf r1886](../evidence/r1886/README.md). Die Namensnennungen zu Bach, Chopin und Schubert stehen unter [Quellen und Rechte](#quellen-und-rechte).
+Die PDFs und Ausschnitte stammen aus dem [Windows-Korpuslauf r1921](../evidence/r1921/README.md). Klicke auf ein Bild, um das vollständige PDF zu öffnen.
 
-| Stück | Seiten | PDF |
+| Stück | Seiten | Ausschnitt und PDF |
 | --- | ---: | --- |
-| Bach · Fuge c-Moll BWV 847 | 3 | [PDF](bwv847-fuge-r1886.pdf) |
-| Chopin · Etüde E-Dur op. 10 Nr. 3 | 1 | [PDF](chopin-op10-no3-p01-r1886.pdf) |
-| Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15 | 2 | [PDF](schubert-d783-no15-p18-r1886.pdf) |
-| Etüde Nr. 1 | 2 | [PDF](etude-1-r1886.pdf) |
-| Etüde Nr. 2 | 5 | [PDF](etude-2-r1886.pdf) |
-| Etüde Nr. 3 | 4 | [PDF](etude-3-r1886.pdf) |
-| Etüde Nr. 4 | 3 | [PDF](etude-4-r1886.pdf) |
-| Etüde Nr. 5 | 6 | [PDF](etude-5-r1886.pdf) |
-| Etüde Nr. 6 | 6 | [PDF](etude-6-r1886.pdf) |
-| Etüde Nr. 7 | 6 | [PDF](etude-7-r1886.pdf) |
-| Etüde Nr. 8 | 6 | [PDF](etude-8-r1886.pdf) |
-| Etüde Nr. 9 | 4 | [PDF](etude-9-r1886.pdf) |
-| Etüde Nr. 10 | 6 | [PDF](etude-10-r1886.pdf) |
+| Bach · Fuge c-Moll BWV 847 | 3 | [![Bach · Fuge c-Moll BWV 847, Ausschnitt](../images/bwv847-fuge-r1921-ausschnitt.png)](bwv847-fuge-r1921.pdf) |
+| Chopin · Etüde E-Dur op. 10 Nr. 3 | 1 | [![Chopin · Etüde E-Dur op. 10 Nr. 3, Ausschnitt](../images/chopin-op10-no3-p01-r1921-ausschnitt.png)](chopin-op10-no3-p01-r1921.pdf) |
+| Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15 | 2 | [![Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15, Ausschnitt](../images/schubert-d783-no15-p18-r1921-ausschnitt.png)](schubert-d783-no15-p18-r1921.pdf) |
+| Etüde Nr. 1 | 3 | [![Etüde Nr. 1, Ausschnitt](../images/etude-1-r1921-ausschnitt.png)](etude-1-r1921.pdf) |
+| Etüde Nr. 2 | 5 | [![Etüde Nr. 2, Ausschnitt](../images/etude-2-r1921-ausschnitt.png)](etude-2-r1921.pdf) |
+| Etüde Nr. 3 | 4 | [![Etüde Nr. 3, Ausschnitt](../images/etude-3-r1921-ausschnitt.png)](etude-3-r1921.pdf) |
+| Etüde Nr. 4 | 3 | [![Etüde Nr. 4, Ausschnitt](../images/etude-4-r1921-ausschnitt.png)](etude-4-r1921.pdf) |
+| Etüde Nr. 5 | 6 | [![Etüde Nr. 5, Ausschnitt](../images/etude-5-r1921-ausschnitt.png)](etude-5-r1921.pdf) |
+| Etüde Nr. 6 | 6 | [![Etüde Nr. 6, Ausschnitt](../images/etude-6-r1921-ausschnitt.png)](etude-6-r1921.pdf) |
+| Etüde Nr. 7 | 6 | [![Etüde Nr. 7, Ausschnitt](../images/etude-7-r1921-ausschnitt.png)](etude-7-r1921.pdf) |
+| Etüde Nr. 8 | 6 | [![Etüde Nr. 8, Ausschnitt](../images/etude-8-r1921-ausschnitt.png)](etude-8-r1921.pdf) |
+| Etüde Nr. 9 | 4 | [![Etüde Nr. 9, Ausschnitt](../images/etude-9-r1921-ausschnitt.png)](etude-9-r1921.pdf) |
+| Etüde Nr. 10 | 6 | [![Etüde Nr. 10, Ausschnitt](../images/etude-10-r1921-ausschnitt.png)](etude-10-r1921.pdf) |
+
+[Notenbilder des Windows-Laufs r1886](../evidence/r1886/score_sha256.tsv)
 
 ## Frühere Notenbilder und Druckvorlagen
 

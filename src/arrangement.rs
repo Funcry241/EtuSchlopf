@@ -2129,7 +2129,7 @@
             out = insert_after_type_or_before_end(&out, &format!("    <stem>{}</stem>\n", staff.stem()));
             changed.stem_added = true;
         }
-        out = sync_note_type_and_dots(&out);
+        out = sync_note_type_and_dots(&out, 96);
         (out, changed)
     }
     fn move_note_to_left_system_for_human_potential(note_text: &str, separate_voice: bool) -> String {
@@ -2549,11 +2549,11 @@
                 ) {
                     vec![duration]
                 } else {
-                    split_duration_for_metric_notation(start, duration, beat_duration.max(1))
+                    split_duration_for_metric_notation(start, duration, beat_duration, rhythm_context.divisions)
                 };
-                if is_rest && parts.is_empty() {
+                if parts.is_empty() {
                     if let Some(courses) = course_measure.as_deref_mut() {
-                        courses.push_normalized(idx, &note.text).expect("Unsplit rest custody");
+                        courses.push_normalized(idx, &note.text).expect("Unsplit metric occurrence custody");
                     }
                     if stats.capture_births { stats.births.capture_continuation(note.start..note.end, out.len(), &note.text); }
                     out.push_str(&note.text);
@@ -2564,7 +2564,7 @@
                     last = note.end;
                     continue;
                 }
-                let must_split = parts.len() > 1 || !is_exact_notation_duration(duration);
+                let must_split = parts.len() > 1 || !is_exact_notation_duration(duration, rhythm_context.divisions);
                 // Sequential head fragments would re-anchor any unsplit chord member.
                 let needs_cohort = parts.len() > 1
                     && meta_by_raw.get(&(idx + 1)).is_some_and(|next| next.is_chord);
@@ -2587,7 +2587,7 @@
                                 if member == 0 && is_rest {
                                     make_visible_rest_sequence_from_parts(&parts, staff, voice.trim())
                                 } else {
-                                    split_visible_pitched_note_with_parts(&raw.text, &parts)
+                                    split_visible_pitched_note_with_parts(&raw.text, &parts, rhythm_context.divisions)
                                 }
                             }).collect::<Vec<_>>();
                             let blocks = replacements.iter().map(|text| collect_raw_notes(text)).collect::<Vec<_>>();
@@ -2612,7 +2612,7 @@
                     let replacement = if is_rest {
                         make_visible_rest_sequence_from_parts(&parts, staff, voice.trim())
                     } else {
-                        split_visible_pitched_note_with_parts(&note.text, &parts)
+                        split_visible_pitched_note_with_parts(&note.text, &parts, rhythm_context.divisions)
                     };
                     if let Some(courses) = course_measure.as_deref_mut() {
                         courses.push_normalized(idx, &replacement).expect("Actual split course ancestry");
@@ -2637,7 +2637,7 @@
                 }
             }
             let replacement = if visible && duration > 0 {
-                let synced = sync_note_type_and_dots(&note.text);
+                let synced = sync_note_type_and_dots(&note.text, rhythm_context.divisions);
                 if synced != note.text { stats.notes_normalized += 1; }
                 synced
             } else { note.text.clone() };
@@ -2655,9 +2655,9 @@
         out.push_str(&measure_text[last..]);
         (out, origins)
     }
-    fn split_visible_pitched_note_with_parts(note_text: &str, parts: &[i64]) -> String {
+    fn split_visible_pitched_note_with_parts(note_text: &str, parts: &[i64], divisions: i64) -> String {
         if parts.len() <= 1 {
-            return sync_note_type_and_dots(note_text);
+            return sync_note_type_and_dots(note_text, divisions);
         }
         let Ok(note) = roxmltree::Document::parse(note_text) else {
             return note_text.to_string();
@@ -2672,7 +2672,7 @@
             let mut block = ensure_child_text_value_local(&untied, "duration", &part_duration.to_string());
             block = remove_child_blocks(&block, "beam");
             block = remove_child_blocks(&block, "notations");
-            block = sync_note_type_and_dots(&block);
+            block = sync_note_type_and_dots(&block, divisions);
             block = add_tie_markup(&block, idx + 1 < parts.len() || outgoing_tie, idx > 0 || incoming_tie);
             out.push_str(&block);
             if !out.ends_with('\n') {
@@ -2724,10 +2724,11 @@
     fn is_note_block_visible(note_text: &str) -> bool {
         !note_text.contains("print-object=\"no\"") && !note_text.contains("print-object='no'")
     }
-    fn is_exact_notation_duration(duration: i64) -> bool {
-        matches!(duration, 384 | 288 | 192 | 144 | 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6)
+    fn is_exact_notation_duration(duration: i64, divisions: i64) -> bool {
+        matches!(crate::model::metric_rest_notation::scale_notation_duration(duration, divisions, 96),
+            Some(384 | 288 | 192 | 144 | 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6))
     }
-    fn split_duration_for_metric_notation(start: i64, duration: i64, beat_duration: i64) -> Vec<i64> {
+    fn split_duration_for_metric_notation(start: i64, duration: i64, beat_duration: i64, divisions: i64) -> Vec<i64> {
         let beat_duration = beat_duration.max(1);
         if duration <= 0 {
             return Vec::new();
@@ -2739,8 +2740,18 @@
             let offset = cursor.rem_euclid(beat_duration);
             let to_next_beat = if offset == 0 { beat_duration } else { beat_duration - offset };
             let take = remaining.min(to_next_beat);
-            for part in split_duration_for_visible_notation(take) {
-                parts.push(part);
+            let Some(canonical) = crate::model::metric_rest_notation::scale_notation_duration(take, divisions, 96) else {
+                return Vec::new();
+            };
+            let local = split_duration_for_visible_notation(canonical);
+            if divisions != 96 && local.iter().sum::<i64>() != canonical {
+                return Vec::new();
+            }
+            for part in local {
+                let Some(scaled) = crate::model::metric_rest_notation::scale_notation_duration(part, 96, divisions) else {
+                    return Vec::new();
+                };
+                parts.push(scaled);
             }
             remaining -= take;
             cursor += take;
@@ -2788,8 +2799,8 @@
             _ => ("64th", 0),
         }
     }
-    fn sync_note_type_and_dots(note_text: &str) -> String {
-        crate::structural_write_authority::sync_arrangement_note_type_and_dots_authorized(note_text)
+    fn sync_note_type_and_dots(note_text: &str, divisions: i64) -> String {
+        crate::structural_write_authority::sync_arrangement_note_type_and_dots_authorized(note_text, divisions)
     }
     fn ensure_child_text_value_local(text: &str, tag: &str, value: &str) -> String {
         crate::structural_write_authority::ensure_arrangement_child_text_value_authorized(text, tag, value)
@@ -2882,7 +2893,7 @@ fn source_bound_metric_note_parts(
     courses: Option<&CourseMeasure>,
 ) -> Option<Vec<i64>> {
     let (Some(courses), Some(host)) = (courses, metas.get(&idx)) else { return None; };
-    if context.divisions != 96 || context.beat_type != 4 {
+    if context.beat_type != 4 {
         return None;
     }
     let initial_dotted_tie = host.start == 0 && crate::midi_seed::initial_dotted_quarter_tie_value(
@@ -2902,7 +2913,7 @@ fn source_bound_metric_note_parts(
     let tail = host.duration - half_bar;
     let crosses_midpoint = context.beats == 4 && host.start == 0
         && (1..context.beat_duration()).contains(&tail)
-        && is_exact_notation_duration(tail);
+        && is_exact_notation_duration(tail, context.divisions);
     if !initial_dotted_tie && !aligned_long_value && !syncopated_quarter && !crosses_midpoint {
         return None;
     }
@@ -2952,13 +2963,14 @@ fn whole_bar_single_note_is_eligible(
 ) -> bool {
     let Some(note) = raw.get(idx) else { return false; };
     let Some(meta) = metas.get(&idx) else { return false; };
-    if context.divisions != 96 || context.beats != 4 || context.beat_type != 4
-        || meta.start != 0 || meta.duration != 384 || meta.midi.is_none()
+    let measure_duration = context.beat_duration().saturating_mul(4);
+    if context.beats != 4 || context.beat_type != 4
+        || meta.start != 0 || meta.duration != measure_duration || meta.midi.is_none()
         || meta.is_chord || meta.is_rest || !is_note_block_visible(&note.text)
         || ["<tie", "<notations", "<grace", "<time-modification", "<lyric"]
             .iter().any(|tag| note.text.contains(tag))
         || metas.get(&(idx + 1)).is_some_and(|next| next.is_chord)
-        || metas.values().any(|other| other.start < 0 || other.start + other.duration > 384
+        || metas.values().any(|other| other.start < 0 || other.start + other.duration > measure_duration
             || (other.raw_idx != idx && other.staff == meta.staff && other.midi.is_some()
                 && raw.get(other.raw_idx).is_some_and(|n| is_note_block_visible(&n.text))))
         || measure_text.contains("<senza-misura")
@@ -2978,7 +2990,7 @@ fn whole_bar_single_note_is_eligible(
                 };
                 if duration < 0 { return false; }
                 let Some(next) = cursor.checked_add(if advance { duration } else { -duration }) else { return false; };
-                if !(0..=384).contains(&next) { return false; }
+                if !(0..=measure_duration).contains(&next) { return false; }
                 cursor = next;
             }
         }
@@ -2996,14 +3008,20 @@ fn aligned_half_bar_note_is_eligible(
 ) -> bool {
     let Some(note) = raw.get(idx) else { return false; };
     let Some(meta) = metas.get(&idx) else { return false; };
-    if context.divisions != 96 || context.beats != 4 || context.beat_type != 4
-        || !matches!(meta.start, 0 | 192) || !matches!(meta.duration, 144 | 192)
+    let beat = context.beat_duration();
+    let half = beat.saturating_mul(2);
+    let measure_duration = half.saturating_mul(2);
+    if context.beats != 4 || context.beat_type != 4
+        || (meta.start != 0 && meta.start != half)
+        || (meta.duration != half && !crate::midi_seed::initial_dotted_quarter_tie_value(
+            meta.duration, measure_duration, beat,
+        ))
         || meta.midi.is_none() || meta.is_rest || meta.is_chord
         || !is_note_block_visible(&note.text)
         || ["<tie", "<notations", "<grace", "<time-modification", "<lyric"]
             .iter().any(|tag| note.text.contains(tag))
         || metas.get(&(idx + 1)).is_some_and(|next| next.is_chord)
-        || metas.values().any(|other| other.start < 0 || other.start + other.duration > 384
+        || metas.values().any(|other| other.start < 0 || other.start + other.duration > measure_duration
             || (other.raw_idx != idx && other.staff == meta.staff && other.midi.is_some()
                 && other.start < meta.start + meta.duration && other.start + other.duration > meta.start))
         || measure_text.contains("<senza-misura")
@@ -3020,7 +3038,7 @@ fn aligned_half_bar_note_is_eligible(
                 let Some(duration) = duration else { return false; };
                 if duration < 0 { return false; }
                 let Some(next) = cursor.checked_add(if advance { duration } else { -duration }) else { return false; };
-                if !(0..=384).contains(&next) { return false; }
+                if !(0..=measure_duration).contains(&next) { return false; }
                 cursor = next;
             }
         }

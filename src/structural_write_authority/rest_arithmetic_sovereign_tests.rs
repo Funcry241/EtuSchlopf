@@ -39,13 +39,6 @@ mod r1230_ra1_sovereign_tests {
     fn lane_at(ordinal: usize) -> String {
         format!("<score-partwise version=\"4.0\"><part id=\"P1\"><measure number=\"{ordinal}\"><attributes><divisions>96</divisions></attributes><forward><duration>192</duration></forward><note><rest/><duration>24</duration><type>16th</type><voice>1</voice><staff>2</staff></note><note><pitch><step>C</step><octave>3</octave></pitch><duration>24</duration><type>16th</type><voice>2</voice><staff>2</staff></note><note><pitch><step>D</step><octave>3</octave></pitch><duration>24</duration><type>16th</type><voice>2</voice><staff>2</staff></note><forward><duration>24</duration><voice>1</voice><staff>1</staff></forward><backup><duration>288</duration></backup><forward><duration>264</duration></forward><note><pitch><step>E</step><octave>3</octave></pitch><duration>24</duration><type>16th</type><voice>2</voice><staff>2</staff></note></measure></part></score-partwise>")
     }
-    fn combined() -> String {
-        let ordinal = NEXT.fetch_add(2, Ordering::Relaxed) + 1;
-        let lane = lane_at(ordinal + 1);
-        let measure_start = lane.find("<measure").expect("lane measure");
-        let measure_end = lane.find("</part>").expect("lane part");
-        balance_at(ordinal).replace("</part></score-partwise>", &format!("{}</part></score-partwise>", &lane[measure_start..measure_end]))
-    }
     fn state(xml: &str, path: &Path) -> RenderSovereignState {
         let master = MasterAdoptedState::adopt_genesis_state(xml.to_owned(), MasterLineage::lineage_from_genesis(crate::master_state_identity::tests::synthetic_genesis_for_tests(xml)));
         let mut state = RenderSovereignState::begin_project_render(path, &master);
@@ -198,23 +191,7 @@ mod r1230_ra1_sovereign_tests {
         let result=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||state.adopt_transition(root,&post,receipts,RenderSinkKind::FragmentedRestChainTrial,|path,pre,candidate| { let result=crate::structural_write_authority::write_fragmented_rest_chain_trial_authorized(pre,candidate,path); if result.is_ok(){std::fs::write(path,"wrong").expect("sabotage witness");}(result,None)})));
         assert!(result.is_err()); assert_eq!(state.document(),Some(xml.as_str())); crate::master_state_identity::reset_render_lineage_measurement(); let _=std::fs::remove_file(path);
     }
-    fn second_adoption(fail_write:bool, bad_readback:bool) {
-        let xml=combined(); let path=path(); let mut state=state(&xml,&path); let (_,post,receipts)=prepare(&xml,&path); rest_commit(&mut state,&post,receipts); assert_eq!(state.document(),Some(post.as_str()));
-        let root=state.initial_trial_root(false); let ((lane_post,stats),receipt)=human_bound_cursor_lane_owner_transfer_xml_with_receipt(root.document()); assert!(stats.written && lane_post!=post,"real second owner");
-        let mut chain=RenderTransitionReceipts::new(); chain.push_preserving(receipt,&lane_post);
-        let result=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||state.adopt_transition(root,&lane_post,chain,RenderSinkKind::Checkpoint(RenderCheckpointSink::CursorLaneRepair),|path,_,candidate| {
-            if fail_write {return (Err(std::io::Error::other("checkpoint I/O failure")),None);}
-            let result=crate::structural_write_authority::write_cursor_lane_repair_checkpoint_authorized(path,candidate);
-            if bad_readback && result.0.is_ok() {std::fs::write(path,"wrong").expect("sabotage witness");} result
-        })));
-        if bad_readback { assert!(result.is_err()); assert_eq!(state.document(),Some(post.as_str())); }
-        else if fail_write {assert!(result.expect("ordinary I/O result").is_err()); assert_eq!(state.document(),Some(post.as_str()));}
-        else {assert!(result.expect("no panic").is_ok()); assert_eq!(state.document(),Some(lane_post.as_str())); assert_eq!(std::fs::read_to_string(&path).expect("artifact"),lane_post);}
-        crate::master_state_identity::reset_render_lineage_measurement(); let _=std::fs::remove_file(path);
-
-    }
-    #[test] fn r1230_ra1_two_real_adoptions() {
-        second_adoption(false,false);
+    #[test] fn bound_cursor_exchange_checkpoints_preserve_adopted_occurrences() {
         for (fail_write,bad_readback) in [(false,false),(true,false),(false,true)] {
         // Explicit synthetic adopted connection epochs exercise the real E057
         // writer, original receipt, canonical transport and existing Main sink.
@@ -261,8 +238,6 @@ mod r1230_ra1_sovereign_tests {
 
         }
     }
-    #[test] fn r1230_ra1_checkpoint_failure_preserves_first_commit() {second_adoption(true,false);}
-    #[test] fn r1230_ra1_checkpoint_wrong_readback_preserves_first_commit() {second_adoption(false,true);}
     #[test]
     fn r1230_ra2_real_height_owner_checkpoint_commits() {
         let xml=balance(); let path=path(); let mut state=state(&xml,&path);

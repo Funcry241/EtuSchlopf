@@ -494,6 +494,15 @@ fn extend_beam_states_from_plan(
     true
 }
 
+fn metric_rest_connection_is_covered(
+    infos: &[PartialBeatNoteInfo],
+    left: &PartialBeatNoteInfo,
+    right: &PartialBeatNoteInfo,
+) -> bool {
+    let end = left.start + left.duration;
+    end == right.start || (end < right.start && visible_rests_cover_gap(infos, left, right))
+}
+
 fn choose_structural_rest_bridge_candidate_groups(
     infos: &[PartialBeatNoteInfo],
     beat_unit: i64,
@@ -515,30 +524,23 @@ fn choose_structural_rest_bridge_candidate_groups(
     let mut candidates = Vec::new();
     for ((staff, voice, beat), mut notes) in groups {
         notes.sort_by_key(|info| (info.start, info.index));
-        if notes.len() < 2 || !beat_group_stays_inside_one_beat(&notes, beat_unit) {
+        if notes.len() < 2 || !beat_group_stays_inside_one_beat(&notes, beat_unit)
+            || notes.windows(2).any(|pair| pair[0].start + pair[0].duration > pair[1].start)
+        {
             continue;
         }
-        let mut has_rest_bridge = false;
-        for pair in notes.windows(2) {
-            if let [left, right] = pair
-                && left.start + left.duration < right.start && visible_rests_cover_gap(infos, left, right) {
-                    has_rest_bridge = true;
-                }
-        }
-        let short_count = notes.iter().filter(|info| info.duration <= beat_unit / 4).count();
-        let has_eighth_layer = notes
-            .iter()
-            .any(|info| info.duration >= beat_unit / 2 || info.note_type == "eighth");
-        let has_mixed_hierarchy = has_eighth_layer && short_count >= 2;
-        if !has_rest_bridge && !has_mixed_hierarchy {
-            continue;
-        }
-        let score = (if has_rest_bridge { 100 } else { 0 })
-            + (if has_mixed_hierarchy { 80 } else { 0 })
-            + (short_count as i64)
-            + (notes.len() as i64);
-        if score > 0 {
-            candidates.push((beat, staff, voice, notes, has_rest_bridge, has_mixed_hierarchy));
+        for run in notes.chunk_by(|left, right| metric_rest_connection_is_covered(infos, left, right)) {
+            if run.len() < 2 {
+                continue;
+            }
+            let has_rest_bridge = run.windows(2).any(|pair| pair[0].start + pair[0].duration < pair[1].start);
+            let has_primary_only_note = run.iter().any(|info| partial_beat_level(info) == 1);
+            let secondary_capable_notes = run.iter()
+                .filter(|info| partial_beat_level(info) >= 2).take(2).count();
+            let has_mixed_hierarchy = has_primary_only_note && secondary_capable_notes == 2;
+            if has_rest_bridge || has_mixed_hierarchy {
+                candidates.push((beat, staff.clone(), voice.clone(), run.to_vec(), has_rest_bridge, has_mixed_hierarchy));
+            }
         }
     }
     candidates.sort_by_key(|(beat, staff, voice, _, _, _)| (*beat, staff.clone(), voice.clone()));
@@ -681,6 +683,41 @@ mod structural_lower_rest_bridge_decision_scope_tests {
             targets.iter().map(|info| info.start).collect::<Vec<_>>(),
             vec![0, 72]
         );
+    }
+
+    #[test]
+    fn rest_bridge_stops_at_uncovered_time_within_the_same_beat() {
+        for scale in [1, 3] {
+            let infos = vec![
+                event(0, 0, 12 * scale, "32nd", false),
+                event(1, 12 * scale, 12 * scale, "32nd", true),
+                event(2, 24 * scale, 12 * scale, "32nd", false),
+                event(3, 48 * scale, 12 * scale, "32nd", false),
+                event(4, 60 * scale, 12 * scale, "32nd", true),
+                event(5, 72 * scale, 12 * scale, "32nd", false),
+            ];
+            let groups = choose_structural_rest_bridge_candidate_groups(&infos, 96 * scale);
+            let actual: Vec<Vec<_>> = groups.iter().map(|group| {
+                group.3.iter().map(|note| note.index).collect()
+            }).collect();
+            assert_eq!(actual, [vec![0, 2], vec![3, 5]]);
+        }
+    }
+
+    #[test]
+    fn mixed_hierarchy_follows_written_beam_levels_independently_of_tick_lengths() {
+        for scale in [1, 3] {
+            let groups = |values: [&str; 3]| {
+                let infos = values.into_iter().enumerate().map(|(index, value)| {
+                    event(index, index as i64 * 24 * scale, 24 * scale, value, false)
+                }).collect::<Vec<_>>();
+                choose_structural_rest_bridge_candidate_groups(&infos, 96 * scale)
+                    .iter().filter(|group| group.5).count()
+            };
+            assert_eq!(groups(["eighth", "eighth", "eighth"]), 0);
+            assert_eq!(groups(["16th", "eighth", "16th"]), 1);
+            assert_eq!(groups(["eighth", "16th", "32nd"]), 1);
+        }
     }
 
     #[test]

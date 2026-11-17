@@ -622,7 +622,7 @@ fn policy_priority_is_lexicographic_and_never_a_weighted_tradeoff() {
 
 #[test]
 fn versioned_sign_priority_accepts_three_ledgers_without_weakening_head_protection() {
-    assert_eq!(POLICY_ID, "joint_register_dp_c4_v1");
+    assert_eq!(POLICY_ID, "joint_register_dp_c5_v1");
     assert_eq!(COST_COMPONENTS[9..11], ["ch", "h3"]);
     let make = |middle| {
         let mut d = domain(vec![layer(35, (1, 1), 0), layer(middle, (1, 1), 5), layer(35, (1, 1), 0)]);
@@ -640,4 +640,21 @@ fn versioned_sign_priority_accepts_three_ledgers_without_weakening_head_protecti
     assert_eq!(result.selected, vec![state(0), state(5), state(0)]);
     assert!(evaluate_course(&protected, &[state(0); 3]).is_err());
     assert_eq!((result.selected_cost, result.selected.clone()), enumerate(&protected));
+}
+
+
+#[test]
+fn repeated_three_ledger_heads_can_pay_for_a_sustained_clef_change() {
+    let mut layers = vec![layer(35, (1, 1), 0)];
+    layers.extend((0..10).map(|_| layer(24, (1, 1), 0)));
+    layers.push(layer(35, (1, 1), 0));
+    let mut input = domain(layers);
+    for layer in &mut input.layers {
+        layer.allowed = vec![state(0), state(5)];
+    }
+    let result = solve(&input, None).unwrap();
+    assert_eq!(result.selected[0], state(0));
+    assert!(result.selected[1..11].iter().all(|selected| *selected == state(5)));
+    assert_eq!(result.selected[11], state(0));
+    assert_eq!((result.selected_cost, result.selected), enumerate(&input));
 }

@@ -1,0 +1,13 @@
+kind=etuschlopf_source_snapshot
+take_compatible=false
+source_complete=true
+status=SOURCE-SNAPSHOT COMPLETE
+Version=0.10.1839
+Revision=r1921
+Name=FinalVoiceAndRegisterReadability
+FileCount=2183
+SourceArchive=EtuSchlopf_v0_10_1839_r1921_unbuilt_source.zip
+SourceZipSha256=sha256:1df11ce2e7874810befc8242d655d9469a32b332bf0b54b6b244f323b23e27ca
+Reason=current project root source bytes captured without reconstruction
+TransportPathBudgetUtf16=archive_name<=64;entry_filename<=120;relative_path<=140;extracted_envelope<=180
+Policy=current_project_root_bytes_only_no_reconstruction

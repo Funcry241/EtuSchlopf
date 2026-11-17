@@ -262,19 +262,10 @@ fn independent_pedal_changes_keep_exact_positions() {
     );
 }
 #[test]
-fn hidden_note_and_unsupported_divisions_are_excluded() {
+fn hidden_note_is_excluded() {
     let hidden =
         measure(&pitched("C", 3, 384, "2", 2, "")).replace("<note>", "<note print-object=\"no\">");
     compare_excluded(&hidden, RhythmContext::default());
-    compare_excluded(
-        &measure(&pitched("C", 3, 768, "2", 2, "")),
-        RhythmContext {
-            divisions: 192,
-            beats: 4,
-            beat_type: 4,
-            physical_duration: None,
-        },
-    );
 }
 #[test]
 fn overfilled_measure_is_excluded() {
@@ -381,7 +372,7 @@ fn r1537_normalize_visible_note_values(
                     beat_duration,
                 )
             } else {
-                split_duration_for_metric_notation(start, duration, beat_duration.max(1))
+                split_duration_for_metric_notation(start, duration, beat_duration.max(1), 96)
             };
             if is_rest && parts.is_empty() {
                 if let Some(courses) = course_measure.as_deref_mut() {
@@ -402,7 +393,7 @@ fn r1537_normalize_visible_note_values(
                 last = note.end;
                 continue;
             }
-            let must_split = parts.len() > 1 || !is_exact_notation_duration(duration);
+            let must_split = parts.len() > 1 || !is_exact_notation_duration(duration, 96);
             if must_split {
                 if let Some(courses) = course_measure.as_deref_mut() {
                     let mut end = idx + 1;
@@ -435,7 +426,7 @@ fn r1537_normalize_visible_note_values(
                                         voice.trim(),
                                     )
                                 } else {
-                                    split_visible_pitched_note_with_parts(&raw.text, &parts)
+                                    split_visible_pitched_note_with_parts(&raw.text, &parts, 96)
                                 }
                             })
                             .collect::<Vec<_>>();
@@ -470,7 +461,7 @@ fn r1537_normalize_visible_note_values(
                 let replacement = if is_rest {
                     make_visible_rest_sequence_from_parts(&parts, staff, voice.trim())
                 } else {
-                    split_visible_pitched_note_with_parts(&note.text, &parts)
+                    split_visible_pitched_note_with_parts(&note.text, &parts, 96)
                 };
                 if let Some(courses) = course_measure.as_deref_mut() {
                     courses
@@ -506,7 +497,7 @@ fn r1537_normalize_visible_note_values(
             }
         }
         let replacement = if visible && duration > 0 {
-            let synced = sync_note_type_and_dots(&note.text);
+            let synced = sync_note_type_and_dots(&note.text, 96);
             if synced != note.text {
                 stats.notes_normalized += 1;
             }
@@ -768,6 +759,23 @@ fn rhythm_normalization_keeps_unbound_chord_members_on_their_head() {
             assert_eq!(member_rows.len(), 1);
             assert!(raw[member_rows[0].post_raw_idx].text.contains("print-object=\"no\""));
             assert_eq!(member_rows[0].post_raw_idx, head_rows[0].post_raw_idx + 1);
+        }
+    }
+}
+
+#[test]
+fn whole_and_half_values_keep_the_same_written_shape_at_equivalent_divisions() {
+    for divisions in [96, 192] {
+        let context = RhythmContext { divisions, ..RhythmContext::default() };
+        for (offset, duration, kind) in [(0, divisions * 4, "whole"), (divisions * 2, divisions * 2, "half")] {
+            let lead = if offset == 0 { String::new() } else {
+                format!("<forward><duration>{offset}</duration></forward>")
+            };
+            let xml = measure(&format!("{lead}{}", pitched("C", 3, duration, "2", 2, "")));
+            let (out, _) = normalize_visible_note_values(&xml, context, &mut VisibleLedgerStats::default(), None, true);
+            assert_eq!(half_bar_pitch_count(&out, 48), 1);
+            assert!(out.contains(&format!("<type>{kind}</type>")));
+            assert_eq!(sound(&xml), sound(&out));
         }
     }
 }

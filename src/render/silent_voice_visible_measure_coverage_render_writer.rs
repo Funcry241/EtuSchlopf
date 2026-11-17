@@ -122,6 +122,8 @@ pub(super) struct SilentVoiceVisibleMeasureCoverageRenderWriteAudit {
     ledger_bounded_clef_boundaries_accepted: usize,
     ledger_bounded_clef_boundaries_written: usize,
     primary_beam_voice_elements_written: usize,
+    stem_directions_written: bool,
+    cursor_exchange_written: bool,
     primary_clef_projection_green: bool,
     primary_clef_projection_changed: bool,
     committed_state_readback_green: bool,
@@ -1584,7 +1586,7 @@ fn finalize_silent_voice_visible_measure_coverage_render_write_audit(
         audit.verdict.clone()
     };
     audit.pipeline_line = format!(
-        "SilentVoiceVisibleMeasureCoverageWriterStage v{}: Attempted {}; SelectedRenderSource {}; WriteEnabled {}; Candidates {}; MeasuresWritten {}; ForwardNodesPlanned {}; ForwardDurationPlanned {}; ForwardNodesReplaced {}; ForwardDurationReplaced {}; BeamLostBeginNotesWritten {}; SourceHigherBeamNotesRestored {}; RestVerticalPlacementCandidates {}; RestVerticalPlacementAnchorsWritten {}; RestVerticalPlacementCandidateRowsAfter {}; LedgerBoundedClefBoundariesAccepted {}; LedgerBoundedClefBoundariesWritten {}; PrimaryClefProjectionGreen {}; PrimaryClefProjectionChanged {}; CommittedStateReadbackGreen {}; CommittedPrimaryClefReentryChanges {}; CommittedRestPlacementCandidates {}; CommittedHigherBeamCandidates {}; CommittedBeamLostBeginCandidates {}; CommittedPartialBeatLaneSplitCandidates {}; CommittedLowerDualEdgeCandidates {}; CommittedShadowRestCandidates {}; CommittedShadowRestRows {}; CommittedTiedTailAccentCandidates {}; CommittedRawCursorStable {}; CommittedRawCursorGreen {}; CommittedPitchedEventMultisetStable {}; VisibleRestsBeforeAfter {}/{}; NoteCountBeforeAfter {}/{}; ParseBeforeAfter {}/{}; BackupForwardBeforeAfter {}/{}; RawCursorStable {}; PitchedEventMultisetStable {}; CandidateRowsAfter {}; ExactCandidateDelta {}; SelectorPolicy scorewide_no_notes_full_timeline_single_staff_forward_carrier_plus_structural_cross_staff_covered_rest_lane_suppression_plus_master_bound_orphan_chord_rest_host_plus_ledger_clef_observation_plus_primary_clef_projection_plus_final_clef_bound_rest_anchor_rebind_plus_committed_higher_beam_regression_readback_plus_committed_lost_begin_regression_readback_plus_committed_partial_beat_lane_split_regression_readback_plus_committed_lower_dual_edge_regression_readback_plus_committed_shadow_rest_role_regression_readback_plus_committed_tied_tail_accent_regression_readback; PrimaryBeamVoiceElementsWritten {}; RenderXmlWrite {}; NotationMutation {}; MusicMutation {}; MasterApply {}; ReleaseVeto {}; Urteil {}.",
+        "SilentVoiceVisibleMeasureCoverageWriterStage v{}: Attempted {}; SelectedRenderSource {}; WriteEnabled {}; Candidates {}; MeasuresWritten {}; ForwardNodesPlanned {}; ForwardDurationPlanned {}; ForwardNodesReplaced {}; ForwardDurationReplaced {}; BeamLostBeginNotesWritten {}; SourceHigherBeamNotesRestored {}; RestVerticalPlacementCandidates {}; RestVerticalPlacementAnchorsWritten {}; RestVerticalPlacementCandidateRowsAfter {}; LedgerBoundedClefBoundariesAccepted {}; LedgerBoundedClefBoundariesWritten {}; PrimaryClefProjectionGreen {}; PrimaryClefProjectionChanged {}; CommittedStateReadbackGreen {}; CommittedPrimaryClefReentryChanges {}; CommittedRestPlacementCandidates {}; CommittedHigherBeamCandidates {}; CommittedBeamLostBeginCandidates {}; CommittedPartialBeatLaneSplitCandidates {}; CommittedLowerDualEdgeCandidates {}; CommittedShadowRestCandidates {}; CommittedShadowRestRows {}; CommittedTiedTailAccentCandidates {}; CommittedRawCursorStable {}; CommittedRawCursorGreen {}; CommittedPitchedEventMultisetStable {}; VisibleRestsBeforeAfter {}/{}; NoteCountBeforeAfter {}/{}; ParseBeforeAfter {}/{}; BackupForwardBeforeAfter {}/{}; RawCursorStable {}; PitchedEventMultisetStable {}; CandidateRowsAfter {}; ExactCandidateDelta {}; SelectorPolicy scorewide_no_notes_full_timeline_single_staff_forward_carrier_plus_structural_cross_staff_covered_rest_lane_suppression_plus_master_bound_orphan_chord_rest_host_plus_ledger_clef_observation_plus_primary_clef_projection_plus_final_clef_bound_rest_anchor_rebind_plus_committed_higher_beam_regression_readback_plus_committed_lost_begin_regression_readback_plus_committed_partial_beat_lane_split_regression_readback_plus_committed_lower_dual_edge_regression_readback_plus_committed_shadow_rest_role_regression_readback_plus_committed_tied_tail_accent_regression_readback; PrimaryBeamVoiceElementsWritten {}; FinalStemDirectionsWritten {}; CursorExchangeWritten {}; RenderXmlWrite {}; NotationMutation {}; MusicMutation {}; MasterApply {}; ReleaseVeto {}; Urteil {}.",
         env!("CARGO_PKG_VERSION"),
         yes_no(audit.attempted),
         yes_no(audit.selected_render_source),
@@ -1634,6 +1636,8 @@ fn finalize_silent_voice_visible_measure_coverage_render_write_audit(
         audit.candidate_rows_after,
         yes_no(exact_candidate_delta),
         primary_beam_voice_elements_written,
+        yes_no(committed && audit.stem_directions_written),
+        yes_no(committed && audit.cursor_exchange_written),
         yes_no(committed),
         yes_no(committed),
         yes_no(committed && audit.candidate_music_mutation),
@@ -2135,6 +2139,30 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
         }
     }
 
+    let mut stem_directions_written = false;
+    if write_enabled && primary_clef_projection_green {
+        let Ok(stem_projection) = super::super::notation::project_final_stem_directions(&final_candidate) else {
+            return rejected_pdf_preparation(receipts);
+        };
+        if let Some((stem_post, stem_receipt)) = stem_projection {
+            let transported = candidate_occurrence_continuation.as_ref().ok().and_then(|course| {
+                course.through_final_stem_directions(&stem_post, &stem_receipt,
+                    final_chord_structural_plan, &effective_voice_plan,
+                    Some(render_pruned_final_chord_omissions)).ok()
+            });
+            let mut trial = RenderTransitionReceipts::new();
+            trial.push_preserving(Some(stem_receipt), &stem_post);
+            let Some(transported) = transported else {
+                trial.discard_unadopted(RenderDiscardReason::LosingCandidate);
+                return rejected_pdf_preparation(receipts);
+            };
+            receipts.append(trial);
+            final_candidate = stem_post;
+            candidate_occurrence_continuation = Ok(transported);
+            stem_directions_written = true;
+        }
+    }
+
     crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
         "FinalPdfPrecommit",
         &final_candidate,
@@ -2148,7 +2176,8 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
         || primary_clef_projection_changed
         || primary_beam_voice_partition_changed_voice_elements > 0
         || cursor_exchange_written
-        || source_sustain_written;
+        || source_sustain_written
+        || stem_directions_written;
     if candidate_occurrence_continuation.is_err() { return rejected_pdf_preparation(receipts); }
     let prepared_candidate = final_candidate.clone();
     let final_chord_structural_plan = final_chord_structural_plan.clone();
@@ -2351,6 +2380,8 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
     silent_audit.ledger_bounded_clef_boundaries_written = committed_ledger_clef_markers;
     silent_audit.primary_beam_voice_elements_written =
         primary_beam_voice_partition_changed_voice_elements;
+    silent_audit.stem_directions_written = stem_directions_written;
+    silent_audit.cursor_exchange_written = cursor_exchange_written;
     if committed_rest_vertical_candidates != usize::MAX {
         rest_audit.candidate_rows_after = committed_rest_vertical_candidates;
     }
@@ -2756,19 +2787,25 @@ mod silent_voice_visible_measure_coverage_render_write_tests {
     }
 
     #[test]
-    fn primary_beam_voice_write_evidence_requires_committed_sink() {
+    fn final_notation_write_evidence_requires_committed_sink() {
         let mut audit = SilentVoiceVisibleMeasureCoverageRenderWriteAudit {
             primary_beam_voice_elements_written: 2,
+            stem_directions_written: true,
+            cursor_exchange_written: true,
             ..SilentVoiceVisibleMeasureCoverageRenderWriteAudit::default()
         };
 
         audit.commit_outcome = FinalNotationCommitOutcome::Rejected;
         finalize_silent_voice_visible_measure_coverage_render_write_audit(&mut audit);
         assert!(audit.pipeline_line.contains("PrimaryBeamVoiceElementsWritten 0"));
+        assert!(audit.pipeline_line.contains("FinalStemDirectionsWritten nein"));
+        assert!(audit.pipeline_line.contains("CursorExchangeWritten nein"));
 
         audit.commit_outcome = FinalNotationCommitOutcome::Committed;
         finalize_silent_voice_visible_measure_coverage_render_write_audit(&mut audit);
         assert!(audit.pipeline_line.contains("PrimaryBeamVoiceElementsWritten 2"));
+        assert!(audit.pipeline_line.contains("FinalStemDirectionsWritten ja"));
+        assert!(audit.pipeline_line.contains("CursorExchangeWritten ja"));
     }
 
     #[test]

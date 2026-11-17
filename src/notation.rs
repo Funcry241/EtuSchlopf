@@ -1,3 +1,6 @@
+#[path = "notation_final_stems.rs"]
+mod final_stem_direction;
+
 // v0.10.1521 pipeline-owned notation support module.
 // No musical behavior changes; the module now shares the pipeline owner explicitly.
 
@@ -106,7 +109,7 @@
                 self.hits += 1;
                 return Ok(result.clone());
             }
-            let result = polish_measure_with_stems(text, divisions, clef)?;
+            let result = polish_measure_with_stems(text, divisions, clef, None)?;
             if self.remaining_bytes != 0
                 && let std::collections::btree_map::Entry::Vacant(entry) = self.measures.entry(ordinal)
             {
@@ -217,7 +220,7 @@
             let clef = lower_stem_clefs.get(&span.start).copied();
             let polished = match reuse.as_deref_mut() {
                 Some(reuse) => reuse.polish(ordinal, measure_text, divisions, clef),
-                None => polish_measure_with_stems(measure_text, divisions, clef),
+                None => polish_measure_with_stems(measure_text, divisions, clef, None),
             }.context("Takt konnte für Notensatz-Politur nicht verarbeitet werden")?;
             divisions = polished.divisions;
             total.beam_groups += polished.stats.beam_groups;
@@ -258,6 +261,51 @@
         })
     }
     
+    /// Decide plain stems after the final beam and voice transformations. The
+    /// existing NotationPolish preserving owner supplies the source-bound receipt.
+    pub(super) fn project_final_stem_directions(xml: &str) -> anyhow::Result<Option<(String, PreservingTransformationReceipt)>> {
+        let stems = final_stem_direction::plan_final_stem_directions(xml);
+        if stems.is_empty() {
+            return Ok(None);
+        }
+        let mut edits = Vec::with_capacity(stems.len());
+        let mut output = String::with_capacity(xml.len());
+        let mut last = 0;
+        let mut stems = stems.into_iter().peekable();
+        for span in find_measure_spans(xml) {
+            output.push_str(&xml[last..span.start]);
+            let mut directions = BTreeMap::new();
+            while let Some(&(start, end, direction)) = stems.peek() {
+                if start >= span.end { break; }
+                anyhow::ensure!(span.start <= start && end <= span.end,
+                    "Final stem direction lost its measure range");
+                directions.insert(start - span.start, direction);
+                stems.next();
+            }
+            let measure = &xml[span.start..span.end];
+            if directions.is_empty() {
+                output.push_str(measure);
+            } else {
+                let result = polish_measure_with_stems(measure, 1, None, Some(&directions))?;
+                output.push_str(&result.text);
+                edits.extend(result.edits.into_iter().filter_map(|(range, replacement)| {
+                    (measure[range.clone()] != replacement)
+                        .then_some((range.start + span.start..range.end + span.start, replacement))
+                }));
+            }
+            last = span.end;
+        }
+        output.push_str(&xml[last..]);
+        anyhow::ensure!(stems.next().is_none() && final_stem_direction::matches_planned_stem_edit(xml, &output),
+            "Final stem direction changed a byte outside its plan");
+        let mint = NotationPolishPreservingMint { _sealed: () };
+        let receipt = PreservingTransformationReceipt::mint_preserving_receipt(NotationPolishPreservingMint { _sealed: () }, xml, &output)
+            .context("Final stem direction did not preserve musical identity")?;
+        let transport = RhythmicRepresentationTransport::polish(&mint,
+            vec![RepresentationStep::recorded(xml, &output, edits)]);
+        Ok(Some((output, receipt.with_recorded_representation(transport))))
+    }
+
     pub(crate) struct LedgerBoundedLowerStaffClefReadbackPreservingMint { _sealed: () }
 
     pub fn ledger_bounded_lower_staff_clef_readback(
@@ -1105,11 +1153,12 @@
 
     #[cfg(test)]
     fn polish_measure(text: &str, inherited_divisions: i64) -> anyhow::Result<MeasurePolish> {
-        polish_measure_with_stems(text, inherited_divisions, None)
+        polish_measure_with_stems(text, inherited_divisions, None, None)
     }
 
     fn polish_measure_with_stems(
         text: &str, inherited_divisions: i64, lower_clef: Option<PianoClef>,
+        final_directions: Option<&BTreeMap<usize, &'static str>>,
     ) -> anyhow::Result<MeasurePolish> {
         let divisions = extract_first_i64(text, "divisions").unwrap_or(inherited_divisions).max(1);
         let raw_notes = collect_raw_notes(text);
@@ -1122,128 +1171,129 @@
             });
         }
     
-        let note_infos = collect_note_infos(text, &raw_notes);
-        let lower_staff_clef_boundaries = collect_lower_staff_clef_boundaries(text);
         let mut beam_state_by_note: BTreeMap<usize, Vec<(usize, &'static str)>> = BTreeMap::new();
-        let lower_voice = lower_monophonic_voice(&note_infos);
         let mut stem_by_note = BTreeMap::new();
         let mut stats = PolishStats::default();
-    
-        let mut natural_group_counts: BTreeMap<(String, String, i64), usize> = BTreeMap::new();
-        let mut groups: BTreeMap<(String, String, i64, usize), Vec<usize>> = BTreeMap::new();
-        for info in &note_infos {
-            if !is_beam_candidate(info) {
-                continue;
-            }
-            let beat_bucket = info.start.div_euclid(divisions);
-            let natural_key = (info.staff.clone(), info.voice.clone(), beat_bucket);
-            *natural_group_counts.entry(natural_key).or_default() += 1;
-            let clef_segment = lower_staff_clef_beam_segment(info, &lower_staff_clef_boundaries);
-            groups
-                .entry((info.staff.clone(), info.voice.clone(), beat_bucket, clef_segment))
-                .or_default()
-                .push(info.index);
-        }
-    
-        for ((staff, voice, beat_bucket), natural_count) in natural_group_counts {
-            if staff.trim() != "2" || natural_count < 2 {
-                continue;
-            }
-            let split_segments = groups
-                .keys()
-                .filter(|(g_staff, g_voice, g_beat, _)| g_staff == &staff && g_voice == &voice && *g_beat == beat_bucket)
-                .count();
-            if split_segments > 1 {
-                stats.lower_staff_clef_beam_boundary_splits += split_segments - 1;
-                stats.lower_staff_clef_beam_boundary_notes += natural_count;
-            }
-        }
-    
-        for ((staff, voice, _, _), mut indices) in groups {
-            indices.sort_by_key(|idx| {
-                note_infos
-                    .iter()
-                    .find(|info| info.index == *idx)
-                    .map_or(0, |info| info.start)
-            });
-            if indices.len() < 2 {
-                continue;
-            }
-    
-            let partial_post_rest = is_partial_beat_post_rest_beam_group(&note_infos, &indices, divisions);
-            if !is_safe_beam_group(&note_infos, &indices, divisions) {
-                stats.blocked_beam_groups += 1;
-                stats.blocked_beam_notes += indices.len();
-                continue;
-            }
-    
-            stats.beam_groups += 1;
-            stats.beamed_notes += indices.len();
-            if partial_post_rest {
-                stats.partial_beat_post_rest_beam_groups += 1;
-                stats.partial_beat_post_rest_beam_notes += indices.len();
-            }
-            if let Some((ordered_note_indices, plan)) =
-                metric_beam_plan(&note_infos, &indices)
-            {
-                let planned_states = plan
-                    .edits()
-                    .iter()
-                    .map(|edit| {
-                        ordered_note_indices.get(edit.event_ordinal()).map(|note_index| {
-                            (
-                                *note_index,
-                                usize::from(edit.level()),
-                                edit.state().as_musicxml_text(),
-                            )
-                        })
-                    })
-                    .collect::<Option<Vec<_>>>();
-                let Some(planned_states) = planned_states else {
+        let structurally_bound_external_levels = if final_directions.is_none() {
+            let note_infos = collect_note_infos(text, &raw_notes);
+            let lower_staff_clef_boundaries = collect_lower_staff_clef_boundaries(text);
+            let lower_voice = lower_monophonic_voice(&note_infos);
+
+            let mut natural_group_counts: BTreeMap<(String, String, i64), usize> = BTreeMap::new();
+            let mut groups: BTreeMap<(String, String, i64, usize), Vec<usize>> = BTreeMap::new();
+            for info in &note_infos {
+                if !is_beam_candidate(info) {
                     continue;
-                };
-                if staff.trim() == "2" && lower_voice == Some(voice.as_str())
-                    && let Some(clef) = lower_clef
-                    && let Some(direction) = lower_group_stem(clef, &raw_notes, &ordered_note_indices)
+                }
+                let beat_bucket = info.start.div_euclid(divisions);
+                let natural_key = (info.staff.clone(), info.voice.clone(), beat_bucket);
+                *natural_group_counts.entry(natural_key).or_default() += 1;
+                let clef_segment = lower_staff_clef_beam_segment(info, &lower_staff_clef_boundaries);
+                groups
+                    .entry((info.staff.clone(), info.voice.clone(), beat_bucket, clef_segment))
+                    .or_default()
+                    .push(info.index);
+            }
+
+            for ((staff, voice, beat_bucket), natural_count) in natural_group_counts {
+                if staff.trim() != "2" || natural_count < 2 {
+                    continue;
+                }
+                let split_segments = groups
+                    .keys()
+                    .filter(|(g_staff, g_voice, g_beat, _)| g_staff == &staff && g_voice == &voice && *g_beat == beat_bucket)
+                    .count();
+                if split_segments > 1 {
+                    stats.lower_staff_clef_beam_boundary_splits += split_segments - 1;
+                    stats.lower_staff_clef_beam_boundary_notes += natural_count;
+                }
+            }
+
+            for ((staff, voice, _, _), mut indices) in groups {
+                indices.sort_by_key(|idx| {
+                    note_infos
+                        .iter()
+                        .find(|info| info.index == *idx)
+                        .map_or(0, |info| info.start)
+                });
+                if indices.len() < 2 {
+                    continue;
+                }
+
+                let partial_post_rest = is_partial_beat_post_rest_beam_group(&note_infos, &indices, divisions);
+                if !is_safe_beam_group(&note_infos, &indices, divisions) {
+                    stats.blocked_beam_groups += 1;
+                    stats.blocked_beam_notes += indices.len();
+                    continue;
+                }
+
+                stats.beam_groups += 1;
+                stats.beamed_notes += indices.len();
+                if partial_post_rest {
+                    stats.partial_beat_post_rest_beam_groups += 1;
+                    stats.partial_beat_post_rest_beam_notes += indices.len();
+                }
+                if let Some((ordered_note_indices, plan)) =
+                    metric_beam_plan(&note_infos, &indices)
                 {
-                    for index in &ordered_note_indices {
-                        stem_by_note.insert(*index, direction);
+                    let planned_states = plan
+                        .edits()
+                        .iter()
+                        .map(|edit| {
+                            ordered_note_indices.get(edit.event_ordinal()).map(|note_index| {
+                                (
+                                    *note_index,
+                                    usize::from(edit.level()),
+                                    edit.state().as_musicxml_text(),
+                                )
+                            })
+                        })
+                        .collect::<Option<Vec<_>>>();
+                    let Some(planned_states) = planned_states else {
+                        continue;
+                    };
+                    if staff.trim() == "2" && lower_voice == Some(voice.as_str())
+                        && let Some(clef) = lower_clef
+                        && let Some(direction) = lower_group_stem(clef, &raw_notes, &ordered_note_indices)
+                    {
+                        for index in &ordered_note_indices {
+                            stem_by_note.insert(*index, direction);
+                        }
+                    }
+                    for (note_index, level, state) in planned_states {
+                        beam_state_by_note.entry(note_index).or_default().push((level, state));
                     }
                 }
-                for (note_index, level, state) in planned_states {
-                    beam_state_by_note.entry(note_index).or_default().push((level, state));
-                }
             }
-        }
-    
-        // v0.10.1778 NotationPolishBeamDecisionTrichotomyClosure:
-        // Positive plan notes are owned and canonicalized. Outside that positive
-        // plan, complete same-Staff/Voice/Beat Beam chains are foreign truth and
-        // stay byteidentical. Only recognized Beam levels that cannot be bound
-        // into a complete structural chain are explicit negative decisions and
-        // may be removed. This keeps the v0.10.1777 noninterference goal without
-        // preserving orphan/cross-beat Beam fragments that made MuseScore render
-        // a changed page in the Etuede-4 stress run.
-        let structurally_bound_external_levels = structurally_complete_external_beam_levels(
-            &note_infos,
-            &raw_notes,
-            divisions,
-            &lower_staff_clef_boundaries,
-        );
+
+            // v0.10.1778 NotationPolishBeamDecisionTrichotomyClosure:
+            // Positive plan notes are owned and canonicalized. Outside that positive
+            // plan, complete same-Staff/Voice/Beat Beam chains are foreign truth and
+            // stay byteidentical. Only recognized Beam levels that cannot be bound
+            // into a complete structural chain are explicit negative decisions and
+            // may be removed. This keeps the v0.10.1777 noninterference goal without
+            // preserving orphan/cross-beat Beam fragments that made MuseScore render
+            // a changed page in the Etuede-4 stress run.
+            structurally_complete_external_beam_levels(
+                &note_infos,
+                &raw_notes,
+                divisions,
+                &lower_staff_clef_boundaries,
+            )
+        } else {
+            BTreeSet::new()
+        };
         let mut rebuilt = String::with_capacity(text.len() + stats.beamed_notes * 40);
         let mut edits = Vec::new();
         let mut last = 0_usize;
         for note in &raw_notes {
             rebuilt.push_str(&text[last..note.start]);
             let output_start = rebuilt.len();
-            if let Some(states) = beam_state_by_note.get(&note.start) {
+            let mut replacement = if final_directions.is_some() {
+                note.text.clone()
+            } else if let Some(states) = beam_state_by_note.get(&note.start) {
                 stats.removed_beams += count_beam_tags(&note.text);
-                let mut cleaned = strip_beam_tags(&note.text);
-                if let Some(&direction) = stem_by_note.get(&note.start) {
-                    cleaned = cleaned.replace("<stem>up</stem>", direction)
-                        .replace("<stem>down</stem>", direction);
-                }
-                rebuilt.push_str(&insert_beam_tags(&cleaned, states));
+                insert_beam_tags(&strip_beam_tags(&note.text), states)
             } else {
                 let (retained, removed) = retain_only_structurally_bound_external_beams(
                     &note.text,
@@ -1251,8 +1301,19 @@
                     &structurally_bound_external_levels,
                 );
                 stats.removed_beams += removed;
-                rebuilt.push_str(&retained);
+                retained
+            };
+            let direction = if let Some(directions) = final_directions {
+                // The final planner binds the opening stem tag within this note.
+                note.text.find("<stem>").and_then(|offset| directions.get(&(note.start + offset)))
+            } else {
+                stem_by_note.get(&note.start)
+            };
+            if let Some(&direction) = direction {
+                replacement = replacement.replace("<stem>up</stem>", direction)
+                    .replace("<stem>down</stem>", direction);
             }
+            rebuilt.push_str(&replacement);
             edits.push((note.start..note.end, rebuilt[output_start..].to_owned()));
             last = note.end;
         }
@@ -2433,7 +2494,7 @@
                 (&text, 96, bass), (&changed, 96, bass), (&text, 48, bass),
                 (&text, 96, treble), (&text, 96, bass),
             ] {
-                let expected = super::polish_measure_with_stems(xml, divisions, clef).unwrap();
+                let expected = super::polish_measure_with_stems(xml, divisions, clef, None).unwrap();
                 let observed = reuse.polish(0, xml, divisions, clef).unwrap();
                 assert_eq!(observed.text, expected.text);
                 assert_eq!(observed.edits, expected.edits);

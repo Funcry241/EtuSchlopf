@@ -458,12 +458,18 @@ fn qualified_source_voices(
     }
     let roles = lanes.keys().map(|&(role, _, _)| role).collect::<BTreeSet<_>>();
     if roles.len() < 2 || roles.len() != lanes.len() { return None; }
-    let bass = lanes.iter().find_map(|(&(role, _, _), lane)| (role == Bass).then_some(lane));
-    let lower_alto = match (bass, roles.contains(&Soprano), roles.contains(&Tenor)) {
-        (Some(bass), true, false) => lanes.iter().find_map(|(&(role, _, _), lane)|
-            (role == Alto).then(|| low_alto_source_measures(lane, bass, metric))).unwrap_or_default(),
-        _ => BTreeSet::new(),
-    };
+    let lower_alto = lanes.iter().find_map(|(&(role, _, _), alto)| {
+        (role == Alto).then(|| {
+            let companions = lanes.iter()
+                .filter(|((role, _, _), _)| *role != Alto)
+                .flat_map(|((role, _, _), lane)| {
+                    lane.iter().copied().map(|note| (note, matches!(role, Bass | Tenor)))
+                })
+                .collect::<Vec<_>>();
+            let proposed = low_alto_source_spans(alto, &companions);
+            lower_alto_on_complete_staff_lifetimes(alto, metric, proposed)
+        })
+    }).unwrap_or_default();
     let mut assignments = BTreeMap::new();
     for ((role, _, _), mut lane) in lanes {
         lane.sort_by_key(|note| (note.pos, note.midi));
@@ -483,7 +489,7 @@ fn qualified_source_voices(
         };
         for note in lane {
             let move_alto = role == Alto
-                && metric.ordinal_at(note.pos).is_some_and(|index| lower_alto.contains(&index));
+                && lower_alto.contains(&note.source_ordinal);
             let assignment = if move_alto {
                 SourceVoice { staff: 2, voice, opposite_stem: true }
             } else {
@@ -495,12 +501,11 @@ fn qualified_source_voices(
     (assignments.len() == notes.len()).then_some(assignments)
 }
 
-// Compare the complete measured line on the two piano staves. Keep the
-// bass below every simultaneous alto note and prefer a sustained relocation.
-fn low_alto_source_measures(
+// A continuous, readable alto line may share the lower staff when it stays
+// clear of simultaneous voices. Boundaries are derived from notes and gaps.
+fn low_alto_source_spans(
     alto: &[&MidiSeedNote],
-    bass: &[&MidiSeedNote],
-    metric: &MetricTimeline,
+    companions: &[(&MidiSeedNote, bool)],
 ) -> BTreeSet<usize> {
     let ledger = |midi: i32, low: i32, high: i32| {
         let (step, _, octave) = midi_to_pitch(midi);
@@ -508,45 +513,98 @@ fn low_alto_source_measures(
         let diatonic = octave * 7 + offset;
         (low - diatonic).max(diatonic - high).max(0) / 2
     };
-    let mut regions = BTreeSet::new();
-    for index in 0..metric.len() {
-        let Some(bar) = metric.measure(index) else { continue; };
-        let line: Vec<_> = alto.iter().copied()
-            .filter(|note| note.pos < bar.end && bar.start < note.pos + note.len)
-            .collect();
-        if line.len() < 2 || line.iter().any(|note| note.pos < bar.start || note.pos + note.len > bar.end) {
-            continue;
+    let mut notes = alto.to_vec();
+    notes.sort_by_key(|note| (note.pos, note.midi, note.source_ordinal));
+    let mut selected = BTreeSet::new();
+    let mut run = Vec::new();
+    let mut run_end = None;
+    let mut supported_below = false;
+    let finish = |run: &mut Vec<&MidiSeedNote>, supported, selected: &mut BTreeSet<usize>| {
+        if supported && run.first().zip(run.last()).is_some_and(|(first, last)| first.pos < last.pos) {
+            selected.extend(run.iter().map(|note| note.source_ordinal));
         }
-        let mut gain = 0;
-        let mut overlapping_bass = false;
-        let mut spaced = true;
-        for note in &line {
-            // E4 to F5 in treble and G2 to A3 in bass.
-            gain += ledger(note.midi, 30_i32, 38_i32) - ledger(note.midi, 18_i32, 26_i32);
-            for low in bass.iter().filter(|low| low.pos < note.pos + note.len && note.pos < low.pos + low.len) {
-                overlapping_bass = true;
-                if note.midi - low.midi < 3 { spaced = false; }
-            }
+        run.clear();
+    };
+    // Simultaneous alto chord members share one placement decision.
+    for chord in notes.chunk_by(|left, right| left.pos == right.pos && left.len == right.len) {
+        let start = chord[0].pos;
+        let end = start + chord[0].len;
+        let mut overlapping_lower = false;
+        let clear = chord.iter().all(|note| {
+            ledger(note.midi, 30, 38) > ledger(note.midi, 18, 26)
+                && companions.iter().filter(|(other, _)| other.pos < end && start < other.pos + other.len)
+                    .all(|(other, lower)| {
+                        overlapping_lower |= *lower;
+                        if *lower { note.midi - other.midi >= 3 } else { other.midi > note.midi }
+                    })
+        });
+        if !clear || run_end != Some(start) {
+            finish(&mut run, supported_below, &mut selected);
+            supported_below = false;
         }
-        if overlapping_bass && spaced && gain >= line.len() as i32 {
-            regions.insert(index);
+        if clear {
+            run.extend_from_slice(chord);
+            run_end = Some(end);
+            supported_below |= overlapping_lower;
+        } else {
+            run_end = None;
         }
     }
-    regions.iter().copied().filter(|&index| regions.contains(&(index + 1))
-        || index.checked_sub(1).is_some_and(|before| regions.contains(&before))).collect()
+    finish(&mut run, supported_below, &mut selected);
+    selected
+}
+
+// The seed writer assigns one staff per source voice and metric measure.
+// Connect measures sharing a source note before deciding their placement.
+fn lower_alto_on_complete_staff_lifetimes(
+    alto: &[&MidiSeedNote],
+    metric: &MetricTimeline,
+    proposed: BTreeSet<usize>,
+) -> BTreeSet<usize> {
+    let mut occupied = Vec::with_capacity(alto.len());
+    for note in alto {
+        let Some(last_tick) = note.pos.checked_add(note.len).and_then(|end| end.checked_sub(1)) else {
+            return BTreeSet::new();
+        };
+        let (Some(first), Some(last)) = (metric.ordinal_at(note.pos), metric.ordinal_at(last_tick)) else {
+            return BTreeSet::new();
+        };
+        occupied.push((first, last, note.source_ordinal));
+    }
+    occupied.sort_unstable();
+
+    let mut lower = BTreeSet::new();
+    let mut start = 0;
+    while let Some(&(_, mut last, _)) = occupied.get(start) {
+        let mut end = start + 1;
+        while let Some(&(first, note_last, _)) = occupied.get(end) {
+            if first > last { break; }
+            last = last.max(note_last);
+            end += 1;
+        }
+        let component = &occupied[start..end];
+        if component.iter().all(|(_, _, id)| proposed.contains(id)) {
+            lower.extend(component.iter().map(|&(_, _, id)| id));
+        }
+        start = end;
+    }
+    lower
 }
 
 pub(crate) fn aligned_long_tie_value(
     start: i64, duration: i64, measure_duration: i64, beat_duration: i64,
 ) -> bool {
-    measure_duration == 384 && beat_duration == 96
-        && matches!((start, duration), (0, 384) | (0 | 192, 192))
+    let Some(half) = beat_duration.checked_mul(2).filter(|&half| half > 0) else { return false; };
+    half.checked_mul(2) == Some(measure_duration)
+        && ((start == 0 && duration == measure_duration) || ((start == 0 || start == half) && duration == half))
 }
 
 // A source-bound continuation can enter on the barline with one dotted
 // quarter, provided the bar has room for the complete value.
 pub(crate) fn initial_dotted_quarter_tie_value(duration: i64, measure_duration: i64, beat_duration: i64) -> bool {
-    beat_duration == 96 && duration == 144 && duration <= measure_duration
+    beat_duration > 0 && beat_duration % 2 == 0
+        && beat_duration.checked_add(beat_duration / 2) == Some(duration)
+        && duration <= measure_duration
 }
 
 fn source_voice_fragments(
@@ -3599,5 +3657,44 @@ mod inner_tone_tests {
 
         notes[1].midi = 65;
         assert_eq!(single_optional_inner_tone(&notes, &group, &[], &no_hosts, 96), None);
+    }
+}
+
+#[cfg(test)]
+mod continuous_alto_staff_tests {
+    use super::*;
+
+    #[test]
+    fn staff_lifetime_couples_every_note_in_the_same_occupied_measures() {
+        use crate::midi::source_time::{MeterChange, SourceTimeDomain};
+        let metric = MetricTimeline::from_midi(
+            SourceTimeDomain { source_ppq: 96, divisions: 96 },
+            &[MeterChange { tick: 0, beats: 3, beat_type: 4 }],
+            864,
+        ).unwrap();
+        let note = |source_ordinal, pos, len| MidiSeedNote { source_ordinal, pos, len, midi: 53, staff: 1 };
+        let line = [note(1, 48, 72), note(2, 264, 48), note(3, 312, 72), note(4, 600, 48)];
+        let notes = line.iter().collect::<Vec<_>>();
+        let lower = lower_alto_on_complete_staff_lifetimes(&notes, &metric, BTreeSet::from([2, 3, 4]));
+        assert_eq!(lower, BTreeSet::from([4]));
+        let assignments = line.iter().map(|note| {
+            let staff = if lower.contains(&note.source_ordinal) { 2 } else { 1 };
+            (note.source_ordinal, SourceVoice { staff, voice: 3, opposite_stem: true })
+        }).collect();
+        assert_eq!(assigned_voice_staff_lifetimes(&line, &assignments, &metric, 3, 2, 864).unwrap(),
+            vec![576..864]);
+    }
+
+    #[test]
+    fn simultaneous_companions_constrain_only_the_affected_source_span() {
+        let note = |source_ordinal, pos, len, midi| MidiSeedNote { source_ordinal, pos, len, midi, staff: 1 };
+        let line = [note(1, 60, 36, 53), note(2, 96, 36, 55), note(3, 132, 36, 53)];
+        let lower = note(4, 48, 144, 43);
+        let remote = note(5, 192, 24, 55);
+        let conflict = note(6, 98, 12, 54);
+        let alto = line.iter().collect::<Vec<_>>();
+        assert_eq!(low_alto_source_spans(&alto, &[(&lower, true)]), BTreeSet::from([1, 2, 3]));
+        assert_eq!(low_alto_source_spans(&alto, &[(&lower, true), (&remote, true)]), BTreeSet::from([1, 2, 3]));
+        assert!(low_alto_source_spans(&alto, &[(&lower, true), (&conflict, true)]).is_empty());
     }
 }

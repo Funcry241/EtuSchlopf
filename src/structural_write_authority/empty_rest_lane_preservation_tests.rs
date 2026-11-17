@@ -85,6 +85,68 @@ mod empty_rest_lane_preservation_tests {
         assert!(again_receipt.is_none());
     }
     #[test]
+    fn held_note_with_a_shared_voice_label_does_not_hide_an_entry_rest() {
+        let unit = 24;
+        let held = pitched("1", "7", unit, false).replace("<voice>", "<tie type=\"stop\"/><voice>");
+        let leading = rest("1", "7", unit, unit);
+        let rewind = format!("<backup><duration>{unit}</duration></backup>");
+        let next = pitched("1", "7", unit, false);
+        for continuation in [held.clone(), held.replace("<voice>7</voice>", "<voice>9</voice>")] {
+            preserve(&document(&[format!("{continuation}{rewind}{leading}{next}")]));
+        }
+    }
+
+    #[test]
+    fn remote_octave_mark_and_note_density_do_not_prove_a_rest_redundant() {
+        let unit = 24;
+        let voice = "7";
+        let plain = format!("{}{}{}", rest("1", voice, unit / 2, unit),
+            pitched("1", voice, unit / 2, false), rest("1", voice, unit / 2, unit));
+        let octave = "<direction><direction-type><octave-shift type=\"down\" size=\"8\"/></direction-type></direction>";
+        let distant = format!("{octave}{}", pitched("1", voice, unit / 2, false).repeat(3));
+        let decorated = format!("{plain}{distant}");
+        preserve(&document(&[plain]));
+        preserve(&document(&[decorated]));
+
+        let covering = format!(
+            "{}<backup><duration>{}</duration></backup>{}",
+            rest("1", voice, unit / 2, unit), unit / 2, pitched("1", voice, unit / 2, false),
+        );
+        for body in [covering.clone(), format!("{covering}{distant}")] {
+            let (edits, _, _) = empty_voice_rest_suppression_plan(&document(&[body]), usize::MAX);
+            assert_eq!(edits.len(), 1);
+        }
+    }
+
+    #[test]
+    fn repeated_measure_label_does_not_merge_lower_staff_quotas() {
+        let unit = 24;
+        let duration = unit * 4;
+        let rest_size = unit / 2;
+        let rests = rest("2", "7", rest_size, unit).repeat(8);
+        let body = format!(
+            "<attributes><divisions>{unit}</divisions></attributes>{rests}\
+             <backup><duration>{duration}</duration></backup>{}\
+             <backup><duration>{duration}</duration></backup>{}",
+            pitched("2", "7", duration, false), pitched("2", "8", duration, false),
+        );
+        let measure = |label| format!(r#"<measure number="{label}">{body}</measure>"#);
+        let anchor_and_overlap_counts = |labels: [i32; 2]| {
+            let xml = format!("<score-partwise><part>{}{}</part></score-partwise>",
+                measure(labels[0]), measure(labels[1]));
+            let anchor = select_lower_staff_rest_candidates(
+                lower_staff_visible_rest_lane_anchor_suppression_candidates(&xml), 24, 6,
+            );
+            let overlaps = select_lower_staff_rest_candidates(
+                lower_staff_overlapping_rest_suppression_candidates(&xml), 16, 3,
+            );
+            (anchor.len(), overlaps.len())
+        };
+        assert_eq!(anchor_and_overlap_counts([12, 31]), (12, 6));
+        assert_eq!(anchor_and_overlap_counts([12, 12]), (12, 6));
+    }
+
+    #[test]
     fn empty_lanes_preserve_single_and_partitioned_rests_on_both_staffs_under_relabelling_and_scaling()
      {
         for unit in [12, 18] {

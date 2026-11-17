@@ -950,6 +950,24 @@ fn apply_behind_bars_rule_check_spurious_empty_voice_rest_suppression(
 
 
 
+// A continuation can share a serialized voice label with a later entrance.
+// It does not account for that entrance's visible leading silence.
+fn rest_marks_separate_voice_entry(
+    rest: &RenderXmlTimelineFragmentSpan,
+    fragments: &[RenderXmlTimelineFragmentSpan],
+) -> bool {
+    let Some(end) = rest.onset.checked_add(rest.duration) else {
+        return true;
+    };
+    let fresh_attacks = fragments.iter().filter(|attack| {
+        attack.is_visible_pitched && !attack.is_chord && attack.duration > 0
+            && attack.staff == rest.staff && attack.voice == rest.voice
+            && !note_fragment_has_tie_role(&attack.fragment, "stop")
+    });
+    fresh_attacks.clone().any(|attack| attack.onset == end)
+        && !fresh_attacks.clone().any(|attack| attack.onset <= rest.onset)
+}
+
 // Pure proposal construction owned by the existing suppression writer. No
 // receipt, materialization or adoption capability is exposed by this reader.
 fn empty_voice_rest_suppression_plan(xml: &str, max_actions: usize) -> (
@@ -961,21 +979,17 @@ fn empty_voice_rest_suppression_plan(xml: &str, max_actions: usize) -> (
     let mut occupied = Vec::<(usize, usize)>::new();
 
     let atomic_notes = parse_atomic_notes(xml);
-    let mut scan = 0_usize;
-    while let Some((measure_start, measure_end, scope_number)) = find_next_measure_bounds(xml, scan) {
+    for (measure_start, measure_end, scope_number, (expected, _)) in render_measure_metric_entries(xml) {
         if actions.len() >= max_actions {
             break;
         }
         let measure = &xml[measure_start..measure_end];
-        let expected = infer_measure_duration_from_measure_xml(measure).unwrap_or(384).max(1);
         let fragments = collect_render_timeline_fragments_in_segment(measure, measure_start, scope_number);
         let mut visible_pitched_by_staff_voice: BTreeMap<(String, String), usize> = BTreeMap::new();
-        let mut visible_pitched_by_staff: BTreeMap<String, usize> = BTreeMap::new();
         let mut visible_staffs_by_voice: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
         for frag in &fragments {
             if frag.is_visible_pitched {
                 *visible_pitched_by_staff_voice.entry((frag.staff.clone(), frag.voice.clone())).or_insert(0) += 1;
-                *visible_pitched_by_staff.entry(frag.staff.clone()).or_insert(0) += 1;
                 visible_staffs_by_voice.entry(frag.voice.clone()).or_default().insert(frag.staff.clone());
             }
         }
@@ -1000,33 +1014,28 @@ fn empty_voice_rest_suppression_plan(xml: &str, max_actions: usize) -> (
                     .copied().unwrap_or(0) == 0 {
                     continue;
                 }
+                let covering_intervals = fragments
+                    .iter()
+                    .filter(|frag| {
+                        frag.is_visible_pitched
+                            && !frag.is_chord
+                            && !frag.is_hidden
+                            && frag.voice == *voice
+                            && frag.staff.trim() != staff.trim()
+                    })
+                    .map(|frag| (frag.onset, frag.duration))
+                    .collect::<Vec<_>>();
                 let selected_rests = rests
                     .iter()
                     .copied()
                     .filter(|rest| {
-                        let start = rest.onset.max(0);
-                        let end = rest.onset.saturating_add(rest.duration.max(0)).min(expected);
-                        let duration = end.saturating_sub(start);
-                        if duration <= 0 {
-                            return false;
-                        }
-                        let coverage = fragments
-                            .iter()
-                            .filter(|frag| {
-                                frag.is_visible_pitched
-                                    && !frag.is_chord
-                                    && !frag.is_hidden
-                                    && frag.voice == *voice
-                                    && frag.staff.trim() != staff.trim()
-                            })
-                            .map(|frag| {
-                                end.min(frag.onset.saturating_add(frag.duration.max(0)))
-                                    .saturating_sub(start.max(frag.onset))
-                                    .max(0)
-                            })
-                            .sum::<i32>()
-                            .min(duration);
-                        coverage >= duration
+                        !rest_marks_separate_voice_entry(rest, &fragments)
+                            && rest.onset.checked_add(rest.duration).is_some_and(|end| end <= expected)
+                            && pitched_intervals_cover_rest(
+                                rest.onset,
+                                rest.duration,
+                                &covering_intervals,
+                            )
                     })
                     .collect::<Vec<_>>();
                 let action_kind = "cross_staff_same_voice_covered_rest_lane_to_forward";
@@ -1055,82 +1064,53 @@ fn empty_voice_rest_suppression_plan(xml: &str, max_actions: usize) -> (
             }
         }
 
-        // Keep the remaining original sounding-lane rule. Empty upper lanes
-        // receive the same preservation regardless of partition or octave marks.
+        // An upper-staff rest can be redundant when the same written lane
+        // already sounds throughout its complete interval.
         for ((staff, voice), mut rests) in rest_by_staff_voice {
             if actions.len() >= max_actions {
                 break;
             }
-            let staff_trimmed = staff.trim();
-            if staff_trimmed != "1" || rests.is_empty() {
+            if staff.trim() != "1" {
                 continue;
             }
-            rests.retain(|fragment| {
-                let Some(note) = atomic_notes.binary_search_by_key(&fragment.start, |note| note.note_start)
+            let covering_intervals = fragments
+                .iter()
+                .filter(|frag| {
+                    frag.is_visible_pitched && !frag.is_chord && !frag.is_hidden
+                        && frag.staff == staff && frag.voice == voice
+                })
+                .map(|frag| (frag.onset, frag.duration))
+                .collect::<Vec<_>>();
+            rests.retain(|rest| {
+                if rest.has_visible_dependency
+                    || rest_marks_separate_voice_entry(rest, &fragments)
+                    || !rest.onset.checked_add(rest.duration).is_some_and(|end| end <= expected)
+                    || !pitched_intervals_cover_rest(rest.onset, rest.duration, &covering_intervals)
+                    || (rest.onset == 0 && rest.duration == expected)
+                    || occupied.iter().any(|(start, end)| rest.start < *end && rest.end > *start)
+                {
+                    return false;
+                }
+                let Some(note) = atomic_notes.binary_search_by_key(&rest.start, |note| note.note_start)
                     .ok().map(|index| &atomic_notes[index])
                 else { return false; };
                 !atomic_rest_connects_written_voice_course(xml, note, &atomic_notes)
             });
-            if rests.is_empty() { continue; }
-            rests.sort_by_key(|frag| (frag.onset, frag.duration, frag.start));
-            let same_lane_visible_pitched = visible_pitched_by_staff_voice.get(&(staff.clone(), voice.clone())).copied().unwrap_or(0);
-            if same_lane_visible_pitched == 0 { continue; }
-            let same_staff_other_voice_visible = visible_pitched_by_staff
-                .get(&staff)
-                .copied()
-                .unwrap_or(0)
-                .saturating_sub(same_lane_visible_pitched)
-                > 0;
-            let cross_staff_same_voice_visible = visible_staffs_by_voice
-                .get(&voice)
-                .is_some_and(|staffs| staffs.iter().any(|visible_staff| visible_staff.trim() != staff.trim()));
-            let measure_has_octave_shift = measure.contains("<octave-shift");
-            let dense_upper_same_voice_rest_lane = same_lane_visible_pitched >= 4
-                && measure_has_octave_shift
-                && rests.len() >= 2
-                && rests.iter().all(|frag| frag.duration > 0 && frag.duration <= expected / 4);
-            if !same_staff_other_voice_visible && !cross_staff_same_voice_visible && !dense_upper_same_voice_rest_lane {
-                continue;
-            }
-            let total_duration: i32 = rests.iter().map(|frag| frag.duration.max(0)).sum();
-            if total_duration <= 0 || total_duration > expected {
-                continue;
-            }
-            // Der alte Volltakt-Einzelfall wurde oben bereits beschrieben;
-            // hier geht es ausdrücklich um sichtbare Restspuren/Teilfragmente
-            // in der oberen Zusatzstimme.
-            if rests.len() == 1 && rests[0].onset == 0 && rests[0].duration == expected {
+            if rests.is_empty() {
                 continue;
             }
             candidates_seen += 1;
-            let mut local_replacements = Vec::<(usize, usize, String)>::new();
-            let mut overlap = false;
-            for rest in &rests {
-                if occupied.iter().any(|(used_start, used_end)| rest.start < *used_end && rest.end > *used_start) {
-                    overlap = true;
-                    break;
-                }
-                local_replacements.push((rest.start, rest.end, render_forward_fragment(rest.duration)));
-            }
-            if overlap {
-                continue;
-            }
             for rest in &rests {
                 occupied.push((rest.start, rest.end));
+                selected_replacements.push((rest.start, rest.end, render_forward_fragment(rest.duration)));
             }
-            selected_replacements.extend(local_replacements);
             actions.push(BehindBarsRuleCheckRestAndTieAction {
-                action_kind: if dense_upper_same_voice_rest_lane {
-                    "upper_staff_octave_shift_same_voice_rest_lane_visible_proof_to_forward".to_string()
-                } else {
-                    "upper_staff_rest_lane_visible_proof_to_forward".to_string()
-                },
+                action_kind: "upper_staff_rest_lane_visible_proof_to_forward".to_string(),
                 old_rest_count: rests.len(),
                 new_rest_count: 0,
                 verdict: "adopted_if_rest_delta_adoption_gate_holds".to_string(),
             });
         }
-        scan = measure_end;
     }
 
     selected_replacements.sort_by_key(|a| std::cmp::Reverse(a.0));
@@ -1261,29 +1241,15 @@ fn apply_lower_staff_visible_rest_lane_anchor_suppression(
     let candidates = lower_staff_visible_rest_lane_anchor_suppression_candidates(xml);
     let candidates_seen = candidates.len();
     let mut replacements = Vec::<(usize, usize, String)>::new();
-    let mut occupied = Vec::<(usize, usize)>::new();
-    let mut per_scope_selected = BTreeMap::<usize, usize>::new();
     let mut scopes = BTreeSet::<usize>::new();
     let mut total_duration = 0_i32;
-    let mut selected = 0_usize;
-    let mut evidence_rows = Vec::new();
-    for (_score, start, end, replacement, scope, evidence, duration) in candidates {
-        if selected >= max_actions {
-            break;
-        }
-        if *per_scope_selected.get(&scope).unwrap_or(&0) >= 6 {
-            continue;
-        }
-        if occupied.iter().any(|(used_start, used_end)| start < *used_end && end > *used_start) {
-            continue;
-        }
-        occupied.push((start, end));
+    let chosen = select_lower_staff_rest_candidates(candidates, max_actions, 6);
+    let mut evidence_rows = Vec::<String>::new();
+    for LowerStaffRestCandidate { start, end, replacement, scope, evidence, duration, .. } in chosen {
         replacements.push((start, end, replacement));
-        *per_scope_selected.entry(scope).or_default() += 1;
         scopes.insert(scope);
         total_duration = total_duration.saturating_add(duration.max(0));
         evidence_rows.push(evidence);
-        selected += 1;
     }
     replacements.sort_by_key(|a| std::cmp::Reverse(a.0));
     let (out, receipt) = crate::structural_write_authority::apply_lower_visible_rest_suppression_authorized(
@@ -1299,7 +1265,7 @@ fn apply_lower_staff_visible_rest_lane_anchor_suppression(
         scopes.iter().map(|value| value.to_string()).collect::<Vec<_>>().join(",")
     };
     let chosen_evidence = evidence_rows.join(" | ");
-    ((out, candidates_seen, selected, total_duration, scope_text, chosen_evidence), receipts)
+    ((out, candidates_seen, evidence_rows.len(), total_duration, scope_text, chosen_evidence), receipts)
 }
 
 fn apply_lower_staff_overlapping_visible_rest_suppression(
@@ -1309,29 +1275,15 @@ fn apply_lower_staff_overlapping_visible_rest_suppression(
     let candidates = lower_staff_overlapping_rest_suppression_candidates(xml);
     let candidates_seen = candidates.len();
     let mut replacements = Vec::<(usize, usize, String)>::new();
-    let mut occupied = Vec::<(usize, usize)>::new();
-    let mut per_scope_selected = BTreeMap::<usize, usize>::new();
     let mut scopes = BTreeSet::<usize>::new();
     let mut total_duration = 0_i32;
-    let mut selected = 0_usize;
-    let mut evidence_rows = Vec::new();
-    for (_score, start, end, replacement, scope, evidence, duration) in candidates {
-        if selected >= max_actions {
-            break;
-        }
-        if *per_scope_selected.get(&scope).unwrap_or(&0) >= 3 {
-            continue;
-        }
-        if occupied.iter().any(|(used_start, used_end)| start < *used_end && end > *used_start) {
-            continue;
-        }
-        occupied.push((start, end));
+    let chosen = select_lower_staff_rest_candidates(candidates, max_actions, 3);
+    let mut evidence_rows = Vec::<String>::new();
+    for LowerStaffRestCandidate { start, end, replacement, scope, evidence, duration, .. } in chosen {
         replacements.push((start, end, replacement));
-        *per_scope_selected.entry(scope).or_default() += 1;
         scopes.insert(scope);
         total_duration = total_duration.saturating_add(duration.max(0));
         evidence_rows.push(evidence);
-        selected += 1;
     }
     replacements.sort_by_key(|a| std::cmp::Reverse(a.0));
     let _observed_unproven_replacement_count = replacements.len();
@@ -1390,7 +1342,7 @@ fn select_measure_local_upper_initial_rest_candidates(
 
 fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
     xml: &str,
-    max_coalesces: usize,
+    coalesce_enabled: bool,
 ) -> anyhow::Result<PreparedInitialRestCoalescing> {
     let mut replacements: Vec<(usize, usize, String)> = Vec::new();
     let mut duration_promotions = Vec::<crate::structural_write_authority::DurationPromotion>::new();
@@ -1453,7 +1405,7 @@ fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
             );
             let initial_metric_single_rest = metric_plan.as_slice() == [i64::from(first_onset)];
             let upper_begins_after_cross_staff_material = first_onset > 0
-                && first_onset <= 96
+                && first_onset <= beat_unit
                 && !has_upper_start_rest
                 && initial_metric_single_rest
                 && (lower_or_crossstaff_before_upper || staff_switches > 0 || has_octave_context);
@@ -1497,8 +1449,7 @@ fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
                 continue;
             }
             let total = first.duration.saturating_add(second.duration);
-            let both_sixteenth = first.duration == 24 && second.duration == 24;
-            let inside_single_beat = duration_span_is_inside_single_beat(first.onset, total);
+            let inside_single_beat = duration_span_is_inside_single_beat(first.onset, total, beat_unit);
             let pair_end = second.onset.saturating_add(second.duration.max(0));
             let voice_span_has_sounding = fragments.iter().any(|frag| {
                 frag.voice == first.voice
@@ -1506,8 +1457,8 @@ fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
                     && !frag.is_rest
                     && frag.duration > 0
                     && midi_from_note_fragment(&frag.fragment).is_some()
-                    && frag.onset >= first.onset
                     && frag.onset < pair_end
+                    && frag.onset.saturating_add(frag.duration) > first.onset
             });
             let initial_pre_entry_pair = first.onset == 0
                 && !voice_span_has_sounding
@@ -1522,16 +1473,11 @@ fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
             );
             let metric_single_rest = metric_plan.as_slice() == [i64::from(total)];
             let initial_metric_pair = initial_pre_entry_pair && metric_single_rest;
-            let same_beat_micro_pair = both_sixteenth && inside_single_beat && metric_single_rest;
-            if same_beat_micro_pair || initial_metric_pair {
+            let beat_local_pair = inside_single_beat && metric_single_rest && !voice_span_has_sounding;
+            if beat_local_pair || initial_metric_pair {
                 if let Some(new_first) = preview_upper_rest_duration(&first.fragment, total) {
-                    let score = 900_i64
-                        + if initial_metric_pair { 180 } else { 0 }
-                        + if has_octave_context { 80 } else { 0 }
-                        + (staff_switches as i64 * 25)
-                        + if first.onset % 96 == 0 { 20 } else { 0 };
                     coalesce_candidates.push((
-                        score,
+                        initial_metric_pair,
                         first.start,
                         first.end,
                         second.start,
@@ -1572,7 +1518,7 @@ fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
     let mut coalesce_duration = 0_i32;
     let mut coalesce_scopes = BTreeSet::<usize>::new();
     for (
-        _score,
+        _initial_metric_pair,
         first_start,
         first_end,
         second_start,
@@ -1581,7 +1527,7 @@ fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
         total,
         scope,
     ) in coalesce_candidates.into_iter() {
-        if coalesce_written >= max_coalesces {
+        if !coalesce_enabled {
             break;
         }
         if occupied.iter().any(|(used_start, used_end)| first_start < *used_end && *used_start < second_end) {
@@ -1762,7 +1708,7 @@ mod upper_initial_metric_rest_coalescing_safety_tests {
             pitched("D", 5, 312, false, false),
         ));
         let ((out, _, _, _, _, seen, written, _, duration, _, _), receipts) =
-            apply_upper_staff_initial_rest_and_beat_local_coalescing(&xml, 8).expect("prepare");
+            apply_upper_staff_initial_rest_and_beat_local_coalescing(&xml, true).expect("prepare");
         assert_eq!(receipts.len(), 2, "actual #17 Fragment plus fresh #48 EXACT");
         discard_probe(receipts);
         assert_eq!(seen, 1);
@@ -1770,6 +1716,22 @@ mod upper_initial_metric_rest_coalescing_safety_tests {
         assert_eq!(duration, 48);
         assert_eq!(out.matches("<rest/>").count(), 1);
         assert_eq!(out.matches("<type>eighth</type>").count(), 1);
+
+
+        let contents = format!("{}{}{}{}",
+            pitched("C", 5, 24, false, false), rest(12, "32nd"),
+            rest(36, "16th"), pitched("D", 5, 312, false, false));
+        let sample = score(&contents);
+        let start = sample.find("<measure").unwrap();
+        let end = sample.find("</measure>").unwrap() + "</measure>".len();
+        let measures = (0..9).map(|i| sample[start..end].replacen(
+            "number=\"1\"", &format!("number=\"{}\"", 10 + i * 7), 1,
+        )).collect::<String>();
+        let xml = format!("{}{measures}{}", &sample[..start], &sample[end..]);
+        let ((_, _, _, _, _, seen, written, _, _, _, _), receipts) =
+            apply_upper_staff_initial_rest_and_beat_local_coalescing(&xml, true).expect("prepare");
+        discard_probe(receipts);
+        assert_eq!((seen, written), (9, 9));
     }
 
     #[test]
@@ -1790,7 +1752,7 @@ mod upper_initial_metric_rest_coalescing_safety_tests {
     fn inserted_initial_rest_uses_metric_authority_on_canonical_basis() {
         let xml = octave_context_forward_then_pitch(96, 48);
         let ((singleton_out, seen, written, _, duration, _, _, _, _, _, _), receipts) =
-            apply_upper_staff_initial_rest_and_beat_local_coalescing(&xml, 0).expect("prepare");
+            apply_upper_staff_initial_rest_and_beat_local_coalescing(&xml, false).expect("prepare");
         assert_eq!(receipts.len(), 1, "insertion-only candidate is owned only by #48");
         discard_probe(receipts);
         assert_eq!(seen, 1);
@@ -1812,7 +1774,7 @@ mod upper_initial_metric_rest_coalescing_safety_tests {
             _,
             _,
             _,
-        ), receipts) = apply_upper_staff_initial_rest_and_beat_local_coalescing(&duplicated, 0).expect("prepare");
+        ), receipts) = apply_upper_staff_initial_rest_and_beat_local_coalescing(&duplicated, false).expect("prepare");
         discard_probe(receipts);
         assert_eq!(duplicated_seen, 2);
         assert_eq!(duplicated_written, 2);
@@ -1828,7 +1790,7 @@ mod upper_initial_metric_rest_coalescing_safety_tests {
             &format!("number=\"{first_number}\""),
         );
         let ((collision_out, seen, written, _, duration, _, _, _, _, _, _), receipts) =
-            apply_upper_staff_initial_rest_and_beat_local_coalescing(&collision, 0).expect("prepare");
+            apply_upper_staff_initial_rest_and_beat_local_coalescing(&collision, false).expect("prepare");
         assert_eq!(receipts.len(), 1);
         discard_probe(receipts);
         assert_eq!((seen, written, duration), (2, 2, duplicated_duration));
@@ -1846,7 +1808,7 @@ mod upper_initial_metric_rest_coalescing_safety_tests {
         );
         changed_metric.replace_range(second_start.., &second);
         let ((changed_out, _, written, _, duration, _, _, _, _, _, _), receipts) =
-            apply_upper_staff_initial_rest_and_beat_local_coalescing(&changed_metric, 0).expect("prepare");
+            apply_upper_staff_initial_rest_and_beat_local_coalescing(&changed_metric, false).expect("prepare");
         discard_probe(receipts);
         assert_eq!((written, duration), (1, 48));
         assert_eq!(changed_out.matches("<rest/>").count(), 1);
@@ -1865,7 +1827,7 @@ mod upper_initial_metric_rest_coalescing_safety_tests {
     fn inserted_initial_rest_fails_closed_outside_canonical_metric_basis() {
         let xml = octave_context_forward_then_pitch(48, 48);
         let ((out, seen, written, _, duration, _, _, _, _, _, _), receipts) =
-            apply_upper_staff_initial_rest_and_beat_local_coalescing(&xml, 0).expect("prepare");
+            apply_upper_staff_initial_rest_and_beat_local_coalescing(&xml, false).expect("prepare");
         discard_probe(receipts);
         assert_eq!(seen, 0);
         assert_eq!(written, 0);
@@ -1896,7 +1858,7 @@ mod upper_initial_metric_rest_coalescing_safety_tests {
             pitched("C", 5, 192, false, false),
         ));
         let ((out, _, _, _, _, seen, written, _, duration, _, _), receipts) =
-            apply_upper_staff_initial_rest_and_beat_local_coalescing(&xml, 8).expect("prepare");
+            apply_upper_staff_initial_rest_and_beat_local_coalescing(&xml, true).expect("prepare");
         assert_eq!(receipts.len(), 2, "actual #17 Fragment plus fresh #48 EXACT");
         discard_probe(receipts);
         assert_eq!(seen, 1);
@@ -1917,7 +1879,7 @@ mod upper_initial_metric_rest_coalescing_safety_tests {
             pitched("C", 6, 192, false, false),
         ));
         let ((out, _, _, _, _, seen, written, _, duration, _, _), receipts) =
-            apply_upper_staff_initial_rest_and_beat_local_coalescing(&xml, 8).expect("prepare");
+            apply_upper_staff_initial_rest_and_beat_local_coalescing(&xml, true).expect("prepare");
         discard_probe(receipts);
         assert_eq!(seen, 0);
         assert_eq!(written, 0);

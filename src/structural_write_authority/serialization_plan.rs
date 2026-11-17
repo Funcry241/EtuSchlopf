@@ -3036,9 +3036,6 @@ impl FrozenSerializedVoicePlan {
         Some(self.role_for_label(label)?.shadow_rest_primary_exempt())
     }
 
-    pub(crate) fn label_is_lower_dual_edge_primary(&self, label: &str) -> Option<bool> {
-        Some(self.role_for_label(label)?.lower_dual_edge_primary())
-    }
 
 }
 
@@ -10770,6 +10767,22 @@ pub(crate) fn through_final_clef_and_rest_placement(
     )
 }
 }
+
+impl FinalPdfSourceOccurrenceContinuation {
+    pub(crate) fn through_final_stem_directions(
+        &self, post: &str, receipt: &crate::master_state_identity::PreservingTransformationReceipt,
+        canonical: &CanonicalFinalChordStructuralPlan, voice_plan: &FrozenSerializedVoicePlan,
+        render_omissions: Option<&std::collections::BTreeSet<RenderPrunedFinalChordOmissionKey>>,
+    ) -> io::Result<Self> {
+        receipt.validate_preserving_transition::<crate::pipeline::NotationPolishPreservingMint>(self.xml(), post)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
+        transport_final_pdf_source_occurrence_continuation_through_pitched_topology_neutral_write(
+            self, self.xml(), post, canonical, voice_plan, render_omissions,
+            "authorized final stem direction",
+        )
+    }
+}
+
 
 #[cfg(test)]
 impl CanonicalFinalChordStructuralPlan {

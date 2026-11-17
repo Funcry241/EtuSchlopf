@@ -2027,15 +2027,9 @@ fn render_visible_rest_note_fragment(duration: i32, staff: &str, voice: &str) ->
     out.push_str("\n      </note>");
     Some(out)
 }
-fn beat_index_for_duration_position(onset: i32) -> i32 {
-    onset.max(0) / 96
-}
-fn duration_span_is_inside_single_beat(onset: i32, duration: i32) -> bool {
-    if duration <= 0 {
-        return false;
-    }
-    let end_exclusive = onset.saturating_add(duration);
-    beat_index_for_duration_position(onset) == beat_index_for_duration_position(end_exclusive.saturating_sub(1))
+fn duration_span_is_inside_single_beat(onset: i32, duration: i32, beat_unit: i32) -> bool {
+    onset >= 0 && duration > 0 && beat_unit > 0
+        && onset.checked_add(duration - 1).is_some_and(|last| onset / beat_unit == last / beat_unit)
 }
 #[derive(Debug, Clone, Default)]
 struct RestOnlyStaffEmptyMeasureReadabilityOutcome {

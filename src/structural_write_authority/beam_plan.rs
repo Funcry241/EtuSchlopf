@@ -63,6 +63,7 @@ impl BeamPlan {
 
     /// Builds one fail-closed plan from disjoint, ordered event groups whose
     /// beam levels all span the complete group.
+    #[cfg(test)]
     pub fn from_groups(event_count: usize, groups: &[(&[usize], u8)]) -> Option<Self> {
         let mut level_groups = Vec::new();
         for (ordinals, highest_level) in groups {

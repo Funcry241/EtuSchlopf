@@ -172,12 +172,33 @@ pub struct Domain {
     pub exit_group_crossing: bool,
 }
 
-pub const POLICY_ID: &str = "joint_register_dp_c4_v1";
+pub const POLICY_ID: &str = "joint_register_dp_c5_v1";
 pub const COST_COMPONENTS: [&str; 13] = ["h8", "h7", "h6", "h5", "h4", "ko", "uk", "ks", "gb", "ch", "h3", "h2", "h1"];
 
-/// h8,h7,h6,h5,h4,ko,uk,ks,gb,ch,h3,h2,h1, exactly in C4 policy order.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd)]
+/// Raw diagnostic counters. The comparison combines sign changes and repeated
+/// three-ledger heads after the severe, convention and grouping costs.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Cost(pub [u64; 13]);
+impl Ord for Cost {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // An isolated three-ledger head does not justify an extra sign.
+        // A sustained register course can repay the transition across its heads.
+        const THREE_LEDGER_HEADS_PER_SIGN: u128 = 4;
+        let reading_burden = |cost: &Self| {
+            u128::from(cost.0[9]) * THREE_LEDGER_HEADS_PER_SIGN + u128::from(cost.0[10])
+        };
+        self.0[..9].cmp(&other.0[..9])
+            .then_with(|| reading_burden(self).cmp(&reading_burden(other)))
+            .then_with(|| self.0[9..].cmp(&other.0[9..]))
+    }
+}
+
+impl PartialOrd for Cost {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl Cost {
     fn count(&mut self, field: usize, amount: u64) -> Result<(), Error> {
         self.0[field] = self.0[field].checked_add(amount).ok_or(Error::Arithmetic)?;
