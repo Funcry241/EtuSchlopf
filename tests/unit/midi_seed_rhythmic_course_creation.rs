@@ -234,6 +234,28 @@ fn exact_independent_release_can_pass_a_beat_and_an_exact_primary_chord() {
 }
 
 #[test]
+fn mixed_release_chord_keeps_member_intervals_in_legal_serialization_order() {
+    let notes = [
+        MidiSeedNote { midi: 45, len: 48, ..note(0, 0, 2) },
+        MidiSeedNote { midi: 49, len: 24, ..note(1, 0, 2) },
+        MidiSeedNote { midi: 52, len: 48, ..note(2, 0, 2) },
+        MidiSeedNote { midi: 56, len: 48, ..note(3, 0, 2) },
+        MidiSeedNote { midi: 43, len: 48, ..note(4, 48, 2) },
+    ];
+    let (xml, plan) = emitted(&notes, 1);
+    let written: Vec<_> = plan.planned.iter().filter_map(|item| {
+        item.source.map(|source| (source, item.interval.clone(), item.chord))
+    }).collect();
+    assert_eq!(written, [
+        (0, 0..48, false), (2, 0..48, true), (3, 0..48, true),
+        (1, 0..24, true), (4, 48..384, false),
+    ]);
+    assert!(crate::cursor_lane_temporal_check::check_cursor_lane_temporal_precondition(
+        "synthetic-mixed-release-seed", &xml,
+    ).is_ok());
+}
+
+#[test]
 fn aligned_tied_octave_keeps_long_values_through_arrangement() {
     let metric = MidiSeedRhythmicCourses::create_primary_presentations(&[], 3, 384)
         .unwrap().metric;
@@ -696,6 +718,24 @@ fn repeated_accompaniment_hand_preserves_attacks_and_refuses_conflicts() {
     different_release[1].len -= 12;
     restore_repeated_accompaniment_hand(&mut different_release, &mut Vec::new());
     assert_eq!(different_release[1].staff, 1);
+
+    for (staff, expected, decisions) in [(1, 2, 1), (2, 1, 0)] {
+        let companion = MidiSeedNote { midi: 63, len: 48, ..note(5, 144, staff) };
+        let fixture: Vec<_> = chord.into_iter().chain([companion]).collect();
+        let relocated = fixture.iter().map(|n| MidiSeedNote {
+            source_ordinal: n.source_ordinal + fixture.len(),
+            pos: n.pos + 384,
+            midi: n.midi + 4,
+            ..*n
+        });
+        let mut notes: Vec<_> = fixture.iter().copied().chain(relocated).collect();
+        let mut trace = Vec::new();
+        restore_repeated_accompaniment_hand(&mut notes, &mut trace);
+        assert_eq!(notes[1].staff, expected);
+        assert_eq!(notes[fixture.len() + 1].staff, expected);
+        assert_eq!(notes[5], companion);
+        assert_eq!(trace.len(), decisions * 2);
+    }
 }
 
 #[test]

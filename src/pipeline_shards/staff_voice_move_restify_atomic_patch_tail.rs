@@ -61,11 +61,14 @@ fn collect_hotspot_plan(
     report: &CheckReport,
     limit: usize,
     critical_only: bool,
+    inner_tone_only: bool,
 ) -> HotspotPlan {
     let mut grouped: BTreeMap<(usize, Option<u8>), i64> = BTreeMap::new();
     let mut raw_evidence = Vec::new();
     for issue in &report.issues {
-        if critical_only && !is_critical_piano_issue(issue) {
+        if (critical_only && !is_critical_piano_issue(issue))
+            || (inner_tone_only && issue.issue_type != "PIANO_HAND_SPAN_LARGE")
+        {
             continue;
         }
         let Some(measure) = issue.measure.trim().parse::<usize>().ok() else {
@@ -132,6 +135,7 @@ fn collect_hotspot_plan(
         hotspot_plan_audit_fingerprint(critical_only, limit, &entries, &raw_evidence);
     HotspotPlan {
         entries,
+        inner_tone_only,
         audit: HotspotPlanAuditProjection {
             critical_only,
             source_issue_count: raw_evidence.len(),
@@ -145,11 +149,11 @@ fn collect_hotspot_plan(
 }
 
 fn collect_critical_hotspots(report: &CheckReport, limit: usize) -> HotspotPlan {
-    collect_hotspot_plan(report, limit, true)
+    collect_hotspot_plan(report, limit, true, false)
 }
 
 fn collect_hotspots(report: &CheckReport, limit: usize) -> HotspotPlan {
-    collect_hotspot_plan(report, limit, false)
+    collect_hotspot_plan(report, limit, false, false)
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct CandidateDecisionKey {

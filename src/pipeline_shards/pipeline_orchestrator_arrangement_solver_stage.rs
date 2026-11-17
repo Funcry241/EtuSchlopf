@@ -126,6 +126,38 @@ fn run_arrangement_solver_guided_search_stage(
     } = state;
     let mut detail = crate::audit_only::performance_timings::SequentialTimings::new(
         &inputs.source.input_label, "run_arrangement_solver_guided_search_stage", "CorpusHandRhythmPrimaryRepair");
+    if !cli.no_polish && best.final_result.summary.blockers == 0 {
+        let span_plan = collect_hotspot_plan(&best.final_result, 18, false, true);
+        if !span_plan.is_empty() {
+            let variants = build_candidate_batch(
+                "BaseProfileInnerTone",
+                std::slice::from_ref(&best.profile_contract),
+                *next_iteration,
+                inputs,
+                Some(&span_plan),
+            )?;
+            *next_iteration += variants.len();
+            for candidate in variants {
+                let omitted = candidate.midi_seed_stats.source_selection_full_causal.removed_event_count
+                    .saturating_sub(best.midi_seed_stats.source_selection_full_causal.removed_event_count);
+                let preferred = omitted > 0 && candidate_strictly_beats_guard(&candidate, best);
+                console_progress(format!(
+                    "BaseProfileInnerTone: profile={} omitted={omitted} warnings={}/{} critical={}/{} preferred={preferred}",
+                    candidate.profile_name,
+                    candidate.final_result.summary.warnings,
+                    best.final_result.summary.warnings,
+                    critical_count(&candidate.final_result),
+                    critical_count(&best.final_result),
+                ));
+                if preferred {
+                    let previous_best = std::mem::replace(best, candidate);
+                    candidates.push_previous(previous_best);
+                } else if omitted > 0 {
+                    candidates.push(candidate);
+                }
+            }
+        }
+    }
     if !cli.no_polish {
         run_corpus_driven_hand_rhythm_primary_repair(
             best,

@@ -71,7 +71,6 @@ pub(super) struct KodexBuildContext {
     pub(super) launcher_text: String,
     pub(super) launcher_build_control_text: String,
     pub(super) launcher_assistant_export_text: String,
-    pub(super) launcher_neuro_evidence_export_text: String,
     pub(super) public_artifact_recovery_text: String,
     pub(super) formal_green_contract_text: String,
     pub(super) run_cmd_text: String,
@@ -124,8 +123,6 @@ impl KodexBuildContext {
             manifest_dir.join("src/bin/etuschlopf_launcher/launcher_build_control.rs");
         let launcher_assistant_export_path =
             manifest_dir.join("src/bin/etuschlopf_launcher/assistant_export.rs");
-        let launcher_neuro_evidence_export_path =
-            manifest_dir.join("src/bin/etuschlopf_launcher/neuro_evidence_export.rs");
         let public_artifact_recovery_path =
             manifest_dir.join("src/kodex_control_plane/public_artifact_recovery.rs");
         let formal_green_contract_path =
@@ -166,7 +163,6 @@ impl KodexBuildContext {
             &take_bootstrap_path,
             &launcher_path,
             &launcher_assistant_export_path,
-            &launcher_neuro_evidence_export_path,
             &public_artifact_recovery_path,
             &formal_green_contract_path,
             &run_cmd_path,
@@ -209,7 +205,6 @@ impl KodexBuildContext {
         let launcher_text = read(&launcher_path)?;
         let launcher_build_control_text = read(&launcher_build_control_path)?;
         let launcher_assistant_export_text = read(&launcher_assistant_export_path)?;
-        let launcher_neuro_evidence_export_text = read(&launcher_neuro_evidence_export_path)?;
         let public_artifact_recovery_text = read(&public_artifact_recovery_path)?;
         let formal_green_contract_text = read(&formal_green_contract_path)?;
         let run_cmd_text = read(&run_cmd_path)?;
@@ -250,7 +245,6 @@ impl KodexBuildContext {
             launcher_text,
             launcher_build_control_text,
             launcher_assistant_export_text,
-            launcher_neuro_evidence_export_text,
             public_artifact_recovery_text,
             formal_green_contract_text,
             run_cmd_text,

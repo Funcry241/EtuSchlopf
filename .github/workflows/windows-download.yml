@@ -4,7 +4,9 @@ on:
   push:
     branches: [main]
     paths:
-      - 'docs/evidence/r1872/accepted_source_sha256.tsv'
+      - 'docs/evidence/r1886/accepted_source_sha256.tsv'
+      - 'docs/evidence/r1886/score_sha256.tsv'
+      - 'docs/examples/*-r1886.pdf'
       - '.gitattributes'
       - '.github/distribution/**'
       - '!.github/distribution/RELEASE.md'
@@ -29,29 +31,29 @@ jobs:
       - name: Verify accepted runtime source
         run: |
           $ErrorActionPreference = 'Stop'
-          $acceptance = Get-Content docs/evidence/r1872/native_acceptance.txt
-          if ('take_revision=1872' -notin $acceptance -or
-              'accepted_zip_sha256=e3fe4e6cca9b0f16381721643e57ba4f5c2d86ea3724a1edf816e404ca6c8719' -notin $acceptance) {
-            throw 'Native r1872 acceptance does not match the prepared take'
+          $acceptance = Get-Content docs/evidence/r1886/native_acceptance.txt
+          if ('take_revision=1886' -notin $acceptance -or
+              'accepted_zip_sha256=271f22e2c04ca2b7d80c5b5cd021d56a1b0c9d5190d9e2ab0168cc2491c5d08f' -notin $acceptance) {
+            throw 'Native r1886 acceptance does not match the prepared take'
           }
-          if ((Get-FileHash docs/evidence/r1872/native_acceptance.txt -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'f0f2ca8fd5060c1b67d7a243841950ffec549b6570c517cbc8ffc017698bdd54') { throw 'Native acceptance record checksum mismatch' }
-          if ((Get-FileHash docs/evidence/r1872/accepted_source_sha256.tsv -Algorithm SHA256).Hash.ToLowerInvariant() -ne '3a9af263c4057bc122c05d8a0a4905d0970f6c107af4577d62faeafa223f538f') { throw 'Accepted source inventory checksum mismatch' }
-          if ((Get-FileHash docs/evidence/r1872/github_projection_sha256.tsv -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'ac5df03796739a5c89f609da60ce780eebdbcffb130be145fba3090611532fb7') { throw 'Public documentation projection checksum mismatch' }
+          if ((Get-FileHash docs/evidence/r1886/native_acceptance.txt -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'd63cfd39d4cd92ea4871b24800ebb3957cc68e036bf36948401b0063e66a41c6') { throw 'Native acceptance record checksum mismatch' }
+          if ((Get-FileHash docs/evidence/r1886/accepted_source_sha256.tsv -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'f4267f204c7f12c2ca7558012064ce85b086f746a9eeb0532630a31739d38caa') { throw 'Accepted source inventory checksum mismatch' }
+          if ((Get-FileHash docs/evidence/r1886/github_projection_sha256.tsv -Algorithm SHA256).Hash.ToLowerInvariant() -ne '6125ea312d81c12fe182c31155b0a68bda55485faffbdefb96187c663ad6998f') { throw 'Public documentation projection checksum mismatch' }
           $projection = @{}
-          Get-Content docs/evidence/r1872/github_projection_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
+          Get-Content docs/evidence/r1886/github_projection_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
             $parts = $_ -split "`t"
             $projection[$parts[0]] = $parts[1]
           }
           $sourceCount = 0
-          Get-Content docs/evidence/r1872/accepted_source_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
+          Get-Content docs/evidence/r1886/accepted_source_sha256.tsv | Select-Object -Skip 1 | ForEach-Object {
             $parts = $_ -split "`t"
             $nativePath = $parts[1]
             $expected = $parts[0]
             if ($projection.ContainsKey($nativePath)) { $expected = $projection[$nativePath] }
-            if ((Get-FileHash -LiteralPath $nativePath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw "Source differs from accepted r1872 or declared public documentation: $nativePath" }
+            if ((Get-FileHash -LiteralPath $nativePath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw "Source differs from accepted r1886 or declared public documentation: $nativePath" }
             $sourceCount++
           }
-          if ($sourceCount -ne 2166) { throw 'Accepted source inventory is incomplete' }
+          if ($sourceCount -ne 2168) { throw 'Accepted source inventory is incomplete' }
           if ($projection.Count -ne 6) { throw 'Unexpected public documentation projection' }
       - name: Build accepted engine
         run: |
@@ -98,13 +100,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ./.github/distribution/start-example.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path -Output dist/EtuSchlopf-Beispiel-r1872.zip
+          ./.github/distribution/start-example.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path -Output dist/EtuSchlopf-Beispiel-r1886.zip
+      - name: Package all 13 verified score PDFs
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $scoreRows = @(Import-Csv -Delimiter "`t" docs/evidence/r1886/score_sha256.tsv)
+          if ($scoreRows.Count -ne 13) { throw 'Expected 13 score PDFs' }
+          foreach ($row in $scoreRows) {
+            if ((Get-FileHash -LiteralPath $row.path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $row.sha256) { throw "Score PDF hash mismatch: $($row.path)" }
+          }
+          $scores = @($scoreRows | ForEach-Object { $_.path })
+          git archive --format=zip --output=dist/EtuSchlopf-Notenbilder-r1886.zip $env:GITHUB_SHA -- @scores docs/evidence/r1886/score_credits.md docs/evidence/r1886/score_sha256.tsv
+          if ($LASTEXITCODE -ne 0) { throw 'Score archive failed' }
       - name: Hash Windows download
         run: |
-          git archive --format=zip --output=dist/EtuSchlopf-r1872-source.zip $env:GITHUB_SHA
+          git archive --format=zip --output=dist/EtuSchlopf-r1886-source.zip $env:GITHUB_SHA
           if ($LASTEXITCODE -ne 0) { throw 'Source archive failed' }
-          @("revision=r1872", "commit=$env:GITHUB_SHA", "workflow=$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID", "accepted_take_sha256=e3fe4e6cca9b0f16381721643e57ba4f5c2d86ea3724a1edf816e404ca6c8719") | Set-Content -Encoding ascii dist/runtime-provenance.txt
-          $sums = foreach ($name in @('EtuSchlopf-Windows-x64.exe', 'EtuSchlopf-r1872-source.zip', 'EtuSchlopf-Beispiel-r1872.zip', 'runtime-provenance.txt')) {
+          @("revision=r1886", "commit=$env:GITHUB_SHA", "workflow=$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID", "accepted_take_sha256=271f22e2c04ca2b7d80c5b5cd021d56a1b0c9d5190d9e2ab0168cc2491c5d08f") | Set-Content -Encoding ascii dist/runtime-provenance.txt
+          $sums = foreach ($name in @('EtuSchlopf-Windows-x64.exe', 'EtuSchlopf-r1886-source.zip', 'EtuSchlopf-Beispiel-r1886.zip', 'EtuSchlopf-Notenbilder-r1886.zip', 'runtime-provenance.txt')) {
             $hash = (Get-FileHash -Algorithm SHA256 "dist/$name").Hash.ToLowerInvariant()
             "$hash  $name"
           }
@@ -129,14 +142,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag=v0.10.1839-r1872-windows-preview
+          tag=v0.10.1839-r1886-windows-preview
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $tag already exists."
             exit 0
           fi
           gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name EtuSchlopf-Windows-x64 --dir dist
           (cd dist && sha256sum --check SHA256SUMS.txt)
-          notes="Windows x64 test version from natively accepted revision r1872 (0.10.1839). Native Windows acceptance for Schubert D. 783 no. 15, p18: 3097 tests passed, four ignored, build, Strict Clippy and PDF rendering passed. Windows checks: isolated start without developer PATH, unchanged input hashes, distribution tests and a freshly rendered synthetic MIDI/WAV example. MuseScore is required for PDFs; the EXE is unsigned. Package checks and source commit: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          gh release create "$tag" dist/EtuSchlopf-Windows-x64.exe dist/EtuSchlopf-r1872-source.zip dist/EtuSchlopf-Beispiel-r1872.zip dist/runtime-provenance.txt dist/SHA256SUMS.txt \
+          notes="Windows x64 test version from natively accepted revision r1886 (0.10.1839). Native Windows acceptance: 3081 tests passed, four ignored, and all 13 corpus pieces produced PDFs. The score archive includes the PDFs and attribution. Windows checks: isolated start without developer PATH, unchanged input hashes, distribution tests and a freshly rendered synthetic MIDI/WAV example. MuseScore is required for PDFs; the EXE is unsigned. Package checks and source commit: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          gh release create "$tag" dist/EtuSchlopf-Windows-x64.exe dist/EtuSchlopf-r1886-source.zip dist/EtuSchlopf-Beispiel-r1886.zip dist/EtuSchlopf-Notenbilder-r1886.zip dist/runtime-provenance.txt dist/SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-            --title "EtuSchlopf r1872 Windows x64" --notes "$notes"
+            --title "EtuSchlopf r1886 Windows x64" --notes "$notes"

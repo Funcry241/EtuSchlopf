@@ -50,12 +50,6 @@ impl JointReadingOwnerInput {
             }
         }
         let tonal = derive_tonal_spelling_decision(after, &notes);
-        let spelling = tonal.selected_profile.filter(|_| tonal.scorewide_attempted || tonal.final_section.is_some())
-            .map(|profile| functional_respelling_plans_for_tonal_frame_from_measure(after,
-                profile.fifths, profile.tonic, profile.minor,
-                tonal.final_section.as_ref().map(|section| section.boundary_measure)))
-            .unwrap_or_default();
-        let spelling = spelling.iter().map(|plan| (plan.note_start, plan)).collect::<BTreeMap<_, _>>();
         let mut heads = Vec::with_capacity(mapped.len());
         for (head, range) in mapped {
             let (note, fragment) = by_range.remove(&(range.start, range.end))
@@ -64,17 +58,38 @@ impl JointReadingOwnerInput {
                 .and_then(|note| note.pitch.as_ref()).ok_or_else(|| anyhow!("Original Render head lost its source binding"))?;
             let pitch = note.pitch.as_ref().ok_or_else(|| anyhow!("Original Render head was restified"))?;
             anyhow::ensure!(old.midi == pitch.midi, "Original Render head changed sounding pitch");
-            let (step, octave) = spelling.get(&note.note_start).map_or((pitch.step.as_str(), pitch.octave), |plan| (plan.step, plan.octave));
-            let offset = match step { "C"=>0,"D"=>1,"E"=>2,"F"=>3,"G"=>4,"A"=>5,"B"=>6,_=>anyhow::bail!("Unknown Render spelling") };
             let mut next = head.clone();
             next.source_span = range; next.measure = *ordinals.get(&note.note_start).ok_or_else(|| anyhow!("Render head has no structural measure"))?;
             next.onset = fragment.onset; next.duration = fragment.duration; next.staff = fragment.staff.clone();
             next.visible = fragment.visible; next.continuation = fragment.tie_stop;
-            next.diatonic = octave.checked_mul(7).and_then(|value| value.checked_add(offset)).ok_or_else(|| anyhow!("Render spelling overflow"))?;
+            next.diatonic = render_diatonic_position(&pitch.step, pitch.octave)?;
             heads.push(next);
         }
         anyhow::ensure!(by_range.is_empty(), "A Render pitched emission has no carried source identity");
         Ok(Self { source: std::sync::Arc::from(after), heads, groups: Vec::new(), tonal, unknown_groups: BTreeMap::new() })
+    }
+
+    /// C3 projects the same admissible key-and-spelling edits as the Render owner.
+    /// Pitch planning uses the tonal target and the current original note ranges.
+    fn project_render_tonal_spelling(&mut self) -> anyhow::Result<()> {
+        use crate::arrangement::representation_transport::RepresentationStep;
+
+        let step = RepresentationStep::recorded(&self.source, &self.source, Vec::new());
+        let plans = render_tonal_key_respelling_plans(&step, &self.tonal, Some(self));
+        let by_range = plans.iter().map(|plan| ((plan.note_start, plan.note_end), plan))
+            .collect::<BTreeMap<_, _>>();
+        let pitches = parse_atomic_notes(&self.source).into_iter().filter_map(|note|
+            note.pitch.map(|pitch| ((note.note_start, note.note_end), pitch)))
+            .collect::<BTreeMap<_, _>>();
+        for head in &mut self.heads {
+            let range = (head.source_span.start, head.source_span.end);
+            let original = pitches.get(&range)
+                .ok_or_else(|| anyhow!("Render tonal projection lost its original pitched container"))?;
+            let (step, octave) = by_range.get(&range)
+                .map_or((original.step.as_str(), original.octave), |plan| (plan.step, plan.octave));
+            head.diatonic = render_diatonic_position(step, octave)?;
+        }
+        Ok(())
     }
 
     pub(crate) fn continue_render_final_chord(&self,
@@ -219,6 +234,15 @@ impl JointReadingOwnerInput {
         let mut ranges = ranges.into_iter();
         self.continue_bound_ranges(after, |_| Ok(Some(ranges.next().ok_or_else(|| anyhow!("Incomplete original beam emission"))?)))
     }
+}
+
+fn render_diatonic_position(step: &str, octave: i32) -> anyhow::Result<i32> {
+    let offset = match step {
+        "C" => 0, "D" => 1, "E" => 2, "F" => 3, "G" => 4, "A" => 5, "B" => 6,
+        _ => anyhow::bail!("Unknown Render spelling"),
+    };
+    octave.checked_mul(7).and_then(|value| value.checked_add(offset))
+        .ok_or_else(|| anyhow!("Render spelling overflow"))
 }
 
 #[derive(Debug, Clone)]

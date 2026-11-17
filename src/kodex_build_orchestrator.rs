@@ -282,8 +282,6 @@ fn run() -> Result<(), String> {
                     &context.kodex_capability_retirements_text,
                 launcher_text: &context.launcher_text,
                 launcher_assistant_export_text: &context.launcher_assistant_export_text,
-                launcher_neuro_evidence_export_text:
-                    &context.launcher_neuro_evidence_export_text,
             },
         )?;
 

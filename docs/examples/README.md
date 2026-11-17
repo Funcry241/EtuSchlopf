@@ -4,7 +4,7 @@ Hier stehen die Quellen und Rechte der drei Musikreferenzen von EtuSchlopf. Die 
 
 ## Notenbilder
 
-Die folgenden PDFs stammen aus dem Windows-Korpuslauf r1886. Die Namensnennungen zu Bach, Chopin und Schubert stehen unter [Quellen und Rechte](#quellen-und-rechte).
+Die folgenden PDFs stammen aus dem [Windows-Korpuslauf r1886](../evidence/r1886/README.md). Die Namensnennungen zu Bach, Chopin und Schubert stehen unter [Quellen und Rechte](#quellen-und-rechte).
 
 | Stück | Seiten | PDF |
 | --- | ---: | --- |

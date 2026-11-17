@@ -206,7 +206,8 @@ impl JointReadingCandidate for SolverCandidate {
         crate::audit_only::c3_diagnostics::phase("master_input");
         let master_input=JointReadingOwnerInput::from_candidate(best)?;
         crate::audit_only::c3_diagnostics::phase("render_input");
-        let render_input=custody.input(render_source)?;
+        let mut render_input=custody.input(render_source)?;
+        render_input.project_render_tonal_spelling()?;
         crate::audit_only::c3_diagnostics::phase("master_capabilities");
         let master_capabilities=observe_joint_capabilities(master_input.bound_source())?;
         crate::audit_only::c3_diagnostics::phase("render_capabilities");
@@ -355,9 +356,21 @@ fn joint_verify_prepared_course(input:&JointReadingOwnerInput,proposal:&c3_adapt
     Ok(())
 }
 
-fn validate_joint_tonal_closure(input:&JointReadingOwnerInput,source:&str)->anyhow::Result<()> {
+fn validate_joint_tonal_closure(input:&JointReadingOwnerInput,source:&str,render:bool)->anyhow::Result<()> {
     let tonal=&input.tonal;
     if let Some(profile)=tonal.selected_profile.filter(|_|tonal.scorewide_attempted||tonal.final_section.is_some()){
+        if render {
+            use crate::arrangement::representation_transport::RepresentationStep;
+
+            let measure = tonal.selected_measure.ok_or_else(|| anyhow!("Missing bound C3 tonal entry"))?;
+            anyhow::ensure!(key_signature_measure_fifths(source, measure)==Some(profile.fifths),
+                "Actual Render key does not close the C3 prospective tonal entry");
+            let material = joint_render_custody_context().and_then(|context| context.material.ok());
+            let step = RepresentationStep::recorded(source, source, Vec::new());
+            anyhow::ensure!(render_tonal_key_respelling_plans(&step,tonal,material.as_deref()).is_empty(),
+                "Actual Render contains unfinished admissible C3 spelling edits");
+            return Ok(());
+        }
         let notes=parse_atomic_notes(source);
         let by_range=notes.iter().map(|note|((note.note_start,note.note_end),note)).collect::<BTreeMap<_,_>>();
         for plan in functional_respelling_plans_for_tonal_frame_from_measure(source,profile.fifths,profile.tonic,profile.minor,
@@ -377,7 +390,7 @@ fn validate_joint_reading_final_artifacts(master:&Path,render:&Path)->anyhow::Re
     for (label,path,prepared,input,proposal) in [("Master",master,&accepted.master,&accepted.master_inputs,&accepted.master_proposal),
         ("Render",render,&accepted.render,&accepted.render_inputs,&accepted.render_proposal)]{
         let actual=std::fs::read_to_string(path)?;
-        validate_joint_tonal_closure(input,&actual)?;
+        validate_joint_tonal_closure(input,&actual,label=="Render")?;
         let expected=c3_adapter::read_register_courses(prepared).map_err(|error|anyhow!("{error:?}"))?;
         let observed=c3_adapter::read_register_courses(&actual).map_err(|error|anyhow!("{error:?}"))?;
         for (staff,verdict) in &proposal.staves {

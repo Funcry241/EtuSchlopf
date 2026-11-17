@@ -31,7 +31,6 @@ pub(super) struct PinnedPolicyKodexInputs<'a> {
     pub(super) kodex_capability_retirements_text: &'a str,
     pub(super) launcher_text: &'a str,
     pub(super) launcher_assistant_export_text: &'a str,
-    pub(super) launcher_neuro_evidence_export_text: &'a str,
 }
 
 pub(super) struct PinnedPolicyFingerprints {
@@ -52,7 +51,6 @@ pub(super) fn validate_pinned_policy_kodex(
         kodex_capability_retirements_text,
         launcher_text,
         launcher_assistant_export_text,
-        launcher_neuro_evidence_export_text,
     } = inputs;
     // Whole-byte identity for these Kodex sources is already owned by
     // identity_gate_trust_anchor. This local gate keeps only the fingerprints
@@ -67,44 +65,9 @@ pub(super) fn validate_pinned_policy_kodex(
         "urityNegativeCheck|src/bin/etuschlopf_launcher/assistant_export.rs|publish_assistant_export_archive#1|fnv64:3edf8bcc38f35327|reason:assistant_export_transfer_archive_surface_retired",
     ]
     .concat();
-    if !launcher_neuro_evidence_export_text.contains(
-        "const ARTIFACT_KIND: &str = \"etuschlopf_neuro_evidence\";",
-    )
-        || !launcher_neuro_evidence_export_text.contains("const SCHEMA_VERSION: u32 = 2;")
-        || !launcher_neuro_evidence_export_text.contains(
-            "const POPULATION_SCOPE: &str = \"qualified_key_change_candidates_v1\";",
-        )
-        || !launcher_neuro_evidence_export_text.contains(
-            "const CORPUS_COMMIT_ARTIFACT_KIND: &str = \"etuschlopf_neuro_corpus_commit\";",
-        )
-        || !launcher_neuro_evidence_export_text.contains(
-            "const DECISION_CLASS: &str = \"tonal_segmentation_boundary_audit_v1\";",
-        )
-        || !launcher_neuro_evidence_export_text.contains(
-            "const DECISION_CONTRACT_FINGERPRINT: &str = \"fnv64:4f2c765d00c527e6\";",
-        )
-        || !launcher_neuro_evidence_export_text.contains(
-            "const OWNER: &str = \"TonalSegmentationEvidenceAudit\";",
-        )
-        || !launcher_neuro_evidence_export_text.contains(
-            "const PROMISING_CANDIDATE: &str = \"promising_candidate_more_corpus_calibration\";",
-        )
-        || !launcher_neuro_evidence_export_text.contains(
-            "const HELD_CANDIDATE: &str = \"held_as_tonicization_or_chromatic_colour\";",
-        )
-        || !launcher_neuro_evidence_export_text.contains(
-            "const FULL_EVIDENCE_CANDIDATE: &str = \"full_evidence_candidate_write_still_closed\";",
-        )
-        || !launcher_neuro_evidence_export_text.contains("TonalBoundaryLedger:")
-        || !launcher_neuro_evidence_export_text.contains("source_audit_verdict")
-        || !launcher_neuro_evidence_export_text.contains("\"label\":null,\"proof\":null")
-        || !launcher_neuro_evidence_export_text.contains("DecisionEvidence-Closure verletzt")
-        || !launcher_neuro_evidence_export_text.contains("archive.len() != 2")
-        || !launcher_neuro_evidence_export_text.contains(
-            "names != [DECISIONS_PAYLOAD.to_string(), MANIFEST.to_string()]",
-        )
-        || launcher_neuro_evidence_export_text.contains("assistant_context.json")
-        || launcher_neuro_evidence_export_text.contains("assistant_export_latest.zip")
+    if launcher_text.contains("mod neuro_evidence_export;")
+        || launcher_text.contains("neuro_corpus_publish")
+        || launcher_text.contains("publish_neuro_evidence_for_successful_")
         || launcher_assistant_export_text.contains("neuro_evidence_export")
         || launcher_assistant_export_text.contains("EtuSchlopfTransfer")
         || launcher_assistant_export_text.contains("ETUSCHLOPF_ASSISTANT_EXPORT_DIR")
@@ -120,13 +83,10 @@ pub(super) fn validate_pinned_policy_kodex(
         || launcher_assistant_export_text.contains("publish_assistant_export_archive")
         || !kodex_capability_retirements_text
             .contains(retired_assistant_export_archive_retirement.as_str())
-        || !launcher_text.contains("mod neuro_evidence_export;")
-        || !launcher_text.contains("publish_neuro_evidence_for_successful_normal_run")
-        || !launcher_text.contains("publish_neuro_evidence_for_successful_corpus_run")
         || launcher_text.contains("--neuro-corpus")
     {
         return Err(
-            "NEURO EVIDENCE TRUST-DOMAIN BOUNDARY REGRESSION: schema-v2 population scope, decision contract, exact two-file project closure, corpus-commit publication and assistant-domain exclusion must remain explicit; assistant exports must not publish into EtuSchlopfTransfer; the retired archive surface must remain absent from Assistant Export source and its KodexCapabilityRetirement evidence must remain pinned."
+            "ASSISTANT EXPORT TRUST-DOMAIN BOUNDARY REGRESSION: retired publication paths must stay absent and the archive retirement evidence must remain pinned."
                 .to_string(),
         );
     }

@@ -152,12 +152,11 @@ impl<'a, T: Clone + Eq> RendererPartitionRejections<'a, T> {
     }
 }
 
-fn compact_layout_has_horizontal_only_nonrealization(
+fn compact_layout_has_additive_nonrealization(
     observation: &crate::audit_only::renderer_system_break_readback::RendererSystemBreakReadbackAudit,
 ) -> bool {
-    !observation.inserted_system_breaks.is_empty()
+    (!observation.inserted_system_breaks.is_empty() || !observation.inserted_page_breaks.is_empty())
         && observation.collapsed_system_breaks.is_empty()
-        && observation.inserted_page_breaks.is_empty()
         && observation.collapsed_page_breaks.is_empty()
 }
 

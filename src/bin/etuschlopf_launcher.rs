@@ -27,8 +27,6 @@ mod assistant_export;
 mod console_live_status;
 #[path = "etuschlopf_launcher/console_cargo_activity.rs"]
 mod console_cargo_activity;
-#[path = "etuschlopf_launcher/neuro_evidence_export.rs"]
-mod neuro_evidence_export;
 #[path = "etuschlopf_launcher/inventory_export.rs"]
 mod inventory_export;
 
@@ -1013,7 +1011,6 @@ struct ExecutionRequest {
     launcher_tests: LauncherTestPlan,
     export_policy: AssistantExportPolicy,
     watch: WatchPlan,
-    neuro_corpus_publish: bool,
     inventory: InventoryPlan,
 }
 
@@ -1893,7 +1890,6 @@ fn parse_args(raw_args: Vec<OsString>) -> ArgsState {
     let mut visual_preflight_gate = false;
     let mut export_policy = AssistantExportPolicy::Minimal;
     let mut watch = WatchPlan::Disabled;
-    let mut neuro_corpus_publish = false;
     let mut inventory = InventoryPlan::Disabled;
     let mut index = 0usize;
 
@@ -1961,7 +1957,6 @@ fn parse_args(raw_args: Vec<OsString>) -> ArgsState {
             continue;
         }
         if is_all_arg(&arg_text) {
-            neuro_corpus_publish = true;
             input_arg = Some("--all".to_string());
             program_args.push(OsString::from("--all"));
             index = index.saturating_add(1);
@@ -2017,7 +2012,6 @@ fn parse_args(raw_args: Vec<OsString>) -> ArgsState {
             },
             export_policy,
             watch,
-            neuro_corpus_publish,
             inventory,
         }),
     }
@@ -2629,62 +2623,55 @@ fn execute_corpus_target(
     state.run_exit = program_result.exit_code.to_string();
     state.program_ms = program_result.elapsed_ms.to_string();
     let finalization_timing = LauncherPhaseTimer::new("PostProgramFinalizationBeforeExport");
-    let root_cleanup = cleanup_project_root_residue(project_root, state.input_arg.as_deref(), request.inventory.requested());
-    append_root_cleanup_to_console_log("NachRun", &root_cleanup)?;
-    bind_corpus_run_renderer_outcome(project_root, &launcher.version, state)?;
-    append_run_diagnostic(state, "all_run")?;
-    refresh_corpus_run_manifest_report_binding(
-        project_root,
-        &launcher.version,
-        program_result.exit_code == 0,
-    )?;
-    if request.neuro_corpus_publish {
-        if program_result.exit_code != 0 {
-            return Err(anyhow!(
-                "Neuro-Evidence-Corpus: Korpuslauf fehlgeschlagen; keine Kohorte publiziert"
-            ));
-        }
-        let commit_path =
-            neuro_evidence_export::publish_neuro_evidence_for_successful_corpus_run(
-                project_root,
-                &launcher.version,
-            )
-            .map_err(|error| anyhow!("Neuro-Evidence-Corpus: CORPUS RUN FAILED: {error}"))?;
-        launcher.role_detail_line(
-            ConsolePrefix::None,
-            PresentationRole::Export,
-            "Neuro-Corpus",
-            &commit_path.display().to_string(),
-            Emphasis::Muted,
-        );
-    }
-    if program_result.exit_code == 0 && launcher.version == CORPUS_ACCEPTANCE_CONTRACT_VERSION {
-        write_version_bound_corpus_acceptance_stamp(project_root, &launcher.version)?;
-    }
-    if request.inventory.requested() {
-        let inventory = generate_corpus_inventory(
+    let finalization = (|| -> AppResult<()> {
+        let root_cleanup = cleanup_project_root_residue(project_root, state.input_arg.as_deref(), request.inventory.requested());
+        append_root_cleanup_to_console_log("NachRun", &root_cleanup)?;
+        bind_corpus_run_renderer_outcome(project_root, &launcher.version, state)?;
+        append_run_diagnostic(state, "all_run")?;
+        refresh_corpus_run_manifest_report_binding(
             project_root,
             &launcher.version,
-            launcher.observation.context().session_id().as_str(),
-            &state.target_exe,
-            program_result.exit_code,
+            program_result.exit_code == 0,
         )?;
-        launcher.role_detail_line(
-            ConsolePrefix::None,
-            PresentationRole::Export,
-            "Inventory",
-            &inventory_summary_text(&inventory),
-            Emphasis::Muted,
-        );
+        if program_result.exit_code == 0 && launcher.version == CORPUS_ACCEPTANCE_CONTRACT_VERSION {
+            write_version_bound_corpus_acceptance_stamp(project_root, &launcher.version)?;
+        }
+        if request.inventory.requested() {
+            let inventory = generate_corpus_inventory(
+                project_root,
+                &launcher.version,
+                launcher.observation.context().session_id().as_str(),
+                &state.target_exe,
+                program_result.exit_code,
+            )?;
+            launcher.role_detail_line(
+                ConsolePrefix::None,
+                PresentationRole::Export,
+                "Inventory",
+                &inventory_summary_text(&inventory),
+                Emphasis::Muted,
+            );
+        }
+        Ok(())
+    })();
+    let mut final_exit = program_result.exit_code;
+    if let Err(error) = &finalization {
+        if final_exit == 0 {
+            final_exit = 1;
+        }
+        let message = format!("Korpusabschluss fehlgeschlagen: {error:#}");
+        launcher.diagnostic_context_line(&message);
+        if let Ok(mut log) = OpenOptions::new().append(true).open(CONSOLE_LOG) {
+            let _ = writeln!(log, "{message}");
+        }
     }
-    let outcome = print_summary(launcher, state, "all_run", program_result.exit_code)?;
     drop(finalization_timing);
     let export_path = create_assistant_export(AssistantExportRequest::Corpus {
         project_root,
         state,
         export_version: &launcher.version,
         evidence_version: &launcher.version,
-        final_exit: program_result.exit_code,
+        final_exit,
     })?;
     launcher.role_detail_line(
         ConsolePrefix::None,
@@ -2693,15 +2680,16 @@ fn execute_corpus_target(
         &export_path.display().to_string(),
         Emphasis::Muted,
     );
-    if program_result.exit_code == 0 {
+    let outcome = print_summary(launcher, state, "all_run", final_exit)?;
+    if final_exit == 0 {
         launcher.complete_observation_with_outcome(outcome);
-    } else {
-        launcher.fail_observation_with_outcome(outcome);
-    }
-    if program_result.exit_code == 0 {
         Ok(())
     } else {
-        launcher_exit(program_result.exit_code)
+        launcher.fail_observation_with_outcome(outcome);
+        if program_result.exit_code == 0 && let Err(error) = finalization {
+            return Err(error);
+        }
+        launcher_exit(final_exit)
     }
 }
 
@@ -2804,45 +2792,6 @@ fn execute_project_target(
                 "[EtuSchlopf assistant-export] Einzelprojekt-Export fehlgeschlagen: {error}"
             ),
         ),
-    }
-    if let Some(result_path) = state.result_file.as_deref() {
-        match neuro_evidence_export::publish_neuro_evidence_for_successful_normal_run(
-            project_root,
-            result_path,
-            project,
-            &launcher.version,
-            launcher.observation.context().session_id().as_str(),
-            program_result.exit_code,
-        ) {
-            Ok(Some(path)) => launcher.role_detail_line(
-                ConsolePrefix::None,
-                PresentationRole::Export,
-                "Neuro-Evidence",
-                &path.display().to_string(),
-                Emphasis::Muted,
-            ),
-            Ok(None) => {}
-            Err(error) => launcher.line(
-                PresentationRole::Export,
-                Some(LocalStatus::Blocked),
-                Attention::Warning,
-                Emphasis::Primary,
-                &format!(
-                    "[EtuSchlopf neuro-evidence] Export blockiert; EtuSchlopf bleibt fail-independent: {error}"
-                ),
-            ),
-        }
-    } else {
-        launcher.line(
-            PresentationRole::Export,
-            Some(LocalStatus::Blocked),
-            Attention::Warning,
-            Emphasis::Primary,
-            concat!(
-                "[EtuSchlopf neuro-evidence] Export blockiert: Ergebnisberichtspfad fehlt; ",
-                "EtuSchlopf bleibt fail-independent."
-            ),
-        );
     }
     let outcome = print_summary(launcher, state, "normal_run", program_result.exit_code)?;
     if program_result.exit_code == 0 {
@@ -4746,7 +4695,6 @@ fn promote_post_take_args_to_strict_all(args: &mut ArgsState) {
         launcher_tests: LauncherTestPlan::VisualPreflight,
         export_policy: AssistantExportPolicy::Minimal,
         watch: WatchPlan::Disabled,
-        neuro_corpus_publish: false,
         inventory,
     });
 }
@@ -5030,7 +4978,7 @@ mod fresh_run_gate_tests {
             .find("create_assistant_export(AssistantExportRequest::Corpus")
             .expect("corpus export request");
         let requested_exit = function
-            .rfind("launcher_exit(program_result.exit_code)")
+            .rfind("launcher_exit(final_exit)")
             .expect("all-run requested exit");
         assert!(export_call < requested_exit);
     }

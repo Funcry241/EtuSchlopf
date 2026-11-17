@@ -187,7 +187,7 @@ fn bound_key_diatonic_plans(
     notes: &[AtomicNote],
     material: Option<&JointReadingOwnerInput>,
 ) -> Option<(Vec<FunctionalRespellingPlan>, i32)> {
-    use std::collections::{BTreeMap, BTreeSet};
+    use std::collections::BTreeMap;
     let document = roxmltree::Document::parse(xml).ok()?;
     let parts = document.root_element().children()
         .filter(|node| node.has_tag_name("part")).collect::<Vec<_>>();
@@ -226,18 +226,32 @@ fn bound_key_diatonic_plans(
         note.range().end == plan.note_end && !note.descendants().any(|node|
             node.has_tag_name("accidental-mark") || (node.has_tag_name("accidental")
                 && node.attributes().len() != 0))));
+    let material = material.filter(|material| material.binds(xml));
+    let original_ranges = material.map(|material|
+        material.heads().iter().map(|head| head.source_span.clone()).collect::<Vec<_>>());
+    Some((coherent_render_respelling_plans(
+        notes, &nodes, plans, material.zip(original_ranges.as_deref()),
+    ), fifths))
+}
+
+fn coherent_render_respelling_plans(
+    notes: &[AtomicNote],
+    nodes: &BTreeMap<usize, roxmltree::Node<'_, '_>>,
+    mut plans: BTreeMap<usize, FunctionalRespellingPlan>,
+    original: Option<(&JointReadingOwnerInput, &[std::ops::Range<usize>])>,
+) -> Vec<FunctionalRespellingPlan> {
     let tied = |note: &AtomicNote| note.tie_start || note.tie_stop
         || nodes.get(&note.note_start).is_some_and(|node| node.descendants().any(|child| child.has_tag_name("tied")));
 
     let by_range = notes.iter().map(|note| ((note.note_start, note.note_end), note))
         .collect::<BTreeMap<_, _>>();
     let mut chain_by_start = BTreeMap::<usize, Vec<usize>>::new();
-    if let Some(material) = material.filter(|material| material.binds(xml)
-        && material.heads().iter().all(|head|
-            by_range.contains_key(&(head.source_span.start, head.source_span.end)))) {
+    if let Some((material, ranges)) = original.filter(|(material, ranges)|
+        material.heads().len() == ranges.len()
+        && ranges.iter().all(|range| by_range.contains_key(&(range.start, range.end)))) {
         let mut chains = BTreeMap::<(MaterialSourceEventId, SoundingAttackId), Vec<&AtomicNote>>::new();
-        for head in material.heads() {
-            if let Some(note) = by_range.get(&(head.source_span.start, head.source_span.end)) {
+        for (head, range) in material.heads().iter().zip(ranges) {
+            if let Some(note) = by_range.get(&(range.start, range.end)) {
                 chains.entry((head.source_event_id, head.attack_id)).or_default().push(*note);
             }
         }
@@ -257,6 +271,8 @@ fn bound_key_diatonic_plans(
                 let starts = chain.iter().filter(|note| plans.contains_key(&note.note_start))
                     .map(|note| note.note_start).collect::<Vec<_>>();
                 for start in &starts { chain_by_start.insert(*start, starts.clone()); }
+            } else {
+                for note in chain { plans.remove(&note.note_start); }
             }
         }
     }
@@ -291,7 +307,45 @@ fn bound_key_diatonic_plans(
         }
         if !changed { break; }
     }
-    Some((plans.into_values().rev().collect(), fifths))
+    plans.into_values().rev().collect()
+}
+
+fn key_change_render_respelling_plans(
+    key_step: &crate::arrangement::representation_transport::RepresentationStep,
+    material: Option<&JointReadingOwnerInput>,
+    plans: Vec<FunctionalRespellingPlan>,
+) -> Vec<FunctionalRespellingPlan> {
+    let (before, keyed) = key_step.original_documents();
+    let Ok(document) = roxmltree::Document::parse(keyed) else { return Vec::new() };
+    let nodes = document.descendants().filter(|note| note.has_tag_name("note"))
+        .map(|note| (note.range().start, note)).collect();
+    let material = material.filter(|material| material.binds(before));
+    let ranges = material.and_then(|material| key_step.carry_original_ranges(
+        material.heads().iter().map(|head| head.source_span.clone()),
+    ).ok());
+    coherent_render_respelling_plans(
+        &parse_atomic_notes(keyed), &nodes,
+        plans.into_iter().map(|plan| (plan.note_start, plan)).collect(),
+        material.zip(ranges.as_deref()),
+    )
+}
+
+fn render_tonal_key_respelling_plans(
+    key_step: &crate::arrangement::representation_transport::RepresentationStep,
+    tonal: &TonalSpellingDecision,
+    material: Option<&JointReadingOwnerInput>,
+) -> Vec<FunctionalRespellingPlan> {
+    let Some(profile) = tonal.selected_profile
+        .filter(|_| tonal.scorewide_attempted || tonal.final_section.is_some())
+    else { return Vec::new() };
+    let mut plans = functional_respelling_plans_for_tonal_frame_from_measure(
+        key_step.original_documents().1, profile.fifths, profile.tonic, profile.minor,
+        tonal.final_section.as_ref().map(|section| section.boundary_measure),
+    );
+    // A new plain signature has no explicit minor mode. Its preview cannot
+    // borrow the chromatic-figure permission of an existing modal signature.
+    plans.retain(|plan| plan.kind != FunctionalRespellingKind::ChromaticPassing);
+    key_change_render_respelling_plans(key_step, material, plans)
 }
 
 // The initial write scope uses one measure's unambiguous cursor geometry.
@@ -471,50 +525,45 @@ fn apply_key_signature_enharmonic_spelling_render_write(
         .iter()
         .filter(|event| !event.is_hidden && event.is_rest)
         .count();
+    let tonal = derive_tonal_spelling_decision(xml, &before_atomic);
     let TonalSpellingDecision { decision, scorewide_scope_bound, scorewide_attempted, final_section, selected_profile, target_fifths, selected_measure } =
-        derive_tonal_spelling_decision(xml, &before_atomic);
+        &tonal;
     let selected_profile_label = selected_profile
         .map_or_else(|| "none".to_string(), |profile| profile.name.to_string());
-    let key_rewrite = scorewide_attempted || final_section.is_some();
+    let key_rewrite = *scorewide_attempted || final_section.is_some();
     let material = joint_render_custody_context().and_then(|context| context.material.ok());
     let bound_spelling = if key_rewrite { None } else {
         bound_key_diatonic_plans(xml, &before_atomic, material.as_deref())
     };
     let spelling_attempted = bound_spelling.as_ref().is_some_and(|(plans, _)| !plans.is_empty());
-    let structural_scope_bound = scorewide_scope_bound || final_section.is_some() || spelling_attempted;
+    let structural_scope_bound = *scorewide_scope_bound || final_section.is_some() || spelling_attempted;
     let attempted = key_rewrite || spelling_attempted;
 
     let mut key_edits = Vec::new();
-    let key_candidate_xml = selected_measure
-        .zip(target_fifths)
-        .filter(|_| key_rewrite)
+    let keyed = selected_measure.zip(*target_fifths).filter(|_| key_rewrite)
         .inspect(|&(measure, fifths)| {
             key_edits = key_signature_for_measure_edits(xml, measure, fifths);
         })
-        .map_or_else(|| xml.to_string(), |(measure, fifths)| rewrite_key_signature_for_measure_plain(xml, measure, fifths));
-    let keyed_for_journal = key_candidate_xml.clone();
+        .map_or_else(|| xml.to_owned(), |(measure, fifths)|
+            rewrite_key_signature_for_measure_plain(xml, measure, fifths));
+    let key_step = RepresentationStep::recorded(xml, &keyed,
+        key_edits.into_iter().rev().map(|(start, end, text)| (start..end, text)).collect());
+    let key_candidate_xml = key_step.original_documents().1;
     let mut note_edits = Vec::new();
     let mut record_note = |range, text: &str| note_edits.push((range, text.to_owned()));
     let (candidate_xml, respelling_stats) = if let Some(profile) = selected_profile.filter(|_| key_rewrite) {
-        if let Some(section) = final_section.as_ref() {
-            functional_enharmonic_candidate_with_edits(
-                &key_candidate_xml,
-                profile.fifths,
-                profile.tonic,
-                profile.minor,
-                Some(section.boundary_measure),
-                None,
-                &mut record_note,
-            )
-        } else {
-            scorewide_functional_enharmonic_candidate(&key_candidate_xml, profile, &mut record_note)
-        }
+        let start_measure = final_section.as_ref().map(|section| section.boundary_measure);
+        let plans = render_tonal_key_respelling_plans(&key_step, &tonal, material.as_deref());
+        functional_enharmonic_candidate_with_edits(
+            key_candidate_xml, profile.fifths, profile.tonic, profile.minor,
+            start_measure, Some(plans), &mut record_note,
+        )
     } else if let Some((plans, fifths)) = bound_spelling.filter(|_| spelling_attempted) {
         functional_enharmonic_candidate_with_edits(
-            &key_candidate_xml, fifths, 0, false, None, Some(plans), &mut record_note,
+            key_candidate_xml, fifths, 0, false, None, Some(plans), &mut record_note,
         )
     } else {
-        (key_candidate_xml, FunctionalRespellingStats::default())
+        (key_candidate_xml.to_owned(), FunctionalRespellingStats::default())
     };
 
     let (after_events, backup_forward_after_ok) = collect_render_xml_note_events(&candidate_xml);
@@ -534,7 +583,7 @@ fn apply_key_signature_enharmonic_spelling_render_write(
     let parse_after_ok = parse_musicxml(&candidate_xml).is_ok();
     let sounding_stable = before_sounding == after_sounding;
     let key_written = selected_measure
-        .zip(target_fifths)
+        .zip(*target_fifths)
         .is_some_and(|(measure, fifths)| key_signature_measure_fifths(&candidate_xml, measure) == Some(fifths));
     let invariant_green = attempted
         && parse_before_ok
@@ -577,7 +626,7 @@ fn apply_key_signature_enharmonic_spelling_render_write(
             .global_profile
             .map_or_else(|| "unbound".to_string(), |profile| profile.name.to_string()),
         source_fifths: decision.source_fifths,
-        target_fifths,
+        target_fifths: *target_fifths,
         final_bass_pc: decision.final_bass_pc,
         accidental_cost_open: decision.open_cost,
         accidental_cost_target: decision.target_cost,
@@ -636,13 +685,11 @@ fn apply_key_signature_enharmonic_spelling_render_write(
     };
 
     if written {
-        key_edits.reverse();
         note_edits.reverse();
-        let steps = vec![
-            RepresentationStep::recorded(xml, &keyed_for_journal,
-                key_edits.into_iter().map(|(start, end, text)| (start..end, text)).collect()),
-            RepresentationStep::recorded(&keyed_for_journal, &candidate_xml, note_edits),
-        ];
+        let note_step = RepresentationStep::recorded(
+            key_step.original_documents().1, &candidate_xml, note_edits,
+        );
+        let steps = vec![key_step, note_step];
         ((candidate_xml, audit), steps)
     } else {
         ((xml.to_string(), audit), Vec::new())
@@ -803,16 +850,6 @@ enum FunctionalRespellingKind {
     Diatonic,
     MinorLeading,
     ChromaticPassing,
-}
-
-fn scorewide_functional_enharmonic_candidate(
-    xml: &str,
-    profile: TonalEvidenceProfile,
-    record_note: &mut impl FnMut(std::ops::Range<usize>, &str),
-) -> (String, FunctionalRespellingStats) {
-    functional_enharmonic_candidate_with_edits(
-        xml, profile.fifths, profile.tonic, profile.minor, None, None, record_note,
-    )
 }
 
 #[cfg(test)]

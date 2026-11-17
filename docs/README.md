@@ -3,7 +3,7 @@
 EtuSchlopf ist ein experimentelles, privat gepflegtes Projekt. Beginne je nach
 Aufgabe mit einem der folgenden Einstiege:
 
-Der veröffentlichte Quellstand auf `main` ist **r1872**. Die [Windows-Testversion](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1872-windows-preview) und die [native Windows-Abnahme](evidence/r1872/README.md) gehören zu diesem Stand.
+Der veröffentlichte Quellstand auf `main` ist **r1886**. Die [Windows-Testversion](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1886-windows-preview) und die [native Windows-Abnahme](evidence/r1886/README.md) gehören zu diesem Stand.
 
 | Aufgabe | Einstieg |
 | --- | --- |
@@ -16,7 +16,7 @@ Der veröffentlichte Quellstand auf `main` ist **r1872**. Die [Windows-Testversi
 | Umgang miteinander und Moderation | [Verhaltenskodex](CODE_OF_CONDUCT.md) |
 | Bedienhürden und bekannte Grenzen | [Barrierefreiheit](ACCESSIBILITY.md) |
 | Welche Mathematik wo genutzt wird und was das Notenbild ändert | [Mathematik hinter EtuSchlopf](MATHEMATIK.md) |
-| Entwicklungsstand und native Abnahme prüfen | [Bach r1749](evidence/r1749/README.md) · [Chopin r1792](evidence/r1792/README.md) · [Schubert r1872](evidence/r1872/README.md) |
+| Entwicklungsstand und native Abnahme prüfen | [Bach r1749](evidence/r1749/README.md) · [Chopin r1792](evidence/r1792/README.md) · [Schubert r1872](evidence/r1872/README.md) · [Korpus r1886](evidence/r1886/README.md) |
 | Windows-Testversion und frühere Laufzeitmessung prüfen | [Prüfbelege r1577](evidence/r1577/README.md) |
 | Architektur und zuständige Verträge finden | [Architektureinstieg](assistant_memory/000_start_here.md) |
 | Separate PDF-/Export-Diagnosen verwenden | [Diagnosewerkzeuge](../tools/assistant_diagnostics/README.md) |

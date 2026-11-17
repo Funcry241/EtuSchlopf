@@ -30,8 +30,11 @@ Die Zuordnung läuft im MIDI-Seed nach der allgemeinen Handverteilung und vor
 der Bildung der rhythmischen Stimmen. Ein gemeinsam freigegebener Akkord
 braucht eine vollständige Wiederholung. Als Zeugen gelten die bereits
 zugeordneten Gruppen, deren Ende unmittelbar an den aktuellen Einsatz
-anschließt oder deren Einsatz unmittelbar auf dessen Ende folgt. Für einen
-Widerspruch zwischen diesen Zeugen bleibt die bestehende Zuordnung maßgeblich.
+anschließt oder deren Einsatz unmittelbar auf dessen Ende folgt. Die
+Tonhöhen müssen die vollständige Gruppe der bezeugenden Hand bilden.
+Separate Anschläge der anderen Hand dürfen dieselbe Einsatz- und
+Freigabezeit haben. Bei widersprüchlichen Zeugen bleibt die bestehende
+Zuordnung maßgeblich.
 
 Die Übernahme prüft beide Hände am Einsatz und bei allen weiteren Anschlägen
 bis zur Freigabe des Akkords. Die Quellanschläge behalten Identität, Einsatz,

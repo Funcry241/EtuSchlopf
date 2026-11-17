@@ -51,6 +51,86 @@
     }
 
     #[test]
+    fn key_edit_carries_original_tie_ranges_before_accepting_spellings() {
+        use crate::arrangement::representation_transport::RepresentationStep;
+
+        let pitch = "<step>G</step><alter>-1</alter><octave>4</octave>";
+        let before = score(0, "", &[pitch, pitch, pitch, pitch, pitch]);
+        let mut xml = before.clone();
+        let notes = parse_atomic_notes(&before);
+        for (index, note) in notes[..4].iter().enumerate().rev() {
+            let tie = if index % 2 == 0 { "start" } else { "stop" };
+            let block = before[note.note_start..note.note_end].replace(
+                "</duration>", &format!("</duration><tie type=\"{tie}\"/>"),
+            );
+            xml.replace_range(note.note_start..note.note_end, &block);
+        }
+        let opening = functional_measure_ordinal(&notes[0]);
+        let section = opening + 1;
+        let split = parse_atomic_notes(&xml)[0].note_end;
+        xml.insert_str(split, &format!("</measure><measure number=\"{section}\">"));
+        let original = parse_atomic_notes(&xml);
+        let mut material = JointReadingOwnerInput {
+            source: std::sync::Arc::from(xml.as_str()),
+            heads: original.iter().enumerate().map(|(index, note)| JointReadingOwnerHead {
+                source_event_id: MaterialSourceEventId(index / 2),
+                attack_id: SoundingAttackId(index / 2),
+                measure: 1, onset: note.start, duration: 24, staff: note.staff.clone(),
+                visible: true, diatonic: 32, continuation: note.tie_stop,
+                source_span: note.note_start..note.note_end,
+            }).collect(),
+            tonal: derive_tonal_spelling_decision(&xml, &original),
+            groups: Vec::new(),
+            unknown_groups: std::collections::BTreeMap::new(),
+        };
+        let measure = functional_measure_ordinal(&original[0]);
+        let keyed = rewrite_key_signature_for_measure_plain(&xml, measure, 2);
+        let mut key_edits = key_signature_for_measure_edits(&xml, measure, 2);
+        key_edits.reverse();
+        let key_step = RepresentationStep::recorded(&xml, &keyed,
+            key_edits.into_iter().map(|(start, end, text)| (start..end, text)).collect());
+        let notes = parse_atomic_notes(&keyed);
+        let plans = functional_respelling_plans_for_tonal_frame_from_measure(&keyed, 2, 2, false, None);
+        assert_eq!(plans.len(), notes.len());
+        assert_ne!(notes[0].note_start, original[0].note_start);
+
+        let retained_starts = |material, plans| key_change_render_respelling_plans(&key_step, material, plans)
+            .into_iter().map(|plan| plan.note_start).collect::<Vec<_>>();
+        let partial = plans.iter().filter(|plan| plan.note_start != notes[0].note_start)
+            .cloned().collect();
+        assert_eq!(retained_starts(Some(&material), partial),
+            vec![notes[4].note_start, notes[3].note_start, notes[2].note_start]);
+        assert_eq!(retained_starts(Some(&material), plans.clone()),
+            notes.iter().rev().map(|note| note.note_start).collect::<Vec<_>>());
+        assert_eq!(retained_starts(None, plans), vec![notes[4].note_start]);
+
+        let profile = TONAL_EVIDENCE_PROFILES[2];
+        material.tonal.selected_profile = Some(profile);
+        material.tonal.scorewide_attempted = false;
+        material.tonal.selected_measure = Some(section);
+        material.tonal.target_fifths = Some(profile.fifths);
+        material.tonal.final_section = Some(FinalSectionTonalKeyCandidate {
+            boundary_measure: section, end_measure: section, profile, tail_notes: 4,
+            chromatic_notes: 0, accidental_before: 4, accidental_after: 0, saving_percent: 100,
+        });
+        material.project_render_tonal_spelling().unwrap();
+        assert_eq!(material.heads.iter().map(|head| head.diatonic).collect::<Vec<_>>(),
+            vec![32, 32, 31, 31, 31]);
+
+        let keyed = rewrite_key_signature_for_measure_plain(&xml, section, profile.fifths);
+        let edits = key_signature_for_measure_edits(&xml, section, profile.fifths);
+        let step = RepresentationStep::recorded(&xml, &keyed,
+            edits.into_iter().rev().map(|(start, end, text)| (start..end, text)).collect());
+        assert!(validate_joint_tonal_closure(&material, &keyed, true).is_err());
+        let plans = render_tonal_key_respelling_plans(&step, &material.tonal, Some(&material));
+        let (written, stats) = functional_enharmonic_candidate_for_tonal_frame_from_measure(
+            &keyed, profile.fifths, profile.tonic, profile.minor, Some(section), Some(plans),
+        );
+        assert_eq!(stats.total, 3);
+        assert!(validate_joint_tonal_closure(&material, &written, true).is_ok());
+    }
+
+    #[test]
     fn chromatic_passing_spelling_follows_both_directions() {
         let c = "<step>C</step><octave>4</octave>";
         let c_sharp = "<step>C</step><alter>1</alter><octave>4</octave>";

@@ -205,6 +205,18 @@ fn restify_choices_for_issue(notes: &[AtomicNote], issue: &Issue) -> Vec<Restify
         }
         "PIANO_HAND_SPAN_LARGE" => {
             for (low_note, high_note) in find_span_issue_note_pairs(notes, issue).into_iter().take(3) {
+                let endpoints = [low_note, high_note].map(|note| {
+                    (
+                        note.start,
+                        note.pitch.as_ref().map(|pitch| pitch.midi),
+                        note.is_chord,
+                        atomic_note_is_tie_bound(note),
+                    )
+                });
+                console_progress(format!(
+                    "HandSpanReadback: measure={:?}; staff={:?}; endpoints_onset_pitch_chord_tie={endpoints:?}",
+                    issue.measure, issue.staff,
+                ));
                 if let Some(choice) = restify_choice_from_notes("hide_low", &[low_note]) {
                     choices.push(choice);
                 }

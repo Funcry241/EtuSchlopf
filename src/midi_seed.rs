@@ -92,6 +92,7 @@ pub struct HotspotPlanAuditProjection {
 pub struct HotspotPlan {
     pub entries: Vec<HotspotFocus>,
     pub audit: HotspotPlanAuditProjection,
+    pub(crate) inner_tone_only: bool,
 }
 
 impl HotspotPlan {
@@ -1058,6 +1059,7 @@ impl MidiSeedRhythmicCourses {
                             independent_end = start + source.len;
                         }
                     }
+                    let primary_begin = planned.len();
                     let mut head_end = next;
                     for (member, source) in primary.iter().enumerate() {
                         // The host and member can have independent releases when
@@ -1101,6 +1103,12 @@ impl MidiSeedRhythmicCourses {
                             }
                             planned.push(occurrence);
                         }
+                    }
+                    // Keep the cursor-bearing head and every member's release.
+                    // MusicXML requires each additional tone to be no longer
+                    // than its immediate predecessor.
+                    if let Some((_, members)) = planned[primary_begin..].split_first_mut() {
+                        members.sort_by_key(|note| std::cmp::Reverse(note.interval.end));
                     }
                     if primary.is_empty() && (start < upper_line_end || upper_sustain.is_some() || paired_sustains.is_some() || !across_bar.is_empty()) {
                         planned.push(PlannedSeedOccurrence {
@@ -1436,15 +1444,16 @@ pub fn midi_to_musicxml_seed_with_profile_and_hotspots(
             }
         }
     } else {
-        redistribute_midi_seed_hands_for_piano(metric, &mut notes, &profile, hotspots, preserve_attacks, &mut decision_trace);
+        let refinement_hotspots = hotspots.filter(|plan| !plan.inner_tone_only);
+        redistribute_midi_seed_hands_for_piano(metric, &mut notes, &profile, refinement_hotspots, preserve_attacks, &mut decision_trace);
         if allow_removal {
-            apply_hotspot_reductions(metric, &mut notes, &profile, hotspots,
+            apply_hotspot_reductions(&notation_time, &mut notes, &profile, hotspots,
                 &mut removal_reasons, &mut decision_trace);
         }
         let trajectory = apply_hand_trajectory_solver(metric, 
             &mut notes,
             &profile,
-            hotspots,
+            refinement_hotspots,
             allow_removal,
             &mut removal_reasons,
             &mut decision_trace,
@@ -1456,7 +1465,7 @@ pub fn midi_to_musicxml_seed_with_profile_and_hotspots(
             redistribute_wide_simultaneities(metric, 
                 &mut notes,
                 &profile,
-                hotspots,
+                refinement_hotspots,
                 SourceSelectionDecisionPass::PostTrajectoryWideSimultaneity,
                 0,
                 &mut decision_trace,
@@ -1465,7 +1474,7 @@ pub fn midi_to_musicxml_seed_with_profile_and_hotspots(
         let residual = apply_residual_critical_pass(metric, 
             &mut notes,
             &profile,
-            hotspots,
+            refinement_hotspots,
             allow_removal,
             &mut removal_reasons,
             &mut decision_trace,
@@ -1477,7 +1486,7 @@ pub fn midi_to_musicxml_seed_with_profile_and_hotspots(
             redistribute_wide_simultaneities(metric, 
                 &mut notes,
                 &profile,
-                hotspots,
+                refinement_hotspots,
                 SourceSelectionDecisionPass::PostResidualWideSimultaneity,
                 0,
                 &mut decision_trace,
@@ -1486,7 +1495,7 @@ pub fn midi_to_musicxml_seed_with_profile_and_hotspots(
         // Later owners can alter the staff assignment after the initial split.
         if preserve_attacks && (trajectory.moved > 0 || residual.moved > 0) {
             redistribute_wide_simultaneities(
-                metric, &mut notes, &profile, hotspots,
+                metric, &mut notes, &profile, refinement_hotspots,
                 SourceSelectionDecisionPass::AlignedHandSpanSplit, 0, &mut decision_trace,
             );
         }
@@ -2196,7 +2205,7 @@ fn is_removable_trajectory_note(notes: &[MidiSeedNote], idx: usize, staff: u8, p
     }
 }
 
-fn apply_hotspot_reductions(metric: &MetricTimeline, 
+fn apply_hotspot_reductions(notation_time: &NotationTimePlan,
     notes: &mut Vec<MidiSeedNote>,
     profile: &CandidateProfile,
     hotspots: Option<&HotspotPlan>,
@@ -2215,16 +2224,27 @@ fn apply_hotspot_reductions(metric: &MetricTimeline,
     // Residual-Move-Paesse erhalten. Es werden weiterhin keine neuen Noten
     // erfunden.
     let Some(plan) = hotspots else { return 0; };
-    if plan.is_empty() || !profile.runs_hotspot_reduction() {
+    if plan.is_empty() || !(plan.inner_tone_only || profile.runs_hotspot_reduction()) {
         return 0;
     }
+    let metric = &notation_time.metric;
 
     let mut remove = BTreeSet::new();
     let mut removal_reason_by_index = BTreeMap::new();
     let mut removal_decision_by_index = BTreeMap::new();
     let per_hotspot_cap = profile.per_hotspot_cap();
 
-    for focus in &plan.entries {
+    if plan.inner_tone_only {
+        for (index, evidence) in
+            plan_inner_tone_reductions(notation_time, notes, plan, per_hotspot_cap)
+        {
+            remove.insert(index);
+            removal_reason_by_index.insert(index, ExistingSourceSelectionRemovalReason::HotspotSpan);
+            removal_decision_by_index.insert(index, evidence);
+        }
+    }
+    let legacy_focuses = plan.entries.iter().filter(|_| !plan.inner_tone_only);
+    for focus in legacy_focuses {
         let before = remove.len();
         reduce_hotspot_spans(HotspotMetricContext { metric, focus },
             notes,
@@ -2287,6 +2307,115 @@ fn apply_hotspot_reductions(metric: &MetricTimeline,
         keep
     });
     original.saturating_sub(notes.len())
+}
+
+fn plan_inner_tone_reductions(
+    notation_time: &NotationTimePlan,
+    notes: &[MidiSeedNote],
+    hotspots: &HotspotPlan,
+    cap: usize,
+) -> Vec<(usize, SourceSelectionDecisionEvidence)> {
+    let span_focuses = hotspots.audit.evidence.iter()
+        .filter(|row| row.included_after_truncation && row.issue_type == "PIANO_HAND_SPAN_LARGE")
+        .map(|row| row.measure)
+        .collect::<BTreeSet<_>>();
+    if span_focuses.is_empty() {
+        return Vec::new();
+    }
+    let protected = notation_time.events.iter()
+        .filter_map(|event| match event.kind {
+            NotationEventKind::Grace { host } => Some(host),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    let mut attacks = BTreeMap::<i64, Vec<usize>>::new();
+    for (index, note) in notes.iter().enumerate() {
+        attacks.entry(note.pos).or_default().push(index);
+    }
+    let metric = &notation_time.metric;
+    let mut held: Vec<usize> = Vec::new();
+    let mut proposals = BTreeMap::<(usize, u8), Vec<_>>::new();
+    for (onset, mut group) in attacks {
+        held.retain(|&index| notes[index].pos + notes[index].len > onset);
+        let measure = note_measure(metric, onset);
+        if span_focuses.contains(&measure)
+            && let Some(bar) = measure.checked_sub(1).and_then(|ordinal| metric.measure(ordinal))
+        {
+            group.sort_by_key(|&index| notes[index].midi);
+            if let Some(index) = single_optional_inner_tone(notes, &group, &held, &protected, bar.end) {
+                let (low, high) = (notes[group[0]], notes[group[group.len() - 1]]);
+                let reason = ExistingSourceSelectionRemovalReason::HotspotSpan;
+                let evidence = removal_decision(&notes[index], reason, SourceSelectionDecisionContext {
+                    pass: SourceSelectionDecisionPass::HotspotSpan,
+                    pass_iteration: 0,
+                    witness_a_source_ordinal: Some(low.source_ordinal),
+                    witness_b_source_ordinal: Some(high.source_ordinal),
+                    observed_primary: i64::from(high.midi - low.midi),
+                    observed_secondary: i64::try_from(group.len() - 1).unwrap_or(i64::MAX),
+                    threshold_primary: i64::from(crate::rules::PIANO_HAND_MAX_SPAN),
+                    threshold_secondary: 1,
+                    focus_score: hotspots.focus_score_for(measure, None),
+                    tie_break_code: notes[index].staff,
+                });
+                proposals.entry((measure, notes[index].staff)).or_default().push((index, evidence));
+            }
+        }
+        held.extend(group);
+    }
+
+    proposals.into_values().filter(|group| group.len() <= cap).flatten().collect()
+}
+
+fn single_optional_inner_tone(
+    notes: &[MidiSeedNote],
+    attacks: &[usize],
+    held: &[usize],
+    protected: &BTreeSet<usize>,
+    measure_end: i64,
+) -> Option<usize> {
+    if attacks.len() < 3
+        || attacks.windows(2).any(|pair| notes[pair[0]].midi >= notes[pair[1]].midi)
+        || (0..=attacks.len()).any(|split| source_grip_fits(notes, attacks, held, Some(split), None))
+    {
+        return None;
+    }
+
+    let mut omissions = attacks[1..attacks.len() - 1].iter().copied().filter(|&index| {
+        let note = notes[index];
+        note.pos + note.len <= measure_end
+            && !protected.contains(&note.source_ordinal)
+            && held.iter().all(|&other| notes[other].midi != note.midi)
+            && attacks.iter().any(|&other| {
+                other != index && notes[other].staff == note.staff && notes[other].len == note.len
+            })
+            && source_grip_fits(notes, attacks, held, None, Some(index))
+    });
+    let omission = omissions.next()?;
+    omissions.next().is_none().then_some(omission)
+}
+
+fn source_grip_fits(
+    notes: &[MidiSeedNote],
+    attacks: &[usize],
+    held: &[usize],
+    split: Option<usize>,
+    omission: Option<usize>,
+) -> bool {
+    use crate::rules::{PIANO_HAND_MAX_KEYS, PIANO_HAND_MAX_SPAN};
+
+    let hands = [2, 1].map(|staff| {
+        held.iter().filter(|&&index| notes[index].staff == staff)
+            .map(|&index| notes[index].midi)
+            .chain(attacks.iter().enumerate().filter_map(|(order, &index)| {
+                let hand = split.map_or(notes[index].staff, |split| staff_for_hand_split(order, split));
+                (hand == staff && Some(index) != omission).then_some(notes[index].midi)
+            }))
+            .collect::<BTreeSet<_>>()
+    });
+    hands.iter().all(|keys| {
+        keys.len() <= PIANO_HAND_MAX_KEYS
+            && keys.first().zip(keys.last()).is_none_or(|(low, high)| low.abs_diff(*high) <= PIANO_HAND_MAX_SPAN)
+    }) && hands[0].last().zip(hands[1].first()).is_none_or(|(low, high)| low < high)
 }
 
 fn hotspot_note_indices(metric: &MetricTimeline, notes: &[MidiSeedNote], focus: &HotspotFocus) -> Vec<usize> {
@@ -2590,15 +2719,20 @@ fn restore_repeated_accompaniment_hand(
             }
             let prior = preceding.get(&start).into_iter().flatten().copied();
             let following = chords.range((release, release)..=(release, i64::MAX)).map(|(_, chord)| chord);
-            let anchors = prior.chain(following).filter(|chord| chord.keys().eq(members.keys()));
+            let low_pitch = members.first_key_value().expect("nonempty chord").0;
+            let high_pitch = members.last_key_value().expect("nonempty chord").0;
             let mut hand = None;
-            for chord in anchors {
-                let low = *chord.first_key_value().expect("nonempty repetition").1;
-                let high = *chord.last_key_value().expect("nonempty repetition").1;
+            for chord in prior.chain(following) {
+                let Some(&low) = chord.get(low_pitch) else { continue };
                 let staff = original_hands[low];
-                if chord.values().any(|&index| original_hands[index] != staff) {
+                // An independent attack in the other hand may share both times.
+                let candidate_hand_pitches = chord.iter().filter_map(|(pitch, &index)| {
+                    (original_hands[index] == staff).then_some(pitch)
+                });
+                if !candidate_hand_pitches.eq(members.keys()) {
                     continue;
                 }
+                let high = chord[high_pitch];
                 if hand.is_some_and(|(existing, _, _)| existing != staff) {
                     hand = None;
                     break;
@@ -3430,3 +3564,40 @@ fn escape_xml(text: &str) -> String {
 #[cfg(test)]
 #[path = "../tests/unit/midi_seed_rhythmic_course_creation.rs"]
 pub(crate) mod rhythmic_course_creation_tests;
+
+#[cfg(test)]
+mod inner_tone_tests {
+    use super::{BTreeSet, MidiSeedNote, single_optional_inner_tone};
+
+    #[test]
+    fn an_optional_inner_attack_can_leave_the_outer_notes_playable() {
+        let mut notes = [
+            (36, 2, 24),
+            (62, 1, 24),
+            (76, 1, 24),
+            (75, 2, 0),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(source_ordinal, (midi, staff, pos))| MidiSeedNote {
+            source_ordinal, pos, len: 48, midi, staff,
+        })
+        .collect::<Vec<_>>();
+        let group = [0, 1, 2];
+        let no_hosts = BTreeSet::new();
+        assert_eq!(single_optional_inner_tone(&notes, &group, &[], &no_hosts, 96), Some(1));
+        assert_eq!(single_optional_inner_tone(&notes, &group, &[3], &no_hosts, 96), None);
+        assert_eq!(single_optional_inner_tone(&notes, &group, &[], &BTreeSet::from([1]), 96), None);
+        assert_eq!(single_optional_inner_tone(&notes, &group, &[], &no_hosts, 60), None);
+
+        let mut transposed = notes.clone();
+        for note in &mut transposed {
+            note.midi += 5;
+            note.pos += 96;
+        }
+        assert_eq!(single_optional_inner_tone(&transposed, &group, &[], &no_hosts, 192), Some(1));
+
+        notes[1].midi = 65;
+        assert_eq!(single_optional_inner_tone(&notes, &group, &[], &no_hosts, 96), None);
+    }
+}

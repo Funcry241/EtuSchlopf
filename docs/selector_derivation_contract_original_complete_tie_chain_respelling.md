@@ -26,6 +26,21 @@ CausalFeature: original canonical binding and actual FinalChord emissions carry 
 CausalFeature: sounding pitch support staff course presentation disposition and original tie edges remain unchanged and original receipt scripts reproduce the same bound plan
 NonCausalContextExcluded: project measure page system pitch register concrete spelling source identifier value voice label occurrence count chain length corpus distribution renderer success and PDF existence
 
+The render owner applies the same complete-chain constraint when installing
+a new key signature. Its own key edit journal carries the original note
+containers to the spelling plan's byte ranges. The rendering operation
+retains consistent in-scope plans and removes proposals that would respell
+only part of an original chain. Unbound tie markers confer no permission
+to respell a fragment. The key edit and unrelated legal spellings remain
+eligible under the existing render invariants and receipts.
+
+C3 Render planning reads the tonal target and uses the same admissibility
+rules as the Render writer on the original note ranges. Only the writer
+executes and records the key edit. At final readback C3 checks the planned
+key entry and evaluates residual spelling work through that same complete-chain
+rule on the persisted Render document. The Master mirror retains its own
+complete-chain export contract and C3 readback.
+
 Parent: accepted r1438. ChangeClass: MusicMutation.
 
 The unchanged r1437 definition is the causal prerequisite. This implementation

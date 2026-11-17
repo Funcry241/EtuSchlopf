@@ -1797,6 +1797,7 @@ fn run_final_playability_polish(
         }
         let variants = final_playability_polish_variants(best.layout_xml(), &best.final_result, 2048);
         if variants.is_empty() {
+            console_progress("PlayabilityCandidateTrace: stage=FinalPlayabilityPolish; proposed=0");
             break;
         }
         let variant_count = variants.len();
@@ -1825,6 +1826,7 @@ fn run_final_playability_polish(
                 late_playability_best_candidate_decision_facts(&candidate),
                 late_playability_best_candidate_decision_facts(best),
             );
+            log_playability_candidate("FinalPlayabilityPolish", &candidate, beats_current);
             let beats_round_best = round_best
                 .as_ref()
                 .is_none_or(|current| decide_late_playability_best_candidate_adoption(
@@ -1865,6 +1867,7 @@ fn run_global_hand_trajectory_solver(
         }
         let variants = global_hand_trajectory_variants(best.layout_xml(), &best.final_result, 4096);
         if variants.is_empty() {
+            console_progress("PlayabilityCandidateTrace: stage=GlobalHandTrajectorySolver; proposed=0");
             break;
         }
         let variant_count = variants.len();
@@ -1893,6 +1896,7 @@ fn run_global_hand_trajectory_solver(
                 late_playability_best_candidate_decision_facts(&candidate),
                 late_playability_best_candidate_decision_facts(best),
             );
+            log_playability_candidate("GlobalHandTrajectorySolver", &candidate, beats_current);
             let beats_round_best = round_best
                 .as_ref()
                 .is_none_or(|current| decide_late_playability_best_candidate_adoption(
@@ -1916,6 +1920,17 @@ fn run_global_hand_trajectory_solver(
         candidates.push_previous(previous_best);
     }
     Ok(())
+}
+
+fn log_playability_candidate(stage: &str, candidate: &SolverCandidate, beats_incumbent: bool) {
+    console_progress(format!(
+        "PlayabilityCandidateTrace: stage={stage}; variant={:?}; beats_incumbent={beats_incumbent}; blockers={}; critical={}; warnings={}; warning_load={}",
+        candidate.profile_name,
+        candidate.final_result.summary.blockers,
+        critical_count(&candidate.final_result),
+        candidate.final_result.summary.warnings,
+        playability_warning_load(&candidate.final_result),
+    ));
 }
 
 fn final_playability_variants(xml: &str, report: &CheckReport, limit: usize) -> Vec<PatchVariant> {

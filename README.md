@@ -16,13 +16,13 @@ Leg beide Dateien in denselben Ordner und zieh die MIDI-Datei auf EtuSchlopf. **
 
 Der Name darf dich zum Schmunzeln bringen. Die Mathematik dahinter nehmen wir ernst. Probier EtuSchlopf mit deinem eigenen Stück aus oder schau dir an, wie es arbeitet. [Die Mathematik hinter EtuSchlopf](docs/MATHEMATIK.md)
 
-**[Windows-Testversion r1872 · EXE und Startbeispiel](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1872-windows-preview)** · [Windows-Testversion r1792](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1792-windows-preview)
+**[Windows-Testversion r1886 · EXE und Startbeispiel](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1886-windows-preview)** · [Windows-Testversion r1872](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1872-windows-preview)
 
 Windows x64 · kein Rust oder Cargo erforderlich · MuseScore für PDF · MIDI und WAV als Eingabe
 
-Der Quellstand auf `main` ist **r1872**. Der Windows-Einzellauf für Schubert D. 783 Nr. 15, p18 endete mit Exitcode 0, ohne Warnungen und mit 100 % Notenerhalt. Build, Strict Clippy, 3.097 Tests und PDF-Freigabe bestanden. Vier Tests waren ignoriert. [Stand und Prüfumfang](docs/evidence/r1872/README.md)
+Der Quellstand auf `main` ist **r1886**. Der Windows-Korpuslauf lieferte für alle 13 Stücke vollständige Ausgaben samt PDF. Build und Strict Clippy sind grün. Im Einzellauf bestanden 3.081 Tests, vier waren ignoriert. [Stand und Prüfumfang](docs/evidence/r1886/README.md)
 
-[Versionshinweise und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1872-windows-preview) ·
+[Versionshinweise und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1886-windows-preview) ·
 [Erstes Stück](#dein-erstes-stück) · [Grenzen der Testversion](#aktueller-stand) ·
 [Technische Dokumentation](docs/DEVELOPMENT.md) · [Mathematik dahinter](docs/MATHEMATIK.md)
 
@@ -35,10 +35,9 @@ Die drei Vorschauen öffnen die von EtuSchlopf erzeugten Noten-PDFs.
 | Johann Sebastian Bach | Frédéric Chopin | Franz Schubert |
 | :---: | :---: | :---: |
 | Fuge c-Moll, BWV 847 | Etüde E-Dur, op. 10 Nr. 3 · p01 | Deutscher Tanz As-Dur, D. 783 Nr. 15 · p18 |
-| [![Notenausschnitt Bach](docs/images/bwv847-fuge-r1749-ausschnitt.png)](docs/examples/bwv847-fuge-r1749.pdf) | [![Notenausschnitt Chopin](docs/images/chopin-op10-no3-p01-r1792-ausschnitt.png)](docs/examples/chopin-op10-no3-p01-r1792.pdf) | [![Notenausschnitt Schubert](docs/images/schubert-d783-no15-p18-r1872-ausschnitt.png)](docs/examples/schubert-d783-no15-p18-r1872.pdf) |
-| [Windows r1749](docs/evidence/r1749/README.md) | [Windows r1792](docs/evidence/r1792/README.md) | [Windows r1872](docs/evidence/r1872/README.md) |
+| [![Notenausschnitt Bach](docs/images/bwv847-fuge-r1886-ausschnitt.png)](docs/examples/bwv847-fuge-r1886.pdf) | [![Notenausschnitt Chopin](docs/images/chopin-op10-no3-p01-r1886-ausschnitt.png)](docs/examples/chopin-op10-no3-p01-r1886.pdf) | [![Notenausschnitt Schubert](docs/images/schubert-d783-no15-p18-r1886-ausschnitt.png)](docs/examples/schubert-d783-no15-p18-r1886.pdf) |
 
-[Alle Notenbilder, Druckvorlagen und Lizenzen](docs/examples/README.md#notenbilder)
+[Alle 13 Notenbilder, Druckvorlagen und Lizenzen](docs/examples/README.md#notenbilder)
 
 Das Projekt ist experimentell und privat gepflegt. Prüfe am eigenen Stück,
 ob dir die Fassung bei der weiteren Arbeit hilft. Musikalische Nachbearbeitung
@@ -46,7 +45,7 @@ kann erforderlich sein.
 
 ## Dein erstes Stück
 
-**[Kleines Startbeispiel und Windows-EXE](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1872-windows-preview)**. Das Startbeispiel enthält ein synthetisches MIDI/WAV-Paar und die daraus erzeugte PDF.
+**[Kleines Startbeispiel und Windows-EXE](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1886-windows-preview)**. Das Startbeispiel enthält ein synthetisches MIDI/WAV-Paar und die daraus erzeugte PDF.
 
 1. Lade die Windows-EXE herunter. Für die PDF-Ausgabe brauchst du außerdem **[MuseScore](https://musescore.org/de/download)**.
 2. Lege MIDI und WAV in denselben Ordner. Die Namen vor der Dateiendung müssen übereinstimmen: `Mein Stück.mid` und `Mein Stück.wav`.
@@ -90,21 +89,21 @@ Laufbericht zusammentragen. Unbekannte technische Angaben kannst du offenlassen.
 
 ## Aktueller Stand
 
-Die Windows-Testversion enthält **Engine r1872 / 0.10.1839** und den
+Die Windows-Testversion enthält **Engine r1886 / 0.10.1839** und den
 eigenständigen Windows-Starter. Unterstützt sind 2/4, 3/4 und 4/4 sowie
 Taktwechsel an Taktgrenzen. Andere Taktarten, Triolen und Wechsel mitten
 im Takt bleiben offen.
 
 Der Paketlauf prüft den isolierten Start ohne Entwickler-PATH und rendert
 das synthetische MIDI/WAV-Startbeispiel mit MuseScore. Die
-[Versionshinweise und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1872-windows-preview)
-verlinken den Paketlauf. Die [native musikalische Abnahme](docs/evidence/r1872/README.md) dokumentiert den Schubert-Einzellauf. Prüfe Lesbarkeit und Spielbarkeit am eigenen Stück.
+[Versionshinweise und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1886-windows-preview)
+verlinken den Paketlauf. Die [native musikalische Abnahme](docs/evidence/r1886/README.md) dokumentiert den Korpuslauf. Prüfe Lesbarkeit und Spielbarkeit am eigenen Stück.
 
 ## Quellstand und Beiträge
 
-Auf `main` liegt der veröffentlichte Quellstand **r1872 / 0.10.1839**. Der [Windows-Prüfstand r1872](docs/evidence/r1872/README.md) dokumentiert den Schubert-Lauf. Der historische [Vollkorpuslauf r1684](docs/evidence/r1684/README.md) umfasst zehn Etüden.
+Auf `main` liegt der veröffentlichte Quellstand **r1886 / 0.10.1839**. Der [Windows-Prüfstand r1886](docs/evidence/r1886/README.md) dokumentiert den Korpuslauf. Der historische [Vollkorpuslauf r1684](docs/evidence/r1684/README.md) umfasst zehn Etüden.
 
-Der [Windows-Release](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1872-windows-preview) enthält den Quellbaum des Paketlaufs und seine Prüfsummen.
+Der [Windows-Release](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1886-windows-preview) enthält den Quellbaum des Paketlaufs und seine Prüfsummen.
 
 Für die Arbeit am Quellcode gelten die [technische Referenz](docs/DEVELOPMENT.md)
 und die [Beitragsregeln](docs/CONTRIBUTING.md). Der [Dokumentationswegweiser](docs/README.md)

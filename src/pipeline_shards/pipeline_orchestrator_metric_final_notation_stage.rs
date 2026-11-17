@@ -1417,10 +1417,11 @@ primary_beam_voice_partition_plan.as_ref())?,
                         source_fingerprint,
                     });
                 }
-                // A pure system subdivision can reuse the bound horizontal
-                // exclusions. The replacement still needs fresh confirmation.
+                // Keep additive drift in the bound search. System subdivisions
+                // exclude the affected intervals and extra pages exclude the
+                // submitted partition. The replacement needs fresh confirmation.
                 if renderer_feasibility_basis.compact_geometry_planned
-                    && !compact_layout_has_horizontal_only_nonrealization(&shadow_observation)
+                    && !compact_layout_has_additive_nonrealization(&shadow_observation)
                 {
                     anyhow::bail!(
                         "Automatic compact layout: renderer did not confirm the planned system and page breaks"

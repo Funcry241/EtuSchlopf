@@ -211,7 +211,7 @@ fn horizontal_subdivision_is_reused_with_or_without_vertical_insertion() {
         let mut state = RendererPartitionRejections::new("fixed complete source and style");
         state.bind("fixed complete source and style",Some(&"actual fresh-import consumer")).unwrap();
         let data = subdivided_observation(concurrent);
-        assert_eq!(compact_layout_has_horizontal_only_nonrealization(&data), !concurrent);
+        assert!(compact_layout_has_additive_nonrealization(&data));
         let ranges = state.system_ranges(&original,&original,&data).unwrap();
         assert_eq!(ranges,std::collections::BTreeSet::from([(1,3),(4,6)]));
         if concurrent { state.record(&original,&data).unwrap(); }
@@ -222,7 +222,7 @@ fn horizontal_subdivision_is_reused_with_or_without_vertical_insertion() {
             no_goods: &ranges, rejected_partitions: &state.partitions };
         let chosen = build_renderer_feasibility_frontier_candidate(&request).unwrap();
         let basis = GlobalHorizontalPageSystemPlanAudit { feasible_page_counts: vec![2,3],
-            compact_geometry_planned: !concurrent,
+            compact_geometry_planned: true,
             selected_measure_demand_evidence: vec![60;6], selected_measure_clearance_edge_evidence: vec![0;6],
             accepted_system_capacity: 180, max_allowed_system_measures: 3, vertical_max_systems_per_page: 3,
             ..Default::default() };
@@ -238,9 +238,20 @@ fn horizontal_subdivision_is_reused_with_or_without_vertical_insertion() {
 fn vertical_insertion_alone_never_produces_a_horizontal_exclusion() {
     let original = plan(&[vec![1,2],vec![1,2]]);
     let mut state = RendererPartitionRejections::new("source");state.bind("source",Some(&"consumer")).unwrap();
-    assert!(!compact_layout_has_horizontal_only_nonrealization(&observation()));
-    assert!(state.system_ranges(&original,&original,&observation()).unwrap().is_empty());
-    state.record(&original,&observation()).unwrap();assert_eq!(state.partitions.len(),1);
+    let data = observation();
+    assert!(compact_layout_has_additive_nonrealization(&data));
+    assert!(state.system_ranges(&original,&original,&data).unwrap().is_empty());
+    state.record(&original,&data).unwrap();assert_eq!(state.partitions.len(),1);
+
+    for collapse_system in [false, true] {
+        let mut collapsed = data.clone();
+        if collapse_system {
+            collapsed.collapsed_system_breaks.push(4);
+        } else {
+            collapsed.collapsed_page_breaks.push(4);
+        }
+        assert!(!compact_layout_has_additive_nonrealization(&collapsed));
+    }
 }
 
 #[test]

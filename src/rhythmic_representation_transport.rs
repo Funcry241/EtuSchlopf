@@ -147,6 +147,14 @@ impl RepresentationStep {
         self.carry(range)
     }
 
+    pub(crate) fn carry_original_ranges(
+        &self, ranges: impl IntoIterator<Item = Range<usize>>,
+    ) -> Result<Vec<Range<usize>>> {
+        self.validate()?;
+        let prefix = self.operation_prefixes();
+        ranges.into_iter().map(|range| self.carry_indexed(range, &prefix)).collect()
+    }
+
     fn carry(&self, range: Range<usize>) -> Result<Range<usize>> {
         let mut removed = 0usize;
         let mut inserted = 0usize;

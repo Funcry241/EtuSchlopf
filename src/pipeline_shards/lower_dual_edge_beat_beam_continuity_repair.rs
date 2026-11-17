@@ -48,7 +48,7 @@ pub(crate) fn lower_dual_edge_beat_regression_candidates_with_voice_binding(
     let spans = partial_beat_measure_spans(xml);
     let mut inherited_divisions = 1_i64;
     let mut candidates = 0_usize;
-    for span in spans {
+    for (measure_index, span) in spans.into_iter().enumerate() {
         let measure_text = &xml[span.start..span.end];
         inherited_divisions = partial_beat_first_i64(measure_text, "divisions")
             .unwrap_or(inherited_divisions)
@@ -74,8 +74,33 @@ pub(crate) fn lower_dual_edge_beat_regression_candidates_with_voice_binding(
             ) else {
                 continue;
             };
-            if !lower_dual_edge_beat_group_matches_plan(&infos, &raw_notes, &group) {
+            if !lower_dual_edge_beat_group_matches_observed_plans(
+                measure_text, beat_unit, &infos, &raw_notes, &group,
+            ) {
                 candidates = candidates.saturating_add(1);
+                let actual = group.map(|index| {
+                    raw_notes.iter().find(|raw| raw.start == index)
+                        .map(|raw| lower_dual_edge_beat_beam_states(&raw.text))
+                });
+                let voices = group.map(|index| {
+                    infos.iter().find(|info| info.index == index)
+                        .map(|info| info.voice.as_str())
+                });
+                let expected = lower_dual_edge_beat_after_plan(&infos, &group)
+                    .map(|(plan, _)| {
+                        [
+                            beam_plan_states_for_event(&plan, 0),
+                            beam_plan_states_for_event(&plan, 1),
+                            std::collections::BTreeMap::new(),
+                            beam_plan_states_for_event(&plan, 2),
+                        ]
+                    });
+                let measure_tag = measure_text.split_once('>')
+                    .map_or("", |(tag, _)| tag);
+                eprintln!(
+                    "LowerDualEdgeReadback: measure_ordinal={}; measure_tag={measure_tag:?}; staff=2; voices={voices:?}; offsets={offsets:?}; note_byte_offsets={group:?}; expected_beams={expected:?}; actual_beams={actual:?}",
+                    measure_index + 1,
+                );
             }
         }
     }
@@ -130,6 +155,63 @@ fn lower_dual_edge_beat_group_matches_plan(
         return false;
     };
     lower_dual_edge_beat_beam_states(&rest_raw.text).is_empty()
+}
+
+fn lower_dual_edge_beat_group_matches_observed_plans(
+    measure: &str,
+    beat_unit: i64,
+    infos: &[PartialBeatNoteInfo],
+    raw_notes: &[PartialBeatRawNote],
+    group: &[usize; 4],
+) -> bool {
+    if lower_dual_edge_beat_group_matches_plan(infos, raw_notes, group) {
+        return true;
+    }
+
+    let [first, second, _, last] = *group;
+    if !(first < second && second < last) {
+        return false;
+    }
+    let Some((first, last)) = infos.iter().find(|note| note.index == first)
+        .zip(infos.iter().find(|note| note.index == last))
+    else {
+        return false;
+    };
+    let Some(boundaries) = metric_beam_clef_boundaries(measure) else {
+        return false;
+    };
+    if !boundaries.get(&first.staff).is_some_and(|cuts| {
+        crosses_metric_beam_clef_boundary(cuts, first.start, last.start)
+    }) {
+        return false;
+    }
+
+    // Read the metric owner's positive and negative decisions without applying its edits.
+    let mut states = BTreeMap::new();
+    let mut ungrouped = BTreeSet::new();
+    add_beat_scoped_beam_groups(
+        infos, beat_unit, &boundaries, &mut states, &mut ungrouped,
+        &mut BeatScopedBeamPatchStats::default(),
+    );
+    group.iter().enumerate().all(|(slot, index)| {
+        let Some(raw) = raw_notes.iter().find(|note| note.start == *index) else {
+            return false;
+        };
+        let actual = lower_dual_edge_beat_beam_states(&raw.text);
+        if slot == 2 {
+            return actual.is_empty();
+        }
+        match states.get(index) {
+            Some(expected) => {
+                actual.len() == expected.len() && expected.iter().all(|&(level, value)| {
+                    u8::try_from(level).ok()
+                        .and_then(|level| actual.get(&level))
+                        .is_some_and(|state| state == value)
+                })
+            }
+            None => ungrouped.contains(index) && actual.is_empty(),
+        }
+    })
 }
 
 fn beam_plan_states_for_event(
@@ -252,7 +334,9 @@ pub(crate) fn lower_dual_edge_beat_regression_candidates(xml: &str) -> Option<us
             ) else {
                 continue;
             };
-            if !lower_dual_edge_beat_group_matches_plan(&infos, &raw_notes, &group) {
+            if !lower_dual_edge_beat_group_matches_observed_plans(
+                measure_text, beat_unit, &infos, &raw_notes, &group,
+            ) {
                 candidates = candidates.saturating_add(1);
             }
         }
@@ -290,6 +374,26 @@ mod lower_dual_edge_recovery_retirement_tests {
             lower_dual_edge_beat_regression_candidates(&legacy_rest_carrier),
             Some(1)
         );
+    }
+
+    #[test]
+    fn a_clef_boundary_accepts_only_the_metric_owners_exact_split() {
+        let before = score("end", "end", "").replace(
+            "</time>",
+            r#"</time><clef number="2"><sign>F</sign><line>4</line></clef>"#,
+        );
+        let terminal_beams = r#"<beam number="1">end</beam><beam number="2">end</beam>"#;
+        let (prefix, suffix) = before.rsplit_once(terminal_beams).unwrap();
+        let split = format!("{prefix}{suffix}");
+        assert_eq!(lower_dual_edge_beat_regression_candidates(&split), Some(1));
+
+        let clef = r#"<attributes><clef number="2"><sign>G</sign><line>2</line></clef></attributes>"#;
+        let bounded = split.replace("<note><rest/>", &format!("{clef}<note><rest/>"));
+        assert_eq!(lower_dual_edge_beat_regression_candidates(&bounded), Some(0));
+        let other_staff = bounded.replace(r#"<clef number="2">"#, r#"<clef number="1">"#);
+        assert_eq!(lower_dual_edge_beat_regression_candidates(&other_staff), Some(1));
+        let incomplete = bounded.replacen(terminal_beams, r#"<beam number="1">end</beam>"#, 1);
+        assert_eq!(lower_dual_edge_beat_regression_candidates(&incomplete), Some(1));
     }
 
     #[test]

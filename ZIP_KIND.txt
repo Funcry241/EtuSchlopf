@@ -1,6 +1,6 @@
 kind=EtuSchlopfTake
 version=0.10.1839
-revision=r1872
-name=PreserveRepeatedAccompaniment
-parent_revision=r1871
+revision=r1886
+name=CompactBreakReplan
+parent_revision=r1885
 change_class=MusicMutation

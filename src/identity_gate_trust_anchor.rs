@@ -170,8 +170,6 @@ const LAUNCHER_ASSISTANT_EXPORT_BYTES: &[u8] =
     include_bytes!("bin/etuschlopf_launcher/assistant_export.rs");
 const LAUNCHER_INVENTORY_EXPORT_BYTES: &[u8] =
     include_bytes!("bin/etuschlopf_launcher/inventory_export.rs");
-const LAUNCHER_NEURO_EVIDENCE_EXPORT_BYTES: &[u8] =
-    include_bytes!("bin/etuschlopf_launcher/neuro_evidence_export.rs");
 const PUBLIC_ARTIFACT_RECOVERY_BYTES: &[u8] =
     include_bytes!("kodex_control_plane/public_artifact_recovery.rs");
 const FORMAL_GREEN_CONTRACT_BYTES: &[u8] = include_bytes!("build_gate/formal_green_contract.rs");
@@ -260,15 +258,13 @@ pub const LAUNCHER_ASSISTANT_EXPORT_FNV1A64: u64 =
     fnv1a64(LAUNCHER_ASSISTANT_EXPORT_BYTES);
 pub const LAUNCHER_INVENTORY_EXPORT_FNV1A64: u64 =
     fnv1a64(LAUNCHER_INVENTORY_EXPORT_BYTES);
-pub const LAUNCHER_NEURO_EVIDENCE_EXPORT_FNV1A64: u64 =
-    fnv1a64(LAUNCHER_NEURO_EVIDENCE_EXPORT_BYTES);
 pub const PUBLIC_ARTIFACT_RECOVERY_FNV1A64: u64 =
     fnv1a64(PUBLIC_ARTIFACT_RECOVERY_BYTES);
 pub const FORMAL_GREEN_CONTRACT_FNV1A64: u64 =
     fnv1a64(FORMAL_GREEN_CONTRACT_BYTES);
 pub const RUN_CMD_FNV1A64: u64 = fnv1a64(RUN_CMD_BYTES);
 
-const _: () = assert!(IDENTITY_BUILD_POLICY_FNV1A64 == 0x19fcc65dd675a150);
+const _: () = assert!(IDENTITY_BUILD_POLICY_FNV1A64 == 0x4003202173dec4b7);
 const _: () = assert!(IDENTITY_SCANNER_FNV1A64 == 0x75f817fb6b15e9fa);
 const _: () = assert!(IDENTITY_ZERO_BASELINE_FNV1A64 == 0xf2abe660ce4dd29c);
 const _: () = assert!(FEEDBACK_STRUCTURALIZATION_GATE_FNV1A64 == 0x56a542ccb94aac1b);
@@ -279,9 +275,9 @@ const _: () = assert!(FEEDBACK_COMPILE_TIME_KODEX_FNV1A64 == 0xe09ea2fffdae3c2d)
 const _: () = assert!(KODEX_BOUNDARY_ADVERSARIAL_KODEX_FNV1A64 == 0x32cbb4f7a7a185d3);
 const _: () = assert!(SOURCE_INTEGRITY_KODEX_FNV1A64 == 0x7d97e8d3fe4c7b85);
 const _: () = assert!(RECOVERY_TRANSACTION_ORDER_KODEX_FNV1A64 == 0x2a4c0068a8abb46b);
-const _: () = assert!(PINNED_POLICY_KODEX_FNV1A64 == 0xd7fc8835bbd91322);
+const _: () = assert!(PINNED_POLICY_KODEX_FNV1A64 == 0x78215a6ca52c4a78);
 const _: () = assert!(INVENTORY_KODEX_FNV1A64 == 0xf90e1f045f4f3ede);
-const _: () = assert!(KODEX_BUILD_CONTEXT_FNV1A64 == 0x86aa959ba24f5b78);
+const _: () = assert!(KODEX_BUILD_CONTEXT_FNV1A64 == 0xe86d6de3cee803ab);
 const _: () = assert!(KODEX_BOUNDARY_ADVERSARIAL_MATRIX_FNV1A64 == 0xd2be3ea82578cb94);
 const _: () = assert!(DEAD_CODE_DETECTION_INTEGRITY_FNV1A64 == 0x3bb4846591cc67d3);
 const _: () = assert!(DEAD_CODE_SUPPRESSION_DEBT_CEILING_FNV1A64 == 0xebbc1501b56f37d7);
@@ -292,7 +288,7 @@ const _: () = assert!(SHARED_SHA256_FNV1A64 == 0xcbf211b6ba70da9c);
 const _: () = assert!(RUST_SOURCE_SCAN_PRIMITIVES_FNV1A64 == 0x61df2ba9b1c6f485);
 const _: () = assert!(RUST_SOURCE_FACT_PRIMITIVES_FNV1A64 == 0x779750c64c86fb48);
 const _: () = assert!(SEMANTIC_CAPABILITY_DIFF_FNV1A64 == 0x2a7f6989a19d2aae);
-const _: () = assert!(KODEX_CAPABILITY_RETIREMENTS_FNV1A64 == 0xcda2b722929047a7);
+const _: () = assert!(KODEX_CAPABILITY_RETIREMENTS_FNV1A64 == 0xb9fe59aa0bcf97a1);
 const _: () = assert!(PRODUCTIVE_WRITE_PATH_SCANNER_FNV1A64 == 0x933947523b68dee2);
 const _: () = assert!(DESTRUCTIVE_POPULATION_FREEZE_GATE_FNV1A64 == 0x77035e9a18ac0a56);
 const _: () = assert!(RENDER_SOVEREIGNTY_KODEX_FNV1A64 == 0x012efd7d50fc2a79);
@@ -308,10 +304,9 @@ const _: () = assert!(DESTRUCTIVE_TRANSFORMATION_SURFACE_BASELINE_V1_FNV1A64 == 
 const _: () = assert!(THIRTY_SURFACE_BATCH_SCAN_FNV1A64 == 0xf7cb74bb1ed893ec);
 const _: () = assert!(KODEX_GATE_CORE_OWNERSHIP_FNV1A64 == 0xa928770e3293682a);
 const _: () = assert!(TAKE_BOOTSTRAP_FNV1A64 == 0x27b08e1c9eee388c);
-const _: () = assert!(LAUNCHER_FNV1A64 == 0xbbddf6d9d946ee41);
+const _: () = assert!(LAUNCHER_FNV1A64 == 0x6931a66b699f3d8e);
 const _: () = assert!(LAUNCHER_ASSISTANT_EXPORT_FNV1A64 == 0xab2690e552cd2391);
 const _: () = assert!(LAUNCHER_INVENTORY_EXPORT_FNV1A64 == 0x633282e2d752a97e);
-const _: () = assert!(LAUNCHER_NEURO_EVIDENCE_EXPORT_FNV1A64 == 0x15ccc748a3a502bd);
 const _: () = assert!(PUBLIC_ARTIFACT_RECOVERY_FNV1A64 == 0x6e8088e300ca8a66);
 const _: () = assert!(FORMAL_GREEN_CONTRACT_FNV1A64 == 0xd59a1810a0692951);
 const _: () = assert!(RUN_CMD_FNV1A64 == 0x39e8ace2dee3a3d0);
@@ -323,7 +318,7 @@ pub fn append_identity_gate_trust_anchor_section(out: &mut String) {
         "--------------------------",
     );
     out.push_str(&format!(
-        "BuildPolicyFNV1A64 {:016x}; ScannerFNV1A64 {:016x}; EmptyBaselineFNV1A64 {:016x}; FeedbackStructuralizationGateFNV1A64 {:016x}; FeedbackProofTransportFNV1A64 {:016x}; EmptyFeedbackAdmissionFNV1A64 {:016x}; FeedbackObservableSinkAllowlistFNV1A64 {:016x}; FeedbackCompileTimeKodexFNV1A64 {:016x}; KodexBoundaryAdversarialKodexFNV1A64 {:016x}; SourceIntegrityKodexFNV1A64 {:016x}; RecoveryTransactionOrderKodexFNV1A64 {:016x}; PinnedPolicyKodexFNV1A64 {:016x}; InventoryKodexFNV1A64 {:016x}; KodexBuildContextFNV1A64 {:016x}; KodexBoundaryAdversarialMatrixFNV1A64 {:016x}; TakeChangeControlFNV1A64 {:016x}; ManagedSourceTreeDefinitionFNV1A64 {:016x}; MultiRevisionEvasionFNV1A64 {:016x}; SharedSha256FNV1A64 {:016x}; RustSourceScanPrimitivesFNV1A64 {:016x}; RustSourceFactPrimitivesFNV1A64 {:016x}; SemanticCapabilityDiffFNV1A64 {:016x}; KodexCapabilityRetirementsFNV1A64 {:016x}; ProductiveWritePathScannerFNV1A64 {:016x}; ThirtySurfaceBatchScanFNV1A64 {:016x}; KodexGateCoreOwnershipFNV1A64 {:016x}; TakeBootstrapFNV1A64 {:016x}; LauncherFNV1A64 {:016x}; LauncherAssistantExportFNV1A64 {:016x}; LauncherInventoryExportFNV1A64 {:016x}; LauncherNeuroEvidenceExportFNV1A64 {:016x}; PublicArtifactRecoveryFNV1A64 {:016x}; FormalGreenContractFNV1A64 {:016x}; RunCmdFNV1A64 {:016x}.\n",
+        "BuildPolicyFNV1A64 {:016x}; ScannerFNV1A64 {:016x}; EmptyBaselineFNV1A64 {:016x}; FeedbackStructuralizationGateFNV1A64 {:016x}; FeedbackProofTransportFNV1A64 {:016x}; EmptyFeedbackAdmissionFNV1A64 {:016x}; FeedbackObservableSinkAllowlistFNV1A64 {:016x}; FeedbackCompileTimeKodexFNV1A64 {:016x}; KodexBoundaryAdversarialKodexFNV1A64 {:016x}; SourceIntegrityKodexFNV1A64 {:016x}; RecoveryTransactionOrderKodexFNV1A64 {:016x}; PinnedPolicyKodexFNV1A64 {:016x}; InventoryKodexFNV1A64 {:016x}; KodexBuildContextFNV1A64 {:016x}; KodexBoundaryAdversarialMatrixFNV1A64 {:016x}; TakeChangeControlFNV1A64 {:016x}; ManagedSourceTreeDefinitionFNV1A64 {:016x}; MultiRevisionEvasionFNV1A64 {:016x}; SharedSha256FNV1A64 {:016x}; RustSourceScanPrimitivesFNV1A64 {:016x}; RustSourceFactPrimitivesFNV1A64 {:016x}; SemanticCapabilityDiffFNV1A64 {:016x}; KodexCapabilityRetirementsFNV1A64 {:016x}; ProductiveWritePathScannerFNV1A64 {:016x}; ThirtySurfaceBatchScanFNV1A64 {:016x}; KodexGateCoreOwnershipFNV1A64 {:016x}; TakeBootstrapFNV1A64 {:016x}; LauncherFNV1A64 {:016x}; LauncherAssistantExportFNV1A64 {:016x}; LauncherInventoryExportFNV1A64 {:016x}; PublicArtifactRecoveryFNV1A64 {:016x}; FormalGreenContractFNV1A64 {:016x}; RunCmdFNV1A64 {:016x}.\n",
         IDENTITY_BUILD_POLICY_FNV1A64,
         IDENTITY_SCANNER_FNV1A64,
         IDENTITY_ZERO_BASELINE_FNV1A64,
@@ -354,7 +349,6 @@ pub fn append_identity_gate_trust_anchor_section(out: &mut String) {
         LAUNCHER_FNV1A64,
         LAUNCHER_ASSISTANT_EXPORT_FNV1A64,
         LAUNCHER_INVENTORY_EXPORT_FNV1A64,
-        LAUNCHER_NEURO_EVIDENCE_EXPORT_FNV1A64,
         PUBLIC_ARTIFACT_RECOVERY_FNV1A64,
         FORMAL_GREEN_CONTRACT_FNV1A64,
         RUN_CMD_FNV1A64,
@@ -373,7 +367,7 @@ pub fn append_identity_gate_trust_anchor_section(out: &mut String) {
         DEAD_CODE_DETECTION_INTEGRITY_FNV1A64,
         DEAD_CODE_SUPPRESSION_DEBT_CEILING_FNV1A64,
     ));
-    out.push_str("CrossProtection: Build-Policy, Identity-Scanner, Productive-Write-Scanner, Thirty-Surface-Scanner, Kodex-Gate-Ownership-Vertrag, leere Nullschuld-Baseline, Feedback-Structuralisierungsgrenze samt kanonischer nichtverknuepfbarer Proof-Projektion, Beweis-Transportparser, leeres Feedback-Writer-Zulassungsregister, geschlossenes beobachtbares Senkenregister, gepinnte adversariale Abschlussmatrix, Take-Change-Control, gepinnte gemeinsame SHA-256-Primitive fuer Rejection-Ledger und Public-Artifact-Recovery, produktive Music-Identity-Provenance-Firewall auf dem bestehenden semantischen Writer-Reachability-Graph, transaktionaler Pre-Copy-Bootstrap, Launcher samt getrennt gepinnten Assistant-Export-, Inventory-Export- und Neuro-Evidence-Export-Modulen, gemeinsames Public-Artifact-Recovery-Protokoll und run.cmd-Recovery-Handoff sind compile-time verankert. Eine Gate-Aenderung kann nicht beiläufig als musikalische Reparatur mitlaufen.\n");
+    out.push_str("CrossProtection: Build-Policy, Identity-Scanner, Productive-Write-Scanner, Thirty-Surface-Scanner, Kodex-Gate-Ownership-Vertrag, leere Nullschuld-Baseline, Feedback-Structuralisierungsgrenze samt kanonischer nichtverknuepfbarer Proof-Projektion, Beweis-Transportparser, leeres Feedback-Writer-Zulassungsregister, geschlossenes beobachtbares Senkenregister, gepinnte adversariale Abschlussmatrix, Take-Change-Control, gepinnte gemeinsame SHA-256-Primitive fuer Rejection-Ledger und Public-Artifact-Recovery, produktive Music-Identity-Provenance-Firewall auf dem bestehenden semantischen Writer-Reachability-Graph, transaktionaler Pre-Copy-Bootstrap, Launcher samt getrennt gepinnten Assistant-Export- und Inventory-Export-Modulen, gemeinsames Public-Artifact-Recovery-Protokoll und run.cmd-Recovery-Handoff sind compile-time verankert. Eine Gate-Aenderung kann nicht beiläufig als musikalische Reparatur mitlaufen.\n");
     out.push_str("RootFileRoleAuthority: Root-Cargo.lock ist LocalTransactional, nicht TakeManaged; vollstaendige Source-Snapshots muessen den lokalen Cargo-Zustand enthalten, waehrend eingehende Take-Payloads ihn weiterhin nicht besitzen duerfen. Project-Catalog und Assistant-Snapshot konsumieren dieselbe Rollenquelle.\n");
     out.push_str("FeedbackAdmission: Datenzeilen 0; feedback-derived WriterOpen nein; Herkunftskoordinaten und detaillierte Beweiswerte bleiben im privaten Sicherheitsmodul; der pensionierte Legacy-Detailpfad schreibt nichts; genau eine kanonische Ergebnisbericht-Projektion ist zugelassen. Andere kontrollierte Senken und unbekannte Vertragsreferenzpfade bleiben fail-closed gesperrt. Die 21 Angriffsklassen der Abschlussmatrix muessen vollstaendig blockiert bleiben; danach ist der planmaessige Kodex-Freeze bereit.\n");
     out.push_str(&format!(

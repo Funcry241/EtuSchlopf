@@ -1,6 +1,6 @@
 # Mathematik in EtuSchlopf
 
-**Quellstand r1872 / 0.10.1839.** Der jüngste veröffentlichte Windows-Einzellauf prüft Schuberts Deutschen Tanz D. 783 Nr. 15. Zur Freigabe gehören der [native Prüfbeleg](evidence/r1872/README.md) und der [Windows-Paketlauf](https://github.com/Funcry241/EtuSchlopf/actions/runs/43755526495). Alle drei musikalischen Referenzen sind mit Notenbild und Druckvorlage in der [Galerie](examples/README.md#notenbilder) dokumentiert.
+**Quellstand r1886 / 0.10.1839.** Der Windows-Korpuslauf umfasst 13 Stücke mit vollständiger PDF-Ausgabe. Der [Prüfbeleg](evidence/r1886/README.md) und die [Notenbilder](examples/README.md#notenbilder) dokumentieren diesen Stand.
 
 EtuSchlopf verwendet Mathematik für musikalische Entscheidungen, Darstellungsentscheidungen, Messungen und technische Beweise. Diese Aufgaben sind verschieden: Eine Erhaltungsbilanz beweist keine Lesbarkeit; ein lesbarer Registerkurs beweist keine menschliche Spielbarkeit; eine bestandene Prüfung erlaubt nur den Übergang, dessen Bedingungen sie tatsächlich abdeckt.
 
@@ -271,7 +271,7 @@ Hashes sind davon getrennt: Sie binden Bytes unter ihren jeweiligen Kollisionsan
 | Chopin, Etüde op. 10 Nr. 3, p01 | r1792, Exitcode 0, 0 Warnungen, 100 % im Notenerhaltsmaß und ein gerendertes Notenbild. Die MIDI-WAV-Zeitzuordnung blieb wegen geringer gemeinsamer Anschlagsdeckung offen. [Abnahme r1792](evidence/r1792/README.md). |
 | Schubert, Deutscher Tanz D. 783 Nr. 15, p18 | r1872, Exitcode 0, 0 Blocker, 0 Warnungen und 100 % im Notenerhaltsmaß. 3.097 Tests bestanden, vier waren ignoriert. Der Windows-Renderer gab das zweiseitige Notenbild frei. [Abnahme r1872](evidence/r1872/README.md). |
 
-Die drei Zeilen belegen Einzelläufe. Für r1872 liegt hier kein aktueller Vollkorpusvergleich vor. Das Notenerhaltsmaß folgt der im Lauf definierten Grundgesamtheit. Es bewertet weder den Abgleich aller Notenwerte mit der Druckvorlage noch das Notenbild als Ganzes.
+Die drei Zeilen belegen Einzelläufe. Für r1886 liegt ein [Vollkorpuslauf mit 13 Stücken](evidence/r1886/README.md) vor. Das Notenerhaltsmaß folgt der im Lauf definierten Grundgesamtheit. Es bewertet weder den Abgleich aller Notenwerte mit der Druckvorlage noch das Notenbild als Ganzes.
 
 ### Historischer Vollkorpuslauf r1683
 
