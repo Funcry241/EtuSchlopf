@@ -4,6 +4,26 @@ Hier stehen die Quellen und Rechte der drei Musikreferenzen von EtuSchlopf. Die 
 
 ## Notenbilder
 
+Die folgenden PDFs stammen aus dem Windows-Korpuslauf r1886. Die Namensnennungen zu Bach, Chopin und Schubert stehen unter [Quellen und Rechte](#quellen-und-rechte).
+
+| Stück | Seiten | PDF |
+| --- | ---: | --- |
+| Bach · Fuge c-Moll BWV 847 | 3 | [PDF](bwv847-fuge-r1886.pdf) |
+| Chopin · Etüde E-Dur op. 10 Nr. 3 | 1 | [PDF](chopin-op10-no3-p01-r1886.pdf) |
+| Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15 | 2 | [PDF](schubert-d783-no15-p18-r1886.pdf) |
+| Etüde Nr. 1 | 2 | [PDF](etude-1-r1886.pdf) |
+| Etüde Nr. 2 | 5 | [PDF](etude-2-r1886.pdf) |
+| Etüde Nr. 3 | 4 | [PDF](etude-3-r1886.pdf) |
+| Etüde Nr. 4 | 3 | [PDF](etude-4-r1886.pdf) |
+| Etüde Nr. 5 | 6 | [PDF](etude-5-r1886.pdf) |
+| Etüde Nr. 6 | 6 | [PDF](etude-6-r1886.pdf) |
+| Etüde Nr. 7 | 6 | [PDF](etude-7-r1886.pdf) |
+| Etüde Nr. 8 | 6 | [PDF](etude-8-r1886.pdf) |
+| Etüde Nr. 9 | 4 | [PDF](etude-9-r1886.pdf) |
+| Etüde Nr. 10 | 6 | [PDF](etude-10-r1886.pdf) |
+
+## Frühere Notenbilder und Druckvorlagen
+
 Klicke auf einen Ausschnitt, um das vollständige EtuSchlopf-PDF zu öffnen.
 
 ### Johann Sebastian Bach · Fuge c-Moll BWV 847
