@@ -1,6 +1,11 @@
 name: Windows download
 on:
   workflow_dispatch:
+    inputs:
+      sign_release:
+        description: Build a SignPath-signed Windows release
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths:
@@ -20,7 +25,10 @@ concurrency:
 jobs:
   build:
     runs-on: windows-2022
-    timeout-minutes: 45
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      actions: read
     defaults:
       run:
         shell: pwsh
@@ -29,6 +37,20 @@ jobs:
       CARGO_INCREMENTAL: '0'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Check signed release configuration
+        if: inputs.sign_release == true
+        env:
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+        run: |
+          if ($env:GITHUB_REF -ne 'refs/heads/main') { throw 'Signed releases require main' }
+          foreach ($name in @('SIGNPATH_ORGANIZATION_ID', 'SIGNPATH_PROJECT_SLUG', 'SIGNPATH_SIGNING_POLICY_SLUG', 'SIGNPATH_API_TOKEN')) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              throw "Missing SignPath configuration: $name"
+            }
+          }
       - name: Verify accepted runtime source
         run: |
           $ErrorActionPreference = 'Stop'
@@ -80,9 +102,58 @@ jobs:
           $env:ETUSCHLOPF_BUNDLE_ZIP = "$env:RUNNER_TEMP/etuschlopf-runtime.zip"
           cargo +1.98.0 test --locked --manifest-path .github/distribution/Cargo.toml --release
           if ($LASTEXITCODE -ne 0) { throw 'Distribution tests failed' }
-          cargo +1.98.0 build --locked --manifest-path .github/distribution/Cargo.toml --release
+          $sdk = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits/10/bin'
+          $rc = Get-ChildItem -Path "$sdk/*/x64/rc.exe" -File |
+            Sort-Object { [version]$_.Directory.Parent.Name } -Descending |
+            Select-Object -First 1
+          if (!$rc) { throw 'Windows SDK resource compiler not found' }
+          $resource = Join-Path $env:RUNNER_TEMP 'EtuSchlopf-version.res'
+          & $rc.FullName /nologo /fo $resource .github/distribution/version.rc
+          if ($LASTEXITCODE -ne 0) { throw 'Windows version resource build failed' }
+          cargo +1.98.0 rustc --locked --manifest-path .github/distribution/Cargo.toml --release --bin etuschlopf_windows_download -- -C "link-arg=$resource"
           if ($LASTEXITCODE -ne 0) { throw 'Distribution build failed' }
           Copy-Item .github/distribution/target/release/etuschlopf_windows_download.exe dist/EtuSchlopf-Windows-x64.exe
+          $version = (Get-Item dist/EtuSchlopf-Windows-x64.exe).VersionInfo
+          if ($version.ProductName -ne 'EtuSchlopf' -or $version.ProductVersion -ne '0.10.1839') {
+            throw 'Distribution version resource mismatch'
+          }
+      - name: Upload the executable for signing
+        if: inputs.sign_release == true
+        id: unsigned
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: EtuSchlopf-unsigned
+          path: dist/EtuSchlopf-Windows-x64.exe
+          retention-days: 1
+          if-no-files-found: error
+      - name: Request SignPath signature
+        if: inputs.sign_release == true
+        uses: SignPath/github-action-submit-signing-request@4a84eb4ad763290f059275786f2deed97c2c672b
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: "2700"
+          output-artifact-directory: ${{ runner.temp }}/etuschlopf-signed
+      - name: Verify Authenticode and use the signed executable
+        if: inputs.sign_release == true
+        run: |
+          $signed = Join-Path $env:RUNNER_TEMP 'etuschlopf-signed/EtuSchlopf-Windows-x64.exe'
+          $signature = Get-AuthenticodeSignature -LiteralPath $signed
+          if ($signature.Status -ne 'Valid' -or !$signature.TimeStamperCertificate) {
+            throw 'Expected a valid timestamped Authenticode signature'
+          }
+          $publisher = $signature.SignerCertificate.GetNameInfo(
+            [System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
+          if ($publisher -ne 'SignPath Foundation') { throw "Unexpected publisher: $publisher" }
+          $version = (Get-Item $signed).VersionInfo
+          if ($version.ProductName -ne 'EtuSchlopf' -or $version.ProductVersion -ne '0.10.1839') {
+            throw 'Signed executable version resource mismatch'
+          }
+          Copy-Item -LiteralPath $signed -Destination dist/EtuSchlopf-Windows-x64.exe -Force
       - name: Test packaged EXE without developer PATH
         run: |
           $exe = (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
@@ -143,16 +214,22 @@ jobs:
       - name: Publish checked Windows preview
         env:
           GH_TOKEN: ${{ github.token }}
+          SIGN_RELEASE: ${{ inputs.sign_release == true }}
         run: |
           set -euo pipefail
           tag=v0.10.1839-r1933-windows-preview
+          signature_note="The EXE is unsigned."
+          if [[ "$SIGN_RELEASE" == true ]]; then
+            tag=v0.10.1839-r1933-windows-signed-preview
+            signature_note="Free code signing provided by SignPath.io, certificate by SignPath Foundation."
+          fi
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $tag already exists."
             exit 0
           fi
           gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name EtuSchlopf-Windows-x64 --dir dist
           (cd dist && sha256sum --check SHA256SUMS.txt)
-          notes="Windows x64 test version from natively accepted revision r1933 (0.10.1839). Native Windows acceptance: all 14 corpus pieces produced PDFs and the manifest self-check passed. The score archive includes the PDFs, preview images and attribution. Windows checks: isolated start without developer PATH, unchanged input hashes, distribution tests and a freshly rendered synthetic MIDI/WAV example. MuseScore is required for PDFs; the EXE is unsigned. Package checks and source commit: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          notes="Windows x64 test version from natively accepted revision r1933 (0.10.1839). Native Windows acceptance: all 14 corpus pieces produced PDFs and the manifest self-check passed. The score archive includes the PDFs, preview images and attribution. Windows checks: isolated start without developer PATH, unchanged input hashes, distribution tests and a freshly rendered synthetic MIDI/WAV example. MuseScore is required for PDFs. $signature_note Package checks and source commit: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           gh release create "$tag" dist/EtuSchlopf-Windows-x64.exe dist/EtuSchlopf-r1933-source.zip dist/EtuSchlopf-Beispiel-r1933.zip dist/EtuSchlopf-Notenbilder-r1933.zip dist/runtime-provenance.txt dist/SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "EtuSchlopf r1933 Windows x64" --notes "$notes"
