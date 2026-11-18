@@ -324,10 +324,7 @@ fn resolve_pre_writer_direction_relocation(
             }
             records.push((child, cursor_before, cursor));
         }
-        if records.len() < 4 {
-            continue;
-        }
-        for index in 1..records.len().saturating_sub(2) {
+        for index in 1..records.len().saturating_sub(1) {
             let (direction, direction_cursor, _) = records[index];
             if !direction.has_tag_name("direction") {
                 continue;
@@ -346,30 +343,27 @@ fn resolve_pre_writer_direction_relocation(
             {
                 continue;
             }
-            let (host, host_before, host_after) = records[index - 1];
-            let (right, right_before, right_after) = records[index + 1];
-            let (last, last_before, last_after) = records[index + 2];
-            if !host.has_tag_name("note")
-                || !right.has_tag_name("note")
-                || !last.has_tag_name("note")
-                || host_before != parts.proposed_host_cursor
-                || host_after != parts.source_effective_cursor
-                || right_before != parts.source_effective_cursor
-                || right_after <= right_before
-                || last_before != right_after
-                || last_after != parts.group_end_cursor
-                || primary_beam_state(host).as_deref() != Some("begin")
-                || primary_beam_state(right).as_deref() != Some("continue")
-                || primary_beam_state(last).as_deref() != Some("end")
+            let Some(host_index) = records[..index].iter().rposition(|(note, before, _)| {
+                *before == parts.proposed_host_cursor
+                    && primary_beam_state(*note).as_deref() == Some("begin")
+            }) else { continue; };
+            let mut members = records[host_index..index].to_vec();
+            members.extend_from_slice(&records[index + 1..]);
+            let Some(end) = renderer_primary_group_end(&members) else { continue; };
+            let pair = index - host_index;
+            if pair > end || members[end].2 != parts.group_end_cursor
+                || members[pair - 1].2 != parts.source_effective_cursor
+                || members[pair].1 != parts.source_effective_cursor
             {
                 continue;
             }
+            let host = members[0].0;
             let direction_staff = direct_child_text(direction, "staff");
-            let host_staff = direct_child_text(host, "staff");
-            let right_staff = direct_child_text(right, "staff");
+            let left_staff = direct_child_text(members[pair - 1].0, "staff");
+            let right_staff = direct_child_text(members[pair].0, "staff");
             if direction_staff.is_none()
                 || direction_staff != right_staff
-                || direction_staff == host_staff
+                || direction_staff == left_staff
                 || direction.descendants().any(|node| {
                     node.is_element()
                         && matches!(
@@ -541,6 +535,30 @@ pub(super) fn direct_child_text(node: Node<'_, '_>, tag: &str) -> Option<String>
         .map(str::trim)
         .filter(|text| !text.is_empty())
         .map(str::to_string)
+}
+
+pub(super) fn renderer_primary_group_end(records: &[(Node<'_, '_>, i64, i64)]) -> Option<usize> {
+    let (first, start, end) = *records.first()?;
+    let voice = direct_child_text(first, "voice");
+    if !first.has_tag_name("note") || end <= start || voice.is_none()
+        || primary_beam_state(first).as_deref() != Some("begin")
+    {
+        return None;
+    }
+    let mut cursor = end;
+    for (index, &(note, before, after)) in records.iter().enumerate().skip(1) {
+        if !note.has_tag_name("note") || before != cursor || after <= before
+            || direct_child_text(note, "voice") != voice
+        {
+            return None;
+        }
+        match primary_beam_state(note).as_deref() {
+            Some("end") => return Some(index),
+            Some("continue") => cursor = after,
+            _ => return None,
+        }
+    }
+    None
 }
 
 pub(super) fn primary_beam_state(note: Node<'_, '_>) -> Option<String> {

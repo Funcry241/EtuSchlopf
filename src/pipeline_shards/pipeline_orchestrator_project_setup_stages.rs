@@ -2,9 +2,14 @@ struct ProjectRunPreparationStageInputs<'a> {
     cli: &'a Cli,
 }
 
+struct ProjectRunScope {
+    _trace: crate::audit_only::writer_trace::WriterTraceSession,
+    _timing: crate::midi::notation_time::PerformanceTimingScope,
+}
+
 struct ProjectRunPreparationStageOutcome {
     source: source::SourcePlan,
-    writer_trace_session: crate::audit_only::writer_trace::WriterTraceSession,
+    writer_trace_session: ProjectRunScope,
     reference: ReferenceReport,
     options: CheckOptions,
     parallel: ParallelPlan,
@@ -26,7 +31,7 @@ fn run_project_run_preparation_stage(
     )?;
     crate::audit_only::c3_diagnostics::start_project(&source.report_out);
     let parallel = resolve_parallel_plan(&cli.jobs, cli.candidate_budget_jobs)?;
-    let decoded_midi = validate_project_input_files(&source, cli.reference_wav.as_deref())?;
+    let (decoded_midi, prepared_timing) = validate_project_input_files(&source, cli.reference_wav.as_deref())?;
     let reference = inspect_reference_files(
         &source.expected_midi,
         cli.reference_wav.as_deref().or(Some(source.expected_wav.as_path())),
@@ -114,7 +119,10 @@ fn run_project_run_preparation_stage(
 
     Ok(ProjectRunPreparationStageOutcome {
         source,
-        writer_trace_session: _writer_trace_session,
+        writer_trace_session: ProjectRunScope {
+            _trace: _writer_trace_session,
+            _timing: crate::midi::notation_time::PreparedPerformanceTiming::enter(prepared_timing.as_ref()),
+        },
         reference,
         options,
         parallel,
@@ -329,16 +337,30 @@ fn run_master_notation_and_salience_stage(
     Ok(MasterNotationAndSalienceStageOutcome { best })
 }
 
-fn validate_project_input_files(source: &source::SourcePlan, explicit_wav: Option<&Path>) -> anyhow::Result<crate::midi::DecodedMidiSource> {
+type ValidatedProjectMidi = (
+    crate::midi::DecodedMidiSource,
+    Option<std::sync::Arc<crate::midi::notation_time::PreparedPerformanceTiming>>,
+);
+
+fn validate_project_input_files(source: &source::SourcePlan, explicit_wav: Option<&Path>) -> anyhow::Result<ValidatedProjectMidi> {
     let wav = explicit_wav.unwrap_or(&source.expected_wav);
     crate::source::validate_file_targets(
         &[source.expected_midi.clone(), wav.to_path_buf()], &source.output_paths(),
     )?;
-    let decoded_midi = crate::midi::read_standard_midi(&source.expected_midi)
+    let decoded_midi = crate::midi::notation_time::read_midi_with_notation(&source.expected_midi)
         .with_context(|| format!("MIDI-Datei konnte nicht verarbeitet werden: {}", source.expected_midi.display()))?;
-    let _ = crate::midi::notation_time::NotationTimePlan::from_midi(&decoded_midi)?;
-    if decode_wav_mono_samples(wav).is_none() {
-        return Err(anyhow!("WAV kann nicht als Audiodatei gelesen werden: {}. Bitte eine unterstuetzte, nicht leere WAV-Datei bereitstellen.", wav.display()));
-    }
-    Ok(decoded_midi)
+    let (samples, sample_rate) = decode_wav_mono_samples(wav).ok_or_else(|| {
+        anyhow!("WAV kann nicht als Audiodatei gelesen werden: {}. Bitte eine unterstuetzte, nicht leere WAV-Datei bereitstellen.", wav.display())
+    })?;
+    let prepared = match crate::midi::notation_time::NotationTimePlan::from_midi(&decoded_midi) {
+        Ok(_) => None,
+        Err(error) if decoded_midi.timing_markers.is_empty() => {
+            let inferred = crate::midi::notation_time::PreparedPerformanceTiming::prepare_performance(
+                &source.expected_midi, decoded_midi.clone(), &samples, sample_rate,
+            ).with_context(|| format!("Automatische Notationszeit nach fehlgeschlagenem Direktimport ({error:#})"))?;
+            Some(inferred.into())
+        }
+        Err(error) => return Err(error),
+    };
+    Ok((decoded_midi, prepared))
 }

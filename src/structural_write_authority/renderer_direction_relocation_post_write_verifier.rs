@@ -11,7 +11,7 @@ use super::authority_primitives::yes_no;
 use super::locator_resolution::stable_xml_snapshot_fingerprint;
 use super::renderer_direction_relocation_authorization::{
     canonical_direction_without_offset_fingerprint, direct_child_i64, direct_child_text,
-    primary_beam_state, RendererDirectionRelocationVerificationContract,
+    renderer_primary_group_end, RendererDirectionRelocationVerificationContract,
 };
 use super::renderer_direction_relocation_writer_boundary::RendererDirectionRelocationWriterAudit;
 use roxmltree::{Document, Node};
@@ -171,12 +171,8 @@ pub(super) fn audit_renderer_direction_relocation_post_write(
         audit.effective_cursor_stable = relocated.direction_cursor.saturating_add(relocated.offset)
             == contract.source_effective_cursor;
         audit.staff_relation_stable = relocated.staff_relation_stable;
-        audit.beam_group_start_bound = relocated.host_cursor_after
-            == contract.source_effective_cursor
-            && relocated.host_beam_begin
-            && relocated.right_beam_continue;
-        audit.beam_group_end_bound =
-            relocated.last_cursor_after == contract.group_end_cursor && relocated.last_beam_end;
+        audit.beam_group_start_bound = relocated.host_cursor_before == contract.group_start_cursor;
+        audit.beam_group_end_bound = relocated.last_cursor_after == contract.group_end_cursor;
         audit.renderer_interstitial_elements = relocated.interstitial_elements;
         audit.renderer_contiguous_target_members = relocated.interstitial_elements
             == contract.expected_interstitial_elements_after_relocation;
@@ -223,12 +219,8 @@ struct RelocatedDirectionEvidence {
     offset: i64,
     offset_explicit: bool,
     host_cursor_before: i64,
-    host_cursor_after: i64,
     last_cursor_after: i64,
     staff_relation_stable: bool,
-    host_beam_begin: bool,
-    right_beam_continue: bool,
-    last_beam_end: bool,
     interstitial_elements: usize,
 }
 
@@ -261,10 +253,7 @@ fn locate_relocated_direction(
             }
             records.push((child, before, cursor));
         }
-        if records.len() < 4 {
-            continue;
-        }
-        for index in 0..records.len().saturating_sub(3) {
+        for index in 0..records.len().saturating_sub(2) {
             let (direction, direction_cursor, _) = records[index];
             if !direction.has_tag_name("direction") {
                 continue;
@@ -281,33 +270,28 @@ fn locate_relocated_direction(
             let offset_explicit = direction
                 .children()
                 .any(|node| node.is_element() && node.has_tag_name("offset"));
-            let (host, host_before, host_after) = records[index + 1];
-            let (right, right_before, right_after) = records[index + 2];
-            let (last, last_before, last_after) = records[index + 3];
-            if !host.has_tag_name("note")
-                || !right.has_tag_name("note")
-                || !last.has_tag_name("note")
-                || right_before != host_after
-                || last_before != right_after
-            {
+            let members = &records[index + 1..];
+            let Some(end) = renderer_primary_group_end(members) else { continue; };
+            let host_before = members[0].1;
+            let last_after = members[end].2;
+            if host_before != contract.group_start_cursor || last_after != contract.group_end_cursor {
                 continue;
             }
+            let Some(pair) = members[..=end].windows(2).find(|pair| {
+                pair[0].2 == contract.source_effective_cursor && pair[1].1 == contract.source_effective_cursor
+            }) else { continue; };
             let direction_staff = direct_child_text(direction, "staff");
-            let host_staff = direct_child_text(host, "staff");
-            let right_staff = direct_child_text(right, "staff");
+            let left_staff = direct_child_text(pair[0].0, "staff");
+            let right_staff = direct_child_text(pair[1].0, "staff");
             matches.push(RelocatedDirectionEvidence {
                 direction_cursor,
                 offset,
                 offset_explicit,
                 host_cursor_before: host_before,
-                host_cursor_after: host_after,
                 last_cursor_after: last_after,
                 staff_relation_stable: direction_staff.is_some()
                     && direction_staff == right_staff
-                    && direction_staff != host_staff,
-                host_beam_begin: primary_beam_state(host).as_deref() == Some("begin"),
-                right_beam_continue: primary_beam_state(right).as_deref() == Some("continue"),
-                last_beam_end: primary_beam_state(last).as_deref() == Some("end"),
+                    && direction_staff != left_staff,
                 interstitial_elements: 0,
             });
         }

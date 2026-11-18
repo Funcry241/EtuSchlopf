@@ -483,7 +483,21 @@ mod tests {
             .iter()
             .filter_map(|located| classify_tail_beam_state(located.detector_view()))
             .collect::<Vec<_>>();
-        assert_eq!(matches, vec![IdentityFreeTailBeamState::Beat3CorrectBeat4Open]);
+        assert_eq!(matches, vec![IdentityFreeTailBeamState::Open]);
+    }
+
+    #[test]
+    fn a_chord_head_in_the_preceding_beam_does_not_hide_a_cursor_obligation() {
+        let head = "<note><chord/><pitch><step>A</step><octave>4</octave></pitch><duration>24</duration><voice>2</voice><staff>2</staff></note>";
+        let extra = SYNTHETIC_SNAPSHOT.replacen(
+            "  <note>\n    <pitch><step>A</step>",
+            &format!("{head}  <note>\n    <pitch><step>A</step>"), 1,
+        );
+        let (views, _) = adapt_structural_snapshot_read_only(&extra, 96, "synthetic");
+        let intents = detect_structural_repair_intents_read_only(&views);
+        assert_eq!(intents.len(), 1);
+        let proof = super::super::audit_identity_free_semantic_event_equivalence(&intents, views.len(), "synthetic");
+        assert!(proof.authorizes_token_origin());
     }
 
     #[test]

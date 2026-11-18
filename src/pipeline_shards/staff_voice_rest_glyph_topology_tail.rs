@@ -456,11 +456,16 @@ fn atomic_visible_rest_is_shadow_bookkeeping_candidate_with_voice_binding(
         .iter()
         .filter(|note| voice_plan.channel_for_label(note.voice.trim()) == Some(rest_channel))
         .count();
-    let pitched_overlap_coverage = pitched_overlaps.iter().fold(0_i64, |sum, note| {
-        let start = note.start.max(rest_start);
-        let end = note.start.saturating_add(note.duration.max(0)).min(rest_end);
-        sum.saturating_add(end.saturating_sub(start).max(0))
-    });
+    let mut occupied = pitched_overlaps.iter().map(|note| {
+        (note.start.max(rest_start), note.start.saturating_add(note.duration).min(rest_end))
+    }).collect::<Vec<_>>();
+    occupied.sort_unstable();
+    let mut covered_until = rest_start;
+    let pitched_overlap_coverage = occupied.into_iter().map(|(start, end)| {
+        let added = end.saturating_sub(start.max(covered_until)).max(0);
+        covered_until = covered_until.max(end);
+        added
+    }).sum::<i64>();
     let has_real_primary_rest_overlap = rest_overlaps.iter().any(|note| {
         voice_plan.label_is_shadow_rest_primary_exempt(note.voice.trim()) == Some(true)
     });

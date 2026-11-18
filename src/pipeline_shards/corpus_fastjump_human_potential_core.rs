@@ -558,6 +558,7 @@ fn build_candidate_batch(
 ) -> anyhow::Result<Vec<SolverCandidate>> {
     let parallel = inputs.parallel;
     let midi_path = inputs.midi_path;
+    let prepared_timing = crate::midi::notation_time::PreparedPerformanceTiming::for_path(midi_path);
     let input_label = inputs.source.input_label.as_str();
     let reference = inputs.reference;
     let options = inputs.options;
@@ -606,6 +607,7 @@ fn build_candidate_batch(
                 profiles[profile_index].display_name()
             ));
         }
+        let _timing = crate::midi::notation_time::PreparedPerformanceTiming::enter(prepared_timing.as_ref());
         let seed = prepare_solver_seed(
             label,
             start_iteration + profile_index,

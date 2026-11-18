@@ -158,8 +158,9 @@ pub(super) fn resolve_authorized_serialization_target(
     let overlap_record = plan
         .rows
         .iter()
-        .find(|row| row.planned_lane == AuthorizedPlannedLane::OverlapRestAuxiliary)
-        .and_then(|row| records.get(&row.source_event_ordinal))?;
+        .filter(|row| row.planned_lane == AuthorizedPlannedLane::OverlapRestAuxiliary)
+        .filter_map(|row| records.get(&row.source_event_ordinal))
+        .min_by_key(|record| record.range.start)?;
     let insertion_backup_end = measure
         .children()
         .filter(Node::is_element)
@@ -191,7 +192,7 @@ fn renderer_beam_member_contiguity_evidence(
     let removed_ranges = plan
         .rows
         .iter()
-        .filter(|row| row.planned_lane == AuthorizedPlannedLane::HiddenCarrierAuxiliary)
+        .filter(|row| row.planned_lane == AuthorizedPlannedLane::HiddenCarrierAuxiliary || row.planned_chord_member)
         .filter_map(|row| records.get(&row.source_event_ordinal))
         .map(|record| record.range.clone())
         .collect::<Vec<_>>();
@@ -252,6 +253,7 @@ fn planned_primary_beam_groups(plan: &AuthorizedSerializationPlan) -> Vec<Vec<us
     let mut groups = Vec::<Vec<usize>>::new();
     let mut current = Vec::<usize>::new();
     for row in rows {
+        if row.planned_chord_member { continue; }
         match row.planned_primary_beam {
             StructuralBeamState::Begin => {
                 current.clear();
@@ -283,7 +285,7 @@ fn renderer_interstitial_obstacle_snapshot(
     let removed_ranges = plan
         .rows
         .iter()
-        .filter(|row| row.planned_lane == AuthorizedPlannedLane::HiddenCarrierAuxiliary)
+        .filter(|row| row.planned_lane == AuthorizedPlannedLane::HiddenCarrierAuxiliary || row.planned_chord_member)
         .filter_map(|row| records.get(&row.source_event_ordinal))
         .map(|record| record.range.clone())
         .collect::<Vec<_>>();

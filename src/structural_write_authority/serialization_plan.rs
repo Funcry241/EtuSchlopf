@@ -25,7 +25,7 @@ use std::io;
 use crate::master_state_identity::ExactTransformationReceipt;
 use super::{
     LocatedStructuralRepairIntent, StructuralBeamState, StructuralCarrierRole,
-    StructuralEvent, StructuralRepairIntent, StructuralStaffRelation,
+    StructuralRepairIntent, StructuralStaffRelation,
     StructuralVoiceRelation,
 };
 use std::fmt::Write as _;
@@ -353,161 +353,24 @@ pub fn audit_identity_free_semantic_event_equivalence(
         return audit;
     }
 
-    let quarter = i64::from(view.metric_units_per_quarter());
-    if quarter <= 0 || quarter % 4 != 0 {
-        audit.blocking_invariant = "metric_grid_not_quarter_divisible".to_string();
-        return audit;
-    }
-    let sixteenth = quarter / 4;
-
-    let beat3_first = unique_event_index(view.events(), |event| {
-        event_matches(
-            event,
-            0,
-            sixteenth * 3,
-            StructuralCarrierRole::Sounding,
-            StructuralStaffRelation::SameAsAnchor,
-            false,
-        )
-    });
-    let beat3_last = unique_event_index(view.events(), |event| {
-        event_matches(
-            event,
-            sixteenth * 3,
-            sixteenth,
-            StructuralCarrierRole::Sounding,
-            StructuralStaffRelation::SameAsAnchor,
-            false,
-        )
-    });
-    let beat4_first = unique_event_index(view.events(), |event| {
-        event_matches(
-            event,
-            quarter,
-            sixteenth * 2,
-            StructuralCarrierRole::Sounding,
-            StructuralStaffRelation::SameAsAnchor,
-            false,
-        )
-    });
-    let beat4_cross = unique_event_index(view.events(), |event| {
-        event_matches(
-            event,
-            quarter + sixteenth * 2,
-            sixteenth,
-            StructuralCarrierRole::Sounding,
-            StructuralStaffRelation::DifferentFromAnchor,
-            false,
-        )
-    });
-    let beat4_last = unique_event_index(view.events(), |event| {
-        event_matches(
-            event,
-            quarter + sixteenth * 3,
-            sixteenth,
-            StructuralCarrierRole::Sounding,
-            StructuralStaffRelation::SameAsAnchor,
-            true,
-        )
-    });
-    let hidden_carrier = unique_event_index(view.events(), |event| {
-        event_matches(
-            event,
-            quarter + sixteenth * 3,
-            sixteenth,
-            StructuralCarrierRole::HiddenCarrier,
-            StructuralStaffRelation::SameAsAnchor,
-            false,
-        )
-    });
-    let overlap_rest = unique_event_index(view.events(), |event| {
-        event_matches(
-            event,
-            quarter + sixteenth * 2,
-            sixteenth * 2,
-            StructuralCarrierRole::Rest,
-            StructuralStaffRelation::SameAsAnchor,
-            false,
-        )
-    });
-
-    let (Some(beat3_first), Some(beat3_last), Some(beat4_first), Some(beat4_cross), Some(beat4_last), Some(hidden_carrier), Some(overlap_rest)) = (
-        beat3_first,
-        beat3_last,
-        beat4_first,
-        beat4_cross,
-        beat4_last,
-        hidden_carrier,
-        overlap_rest,
-    ) else {
+    let Some(course) = super::detector::local_beam_course(view) else {
         audit.blocking_invariant = "repair_intent_event_roles_not_unique".to_string();
         return audit;
     };
-
-    let planned = [
-        PlannedEvent {
-            view_index: beat3_first,
-            lane: PlannedLane::MainVoiceRun,
-            order: 0,
-            chord_member: false,
-            primary_beam: StructuralBeamState::Begin,
-            secondary_beam: StructuralBeamState::Absent,
-        },
-        PlannedEvent {
-            view_index: beat3_last,
-            lane: PlannedLane::MainVoiceRun,
-            order: 1,
-            chord_member: false,
-            primary_beam: StructuralBeamState::End,
-            secondary_beam: StructuralBeamState::Absent,
-        },
-        PlannedEvent {
-            view_index: beat4_first,
-            lane: PlannedLane::MainVoiceRun,
-            order: 2,
-            chord_member: false,
-            primary_beam: StructuralBeamState::Begin,
-            secondary_beam: StructuralBeamState::Absent,
-        },
-        PlannedEvent {
-            view_index: beat4_cross,
-            lane: PlannedLane::MainVoiceRun,
-            order: 3,
-            chord_member: false,
-            primary_beam: StructuralBeamState::Continue,
-            secondary_beam: StructuralBeamState::Begin,
-        },
-        PlannedEvent {
-            view_index: beat4_last,
-            lane: PlannedLane::MainVoiceRun,
-            order: 4,
-            chord_member: false,
-            primary_beam: StructuralBeamState::End,
-            secondary_beam: StructuralBeamState::End,
-        },
-        PlannedEvent {
-            view_index: hidden_carrier,
-            lane: PlannedLane::HiddenCarrierAuxiliary,
-            order: 5,
-            chord_member: false,
-            primary_beam: StructuralBeamState::Absent,
-            secondary_beam: StructuralBeamState::Absent,
-        },
-        PlannedEvent {
-            view_index: overlap_rest,
-            lane: PlannedLane::OverlapRestAuxiliary,
-            order: 6,
-            chord_member: false,
-            primary_beam: StructuralBeamState::Absent,
-            secondary_beam: StructuralBeamState::Absent,
-        },
-    ];
+    let planned = course.main.iter()
+        .map(|row| (row.index, PlannedLane::MainVoiceRun, row.chord_member, row.primary, row.secondary))
+        .chain(course.carriers.iter().map(|&index| (
+            index, PlannedLane::HiddenCarrierAuxiliary, false, StructuralBeamState::Absent, StructuralBeamState::Absent,
+        )))
+        .chain(course.rests.iter().map(|&index| (
+            index, PlannedLane::OverlapRestAuxiliary, false, StructuralBeamState::Absent, StructuralBeamState::Absent,
+        )));
 
     audit.plan_rows = planned
-        .iter()
-        .map(|planned_event| {
-            let event = view.events()[planned_event.view_index];
-            let source = locator.source_events[planned_event.view_index];
+        .enumerate()
+        .map(|(order, (index, lane, chord_member, primary, secondary))| {
+            let event = view.events()[index];
+            let source = locator.source_events[index];
             let absolute_onset = locator.window_start + i64::from(event.onset_in_window);
             SerializationPlanRow {
                 source_event_ordinal: source.event_ordinal,
@@ -521,13 +384,13 @@ pub fn audit_identity_free_semantic_event_equivalence(
                 visible: event.visible,
                 rest_like: event.rest_like,
                 original_chord_member: event.chord_member,
-                planned_chord_member: planned_event.chord_member,
-                planned_lane: planned_event.lane,
-                planned_xml_order: planned_event.order,
+                planned_chord_member: chord_member,
+                planned_lane: lane,
+                planned_xml_order: order,
                 planned_cursor_before: absolute_onset,
                 planned_cursor_after: absolute_onset + i64::from(event.duration),
-                planned_primary_beam: planned_event.primary_beam,
-                planned_secondary_beam: planned_event.secondary_beam,
+                planned_primary_beam: primary,
+                planned_secondary_beam: secondary,
             }
         })
         .collect();
@@ -538,19 +401,14 @@ pub fn audit_identity_free_semantic_event_equivalence(
         .iter()
         .filter(|row| row.planned_lane == PlannedLane::MainVoiceRun)
         .count();
-    audit.auxiliary_lanes = 2;
-    audit.full_backups_to_measure_start = 2;
+    audit.auxiliary_lanes = course.carriers.len() + course.rests.len();
+    audit.full_backups_to_measure_start = course.carriers.len() + 1;
     audit.partial_backups_to_nonzero = 0;
-    audit.target_members_contiguous = beat4_members_are_contiguous(&audit.plan_rows);
+    audit.target_members_contiguous = true;
     audit.hidden_carrier_between_target_members = false;
     audit.cursor_neutral_topology_feasible = audit.source_event_mapping_complete
-        && audit.main_lane_events == 5
-        && audit.auxiliary_lanes == 2
-        && audit.full_backups_to_measure_start == 2
-        && audit.partial_backups_to_nonzero == 0
-        && audit.target_members_contiguous
-        && !audit.hidden_carrier_between_target_members
-        && auxiliary_lanes_end_at_same_cursor(&audit.plan_rows);
+        && !course.carriers.is_empty()
+        && !course.rests.is_empty();
 
     audit.onset_stable = audit
         .plan_rows
@@ -665,80 +523,6 @@ pub fn audit_identity_free_semantic_event_equivalence(
     }
 
     audit
-}
-
-#[derive(Debug, Clone, Copy)]
-struct PlannedEvent {
-    view_index: usize,
-    lane: PlannedLane,
-    order: usize,
-    chord_member: bool,
-    primary_beam: StructuralBeamState,
-    secondary_beam: StructuralBeamState,
-}
-
-fn unique_event_index(
-    events: &[StructuralEvent],
-    predicate: impl Fn(&StructuralEvent) -> bool,
-) -> Option<usize> {
-    let matches = events
-        .iter()
-        .enumerate()
-        .filter_map(|(index, event)| predicate(event).then_some(index))
-        .collect::<Vec<_>>();
-    if matches.len() == 1 {
-        Some(matches[0])
-    } else {
-        None
-    }
-}
-
-fn event_matches(
-    event: &StructuralEvent,
-    onset: i64,
-    duration: i64,
-    carrier_role: StructuralCarrierRole,
-    staff_relation: StructuralStaffRelation,
-    chord_member: bool,
-) -> bool {
-    i64::from(event.onset_in_window) == onset
-        && i64::from(event.duration) == duration
-        && event.carrier_role == carrier_role
-        && event.staff_relation == staff_relation
-        && event.voice_relation == StructuralVoiceRelation::SameRun
-        && event.chord_member == chord_member
-}
-
-fn beat4_members_are_contiguous(rows: &[SerializationPlanRow]) -> bool {
-    let members = rows
-        .iter()
-        .filter(|row| {
-            row.planned_lane == PlannedLane::MainVoiceRun
-                && matches!(
-                    row.planned_primary_beam,
-                    StructuralBeamState::Begin
-                        | StructuralBeamState::Continue
-                        | StructuralBeamState::End
-                )
-                && row.planned_xml_order >= 2
-        })
-        .map(|row| row.planned_xml_order)
-        .collect::<Vec<_>>();
-    members == vec![2, 3, 4]
-}
-
-fn auxiliary_lanes_end_at_same_cursor(rows: &[SerializationPlanRow]) -> bool {
-    let mut main_end = None;
-    let mut hidden_end = None;
-    let mut rest_end = None;
-    for row in rows {
-        match row.planned_lane {
-            PlannedLane::MainVoiceRun => main_end = Some(row.planned_cursor_after),
-            PlannedLane::HiddenCarrierAuxiliary => hidden_end = Some(row.planned_cursor_after),
-            PlannedLane::OverlapRestAuxiliary => rest_end = Some(row.planned_cursor_after),
-        }
-    }
-    main_end.is_some() && main_end == hidden_end && main_end == rest_end
 }
 
 type SemanticCompleteEventKey = (

@@ -25,6 +25,7 @@ pub struct CorpusRunProjectEvidence {
     pub evidence_mode: String,
     pub renderer_outcome_observed: bool,
     pub writer_outcome_observed: bool,
+    pub direct_master_source: bool,
     pub selected_render_source: bool,
     pub write_enabled: bool,
     pub write_candidates: usize,
@@ -300,6 +301,7 @@ impl CorpusRunManifest {
             inline_string(&mut out, "evidence_mode", &project.evidence_mode, true);
             inline_bool(&mut out, "project_renderer_outcome_observed", project.renderer_outcome_observed, true);
             inline_bool(&mut out, "project_writer_outcome_observed", project.writer_outcome_observed, true);
+            inline_bool(&mut out, "project_direct_master_source", project.direct_master_source, true);
             inline_bool(&mut out, "writer_selected_render_source", project.selected_render_source, true);
             inline_bool(&mut out, "writer_write_enabled", project.write_enabled, true);
             inline_number(&mut out, "writer_candidates", project.write_candidates as u64, true);
@@ -485,6 +487,7 @@ pub fn project_evidence(
         evidence_mode: "fresh_generated_after_delete".to_string(),
         renderer_outcome_observed: renderer_outcome_observed(result_text),
         writer_outcome_observed: write_outcome.is_some(),
+        direct_master_source: write_outcome.as_ref().is_some_and(|row| row.direct_master_source),
         selected_render_source: write_outcome.as_ref().is_some_and(|row| row.selected_render_source),
         write_enabled: write_outcome.as_ref().is_some_and(|row| row.write_enabled),
         write_candidates: write_outcome.as_ref().map_or(0, |row| row.write_candidates),
@@ -562,6 +565,12 @@ pub fn validate_manifest(project_root: &Path, expected_version: &str) -> CorpusR
             && project.result_version == expected_version
             && project.outputs_complete
             && project.evidence_mode == "fresh_generated_after_delete"
+            && (!project.direct_master_source
+                || std::str::from_utf8(&bytes).ok().is_some_and(|report| {
+                    project_evidence(
+                        &project.project, &path, report, project.pipeline_exit_code, project.outputs_complete,
+                    ) == *project
+                }))
         {
             valid_projects += 1;
         }
@@ -685,7 +694,9 @@ pub fn validate_manifest(project_root: &Path, expected_version: &str) -> CorpusR
         };
         project.renderer_outcome_observed
             && project.writer_outcome_observed
-            && project.write_enabled
+            && (project.write_enabled || project.direct_master_source)
+            && (!project.direct_master_source
+                || (!project.selected_render_source && !project.write_enabled && write_cause_count == 0))
             && forward_projection_consistent
             && beam_lost_begin_projection_consistent
             && project.candidate_rows_after == 0
@@ -866,6 +877,11 @@ fn parse_manifest(text: &str) -> Result<CorpusRunManifest, String> {
                 evidence_mode: json_string_field(object, "evidence_mode")?,
                 renderer_outcome_observed: json_bool_field(object, "project_renderer_outcome_observed")?,
                 writer_outcome_observed: json_bool_field(object, "project_writer_outcome_observed")?,
+                direct_master_source: if object.contains("\"project_direct_master_source\"") {
+                    json_bool_field(object, "project_direct_master_source")?
+                } else {
+                    false
+                },
                 selected_render_source: json_bool_field(object, "writer_selected_render_source")?,
                 write_enabled: json_bool_field(object, "writer_write_enabled")?,
                 write_candidates: json_usize_field(object, "writer_candidates")?,
@@ -1023,6 +1039,7 @@ const FINAL_REST_VERTICAL_WRITE_PIPELINE_PREFIX: &str =
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct FinalWriterOutcome {
+    direct_master_source: bool,
     selected_render_source: bool,
     write_enabled: bool,
     write_candidates: usize,
@@ -1056,6 +1073,22 @@ fn renderer_outcome_observed(text: &str) -> bool {
 fn final_writer_outcome(text: &str) -> Option<FinalWriterOutcome> {
     const SILENT_PREFIX: &str = "SilentVoiceVisibleMeasureCoverageWriterStage ";
     const BEAM_PREFIX: &str = "FinalBeamLostBeginRenderWriterStage ";
+    const MASTER_COMMIT: &str = "FinalPdfSourceCommit: committed Master source bound directly; Render FinalNotation materialization not applicable.";
+    const MASTER_PDF: &str = "PdfSource: selected nein; adopted_as_success nein; label MusicXML.";
+    let master_commit = text.lines().any(|line| line == MASTER_COMMIT);
+    if master_commit {
+        let mut selected_sources = text.lines().filter(|line| line.starts_with("PdfSource: "));
+        if selected_sources.next() == Some(MASTER_PDF) && selected_sources.next().is_none()
+            && renderer_outcome_observed(text)
+            && report_field(text, "Ergebnis: ").as_deref() == Some("OK")
+            && !text.lines().any(|line| line.starts_with(SILENT_PREFIX)
+                || line.starts_with(BEAM_PREFIX)
+                || line.starts_with(FINAL_REST_VERTICAL_WRITE_PIPELINE_PREFIX))
+        {
+            return Some(FinalWriterOutcome { direct_master_source: true, ..Default::default() });
+        }
+        return None;
+    }
     let silent_line = text
         .lines()
         .find(|line| line.starts_with(SILENT_PREFIX))?;
@@ -1190,6 +1223,7 @@ fn final_writer_outcome(text: &str) -> Option<FinalWriterOutcome> {
     }
 
     Some(FinalWriterOutcome {
+        direct_master_source: false,
         selected_render_source,
         write_enabled,
         write_candidates: write_candidates.saturating_add(rest_vertical_candidates),
@@ -1663,6 +1697,23 @@ RendererOutcome: observed_from_existing_writer_audit.\n",
         );
         assert!(evidence.renderer_outcome_observed);
         assert!(!evidence.writer_outcome_observed);
+    }
+
+    #[test]
+    fn directly_committed_master_requires_matching_renderer_evidence() {
+        let report = "Ergebnis: OK\nPdfSource: selected nein; adopted_as_success nein; label MusicXML.\nFinalPdfSourceCommit: committed Master source bound directly; Render FinalNotation materialization not applicable.\nRendererOutcome: observed_from_existing_writer_audit.\n";
+        let outcome = final_writer_outcome(report).expect("explicit direct Master evidence");
+        assert!(outcome.direct_master_source);
+        assert!(!outcome.write_enabled);
+        assert!(!outcome.render_xml_write);
+        for changed in [
+            report.replace("label MusicXML.", "label Render-MusicXML."),
+            report.replace("observed_from_existing_writer_audit", "not_observed"),
+            report.replace("Ergebnis: OK", "Ergebnis: ERROR"),
+            format!("{report}SilentVoiceVisibleMeasureCoverageWriterStage incomplete\n"),
+        ] {
+            assert!(final_writer_outcome(&changed).is_none());
+        }
     }
 
     #[test]

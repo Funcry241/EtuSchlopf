@@ -62,19 +62,28 @@ fn add_beat_scoped_beam_groups(
                 }
             }
         }
-        if !accepted_any && !separate && candidates.len() == 2 {
-            let left = candidates[0];
-            let right = candidates[1];
-            if beat_group_stays_inside_one_beat(&candidates, beat_unit)
-                && !crosses_metric_beam_clef_boundary(boundaries, left.start, right.start)
-                && left.start + left.duration < right.start
-                && visible_rests_cover_gap(note_infos, left, right)
-            {
-                let group = vec![left, right];
-                let fresh = group.iter().filter(|info| !used_notes.contains(&info.index)).count();
-                if let Some(emission) = partial_beat_extend_states_with_actual_capture(&group, states_by_note) {
+        if !separate {
+            // A rest edge can join two otherwise unclaimed attacks. A complete
+            // sounding run already owns its endpoints. An attack with two
+            // eligible neighbours does not uniquely determine a rest edge.
+            let rest_edges = candidates.windows(2).filter(|edge| {
+                let [left, right] = [edge[0], edge[1]];
+                !selected_in_group.contains(&left.index)
+                    && !selected_in_group.contains(&right.index)
+                    && beat_group_stays_inside_one_beat(edge, beat_unit)
+                    && !crosses_metric_beam_clef_boundary(boundaries, left.start, right.start)
+                    && left.start + left.duration < right.start
+                    && visible_rests_cover_gap(note_infos, left, right)
+            }).collect::<Vec<_>>();
+            let mut degree = BTreeMap::<usize, usize>::new();
+            for note in rest_edges.iter().flat_map(|edge| edge.iter()) {
+                *degree.entry(note.index).or_default() += 1;
+            }
+            for edge in rest_edges.iter().filter(|edge| edge.iter().all(|note| degree[&note.index] == 1)) {
+                let fresh = edge.iter().filter(|info| !used_notes.contains(&info.index)).count();
+                if let Some(emission) = partial_beat_extend_states_with_actual_capture(edge, states_by_note) {
                     stats.actual_beam_emissions.push(emission);
-                    for info in &group {
+                    for info in *edge {
                         used_notes.insert(info.index);
                         selected_in_group.insert(info.index);
                     }
@@ -251,72 +260,49 @@ fn partial_beat_extend_states_with_actual_capture(
 
 
 
-fn structural_cross_staff_voice_beam_groups(
-    infos: &[PartialBeatNoteInfo],
+fn structural_cross_staff_voice_beam_groups<'a>(
+    infos: &'a [PartialBeatNoteInfo],
     beat_unit: i64,
-) -> Vec<Vec<&PartialBeatNoteInfo>> {
-    let mut by_voice_beat: BTreeMap<(String, i64), Vec<&PartialBeatNoteInfo>> = BTreeMap::new();
-    for info in infos.iter().filter(|info| {
-        partial_beat_is_beam_candidate(info) && info.duration <= beat_unit / 2
-    }) {
-        by_voice_beat
-            .entry((info.voice.clone(), info.start.div_euclid(beat_unit)))
-            .or_default()
-            .push(info);
+    quarter: i64,
+    clef_boundaries: &BTreeMap<String, Vec<i64>>,
+) -> Vec<Vec<&'a PartialBeatNoteInfo>> {
+    let mut by_course: BTreeMap<_, Vec<_>> = BTreeMap::new();
+    for info in infos.iter().filter(|info| !info.is_chord) {
+        if let Some(cursor_run) = info.cursor_run {
+            by_course.entry((info.voice.as_str(), cursor_run, info.start.div_euclid(beat_unit)))
+                .or_default().push(info);
+        }
     }
     let mut groups = Vec::new();
-    for ((_voice, _beat), mut notes) in by_voice_beat {
+    for mut notes in by_course.into_values() {
         notes.sort_by_key(|info| (info.start, info.index));
-        let contiguous = notes
-            .windows(2)
-            .all(|pair| pair[0].start + pair[0].duration == pair[1].start);
-        let crosses_staff = notes
-            .windows(2)
-            .any(|pair| pair[0].staff != pair[1].staff);
-        let stays_inside_beat = beat_group_stays_inside_one_beat(&notes, beat_unit);
-        if notes.len() >= 2 && contiguous && crosses_staff && stays_inside_beat {
-            groups.push(notes);
-        }
-    }
-
-    // A staff change does not break an otherwise complete metric beam unit.
-    // Keep the historical <= half-beat class byte-semantically intact above and
-    // admit only the missing dotted-eighth/sixteenth complete-beat pair here.
-    let mut mixed_by_voice_beat: BTreeMap<(String, i64), Vec<&PartialBeatNoteInfo>> =
-        BTreeMap::new();
-    for info in infos.iter().filter(|info| partial_beat_is_beam_candidate(info)) {
-        mixed_by_voice_beat
-            .entry((info.voice.clone(), info.start.div_euclid(beat_unit)))
-            .or_default()
-            .push(info);
-    }
-    for ((_voice, beat), mut notes) in mixed_by_voice_beat {
-        notes.sort_by_key(|info| (info.start, info.index));
-        if notes.len() != 2 {
+        if notes.windows(2).any(|pair| pair[0].start + pair[0].duration > pair[1].start) {
             continue;
         }
-        let left = notes[0];
-        let right = notes[1];
-        let beat_start = beat * beat_unit;
-        let beat_end = (beat + 1) * beat_unit;
-        let contiguous = left.start + left.duration == right.start;
-        let crosses_staff = left.staff != right.staff;
-        let fills_complete_beat = left.start == beat_start
-            && right.start + right.duration == beat_end;
-        let dotted_eighth_then_sixteenth = left.note_type == "eighth"
-            && right.note_type == "16th"
-            && left.duration * 4 == beat_unit * 3
-            && right.duration * 4 == beat_unit;
-        let sixteenth_then_dotted_eighth = left.note_type == "16th"
-            && right.note_type == "eighth"
-            && left.duration * 4 == beat_unit
-            && right.duration * 4 == beat_unit * 3;
-        if contiguous
-            && crosses_staff
-            && fills_complete_beat
-            && (dotted_eighth_then_sixteenth || sixteenth_then_dotted_eighth)
-        {
-            groups.push(notes);
+        for beamable in notes.split(|info| {
+            if !partial_beat_is_beam_candidate(info) { return true; }
+            let base = quarter * 4;
+            let scale = 1_i64 << partial_beat_level(info);
+            // Accept ordinary and dotted binary values. Timing-only duration
+            // coincidence is insufficient when the written value disagrees.
+            ![base, base * 3 / 2, base * 7 / 4].contains(&(info.duration * scale * 4))
+        }) {
+            for run in beamable.chunk_by(|left, right| {
+                left.start + left.duration == right.start
+                    && ![&left.staff, &right.staff].iter().any(|staff| {
+                        clef_boundaries.get(*staff).is_some_and(|boundaries| {
+                            crosses_metric_beam_clef_boundary(boundaries, left.start, right.start)
+                        })
+                    })
+            }) {
+                let [first, ..] = run else { continue; };
+                if beat_group_stays_inside_one_beat(run, beat_unit)
+                    && run.iter().any(|note| note.staff != first.staff)
+                    && run.windows(2).all(|pair| pair[0].index < pair[1].index)
+                {
+                    groups.push(run.to_vec());
+                }
+            }
         }
     }
     groups

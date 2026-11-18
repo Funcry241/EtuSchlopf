@@ -24,7 +24,7 @@ const MIDI_HEADER: &[u8; 4] = b"MThd";
 const MIDI_TRACK: &[u8; 4] = b"MTrk";
 
 #[derive(Debug, Clone, Copy)]
-enum RawNoteEventKind { On, Off }
+enum RawNoteEventKind { On(u8), Off }
 
 #[derive(Debug, Clone, Copy)]
 struct RawNoteEvent {
@@ -98,6 +98,7 @@ pub(crate) struct DecodedMidiSource {
     pub(crate) tracks: u16,
     pub(crate) source_ppq: i64,
     pub(crate) notes: Vec<CanonicalSourceEvent>,
+    pub(crate) attack_velocities: Vec<u8>,
     pub(crate) source_event_causal_ledger: SourceEventCausalLedger,
     pub(crate) tempo_microseconds_per_quarter: Vec<u32>,
     pub(crate) tempo_changes: Vec<(u64, u32)>,
@@ -110,7 +111,7 @@ pub(crate) fn read_standard_midi(path: &Path) -> anyhow::Result<DecodedMidiSourc
     decode_standard_midi_bytes(&data)
 }
 
-fn decode_standard_midi_bytes(data: &[u8]) -> anyhow::Result<DecodedMidiSource> {
+pub(super) fn decode_standard_midi_bytes(data: &[u8]) -> anyhow::Result<DecodedMidiSource> {
     let parsed = parse_midi(data)?;
     let time_domain = SourceTimeDomain::from_raw_boundaries(parsed.ppq,
         parsed.note_events.iter().map(|event| event.tick), &parsed.meter_changes)?;
@@ -135,6 +136,14 @@ fn decode_standard_midi_bytes(data: &[u8]) -> anyhow::Result<DecodedMidiSource> 
     let mut tempo_microseconds_per_quarter = parsed.tempo_changes.iter().map(|&(_, tempo)| tempo).collect::<Vec<_>>();
     tempo_microseconds_per_quarter.sort_unstable();
     tempo_microseconds_per_quarter.dedup();
+    let mut attack_velocities: Vec<_> = parsed.note_events.iter().filter_map(|event| {
+        match event.kind {
+            RawNoteEventKind::On(velocity) => Some(((event.tick, event.track_index, event.event_index), velocity)),
+            RawNoteEventKind::Off => None,
+        }
+    }).collect();
+    attack_velocities.sort_unstable_by_key(|&(order, _)| order);
+    let attack_velocities = attack_velocities.into_iter().map(|(_, velocity)| velocity).collect();
     Ok(DecodedMidiSource {
         timing_markers: parsed.notation.timing_markers,
         opening_key_signature,
@@ -145,6 +154,7 @@ fn decode_standard_midi_bytes(data: &[u8]) -> anyhow::Result<DecodedMidiSource> 
         tracks: parsed.tracks,
         source_ppq: parsed.ppq,
         notes,
+        attack_velocities,
         source_event_causal_ledger,
         tempo_microseconds_per_quarter,
         tempo_changes: parsed.tempo_changes,
@@ -319,7 +329,7 @@ fn parse_track(
                             kind: if velocity == 0 {
                                 RawNoteEventKind::Off
                             } else {
-                                RawNoteEventKind::On
+                                RawNoteEventKind::On(velocity)
                             },
                         });
                     }
@@ -424,6 +434,7 @@ fn pair_and_normalize_note_events(
     let mut active: BTreeMap<(u8, u8), VecDeque<ActiveNote>> = BTreeMap::new();
     let mut completed = Vec::new();
     let mut causal_entries = Vec::new();
+    let mut redundant_note_offs = Vec::new();
     let mut next_source_ordinal = 0usize;
 
     for event in ordered {
@@ -435,7 +446,7 @@ fn pair_and_normalize_note_events(
             key: event.key,
         };
         match event.kind {
-            RawNoteEventKind::On => {
+            RawNoteEventKind::On(_) => {
                 active
                     .entry((event.channel, event.key))
                     .or_default()
@@ -454,14 +465,10 @@ fn pair_and_normalize_note_events(
                         event.tick
                     )
                 })?;
-                let started = queue.pop_front().ok_or_else(|| {
-                    anyhow!(
-                        "MIDI Note-Off ohne offene Note: Kanal {} Ton {} Tick {}",
-                        event.channel,
-                        event.key,
-                        event.tick
-                    )
-                })?;
+                let Some(started) = queue.pop_front() else {
+                    redundant_note_offs.push(locator);
+                    continue;
+                };
                 if event.tick <= started.note_on.tick {
                     return Err(anyhow!(
                         "MIDI-Note ohne positive Dauer: Kanal {} Ton {} Tick {}",
@@ -501,6 +508,7 @@ fn pair_and_normalize_note_events(
             canonical_divisions: domain.divisions,
             raw_note_event_count: parsed.note_events.len(),
             entries: causal_entries,
+            redundant_note_offs,
         },
     ))
 }
@@ -631,6 +639,29 @@ mod tests {
     }
 
     #[test]
+    fn decoder_accounts_for_a_release_while_a_previously_played_key_is_idle() {
+        let track = [
+            0, 0x90, 48, 90,
+            24, 0x80, 48, 0,
+            12, 0x80, 48, 0,
+            12, 0x90, 48, 85,
+            24, 0x80, 48, 0,
+            0, 0xff, 0x2f, 0,
+        ];
+        let decoded = decode_standard_midi_bytes(&midi_with_track(&track)).unwrap();
+        let ledger = &decoded.source_event_causal_ledger;
+        assert_eq!(decoded.notes.iter().map(|note| (note.pos, note.len)).collect::<Vec<_>>(),
+            vec![(0, 24), (48, 24)]);
+        assert_eq!(ledger.raw_note_event_count, 5);
+        assert_eq!(ledger.redundant_note_offs.len(), 1);
+        assert_eq!(ledger.redundant_note_offs[0].tick, 36);
+
+        let mut invalid_ledger = ledger.clone();
+        invalid_ledger.redundant_note_offs[0].tick = 60;
+        assert!(project_source_event_causality(&invalid_ledger, &decoded.notes, 96).is_err());
+    }
+
+    #[test]
     fn decoder_rejects_unclosed_note() {
         let track = [0x00, 0x90, 60, 100, 0x00, 0xff, 0x2f, 0x00];
         let parsed = parse_midi(&midi_with_track(&track)).expect("structurally valid MIDI");
@@ -654,7 +685,7 @@ mod tests {
                     event_index: 0,
                     channel: 0,
                     key: 60,
-                    kind: RawNoteEventKind::On,
+                    kind: RawNoteEventKind::On(64),
                 },
                 RawNoteEvent {
                     tick: 51,

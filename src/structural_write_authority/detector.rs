@@ -1,180 +1,194 @@
+use super::beam_plan::BeamState;
 use super::{
-    StructuralBeamState, StructuralCarrierRole, StructuralEvent, StructuralRepairIntent,
-    StructuralStaffRelation, StructuralView, StructuralVoiceRelation,
+    BeamPlan, StructuralBeamState, StructuralCarrierRole, StructuralEvent, StructuralRepairIntent,
+    StructuralView,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum IdentityFreeTailBeamState {
-    Beat3EmptyBeat4Open,
-    LegacyCrossBeatBeat4Open,
-    Beat3CorrectBeat4Open,
+    Open,
     AlreadyCorrect,
-    Unsupported,
 }
 
-impl IdentityFreeTailBeamState {
-    pub(super) fn is_repairable(self) -> bool {
-        matches!(
-            self,
-            Self::Beat3EmptyBeat4Open
-                | Self::LegacyCrossBeatBeat4Open
-                | Self::Beat3CorrectBeat4Open
-        )
-    }
+#[derive(Debug, Clone, Copy)]
+pub(super) struct LocalBeamMember {
+    pub index: usize,
+    pub chord_member: bool,
+    pub primary: StructuralBeamState,
+    pub secondary: StructuralBeamState,
 }
 
-pub(super) fn classify_tail_beam_state(
-    view: &StructuralView,
-) -> Option<IdentityFreeTailBeamState> {
-    let quarter = i64::from(view.metric_units_per_quarter());
-    let sixteenth = quarter / 4;
-    if quarter <= 0 || quarter % 4 != 0 {
-        return None;
-    }
+pub(super) struct LocalBeamCourse {
+    pub main: Vec<LocalBeamMember>,
+    pub carriers: Vec<usize>,
+    pub rests: Vec<usize>,
+}
 
-    let event = |onset: i64,
-                 duration: i64,
-                 role: StructuralCarrierRole,
-                 relation: StructuralStaffRelation,
-                 visible: bool,
-                 rest_like: bool,
-                 chord_member: bool|
-     -> Option<&StructuralEvent> {
-        let matches = view
-            .events()
-            .iter()
-            .filter(|candidate| {
-                i64::from(candidate.onset_in_window) == onset
-                    && i64::from(candidate.duration) == duration
-                    && candidate.carrier_role == role
-                    && candidate.staff_relation == relation
-                    && candidate.voice_relation == StructuralVoiceRelation::SameRun
-                    && candidate.visible == visible
-                    && candidate.rest_like == rest_like
-                    && candidate.chord_member == chord_member
-            })
-            .collect::<Vec<_>>();
-        if matches.len() == 1 {
-            Some(matches[0])
-        } else {
-            None
-        }
+fn same_attack(a: &StructuralEvent, b: &StructuralEvent) -> bool {
+    a.onset_in_window == b.onset_in_window
+        && a.duration == b.duration
+        && a.staff_relation == b.staff_relation
+        && a.voice_relation == b.voice_relation
+}
+
+pub(super) fn local_beam_course(view: &StructuralView) -> Option<LocalBeamCourse> {
+    use StructuralCarrierRole::{HiddenCarrier, Rest, Sounding};
+
+    let beat = view.metric_units_per_quarter();
+    let events = view.events();
+    let mut course = LocalBeamCourse {
+        main: Vec::new(),
+        carriers: Vec::new(),
+        rests: Vec::new(),
     };
-
-    let beat3_first = event(
-        0,
-        sixteenth * 3,
-        StructuralCarrierRole::Sounding,
-        StructuralStaffRelation::SameAsAnchor,
-        true,
-        false,
-        false,
-    )?;
-    let beat3_last = event(
-        sixteenth * 3,
-        sixteenth,
-        StructuralCarrierRole::Sounding,
-        StructuralStaffRelation::SameAsAnchor,
-        true,
-        false,
-        false,
-    )?;
-    let beat4_first = event(
-        quarter,
-        sixteenth * 2,
-        StructuralCarrierRole::Sounding,
-        StructuralStaffRelation::SameAsAnchor,
-        true,
-        false,
-        false,
-    )?;
-    let beat4_cross = event(
-        quarter + sixteenth * 2,
-        sixteenth,
-        StructuralCarrierRole::Sounding,
-        StructuralStaffRelation::DifferentFromAnchor,
-        true,
-        false,
-        false,
-    )?;
-    let beat4_last = event(
-        quarter + sixteenth * 3,
-        sixteenth,
-        StructuralCarrierRole::Sounding,
-        StructuralStaffRelation::SameAsAnchor,
-        true,
-        false,
-        true,
-    )?;
-    event(
-        quarter + sixteenth * 3,
-        sixteenth,
-        StructuralCarrierRole::HiddenCarrier,
-        StructuralStaffRelation::SameAsAnchor,
-        false,
-        true,
-        false,
-    )?;
-    event(
-        quarter + sixteenth * 2,
-        sixteenth * 2,
-        StructuralCarrierRole::Rest,
-        StructuralStaffRelation::SameAsAnchor,
-        true,
-        true,
-        false,
-    )?;
-
-    if view.events().len() != 7 {
+    let mut heads = Vec::new();
+    for (index, event) in events.iter().enumerate() {
+        match event.carrier_role {
+            Sounding if event.visible && !event.rest_like && event.duration > 0 => {
+                let mut chord_member = event.chord_member;
+                if event.chord_member {
+                    // Keep a real chord attached to its sounding head. An
+                    // exact hidden rest host is a separate cursor obligation.
+                    let host = events[..index]
+                        .iter()
+                        .enumerate()
+                        .rev()
+                        .find(|(_, host)| !host.chord_member && same_attack(event, host))?
+                        .0;
+                    chord_member = events[host].carrier_role != HiddenCarrier;
+                    if !chord_member && !course.carriers.contains(&host) {
+                        return None;
+                    }
+                }
+                if !chord_member {
+                    heads.push(course.main.len());
+                }
+                course.main.push(LocalBeamMember {
+                    index,
+                    chord_member,
+                    primary: event.primary_beam,
+                    secondary: event.secondary_beam,
+                });
+            }
+            HiddenCarrier if event.rest_like && !event.visible && !event.chord_member => {
+                course.carriers.push(index)
+            }
+            Rest if event.rest_like && event.visible && !event.chord_member => {
+                course.rests.push(index)
+            }
+            _ => return None,
+        }
+    }
+    if course.carriers.is_empty() || course.rests.is_empty() {
         return None;
     }
-
-    let exact =
-        |event: &StructuralEvent, primary: StructuralBeamState, secondary: StructuralBeamState| {
-            event.primary_beam == primary && event.secondary_beam == secondary
-        };
-    let absent = StructuralBeamState::Absent;
-    let beat3_empty = exact(beat3_first, absent, absent) && exact(beat3_last, absent, absent);
-    let beat3_correct = exact(beat3_first, StructuralBeamState::Begin, absent)
-        && exact(beat3_last, StructuralBeamState::End, absent);
-    let legacy_cross_beat = exact(beat3_first, absent, absent)
-        && exact(beat3_last, StructuralBeamState::Begin, absent)
-        && exact(beat4_first, StructuralBeamState::End, absent);
-    let beat4_open = exact(beat4_first, absent, absent)
-        && exact(beat4_cross, absent, absent)
-        && exact(beat4_last, absent, absent);
-    let beat4_correct = exact(beat4_first, StructuralBeamState::Begin, absent)
-        && exact(
-            beat4_cross,
-            StructuralBeamState::Continue,
-            StructuralBeamState::Begin,
-        )
-        && exact(
-            beat4_last,
-            StructuralBeamState::End,
-            StructuralBeamState::End,
+    if !course.carriers.iter().all(|&index| {
+        let carrier = &events[index];
+        course
+            .main
+            .iter()
+            .filter(|row| {
+                !row.chord_member
+                    && events[row.index].chord_member
+                    && same_attack(carrier, &events[row.index])
+            })
+            .count()
+            == 1
+    }) {
+        return None;
+    }
+    let event_indices = course.main.iter().map(|row| row.index).collect::<Vec<_>>();
+    let event_at = |offset: usize| &events[event_indices[offset]];
+    if heads.windows(2).any(|pair| {
+        let a = event_at(pair[0]);
+        let b = event_at(pair[1]);
+        a.onset_in_window + a.duration != b.onset_in_window
+    }) {
+        return None;
+    }
+    let end = heads.last().map(|&last| {
+        let event = event_at(last);
+        event.onset_in_window + event.duration
+    })?;
+    if !course.rests.iter().all(|&index| {
+        let rest = &events[index];
+        rest.duration > 0 && rest.onset_in_window + rest.duration == end
+    }) {
+        return None;
+    }
+    let mut has_target = false;
+    for run in heads.chunk_by(|a, b| {
+        event_at(*a).onset_in_window.div_euclid(beat)
+            == event_at(*b).onset_in_window.div_euclid(beat)
+    }) {
+        let first = event_at(run[0]);
+        let last = event_at(*run.last()?);
+        let beat_end = (first.onset_in_window.div_euclid(beat) + 1) * beat;
+        let metric_run = run.len() >= 2
+            && last.onset_in_window + last.duration <= beat_end
+            && run.iter().all(|&member| event_at(member).duration < beat);
+        let advances_new_chord = run.iter().any(|&member| event_at(member).chord_member);
+        if advances_new_chord {
+            if !metric_run
+                || !run
+                    .iter()
+                    .any(|&member| event_at(member).staff_relation != first.staff_relation)
+            {
+                return None;
+            }
+            has_target = true;
+        }
+        if !metric_run {
+            continue;
+        }
+        let primary = (0..run.len()).collect::<Vec<_>>();
+        let secondary = (0..run.len()).collect::<Vec<_>>();
+        let subgroups = secondary.split(|&i| event_at(run[i]).duration > beat / 4);
+        let mut groups = vec![(primary.as_slice(), 1)];
+        groups.extend(
+            subgroups
+                .filter(|members| members.len() >= 2)
+                .map(|members| (members, 2)),
         );
+        let beam = BeamPlan::from_level_groups(run.len(), &groups)?;
+        for &member in run {
+            course.main[member].primary = StructuralBeamState::Absent;
+            course.main[member].secondary = StructuralBeamState::Absent;
+        }
+        for edit in beam.edits() {
+            let state = match edit.state() {
+                BeamState::Begin => StructuralBeamState::Begin,
+                BeamState::Continue => StructuralBeamState::Continue,
+                BeamState::End => StructuralBeamState::End,
+            };
+            let member = &mut course.main[run[edit.event_ordinal()]];
+            if edit.level() == 1 {
+                member.primary = state;
+            } else {
+                member.secondary = state;
+            }
+        }
+    }
+    has_target.then_some(course)
+}
 
-    Some(if beat3_correct && beat4_correct {
+pub(super) fn classify_tail_beam_state(view: &StructuralView) -> Option<IdentityFreeTailBeamState> {
+    let course = local_beam_course(view)?;
+    let is_current = course.main.iter().all(|row| {
+        let event = &view.events()[row.index];
+        row.primary == event.primary_beam && row.secondary == event.secondary_beam
+    });
+    Some(if is_current {
         IdentityFreeTailBeamState::AlreadyCorrect
-    } else if beat3_correct && beat4_open {
-        IdentityFreeTailBeamState::Beat3CorrectBeat4Open
-    } else if beat3_empty && beat4_open {
-        IdentityFreeTailBeamState::Beat3EmptyBeat4Open
-    } else if legacy_cross_beat
-        && exact(beat4_cross, absent, absent)
-        && exact(beat4_last, absent, absent)
-    {
-        IdentityFreeTailBeamState::LegacyCrossBeatBeat4Open
     } else {
-        IdentityFreeTailBeamState::Unsupported
+        IdentityFreeTailBeamState::Open
     })
 }
 
-pub(super) fn detect_repair_intent(
-    view: &StructuralView,
-) -> Option<StructuralRepairIntent> {
-    classify_tail_beam_state(view)
-        .filter(|state| state.is_repairable())
-        .map(|_| StructuralRepairIntent::CompleteTailBeatBeam)
+pub(super) fn detect_repair_intent(view: &StructuralView) -> Option<StructuralRepairIntent> {
+    matches!(
+        classify_tail_beam_state(view),
+        Some(IdentityFreeTailBeamState::Open)
+    )
+    .then_some(StructuralRepairIntent::CompleteTailBeatBeam)
 }

@@ -1986,6 +1986,36 @@ pub(crate) fn extend_bound_sustain_beam_group(
     }).map(Some)
 }
 
+#[derive(Clone, Copy)]
+struct BeatScopedMetric {
+    divisions: i64,
+    beats: i64,
+    beat_type: i64,
+}
+
+impl Default for BeatScopedMetric {
+    fn default() -> Self {
+        Self { divisions: 1, beats: 4, beat_type: 4 }
+    }
+}
+
+impl BeatScopedMetric {
+    fn update(&mut self, measure: &str) {
+        self.divisions = partial_beat_first_i64(measure, "divisions").unwrap_or(self.divisions).max(1);
+        self.beats = partial_beat_first_i64(measure, "beats").unwrap_or(self.beats).max(1);
+        self.beat_type = partial_beat_first_i64(measure, "beat-type").unwrap_or(self.beat_type).max(1);
+    }
+
+    fn pulse(self) -> i64 {
+        crate::midi::source_time::notation_pulse_duration(self.divisions, self.beats, self.beat_type)
+    }
+
+    fn measure_duration(self, measure: &str) -> i64 {
+        crate::musicxml::implicit_measure_extent(measure, self.divisions, self.beats, self.beat_type)
+            .unwrap_or_else(|| (self.divisions.saturating_mul(self.beats).saturating_mul(4) / self.beat_type).max(1))
+    }
+}
+
 fn enforce_beat_scoped_beaming_in_xml(xml: &mut String) -> BeatScopedBeamPatchStats {
     let spans = partial_beat_measure_spans(xml);
     if spans.is_empty() {
@@ -1993,18 +2023,16 @@ fn enforce_beat_scoped_beaming_in_xml(xml: &mut String) -> BeatScopedBeamPatchSt
     }
     let mut out = String::with_capacity(xml.len() + 2048);
     let mut last = 0_usize;
-    let mut inherited_divisions = 1_i64;
+    let mut metric = BeatScopedMetric::default();
     let mut total = BeatScopedBeamPatchStats::default();
     for span in spans {
         total.actual_note_map.0.extend(beat_scoped_unchanged_note_map(&xml[last..span.start], last, out.len()).0);
         out.push_str(&xml[last..span.start]);
         let measure_text = &xml[span.start..span.end];
-        inherited_divisions = partial_beat_first_i64(measure_text, "divisions")
-            .unwrap_or(inherited_divisions)
-            .max(1);
+        metric.update(measure_text);
         let (patched, mut stats) = patch_beat_scoped_beaming_in_measure(
             measure_text,
-            inherited_divisions,
+            metric,
         );
         if stats.groups > 0 {
             total.affected_measures += 1;
@@ -2033,14 +2061,14 @@ fn beat_scoped_unchanged_note_map(text: &str, source: usize, output: usize) -> A
 
 fn patch_beat_scoped_beaming_in_measure(
     measure_text: &str,
-    divisions: i64,
+    metric: BeatScopedMetric,
 ) -> (String, BeatScopedBeamPatchStats) {
     let raw_notes = partial_beat_raw_notes(measure_text);
     if raw_notes.is_empty() {
         return (measure_text.to_string(), BeatScopedBeamPatchStats::default());
     }
     let note_infos = partial_beat_note_infos(measure_text, &raw_notes);
-    let beat_unit = divisions.max(1);
+    let beat_unit = metric.pulse();
     let mut states_by_note: BTreeMap<usize, Vec<(usize, &'static str)>> = BTreeMap::new();
     let mut explicit_negative_notes = BTreeSet::new();
     let mut stats = BeatScopedBeamPatchStats { actual_note_map: ActualBeamNoteMap::unchanged(&raw_notes), ..Default::default() };
@@ -2081,7 +2109,7 @@ fn patch_beat_scoped_beaming_in_measure(
 
 #[cfg(test)]
 mod beat_scoped_beam_decision_scope_materialization_tests {
-    use super::patch_beat_scoped_beaming_in_measure;
+    use super::{BeatScopedMetric, patch_beat_scoped_beaming_in_measure};
 
     fn note(step: &str, duration: i64, note_type: &str, beams: &str) -> String {
         format!(
@@ -2121,7 +2149,7 @@ mod beat_scoped_beam_decision_scope_materialization_tests {
             rest(24, "16th"),
         );
 
-        let (after, stats) = patch_beat_scoped_beaming_in_measure(&measure, 96);
+        let (after, stats) = patch_beat_scoped_beaming_in_measure(&measure, BeatScopedMetric { divisions: 96, ..Default::default() });
         assert_eq!(stats.groups, 1);
 
         let prefix_start = after.find("<step>B</step>").expect("prefix");
@@ -2169,7 +2197,7 @@ mod beat_scoped_beam_decision_scope_materialization_tests {
                     r#"<measure number="{label}">{initial}{}{}<attributes><clef number="{staff}"><sign>{sign}</sign><line>{line}</line></clef></attributes>{}</measure>"#,
                     notes[0], notes[1], notes[2],
                 );
-                let (after, _) = patch_beat_scoped_beaming_in_measure(&measure, 96);
+                let (after, _) = patch_beat_scoped_beaming_in_measure(&measure, BeatScopedMetric { divisions: 96, ..Default::default() });
                 let document = roxmltree::Document::parse(&after).unwrap();
                 let actual: Vec<_> = document.root_element().children()
                     .filter(|node| node.has_tag_name("note"))
@@ -2194,7 +2222,7 @@ mod beat_scoped_beam_decision_scope_materialization_tests {
             "<measure number=\"\
 1\"><attributes><divisions>96</divisions></attributes>{foreign}<forward><duration>72</duration></forward></measure>"
         );
-        let (after, stats) = patch_beat_scoped_beaming_in_measure(&measure, 96);
+        let (after, stats) = patch_beat_scoped_beaming_in_measure(&measure, BeatScopedMetric { divisions: 96, ..Default::default() });
         assert_eq!(stats.groups, 0);
         assert_eq!(after, measure);
     }
@@ -2207,18 +2235,16 @@ fn enforce_beat_scoped_rest_completion_in_xml(xml: &mut String) -> BeatScopedRes
     }
     let mut out = String::with_capacity(xml.len() + 2048);
     let mut last = 0_usize;
-    let mut inherited_divisions = 1_i64;
+    let mut metric = BeatScopedMetric::default();
     let mut total = BeatScopedRestPatchStats::default();
     for span in spans {
         total.actual_note_map.0.extend(beat_scoped_unchanged_note_map(&xml[last..span.start], last, out.len()).0);
         out.push_str(&xml[last..span.start]);
         let measure_text = &xml[span.start..span.end];
-        inherited_divisions = partial_beat_first_i64(measure_text, "divisions")
-            .unwrap_or(inherited_divisions)
-            .max(1);
+        metric.update(measure_text);
         let (patched, mut stats) = patch_beat_scoped_rest_completion_in_measure(
             measure_text,
-            inherited_divisions,
+            metric,
         );
         if stats.rest_notes_inserted > 0
             || stats.rests_rewritten > 0
@@ -2242,15 +2268,15 @@ fn enforce_beat_scoped_rest_completion_in_xml(xml: &mut String) -> BeatScopedRes
 
 fn patch_beat_scoped_rest_completion_in_measure(
     measure_text: &str,
-    divisions: i64,
+    metric: BeatScopedMetric,
 ) -> (String, BeatScopedRestPatchStats) {
     let raw_notes = partial_beat_raw_notes(measure_text);
     if raw_notes.is_empty() {
         return (measure_text.to_string(), BeatScopedRestPatchStats { actual_note_map:ActualBeamNoteMap::unchanged(&raw_notes), ..Default::default() });
     }
     let note_infos = partial_beat_note_infos(measure_text, &raw_notes);
-    let beat_unit = divisions.max(1);
-    let measure_duration = beat_unit.saturating_mul(4);
+    let beat_unit = metric.pulse();
+    let measure_duration = metric.measure_duration(measure_text);
     let mut stats = BeatScopedRestPatchStats { actual_note_map: ActualBeamNoteMap::unchanged(&raw_notes), ..Default::default() };
     let mut replacements: BTreeMap<usize, String> = BTreeMap::new();
     let mut inserts_before: BTreeMap<usize, Vec<String>> = BTreeMap::new();
@@ -2760,26 +2786,15 @@ fn close_beat_scoped_rest_completion_crossing_rests_in_xml(
     let output = {
     let mut out = String::with_capacity(xml.len() + 256);
     let mut scan = 0_usize;
-    let mut divisions = 1_i64;
-    let mut beats = 4_i64;
-    let mut beat_type = 4_i64;
+    let mut metric = BeatScopedMetric::default();
     let mut closed_measures = 0_usize;
 
     while let Some((start, end, _)) = find_next_measure_bounds(xml, scan) {
         out.push_str(&xml[scan..start]);
         let measure_xml = &xml[start..end];
-        let (next_divisions, next_beats, next_beat_type, expected_duration) =
-            parse_musicxml_current_meter(
-                measure_xml,
-                divisions,
-                beats,
-                beat_type,
-            );
-        divisions = next_divisions;
-        beats = next_beats;
-        beat_type = next_beat_type;
-
-        let beat_unit = divisions.max(1);
+        metric.update(measure_xml);
+        let expected_duration = metric.measure_duration(measure_xml);
+        let beat_unit = metric.pulse();
         if let Some((closed, _rewritten_rests)) =
             close_beat_scoped_rest_completion_crossing_rest_suffix(
                 measure_xml,

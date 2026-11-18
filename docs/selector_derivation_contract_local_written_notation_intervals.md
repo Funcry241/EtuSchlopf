@@ -1,0 +1,27 @@
+# Local written beam and rest intervals
+
+SelectorDerivationContract: causal_class_first_v1
+SelectorChange: yes
+SelectorRole: repair_scope
+KnownWitnessUsedForFeatureDerivation: no
+TargetConditionedFeatureNarrowing: no
+ClassDefinitionPrecedesCorpusDistribution: yes
+UniquenessIsOutcomeNotGoal: yes
+RepairSelectorSeparatedFromErrorClass: yes
+CausalFeatureNecessityReview: complete
+CorpusDistributionPurpose: measurement_only
+CorpusDistributionMayRefineClassToKnownWitness: no
+MultiplicityInvarianceContract: candidate_duplication_v1
+IndependentCandidateDuplicationInvariant: yes
+ScorewideMultiplicityAsWriteAuthority: forbidden
+GlobalRankingOfIndependentCandidates: forbidden
+MultiplicityDecisionScope: local_candidate_or_explicit_conflict_group
+CandidateDuplicationProbe: required_before_productive_write
+ParentErrorClassContract: docs/selector_derivation_contract_complete_tail_beat_beam_multiplicity_error_class.md
+ScopeNarrowingBasis: authority_or_safety_only
+DiscriminativeContextOnlyNarrowing: forbidden
+
+CausalFeature: A higher beam segment is checked against the complete contiguous material of the matched written beam.
+CausalFeature: Rest replacement preserves the cursor over the union of resolved sounding intervals of its lane.
+CausalFeature: Renderer groups remain separately checkable and contextual proof must cover the participating group.
+NonCausalContextExcluded: score, filename, measure label, source label, exact group size and occurrence frequency.

@@ -5,6 +5,7 @@
 //
 use super::final_beam_observation_planning_core::{
     final_beam_child_i64, final_beam_child_text, final_beam_has_child,
+    final_beam_note_capacity, final_beam_states,
     final_pdf_source_higher_beam_regression_candidates,
     final_pdf_source_lost_begin_regression_candidates,
 };
@@ -1057,93 +1058,110 @@ fn stage_final_orphan_chord_host_rest_candidate(
                         &member_xml[chord_end..]
                     );
                     let mut promoted = plain_promoted.clone();
-                    let mut beam_rewrite = None;
+                    let mut beam_rewrites = Vec::new();
 
-                    // r1019: if the promoted 16th is the missing metric head of an
-                    // already serialized 16th+eighth primary chain, promote the
-                    // beam ownership with the anchor. This is deliberately bound
-                    // to the existing orphan-host promotion and does not touch
-                    // unrelated cross-voice beam groups.
-                    let member_is_sixteenth =
-                        final_orphan_chord_child_text(member, "type") == "16th";
-                    let member_has_beam = member.children().any(|child| {
-                        child.is_element() && child.tag_name().name() == "beam"
-                    });
-                    let following_notes = elements
-                        .iter()
-                        .skip(index + 2)
-                        .filter(|node| {
-                            node.tag_name().name() == "note"
-                                && !node.children().any(|child| {
-                                    child.is_element() && child.tag_name().name() == "chord"
-                                })
-                        })
-                        .take(2)
-                        .copied()
-                        .collect::<Vec<_>>();
-                    if member_is_sixteenth && !member_has_beam && following_notes.len() == 2 {
-                        let bridge = following_notes[0];
-                        let tail = following_notes[1];
-                        let bridge_xml = &source[bridge.range()];
-                        let tail_xml = &source[tail.range()];
-                        let bridge_visible_pitch = bridge.children().any(|child| {
-                            child.is_element() && child.tag_name().name() == "pitch"
-                        }) && !bridge.children().any(|child| {
-                            child.is_element() && child.tag_name().name() == "rest"
-                        }) && bridge.attribute("print-object") != Some("no")
-                            && bridge.attribute("print-spacing") != Some("no");
-                        let tail_visible_pitch = tail.children().any(|child| {
-                            child.is_element() && child.tag_name().name() == "pitch"
-                        }) && !tail.children().any(|child| {
-                            child.is_element() && child.tag_name().name() == "rest"
-                        }) && tail.attribute("print-object") != Some("no")
-                            && tail.attribute("print-spacing") != Some("no");
-                        let primary_begin = "<beam number=\"1\">begin</beam>";
-                        let primary_end = "<beam number=\"1\">end</beam>";
-                        let bridge_has_secondary = bridge_xml.contains("<beam number=\"2\">");
-                        let tail_has_secondary = tail_xml.contains("<beam number=\"2\">");
-                        let exact_metric_tail = bridge_visible_pitch
-                            && tail_visible_pitch
-                            && final_orphan_chord_duration(bridge) == duration
-                            && final_orphan_chord_duration(tail) == duration.saturating_mul(2)
-                            && final_orphan_chord_child_text(bridge, "type") == "16th"
-                            && final_orphan_chord_child_text(tail, "type") == "eighth"
-                            && final_orphan_chord_child_text(bridge, "staff") == staff
-                            && final_orphan_chord_child_text(tail, "staff") == staff
-                            && final_orphan_chord_child_text(bridge, "voice") != voice
-                            && final_orphan_chord_child_text(tail, "voice") == voice
-                            && bridge_xml.matches(primary_begin).count() == 1
-                            && tail_xml.matches(primary_end).count() == 1
-                            && !bridge_has_secondary
-                            && !tail_has_secondary;
-                        if exact_metric_tail {
-                            let close = plain_promoted.rfind("</note>")?;
-                            promoted = format!(
-                                "{}\n    <beam number=\"1\">begin</beam>\n    <beam number=\"2\">begin</beam>{}",
-                                &plain_promoted[..close],
-                                &plain_promoted[close..]
-                            );
-                            let continued = bridge_xml.replacen(
-                                primary_begin,
-                                "<beam number=\"1\">continue</beam>",
-                                1,
-                            );
-                            let close = continued.rfind("</note>")?;
-                            let continued = format!(
-                                "{}\n    <beam number=\"2\">end</beam>{}",
-                                &continued[..close],
-                                &continued[close..]
-                            );
-                            beam_rewrite = Some((bridge.range().start, bridge.range().end, continued));
-                            beam_completions = beam_completions.saturating_add(1);
+                    // The promoted head can extend a contiguous written
+                    // primary beam. Preserve established higher-level states
+                    // unless the complete extended plan proves them unchanged.
+                    if final_beam_note_capacity(member) > 0 && final_beam_states(member).is_empty() {
+                        let mut course = vec![member];
+                        let mut complete = false;
+                        for &note in &elements[index + 2..] {
+                            if !note.has_tag_name("note") {
+                                break;
+                            }
+                            if final_beam_has_child(note, "chord") {
+                                continue;
+                            }
+                            if note.attribute("print-object") == Some("no")
+                                || note.attribute("print-spacing") == Some("no")
+                                || !final_beam_has_child(note, "pitch")
+                                || final_beam_note_capacity(note) == 0
+                                || final_orphan_chord_duration(note) <= 0
+                                || final_orphan_chord_child_text(note, "staff") != staff
+                            {
+                                break;
+                            }
+                            let states = final_beam_states(note);
+                            match (course.len(), states.get(&1).map(String::as_str)) {
+                                (1, Some("begin"))
+                                    if final_orphan_chord_child_text(note, "voice") != voice => {}
+                                (2.., Some("continue" | "end"))
+                                    if final_orphan_chord_child_text(note, "voice") == voice => {}
+                                _ => break,
+                            }
+                            course.push(note);
+                            if states.get(&1).is_some_and(|state| state == "end") {
+                                complete = true;
+                                break;
+                            }
+                        }
+                        if complete {
+                            let mut groups = vec![((0..course.len()).collect::<Vec<_>>(), 1_u8)];
+                            for level in 2_u8..=8 {
+                                let run = course.iter().take_while(|note| {
+                                    final_beam_note_capacity(**note) >= u32::from(level)
+                                }).count();
+                                if run >= 2 {
+                                    groups.push(((0..run).collect(), level));
+                                }
+                            }
+                            let groups = groups.iter().map(|(indices, level)| {
+                                (indices.as_slice(), *level)
+                            }).collect::<Vec<_>>();
+                            let plan = crate::structural_write_authority::BeamPlan::from_level_groups(
+                                course.len(), &groups,
+                            )?;
+                            let mut replacements = Vec::new();
+                            let mut conflict = false;
+                            for (ordinal, note) in course.iter().enumerate() {
+                                let current = final_beam_states(*note);
+                                let original = if ordinal == 0 {
+                                    plain_promoted.clone()
+                                } else {
+                                    source[note.range()].to_owned()
+                                };
+                                let mut rewritten = original;
+                                for edit in plan.edits().iter().filter(|edit| edit.event_ordinal() == ordinal) {
+                                    let level = edit.level();
+                                    let state = edit.state().as_musicxml_text();
+                                    if let Some(existing) = current.get(&u32::from(level)) {
+                                        if level > 1 && existing != state {
+                                            conflict = true;
+                                            break;
+                                        }
+                                        if existing != state {
+                                            let expected = format!("<beam number=\"{level}\">{existing}</beam>");
+                                            if rewritten.matches(&expected).count() != 1 {
+                                                conflict = true;
+                                                break;
+                                            }
+                                            let tag = format!("<beam number=\"{level}\">{state}</beam>");
+                                            rewritten = rewritten.replacen(&expected, &tag, 1);
+                                        }
+                                    } else {
+                                        let close = rewritten.rfind("</note>")?;
+                                        rewritten = format!("{}\n    <beam number=\"{level}\">{state}</beam>{}",
+                                            &rewritten[..close], &rewritten[close..]);
+                                    }
+                                }
+                                replacements.push(rewritten);
+                            }
+                            if !conflict {
+                                let mut replacements = replacements.into_iter();
+                                promoted = replacements.next()?;
+                                beam_rewrites.extend(course[1..].iter().zip(replacements).filter_map(|(note, written)| {
+                                    let range = note.range();
+                                    (source[range.clone()] != written).then_some((range.start, range.end, written))
+                                }));
+                                beam_completions = beam_completions.saturating_add(1);
+                            }
                         }
                     }
 
                     edits.push((host.range().start, host.range().end, String::new()));
                     edits.push((member.range().start, member.range().end, promoted));
-                    if let Some(beam_rewrite) = beam_rewrite {
-                        edits.push(beam_rewrite);
-                    }
+                    edits.extend(beam_rewrites);
                     promotions = promotions.saturating_add(1);
                 }
             }
@@ -1705,16 +1723,12 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
     // The canonical primary clef course below owns the clef context for
     // final rest placement, after the final beam voice relation is bound.
 
-    // r1027: r1024-r1026 proved that the unique strict-interior same-lane
-    // Rest/Pitch obstruction must be closed inside the already-existing
-    // FinalPdfSourceCommit materializer itself. Earlier projections can be
-    // superseded before this terminal candidate is committed. Keep the
-    // decision identity-free, score-wide and fail-closed: exactly one row,
-    // no project/measure/pitch selector, no new writer or authority.
+    // Subtract the occupied intervals from each rest's bound written lane.
+    // Advancing the original cursor through sounding intervals keeps the
+    // other serialized run at its original time.
     let plan_final_pdf_source_same_lane_strict_interior =
-        |xml: &str| -> (usize, Option<(usize, usize, String)>) {
-            let mut candidate_count = 0_usize;
-            let mut selected_edit: Option<(usize, usize, String)> = None;
+        |xml: &str, voice_plan: &crate::structural_write_authority::FrozenSerializedVoicePlan| {
+            let mut edits = Vec::new();
             let mut scan = 0_usize;
             let mut divisions = 1_i64;
             let mut beats = 4_i64;
@@ -1734,167 +1748,95 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
                 divisions = next_divisions;
                 beats = next_beats;
                 beat_type = next_beat_type;
-                let beat_unit = divisions.max(1);
+                let beat_unit = crate::midi::source_time::notation_pulse_duration(divisions, beats, beat_type);
                 let raw_notes = super::super::partial_beat_raw_notes(measure_xml);
-                let note_infos =
-                    super::super::partial_beat_note_infos(measure_xml, &raw_notes);
+                let note_infos = super::super::partial_beat_note_infos(measure_xml, &raw_notes);
 
                 for rest in note_infos.iter().filter(|note| {
-                    note.is_rest
-                        && !note.is_hidden
-                        && !note.is_chord
-                        && note.duration > 0
-                        && note.staff.trim() == "2"
-                        && note.voice.trim() != "1"
+                    note.is_rest && !note.is_hidden && !note.is_chord && note.duration > 0
+                        && voice_plan.channel_for_label(note.voice.trim()).is_some()
                 }) {
                     let rest_end = rest.start.saturating_add(rest.duration);
-                    let same_lane_pitched = note_infos
-                        .iter()
-                        .filter(|note| {
-                            !note.is_rest
-                                && !note.is_hidden
-                                && !note.is_chord
-                                && note.duration > 0
-                                && note.staff == rest.staff
-                                && note.voice == rest.voice
-                                && rest.start < note.start.saturating_add(note.duration)
-                                && note.start < rest_end
-                        })
+                    let overlaps = |note: &&super::super::PartialBeatNoteInfo| {
+                        !note.is_hidden && note.duration > 0 && note.staff == rest.staff
+                            && rest.start < note.start.saturating_add(note.duration)
+                            && note.start < rest_end
+                    };
+                    if note_infos.iter().filter(overlaps).any(|note| {
+                        if note.is_rest { note.index != rest.index } else { note.voice != rest.voice }
+                    }) {
+                        continue;
+                    }
+                    let mut occupied = note_infos.iter().filter(overlaps)
+                        .filter(|note| !note.is_rest && note.voice == rest.voice)
+                        .map(|note| (note.start, note.start.saturating_add(note.duration)))
                         .collect::<Vec<_>>();
-                    if same_lane_pitched.len() != 1 {
+                    occupied.sort_unstable();
+                    if occupied.is_empty() || occupied.iter().any(|&(start, end)| {
+                        start <= rest.start || end >= rest_end
+                    }) {
                         continue;
                     }
-                    let pitched = same_lane_pitched[0];
-                    let pitched_end = pitched.start.saturating_add(pitched.duration);
-                    if !(rest.start < pitched.start && pitched_end < rest_end) {
-                        continue;
-                    }
-                    let other_voice_pitch_overlap = note_infos.iter().any(|note| {
-                        !note.is_rest
-                            && !note.is_hidden
-                            && !note.is_chord
-                            && note.duration > 0
-                            && note.staff == rest.staff
-                            && note.voice != rest.voice
-                            && rest.start < note.start.saturating_add(note.duration)
-                            && note.start < rest_end
-                    });
-                    let other_visible_rest_overlap = note_infos.iter().any(|note| {
-                        note.is_rest
-                            && !note.is_hidden
-                            && !note.is_chord
-                            && note.duration > 0
-                            && note.index != rest.index
-                            && note.staff == rest.staff
-                            && rest.start < note.start.saturating_add(note.duration)
-                            && note.start < rest_end
-                    });
-                    if other_voice_pitch_overlap || other_visible_rest_overlap {
-                        continue;
+                    let mut merged = Vec::<(i64, i64)>::new();
+                    for (start, end) in occupied {
+                        if let Some((_, previous_end)) = merged.last_mut()
+                            && start <= *previous_end
+                        {
+                            *previous_end = (*previous_end).max(end);
+                        } else {
+                            merged.push((start, end));
+                        }
                     }
 
-                    let leading_duration = pitched.start.saturating_sub(rest.start);
-                    let trailing_duration = rest_end.saturating_sub(pitched_end);
-                    let Some(leading_parts) =
-                        super::super::plan_exact_metric_visible_rest_durations(
-                            rest.start,
-                            leading_duration,
-                            expected_duration,
-                            beat_unit,
-                        )
-                    else {
+                    let Some(raw_rest) = raw_notes.iter().find(|raw| raw.start == rest.index) else {
                         continue;
                     };
-                    let Some(trailing_parts) =
-                        super::super::plan_exact_metric_visible_rest_durations(
-                            pitched_end,
-                            trailing_duration,
-                            expected_duration,
-                            beat_unit,
-                        )
-                    else {
-                        continue;
-                    };
-                    if leading_parts.len() != 1
-                        || leading_parts[0] != leading_duration
-                        || trailing_parts.len() != 1
-                        || trailing_parts[0] != trailing_duration
-                    {
-                        continue;
-                    }
-                    let Some(raw_rest) = raw_notes.iter().find(|raw| raw.start == rest.index)
-                    else {
-                        continue;
-                    };
-                    let Ok(leading_duration_i32) = i32::try_from(leading_duration) else {
-                        continue;
-                    };
-                    let Ok(trailing_duration_i32) = i32::try_from(trailing_duration) else {
-                        continue;
-                    };
-                    let Some(mut leading_rest) =
-                        super::super::render_visible_rest_note_fragment(
-                            leading_duration_i32,
-                            &rest.staff,
-                            &rest.voice,
-                        )
-                    else {
-                        continue;
-                    };
-                    let Some(mut trailing_rest) =
-                        super::super::render_visible_rest_note_fragment(
-                            trailing_duration_i32,
-                            &rest.staff,
-                            &rest.voice,
-                        )
-                    else {
-                        continue;
-                    };
-                    let display_step =
-                        super::super::partial_beat_first_text(&raw_rest.text, "display-step");
-                    let display_octave =
-                        super::super::partial_beat_first_text(&raw_rest.text, "display-octave");
-                    if let (Some(step), Some(octave)) = (display_step, display_octave) {
-                        let display_rest = format!(
+                    let display_rest = super::super::partial_beat_first_text(&raw_rest.text, "display-step")
+                        .zip(super::super::partial_beat_first_text(&raw_rest.text, "display-octave"))
+                        .map(|(step, octave)| format!(
                             "<rest>\n          <display-step>{step}</display-step>\n          <display-octave>{octave}</display-octave>\n        </rest>"
-                        );
-                        leading_rest = leading_rest.replacen("<rest/>", &display_rest, 1);
-                        trailing_rest = trailing_rest.replacen("<rest/>", &display_rest, 1);
-                    }
-                    let Ok(pitched_duration) = i32::try_from(pitched.duration) else {
-                        continue;
-                    };
-                    candidate_count = candidate_count.saturating_add(1);
-                    if candidate_count == 1 {
-                        selected_edit = Some((
-                            measure_start.saturating_add(raw_rest.start),
-                            measure_start.saturating_add(raw_rest.end),
-                            format!(
-                                "{}{}{}",
-                                leading_rest,
-                                super::super::render_staff_voice_forward_fragment(
-                                    pitched_duration,
-                                    &rest.staff,
-                                    &rest.voice,
-                                ),
-                                trailing_rest,
-                            ),
                         ));
+                    let replacement = (|| {
+                        let mut xml = String::new();
+                        let mut rest_count = 0_usize;
+                        let mut cursor = rest.start;
+                        for (start, end) in merged.into_iter().chain(std::iter::once((rest_end, rest_end))) {
+                            let gap = super::super::plan_exact_metric_visible_rest_durations(
+                                cursor, start - cursor, expected_duration, beat_unit,
+                            )?;
+                            for duration in gap {
+                                let fragment = super::super::render_visible_rest_note_fragment(
+                                    i32::try_from(duration).ok()?, &rest.staff, &rest.voice,
+                                )?;
+                                if let Some(display) = &display_rest {
+                                    xml.push_str(&fragment.replacen("<rest/>", display, 1));
+                                } else {
+                                    xml.push_str(&fragment);
+                                }
+                                rest_count += 1;
+                            }
+                            if end > start {
+                                xml.push_str(&super::super::render_staff_voice_forward_fragment(
+                                    i32::try_from(end - start).ok()?, &rest.staff, &rest.voice,
+                                ));
+                            }
+                            cursor = end;
+                        }
+                        Some((xml, rest_count))
+                    })();
+                    if let Some((xml, count)) = replacement {
+                        edits.push((measure_start + raw_rest.start, measure_start + raw_rest.end, xml, count));
                     }
                 }
                 scan = measure_end;
             }
 
-            if candidate_count == 1 {
-                (candidate_count, selected_edit)
-            } else {
-                (candidate_count, None)
-            }
+            (edits.len(), edits)
         };
 
-    let (same_lane_strict_interior_candidates, same_lane_strict_interior_edit) =
+    let (same_lane_strict_interior_candidates, mut same_lane_strict_interior_edits) =
         plan_final_pdf_source_same_lane_strict_interior(
-            &chord_host_candidate,
+            &chord_host_candidate, frozen_serialized_voice_plan,
         );
     crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
         "FinalPdfBeforeSameLaneSplit",
@@ -1907,16 +1849,31 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
     );
     let mut same_lane_strict_interior_split_accepted = false;
 
+    same_lane_strict_interior_edits.sort_unstable_by_key(|edit| edit.0);
+    let added_rests = same_lane_strict_interior_edits.iter()
+        .map(|(_, _, _, count)| count.saturating_sub(1)).sum::<usize>();
+    let same_lane_strict_interior_edit = (|| {
+        let start = same_lane_strict_interior_edits.first()?.0;
+        let mut cursor = start;
+        let mut replacement = String::new();
+        for (left, right, fragment, _) in same_lane_strict_interior_edits {
+            replacement.push_str(final_candidate.get(cursor..left)?);
+            replacement.push_str(&fragment);
+            cursor = right;
+        }
+        Some((start, cursor, replacement))
+    })();
     if let Some((edit_start, edit_end, replacement)) = same_lane_strict_interior_edit {
         let (candidate, same_lane_splice_receipt) = same_lane_strict_interior_raw_splice(
             &final_candidate, edit_start, edit_end, &replacement
         );
+        let mut splice_trial = RenderTransitionReceipts::new();
+        splice_trial.push_exact(same_lane_splice_receipt);
         let before_observation = observe_final_notation_readback(&final_candidate);
         let after_observation = observe_final_notation_readback(&candidate);
         let (residual_candidates, _) =
-            plan_final_pdf_source_same_lane_strict_interior(&candidate);
-        let split_green = same_lane_strict_interior_candidates == 1
-            && residual_candidates == 0
+            plan_final_pdf_source_same_lane_strict_interior(&candidate, frozen_serialized_voice_plan);
+        let split_green = residual_candidates == 0
             && before_observation.parse_ok
             && after_observation.parse_ok
             && before_observation.backup_forward_ok
@@ -1927,11 +1884,9 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
             && before_observation.pitched_payload_signature
                 == after_observation.pitched_payload_signature
             && after_observation.visible_rests
-                == before_observation.visible_rests.saturating_add(1)
+                == before_observation.visible_rests.saturating_add(added_rests)
             && after_observation.note_count
-                == before_observation.note_count.saturating_add(1);
-        let mut splice_trial = RenderTransitionReceipts::new();
-        splice_trial.push_exact(same_lane_splice_receipt);
+                == before_observation.note_count.saturating_add(added_rests);
         if split_green {
             receipts.append(splice_trial);
             crate::audit_only::destructive_edit_attribution::observe_exact_state_successor(
@@ -2235,7 +2190,7 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
             let source_observation = observe_final_notation_readback(&source_xml);
             let committed_observation = observe_final_notation_readback(&committed_xml);
             committed_same_lane_strict_interior_candidates =
-                plan_final_pdf_source_same_lane_strict_interior(&committed_xml).0;
+                plan_final_pdf_source_same_lane_strict_interior(&committed_xml, &effective_voice_plan).0;
             committed_raw_cursor_stable = source_observation.parse_ok
                 && committed_observation.parse_ok
                 && source_observation.raw_cursor_signature
@@ -3073,6 +3028,15 @@ mod silent_voice_visible_measure_coverage_render_write_tests {
             final_pdf_source_higher_beam_regression_candidates(&master, &candidate)
                 .expect("mixed group stays closed");
         assert_eq!(candidates, 0);
+    }
+
+    #[test]
+    fn detects_erased_inner_segment_member() {
+        let master = double_beam_score(
+            r#"<beam number="1">begin</beam><beam number="2">begin</beam>"#,
+        );
+        let candidate = master.replacen(r#"<beam number="2">continue</beam>"#, "", 1);
+        assert_eq!(final_pdf_source_higher_beam_regression_candidates(&master, &candidate), Some(1));
     }
 
     #[test]

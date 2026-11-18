@@ -1,6 +1,6 @@
 # Mathematik in EtuSchlopf
 
-**Quellstand r1921 / 0.10.1839.** Der Windows-Korpuslauf umfasst 13 Stücke mit vollständiger PDF-Ausgabe. Der [Prüfbeleg](evidence/r1921/README.md) und die [Notenbilder](examples/README.md#notenbilder) dokumentieren diesen Stand.
+**Quellstand r1933 / 0.10.1839.** Der Windows-Korpuslauf umfasst 14 Stücke mit vollständiger PDF-Ausgabe. Der [Prüfbeleg](evidence/r1933/README.md) und die [Notenbilder](examples/README.md#notenbilder) dokumentieren diesen Stand.
 
 EtuSchlopf verwendet Mathematik für musikalische Entscheidungen, Darstellungsentscheidungen, Messungen und technische Beweise. Diese Aufgaben sind verschieden: Eine Erhaltungsbilanz beweist keine Lesbarkeit; ein lesbarer Registerkurs beweist keine menschliche Spielbarkeit; eine bestandene Prüfung erlaubt nur den Übergang, dessen Bedingungen sie tatsächlich abdeckt.
 
@@ -273,6 +273,16 @@ für die betroffenen erreichbaren Leser $L$ und ihre Beobachtung $O_L$, einschli
 
 Hashes sind davon getrennt: Sie binden Bytes unter ihren jeweiligen Kollisionsannahmen. FNV-1a ist kein kryptografischer Beweis; auch SHA-256 ist mathematisch nicht injektiv über beliebig lange Eingaben. Provenienz, tatsächlich mitgeführte Ereignisidentität und bytebezogene Integritätsprüfung erfüllen verschiedene Aufgaben.
 
+## Quellzeit, Pausen und Balken in r1933
+
+Ein Ton belegt das halboffene Zeitintervall $[s,e)$. Der MIDI-Seed hält den Quellanschlag und die zugehörige Loslasszeit zusammen. Eine unabhängige Haltedauer braucht einen eigenen Verlauf, während die übrigen Anschläge den Cursor der Hauptstimme weiterführen. Ein späterer Anschlag derselben Tonhöhe innerhalb des betrachteten Intervalls schließt die betreffende Trennung aus. [MIDI-Seed](../src/midi_seed.rs)
+
+Für eine notierte Pause $R$ und die klingenden Intervalle $I_j$ derselben Stimme bestimmt die Intervallvereinigung die belegte Zeit. Die verbleibenden Pausen ergeben sich aus $R\setminus\bigcup_j I_j$, soweit sie sich exakt metrisch darstellen lassen. Gleichzeitige Akkordtöne zählen in der Belegung einmal. Der Cursor und die klingenden Ereignisse werden nach der Serialisierung erneut geprüft. [Pausen und Cursor](../src/render/silent_voice_visible_measure_coverage_render_writer.rs)
+
+Ein Balkenplan verbindet metrisch zusammengehörige Anschläge. Auf höheren Ebenen prüft die Rücklesung zusammenhängende Segmente gegen die gebundene Vorlage. Ein fehlendes Segment kann am Anfang, im Inneren oder am Ende auftreten. Eine Pause kann zwei freie Anschläge verbinden, wenn beide jeweils nur diesen passenden Nachbarn haben. Vollständige Balkengruppen behalten ihre Zugehörigkeit. [Metrische Balkenplanung](../src/pipeline_shards/composer_metric_beam_planning_core.rs) · [Rücklesung](../src/render/final_beam_observation_planning_core.rs)
+
+Der Korpusnachweis unterscheidet zwischen einer beobachteten Render-Materialisierung und einem belegten direkten PDF-Export aus der Master-Quelle. Mozart KV 331 belegt den zweiten Weg. [Manifestprüfung](../src/corpus_run_manifest.rs)
+
 ## Prüfstände und verbleibende Grenzen
 
 | Referenz | Veröffentlichter Windows-Prüfbeleg |
@@ -280,8 +290,9 @@ Hashes sind davon getrennt: Sie binden Bytes unter ihren jeweiligen Kollisionsan
 | Bach, Fuge c-Moll BWV 847 | r1749, Exitcode 0, 3.041 bestandene und vier ignorierte Tests. Der frühere Abgleich von r1745 erfasste 754 Notenansätze, geschriebene Notenwerte und Haltebögen. [Abnahme r1749](evidence/r1749/README.md). |
 | Chopin, Etüde op. 10 Nr. 3, p01 | r1792, Exitcode 0, 0 Warnungen, 100 % im Notenerhaltsmaß und ein gerendertes Notenbild. Die MIDI-WAV-Zeitzuordnung blieb wegen geringer gemeinsamer Anschlagsdeckung offen. [Abnahme r1792](evidence/r1792/README.md). |
 | Schubert, Deutscher Tanz D. 783 Nr. 15, p18 | r1872, Exitcode 0, 0 Blocker, 0 Warnungen und 100 % im Notenerhaltsmaß. 3.097 Tests bestanden, vier waren ignoriert. Der Windows-Renderer gab das zweiseitige Notenbild frei. [Abnahme r1872](evidence/r1872/README.md). |
+| Mozart, KV 331, Andante grazioso, p01 | r1933, 6/8-Takt, direkter PDF-Export aus der Master-MusicXML. [Notenbild](examples/mozart-k331-p01-r1933.pdf). |
 
-Die drei Zeilen belegen Einzelläufe. Für r1921 liegt ein [Vollkorpuslauf mit 13 Stücken](evidence/r1921/README.md) vor. Das Notenerhaltsmaß folgt der im Lauf definierten Grundgesamtheit. Es bewertet weder den Abgleich aller Notenwerte mit der Druckvorlage noch das Notenbild als Ganzes.
+Für r1933 liegt der [Windows-Vollkorpuslauf mit 14 Stücken](evidence/r1933/README.md) vor. Das Notenerhaltsmaß folgt der im Lauf definierten Grundgesamtheit. Es bewertet weder den Abgleich aller Notenwerte mit der Druckvorlage noch das Notenbild als Ganzes.
 
 ### Historischer Vollkorpuslauf r1683
 

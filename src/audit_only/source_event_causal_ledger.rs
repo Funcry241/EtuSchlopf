@@ -26,6 +26,10 @@ pub(crate) fn append_source_event_causal_ledger_foundation_body(
         causal.raw_note_event_count
     )
     .expect("String write cannot fail");
+    if causal.redundant_note_off_count > 0 {
+        writeln!(out, "RedundantNoteOffEvents: {}", causal.redundant_note_off_count)
+            .expect("String write cannot fail");
+    }
     writeln!(out, "LedgerEntries: {}", causal.entry_count)
         .expect("String write cannot fail");
     writeln!(

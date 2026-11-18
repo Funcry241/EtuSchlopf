@@ -139,7 +139,7 @@ mod beat_scoped_rest_completion_planning_boundary_tests {
         partial_beat_raw_notes, patch_beat_scoped_beaming_in_measure,
         patch_beat_scoped_rest_completion_in_measure, plan_exact_metric_visible_rest_durations,
         plan_visible_voice_rest_completion_gaps, BeatScopedRestCompletionGapPlan,
-        BeatScopedRestPatchStats,
+        BeatScopedMetric, BeatScopedRestPatchStats,
     };
 
     #[test]
@@ -157,7 +157,7 @@ mod beat_scoped_rest_completion_planning_boundary_tests {
 
         let measure = "<measure number=\"\
 1\"><attributes><divisions>96</divisions></attributes>\n<note><rest/><duration>384</duration><voice>1</voice><type>whole</type><staff>1</staff></note>\n</measure>";
-        let (patched, stats) = patch_beat_scoped_rest_completion_in_measure(measure, 96);
+        let (patched, stats) = patch_beat_scoped_rest_completion_in_measure(measure, BeatScopedMetric { divisions: 96, ..Default::default() });
         assert_eq!(patched, measure);
         assert_eq!(stats.rest_notes_inserted, 0);
         assert_eq!(stats.rests_rewritten, 0);
@@ -215,7 +215,7 @@ mod beat_scoped_rest_completion_planning_boundary_tests {
     fn beam_only_stage_never_creates_a_rest_note() {
         let measure = "<measure number=\"\
 1\"><attributes><divisions>96</divisions></attributes>\n<note><pitch><step>C</step><octave>5</octave></pitch><duration>24</duration><type>16th</type><voice>1</voice><staff>1</staff></note>\n<note><pitch><step>D</step><octave>5</octave></pitch><duration>24</duration><type>16th</type><voice>1</voice><staff>1</staff></note>\n</measure>";
-        let (patched, stats) = patch_beat_scoped_beaming_in_measure(measure, 96);
+        let (patched, stats) = patch_beat_scoped_beaming_in_measure(measure, BeatScopedMetric { divisions: 96, ..Default::default() });
         assert_eq!(stats.groups, 1);
         assert!(!patched.contains("<rest"));
         assert!(patched.contains("<beam number=\"1\">begin</beam>"));
@@ -226,7 +226,7 @@ mod beat_scoped_rest_completion_planning_boundary_tests {
     fn rest_only_stage_preserves_existing_beam_tags_when_no_rest_write_is_needed() {
         let measure = "<measure number=\"\
 1\"><attributes><divisions>96</divisions></attributes>\n<note><pitch><step>C</step><octave>5</octave></pitch><duration>24</duration><type>16th</type><voice>1</voice><staff>1</staff><beam number=\"1\">begin</beam></note>\n<note><pitch><step>D</step><octave>5</octave></pitch><duration>24</duration><type>16th</type><voice>1</voice><staff>1</staff><beam number=\"1\">end</beam></note>\n</measure>";
-        let (patched, stats) = patch_beat_scoped_rest_completion_in_measure(measure, 96);
+        let (patched, stats) = patch_beat_scoped_rest_completion_in_measure(measure, BeatScopedMetric { divisions: 96, ..Default::default() });
         assert_eq!(patched, measure);
         assert_eq!(stats.rest_notes_inserted, 0);
         assert_eq!(stats.rests_rewritten, 0);
@@ -260,7 +260,7 @@ mod beat_scoped_rest_completion_planning_boundary_tests {
 
         let before = beat_scoped_rest_completion_cursor_state(measure, 384);
         assert!(before.is_green(384));
-        let (patched, stats) = patch_beat_scoped_rest_completion_in_measure(measure, 96);
+        let (patched, stats) = patch_beat_scoped_rest_completion_in_measure(measure, BeatScopedMetric { divisions: 96, ..Default::default() });
         assert_eq!(patched, measure);
         assert_eq!(stats.rest_notes_inserted, 0);
         assert!(beat_scoped_rest_completion_cursor_state(&patched, 384).is_green(384));
@@ -271,7 +271,7 @@ mod beat_scoped_rest_completion_planning_boundary_tests {
 1\"><attributes><divisions>96</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>\n<note><pitch><step>C</step><octave>4</octave></pitch><duration>96</duration><voice>1</voice><staff>2</staff></note>\n<note><pitch><step>E</step><octave>5</octave></pitch><duration>96</duration><voice>1</voice><staff>1</staff></note>\n<note><pitch><step>G</step><octave>4</octave></pitch><duration>96</duration><voice>1</voice><staff>2</staff></note>\n<note><pitch><step>B</step><octave>5</octave></pitch><duration>96</duration><voice>1</voice><staff>1</staff></note>\n<backup><duration>384</duration></backup>\n<note><rest/><duration>96</duration><voice>2</voice><type>quarter</type><staff>2</staff></note>\n<note print-object=\"no\" print-spacing=\"no\"><rest/><duration>96</duration><voice>2</voice><type>quarter</type><staff>2</staff></note>\n<note print-object=\"no\" print-spacing=\"no\"><rest/><duration>96</duration><voice>2</voice><type>quarter</type><staff>2</staff></note>\n<note print-object=\"no\" print-spacing=\"no\"><rest/><duration>96</duration><voice>2</voice><type>quarter</type><staff>2</staff></note>\n</measure>";
 
         let before_pitched = beat_scoped_rest_completion_pitched_timeline(measure);
-        let (patched, stats) = patch_beat_scoped_rest_completion_in_measure(measure, 96);
+        let (patched, stats) = patch_beat_scoped_rest_completion_in_measure(measure, BeatScopedMetric { divisions: 96, ..Default::default() });
         assert_eq!(stats.rest_notes_inserted, 0);
         assert_eq!(stats.rest_only_aux_rests_hidden, 0);
         assert_eq!(
@@ -298,13 +298,13 @@ mod beat_scoped_rest_completion_planning_boundary_tests {
         for source in [visible, renamed] {
             for label in ["37", "811"] {
                 let source = source.replacen("number=\"1\"", &format!("number=\"{label}\""), 1);
-                let (post, observed) = patch_beat_scoped_rest_completion_in_measure(&source, 96);
+                let (post, observed) = patch_beat_scoped_rest_completion_in_measure(&source, BeatScopedMetric { divisions: 96, ..Default::default() });
                 assert_eq!(post, source);
                 assert_eq!(observed.rest_only_aux_rests_hidden, 0);
                 assert_eq!(observed.rest_notes_inserted, 0);
                 assert!(observed.actual_note_map.0.iter().all(|(before, after)| before == after));
                 assert_eq!(observed.actual_note_map.0.len(), partial_beat_raw_notes(&source).len());
-                let (twice, observed_twice) = patch_beat_scoped_rest_completion_in_measure(&post, 96);
+                let (twice, observed_twice) = patch_beat_scoped_rest_completion_in_measure(&post, BeatScopedMetric { divisions: 96, ..Default::default() });
                 assert_eq!(twice, source);
                 assert_eq!(observed_twice.rest_only_aux_rests_hidden, 0);
             }

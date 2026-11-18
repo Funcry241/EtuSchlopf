@@ -163,7 +163,7 @@ fn meter_changes_are_explicit_and_unsupported_or_partial_meters_are_refused() {
     for meters in [
         vec![(0, 5, 2)],
         vec![(0, 7, 2)],
-        vec![(0, 6, 3)],
+        vec![(0, 5, 3)],
         vec![(0, 2, 1)],
         vec![(384, 3, 2)],
     ] {
@@ -507,4 +507,20 @@ fn playback_only_marker_keeps_the_source_event_without_written_time() {
     wrong[2].1 = "v2 playback 1 0 76";
     let source = decoded_with_markers(&notes, 384, &[(0, 3, 2)], &wrong);
     assert!(NotationTimePlan::from_midi(&source).unwrap_err().to_string().contains("MIDI-Tick"));
+}
+
+#[test]
+fn companion_binds_compound_meter_to_original_midi_and_exact_attacks() {
+    let input = b"synthetic MIDI bytes";
+    let checksum = crate::sha256::hex(input);
+    let companion = format!(
+        "ETUSCHLOPF-NOTATION-TIME-V1\nmidi-sha256 {checksum}\nkey 3 major\n0\tv2 meter 6/8 pickup 0\n13\tv2 note 0 0 65 0 72\n");
+    let mut source = decoded(&[(0, 13, 287, 65)], 384, &[]);
+    assert!(attach_notation_companion(&mut source, b"different bytes", &companion).is_err());
+    attach_notation_companion(&mut source, input, &companion).unwrap();
+    let plan = NotationTimePlan::from_midi(&source).unwrap();
+    let bar = plan.metric.measure(0).unwrap();
+    assert_eq!((bar.beats, bar.beat_type, bar.end), (6, 8, 288));
+    assert_eq!((plan.events[0].pos, plan.events[0].len), (0, 72));
+    assert_eq!(source.opening_key_signature.unwrap().fifths, 3);
 }

@@ -2,7 +2,7 @@ use crate::clef_readability_observation::{PianoClef, observe_pitch};
 use roxmltree::{Document, Node};
 use std::collections::BTreeMap;
 
-type StemEdit = (usize, usize, &'static str);
+pub(super) type StemEdit = (usize, usize, &'static str);
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum Direction {
@@ -659,12 +659,13 @@ fn overlapping_directions(
         }
         result.push(direction);
     }
-    (roles.len() == 2).then_some(result)
+    (roles.values().any(|role| *role == Direction::Up)
+        && roles.values().any(|role| *role == Direction::Down)).then_some(result)
 }
 
 // If a larger component has no consistent pitch-role ordering, an explicit
 // flag can still be separated from an adjacent beam of a different voice.
-fn separate_flag_from_beam(groups: &[Group<'_>], edits: &mut Vec<StemEdit>) {
+fn separate_flag_from_beam(groups: &[Group<'_>], edits: &mut Vec<StemEdit>, require_pitch_order: bool) {
     let planned: BTreeMap<_, _> = edits.iter().map(|&(start, _, value)| (start, value)).collect();
     let beam_directions = groups.iter().map(|group| {
         if group.attacks.len() < 2 || !group.topology_writable() {
@@ -698,7 +699,16 @@ fn separate_flag_from_beam(groups: &[Group<'_>], edits: &mut Vec<StemEdit>) {
             if beam.staff() != flag.staff || beam.voice() == flag.voice || !beam.writable() {
                 return None;
             }
-            beam.attacks.iter().any(|attack| overlap(attack, flag) && flag.heads.iter().any(|head| {
+            let mut overlapping = beam.attacks.iter().filter(|attack| overlap(attack, flag)).peekable();
+            if require_pitch_order && (overlapping.peek().is_none() || !overlapping.clone().all(|attack| {
+                match direction {
+                    Direction::Up => entirely_above(attack, flag),
+                    Direction::Down => entirely_above(flag, attack),
+                }
+            })) {
+                return None;
+            }
+            overlapping.any(|attack| flag.heads.iter().any(|head| {
                 attack.heads.iter().any(|beam_head| {
                     head.written_pitch.zip(beam_head.written_pitch)
                         .is_some_and(|(a, b)| a.abs_diff(b) <= 7 && a != b)
@@ -755,11 +765,23 @@ fn measure_edits(groups: &[Group<'_>]) -> Vec<StemEdit> {
             );
         }
     }
-    separate_flag_from_beam(groups, &mut edits);
+    separate_flag_from_beam(groups, &mut edits, false);
     edits
 }
 
+pub(super) fn plan_countervoice_stem_directions(xml: &str) -> Vec<StemEdit> {
+    plan_stem_directions(xml, |groups| {
+        let mut edits = Vec::new();
+        separate_flag_from_beam(groups, &mut edits, true);
+        edits
+    })
+}
+
 pub(super) fn plan_final_stem_directions(xml: &str) -> Vec<StemEdit> {
+    plan_stem_directions(xml, measure_edits)
+}
+
+fn plan_stem_directions(xml: &str, decide: impl Fn(&[Group<'_>]) -> Vec<StemEdit>) -> Vec<StemEdit> {
     let Ok(document) = Document::parse(xml) else {
         return Vec::new();
     };
@@ -775,7 +797,7 @@ pub(super) fn plan_final_stem_directions(xml: &str) -> Vec<StemEdit> {
             if print.iter().any(Option::is_some)
                 && let Some(attacks) = collect_attacks(xml, measure, print)
             {
-                edits.extend(measure_edits(&beam_groups(attacks)));
+                edits.extend(decide(&beam_groups(attacks)));
             }
         }
     }
@@ -783,10 +805,10 @@ pub(super) fn plan_final_stem_directions(xml: &str) -> Vec<StemEdit> {
     edits
 }
 
-pub(super) fn matches_planned_stem_edit(source: &str, post: &str) -> bool {
+pub(super) fn matches_planned_stem_edit(source: &str, post: &str, edits: &[StemEdit]) -> bool {
     let mut old = 0;
     let mut new = 0;
-    for (start, end, replacement) in plan_final_stem_directions(source) {
+    for &(start, end, replacement) in edits {
         let unchanged = start - old;
         if source.get(old..start) != post.get(new..new + unchanged) {
             return false;
@@ -858,10 +880,12 @@ mod tests {
             lower.replace("<stem>up</stem>", "<stem>down</stem>")
         ));
         assert_eq!(preview(&xml), expected);
-        assert!(matches_planned_stem_edit(&xml, &expected));
+        let edits = plan_final_stem_directions(&xml);
+        assert!(matches_planned_stem_edit(&xml, &expected, &edits));
         assert!(!matches_planned_stem_edit(
             &xml,
-            &expected.replace("<voice>2</voice>", "<voice>4</voice>")
+            &expected.replace("<voice>2</voice>", "<voice>4</voice>"),
+            &edits,
         ));
         assert_eq!(preview(&expected), expected);
     }
@@ -905,6 +929,11 @@ mod tests {
         for input in [base, carried] {
             let expected = input.replace(&flag, &flag.replace("<stem>up</stem>", "<stem>down</stem>"));
             assert_eq!(preview(&input), expected);
+            let [(start, end, direction)] = plan_countervoice_stem_directions(&input)[..] else {
+                panic!("only the independent flagged stem must change");
+            };
+            assert_eq!(format!("{}{direction}{}", &input[..start], &input[end..]), expected);
+            assert!(plan_countervoice_stem_directions(&expected).is_empty());
         }
     }
 

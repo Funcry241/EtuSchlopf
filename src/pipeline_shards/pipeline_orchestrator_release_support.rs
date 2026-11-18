@@ -82,10 +82,23 @@ impl CommittedMasterExport {
         final_chord_encoding_input: &str,
         final_chord_encoding_output: &str,
         final_chord_encoding_receipt: Option<ExactTransformationReceipt>,
+        countervoice_stems: Option<(String, master_state_identity::PreservingTransformationReceipt)>,
         master_export_fifths_receipt: Option<ExactTransformationReceipt>,
         functional_respelling_receipt: Option<ExactTransformationReceipt>,
     ) -> Self {
-        let mut document = final_chord_encoding_output.to_string();
+        let mut receipts = master_state_identity::OwnerReceipts::default();
+        receipts.push_exact(final_chord_encoding_receipt);
+        let mut document = if let Some((post, receipt)) = countervoice_stems {
+            receipt.validate_preserving_transition::<NotationPolishPreservingMint>(
+                final_chord_encoding_output, &post,
+            ).unwrap_or_else(|_| master_state_identity::master_sovereignty_violation(
+                "MasterExport: countervoice stem plan lost its FinalChord binding",
+            ));
+            receipts.push_preserving(Some(receipt));
+            post
+        } else {
+            final_chord_encoding_output.to_string()
+        };
         for receipt in [
             master_export_fifths_receipt.as_ref(),
             functional_respelling_receipt.as_ref(),
@@ -99,8 +112,6 @@ impl CommittedMasterExport {
                 )
             });
         }
-        let mut receipts = master_state_identity::OwnerReceipts::default();
-        receipts.push_exact(final_chord_encoding_receipt);
         receipts.push_exact(master_export_fifths_receipt);
         receipts.push_exact(functional_respelling_receipt);
         Self {

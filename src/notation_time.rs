@@ -1,10 +1,12 @@
 //! Explicit source-to-notation projection. Exact source events are never mutated.
 #[path = "inferred_performance_timing.rs"]
 mod inferred_performance_timing;
+#[path = "free_performance_timing.rs"]
+mod free_performance_timing;
 
-use crate::midi::DecodedMidiSource;
-use crate::midi::source_time::{MetricMeasure, MetricTimeline, SourceTimeDomain};
-use anyhow::{Result, anyhow, bail, ensure};
+use crate::midi::{DecodedMidiSource, MidiKeySignature, decode_standard_midi_bytes};
+use crate::midi::source_time::{MetricMeasure, MetricTimeline, SourceTimeDomain, supported_notation_meter};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,12 +62,57 @@ fn plain_onset(metric: &MetricTimeline, pos: i64) -> bool {
         .is_some_and(|bar| pos == bar.start || plain_duration(pos - bar.start))
 }
 
-fn validate_performance_meter(beats: u8, pickup: i64) -> Result<()> {
-    ensure!(
-        (2..=4).contains(&beats) && (0..i64::from(beats) * 96).contains(&pickup)
-            && pickup % 6 == 0,
-        "Die Notationszeitkarte verlangt 2/4, 3/4 oder 4/4 und eine gueltige Auftaktlaenge"
-    );
+fn validate_performance_meter(beats: u8, beat_type: u16, pickup: i64) -> Result<()> {
+    ensure!(supported_notation_meter(beats, beat_type),
+        "Taktart {beats}/{beat_type} wird noch nicht unterstuetzt");
+    let measure_duration = i64::from(beats) * 384 / i64::from(beat_type);
+    ensure!((0..measure_duration).contains(&pickup) && pickup % 6 == 0,
+        "Notationszeitkarte: ungueltige Auftaktlaenge");
+    Ok(())
+}
+
+pub(crate) fn read_midi_with_notation(path: &std::path::Path) -> Result<DecodedMidiSource> {
+    let bytes = std::fs::read(path)
+        .with_context(|| format!("MIDI-Datei nicht lesbar: {}", path.display()))?;
+    let mut source = decode_standard_midi_bytes(&bytes)?;
+    let companion = path.with_extension("notation-time");
+    let contents = match std::fs::read_to_string(&companion) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(source),
+        Err(error) => return Err(error).with_context(|| format!("Notationszeitkarte: {}", companion.display())),
+    };
+    attach_notation_companion(&mut source, &bytes, &contents)
+        .with_context(|| format!("Notationszeitkarte: {}", companion.display()))?;
+    Ok(source)
+}
+
+fn attach_notation_companion(source: &mut DecodedMidiSource, midi: &[u8], contents: &str) -> Result<()> {
+    ensure!(source.timing_markers.is_empty(),
+        "Eingebettete und separate Notationszeitkarte konkurrieren");
+    let mut lines = contents.lines();
+    ensure!(lines.next() == Some("ETUSCHLOPF-NOTATION-TIME-V1"), "Unbekanntes Dateiformat");
+    let checksum = crate::sha256::hex(midi);
+    ensure!(lines.next().and_then(|line| line.strip_prefix("midi-sha256 ")) == Some(checksum.as_str()),
+        "SHA-256 der MIDI stimmt nicht mit der Karte ueberein");
+    let key = lines.next().ok_or_else(|| anyhow!("Tonartzeile fehlt"))?;
+    match key.split_ascii_whitespace().collect::<Vec<_>>().as_slice() {
+        ["key", "midi"] => {}
+        ["key", fifths, mode @ ("major" | "minor")] => {
+            let fifths = fifths.parse::<i8>()?;
+            ensure!((-7..=7).contains(&fifths), "Tonartvorzeichen ausserhalb von -7 bis 7");
+            let key = MidiKeySignature { fifths, minor: *mode == "minor" };
+            ensure!(source.opening_key_signature.is_none_or(|existing| existing == key),
+                "MIDI-Tonart und Notationszeitkarte widersprechen sich");
+            source.opening_key_signature = Some(key);
+        }
+        _ => bail!("Ungueltige Tonartzeile"),
+    }
+    source.timing_markers = lines.map(|line| {
+        let (tick, entry) = line.split_once('\t').ok_or_else(|| anyhow!("Tick und Eintrag fehlen"))?;
+        ensure!(entry.starts_with("v2 "), "Separate Karten verwenden notenbezogene v2-Eintraege");
+        Ok((tick.parse()?, entry.to_owned()))
+    }).collect::<Result<_>>()?;
+    ensure!(!source.timing_markers.is_empty(), "Leere Notationszeitkarte");
     Ok(())
 }
 
@@ -86,7 +133,7 @@ impl PerformanceTiming {
             ["v1", "meter", beats, "pickup", length] => (beats.parse::<u8>()?, length.parse::<i64>()?),
             _ => bail!("Ungueltiger Kopf der MIDI-Notationszeitkarte"),
         };
-        validate_performance_meter(beats, pickup)?;
+        validate_performance_meter(beats, 4, pickup)?;
         let mut anchors = vec![(*first_tick, 0)];
         for (tick, marker) in ordered.into_iter().skip(1) {
             let position = marker.strip_prefix("v1 anchor ")
@@ -142,6 +189,70 @@ fn ordered_source_events(
         .ok_or_else(|| anyhow!("Quellordinalitaet ist nicht vollstaendig"))
 }
 
+/// One immutable inference shared by the seed workers within the project run.
+#[derive(Debug)]
+pub(crate) struct PreparedPerformanceTiming {
+    path: std::path::PathBuf,
+    decoded: DecodedMidiSource,
+    plan: std::sync::Arc<NotationTimePlan>,
+}
+
+std::thread_local! {
+    static PREPARED_TIMING: std::cell::RefCell<Option<std::sync::Arc<PreparedPerformanceTiming>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+pub(crate) struct PerformanceTimingScope {
+    prior: Option<std::sync::Arc<PreparedPerformanceTiming>>,
+    same_thread: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+
+impl Drop for PerformanceTimingScope {
+    fn drop(&mut self) {
+        PREPARED_TIMING.with(|slot| slot.replace(self.prior.take()));
+    }
+}
+
+impl PreparedPerformanceTiming {
+    pub(crate) fn prepare_performance(
+        path: &std::path::Path,
+        mut decoded: DecodedMidiSource,
+        samples: &[f32],
+        sample_rate: u32,
+    ) -> Result<Self> {
+        ensure!(decoded.timing_markers.is_empty(), "Explizite Notationszeitkarte hat Vorrang");
+        let inferred = free_performance_timing::infer_performance(&decoded, samples, sample_rate)?;
+        if decoded.opening_key_signature.is_none() {
+            decoded.opening_key_signature = inferred.key;
+        }
+        let originals = ordered_source_events(&decoded)?;
+        let extent = inferred.events.iter().map(|note| note.pos + note.len).max().unwrap_or(0);
+        let plan = NotationTimePlan {
+            source_domain: decoded.time_domain,
+            metric: MetricTimeline::from_written_meter(inferred.beats, inferred.beat_type, 0, extent)?,
+            events: inferred.events,
+            source_events: originals,
+            timing_authority: TimingAuthority::InferredPerformance,
+        };
+        Ok(Self { path: path.to_path_buf(), decoded, plan: plan.into() })
+    }
+
+    pub(crate) fn enter(value: Option<&std::sync::Arc<Self>>) -> PerformanceTimingScope {
+        PerformanceTimingScope {
+            prior: PREPARED_TIMING.with(|slot| slot.replace(value.cloned())),
+            same_thread: std::marker::PhantomData,
+        }
+    }
+
+    pub(crate) fn for_path(path: &std::path::Path) -> Option<std::sync::Arc<Self>> {
+        PREPARED_TIMING.with(|slot| slot.borrow().as_ref().filter(|timing| timing.path == path).cloned())
+    }
+
+    pub(crate) fn source_and_plan(&self) -> (&DecodedMidiSource, std::sync::Arc<NotationTimePlan>) {
+        (&self.decoded, std::sync::Arc::clone(&self.plan))
+    }
+}
+
 impl NotationTimePlan {
     pub(crate) fn from_midi(source: &DecodedMidiSource) -> Result<Self> {
         Self::from_source(source).or_else(|exact_error| {
@@ -165,7 +276,7 @@ impl NotationTimePlan {
         let extent = inferred.events.iter().map(|note| note.pos + note.len).max().unwrap_or(0);
         Ok(Self {
             source_domain: source.time_domain,
-            metric: MetricTimeline::from_written_meter(2, inferred.pickup, extent)?,
+            metric: MetricTimeline::from_written_meter(2, 4, inferred.pickup, extent)?,
             events: inferred.events,
             source_events: originals,
             timing_authority: TimingAuthority::InferredPerformance,
@@ -194,7 +305,7 @@ impl NotationTimePlan {
                 segment.first_ordinal + segment.count
             );
             ensure!(
-                segment.beat_type == 4 && matches!(segment.beats, 2..=4),
+                supported_notation_meter(segment.beats, segment.beat_type),
                 "Taktart {}/{} wird noch nicht unterstuetzt",
                 segment.beats,
                 segment.beat_type
@@ -393,11 +504,12 @@ impl NotationTimePlan {
         for (tick, marker) in &source.timing_markers {
             let fields: Vec<_> = marker.split_ascii_whitespace().collect();
             let (ordinal, channel, key, pos, len, kind) = match fields.as_slice() {
-                ["v2", "meter", beats, "pickup", pickup] => {
+                ["v2", "meter", signature, "pickup", pickup] => {
                     ensure!(*tick == 0 && meter.is_none(), "Notationszeitkarte: genau ein Taktkopf an MIDI-Tick 0 ist erforderlich");
-                    let (beats, pickup) = (beats.parse()?, pickup.parse()?);
-                    validate_performance_meter(beats, pickup)?;
-                    meter = Some((beats, pickup));
+                    let (beats, beat_type) = signature.split_once('/').unwrap_or((signature, "4"));
+                    let (beats, beat_type, pickup) = (beats.parse()?, beat_type.parse()?, pickup.parse()?);
+                    validate_performance_meter(beats, beat_type, pickup)?;
+                    meter = Some((beats, beat_type, pickup));
                     continue;
                 }
                 ["v2", "note", ordinal, channel, key, pos, len] => {
@@ -427,9 +539,9 @@ impl NotationTimePlan {
             ensure!(events[ordinal].replace(NotationEvent { source_ordinal: ordinal, pos, len, kind }).is_none(),
                 "Notationszeitkarte: doppelter Eintrag fuer Quellnote {ordinal}");
         }
-        let (beats, pickup) = meter.ok_or_else(|| anyhow!("Notationszeitkarte: Taktkopf fehlt"))?;
+        let (beats, beat_type, pickup) = meter.ok_or_else(|| anyhow!("Notationszeitkarte: Taktkopf fehlt"))?;
         ensure!(!attacks.is_empty(), "Notationszeitkarte: keine regulaere notierte Note");
-        ensure!(source.time_signatures.is_empty() || source.time_signatures == [(beats, 4)],
+        ensure!(source.time_signatures.is_empty() || source.time_signatures == [(beats, beat_type)],
             "MIDI-Taktart und Notationszeitkarte widersprechen sich");
         for ordinal in 0..events.len() {
             let event = events[ordinal].as_ref()
@@ -449,7 +561,7 @@ impl NotationTimePlan {
         let events = events.into_iter().flatten().collect();
         Ok(Self {
             source_domain: source.time_domain,
-            metric: MetricTimeline::from_written_meter(beats, pickup, extent)?,
+            metric: MetricTimeline::from_written_meter(beats, beat_type, pickup, extent)?,
             events,
             source_events: originals,
             timing_authority: TimingAuthority::PerformanceNotes,
@@ -492,7 +604,7 @@ impl NotationTimePlan {
             .ok_or_else(|| anyhow!("Notationszeitkarte: Quellordinalitaet ist nicht vollstaendig"))?;
         Ok(Self {
             source_domain: source.time_domain,
-            metric: MetricTimeline::from_written_meter(timing.beats, timing.pickup, extent)?,
+            metric: MetricTimeline::from_written_meter(timing.beats, 4, timing.pickup, extent)?,
             events,
             source_events: originals,
             timing_authority: TimingAuthority::PerformanceAnchors,

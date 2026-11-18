@@ -47,11 +47,12 @@ pub(crate) struct SourceEventCausalLedger {
     pub(crate) canonical_divisions: i64,
     pub(crate) raw_note_event_count: usize,
     pub(crate) entries: Vec<SourceEventCausalEntry>,
+    pub(crate) redundant_note_offs: Vec<SourceEventLocator>,
 }
 
 impl Default for SourceEventCausalLedger {
     fn default() -> Self {
-        Self { canonical_divisions: CANONICAL_DIVISIONS, raw_note_event_count: 0, entries: Vec::new() }
+        Self { canonical_divisions: CANONICAL_DIVISIONS, raw_note_event_count: 0, entries: Vec::new(), redundant_note_offs: Vec::new() }
     }
 }
 
@@ -67,6 +68,7 @@ pub(crate) struct CanonicalSourceEventProjection {
 pub(crate) struct SourceEventCausalLedgerProjection {
     pub(crate) raw_note_event_count: usize,
     pub(crate) entry_count: usize,
+    pub(crate) redundant_note_off_count: usize,
     pub(crate) cross_track_pair_count: usize,
     pub(crate) raw_pair_fingerprint_sha256: String,
     pub(crate) causal_fingerprint_sha256: String,
@@ -134,10 +136,11 @@ pub(crate) fn project_source_event_causality(
         .entries
         .len()
         .checked_mul(2)
+        .and_then(|paired| paired.checked_add(ledger.redundant_note_offs.len()))
         .ok_or_else(|| anyhow!("SourceEventCausalLedger: Rohereigniszahl überläuft usize"))?;
     if ledger.raw_note_event_count != expected_raw_note_event_count {
         return Err(anyhow!(
-            "SourceEventCausalLedger: Rohereignisse {} ungleich zwei je Ledger-Eintrag {}",
+            "SourceEventCausalLedger: Rohereignisse {} ungleich Paarungen plus redundante Note-Offs {}",
             ledger.raw_note_event_count,
             expected_raw_note_event_count
         ));
@@ -303,9 +306,27 @@ pub(crate) fn project_source_event_causality(
         }
     }
 
+    let mut redundant_note_offs = ledger.redundant_note_offs.clone();
+    redundant_note_offs.sort_by_key(|locator| locator.order_key());
+    for locator in redundant_note_offs {
+        let order = locator.order_key();
+        let pairs = pairs_by_channel_key.get(&(locator.channel, locator.key))
+            .map(Vec::as_slice).unwrap_or_default();
+        let started = pairs.partition_point(|pair| pair.note_on.order_key() < order);
+        let ended = pairs.partition_point(|pair| pair.note_off.order_key() < order);
+        if started == 0 || started != ended || !raw_locators.insert(order) {
+            return Err(anyhow!(
+                "SourceEventCausalLedger: redundantes Note-Off ist kein ungebundenes Loslassen bei bereits gespielter Taste"
+            ));
+        }
+        append_locator_bytes(&mut raw_bytes, locator)?;
+        append_locator_bytes(&mut causal_bytes, locator)?;
+    }
+
     Ok(SourceEventCausalLedgerProjection {
         raw_note_event_count: ledger.raw_note_event_count,
         entry_count: entries.len(),
+        redundant_note_off_count: ledger.redundant_note_offs.len(),
         cross_track_pair_count,
         raw_pair_fingerprint_sha256: sha256::hex(&raw_bytes),
         causal_fingerprint_sha256: sha256::hex(&causal_bytes),
@@ -425,6 +446,7 @@ mod tests {
         let ledger = SourceEventCausalLedger {
             canonical_divisions: CANONICAL_DIVISIONS,
             raw_note_event_count: 6,
+            redundant_note_offs: Vec::new(),
             entries: vec![
                 SourceEventCausalEntry {
                     source_ordinal: 2,
@@ -481,6 +503,7 @@ mod tests {
         let ledger = SourceEventCausalLedger {
             canonical_divisions: CANONICAL_DIVISIONS,
             raw_note_event_count: 4,
+            redundant_note_offs: Vec::new(),
             entries: vec![
                 SourceEventCausalEntry {
                     source_ordinal: 0,

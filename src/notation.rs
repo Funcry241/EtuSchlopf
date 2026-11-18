@@ -264,23 +264,32 @@ mod final_stem_direction;
     /// Decide plain stems after the final beam and voice transformations. The
     /// existing NotationPolish preserving owner supplies the source-bound receipt.
     pub(super) fn project_final_stem_directions(xml: &str) -> anyhow::Result<Option<(String, PreservingTransformationReceipt)>> {
-        let stems = final_stem_direction::plan_final_stem_directions(xml);
+        project_stem_directions(xml, &final_stem_direction::plan_final_stem_directions(xml))
+    }
+
+    pub(crate) fn project_master_countervoice_stems(xml: &str) -> anyhow::Result<Option<(String, PreservingTransformationReceipt)>> {
+        project_stem_directions(xml, &final_stem_direction::plan_countervoice_stem_directions(xml))
+    }
+
+    fn project_stem_directions(
+        xml: &str, stems: &[final_stem_direction::StemEdit],
+    ) -> anyhow::Result<Option<(String, PreservingTransformationReceipt)>> {
         if stems.is_empty() {
             return Ok(None);
         }
         let mut edits = Vec::with_capacity(stems.len());
         let mut output = String::with_capacity(xml.len());
         let mut last = 0;
-        let mut stems = stems.into_iter().peekable();
+        let mut pending = stems.iter().copied().peekable();
         for span in find_measure_spans(xml) {
             output.push_str(&xml[last..span.start]);
             let mut directions = BTreeMap::new();
-            while let Some(&(start, end, direction)) = stems.peek() {
+            while let Some(&(start, end, direction)) = pending.peek() {
                 if start >= span.end { break; }
                 anyhow::ensure!(span.start <= start && end <= span.end,
                     "Final stem direction lost its measure range");
                 directions.insert(start - span.start, direction);
-                stems.next();
+                pending.next();
             }
             let measure = &xml[span.start..span.end];
             if directions.is_empty() {
@@ -296,7 +305,7 @@ mod final_stem_direction;
             last = span.end;
         }
         output.push_str(&xml[last..]);
-        anyhow::ensure!(stems.next().is_none() && final_stem_direction::matches_planned_stem_edit(xml, &output),
+        anyhow::ensure!(pending.next().is_none() && final_stem_direction::matches_planned_stem_edit(xml, &output, stems),
             "Final stem direction changed a byte outside its plan");
         let mint = NotationPolishPreservingMint { _sealed: () };
         let receipt = PreservingTransformationReceipt::mint_preserving_receipt(NotationPolishPreservingMint { _sealed: () }, xml, &output)

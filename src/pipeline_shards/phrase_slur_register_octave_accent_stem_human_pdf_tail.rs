@@ -94,11 +94,6 @@ fn note_fragment_has_tie_role(fragment: &str, role: &str) -> bool {
         || fragment.contains(&format!("<tied type=\"{role}\""))
 }
 
-fn same_relational_pitch(left: &AtomicNote, right: &AtomicNote) -> bool {
-    left.pitch.as_ref().map(|pitch| pitch.midi)
-        == right.pitch.as_ref().map(|pitch| pitch.midi)
-}
-
 fn note_has_planned_accent(
     note: &AtomicNote,
     planned: &[AssertiveVisibleArticulationRow],
@@ -117,15 +112,84 @@ fn note_has_planned_accent(
     })
 }
 
+// Index the sounding edges by physical measure order and cursor. Written staff
+// and voice distinguish competing edges only when both endpoints agree.
+fn tied_accent_attack_origins(xml: &str, notes: &[AtomicNote]) -> BTreeMap<usize, usize> {
+    let Ok(document) = roxmltree::Document::parse(xml) else { return BTreeMap::new(); };
+    let mut origins = BTreeMap::new();
+    for part in document.root_element().children().filter(|node| node.has_tag_name("part")) {
+        let mut meter = (1, 4, 4, 4);
+        let mut previous_ends = BTreeMap::<(i64, i32), Vec<usize>>::new();
+        for measure in part.children().filter(|node| node.has_tag_name("measure")) {
+            let range = measure.range();
+            meter = parse_musicxml_current_meter(&xml[range.clone()], meter.0, meter.1, meter.2);
+            let left = notes.partition_point(|note| note.note_start < range.start);
+            let right = notes.partition_point(|note| note.note_start < range.end);
+            let mut measure_notes = (left..right).filter(|&i| {
+                let note = &notes[i];
+                note.visible && note.duration > 0 && note.pitch.is_some()
+            }).collect::<Vec<_>>();
+            measure_notes.sort_by_key(|&i| (notes[i].start, notes[i].note_start));
+            let span = if measure.attribute("implicit") == Some("yes") {
+                (left..right).map(|i| notes[i].start.saturating_add(notes[i].duration))
+                    .max().unwrap_or(0)
+            } else {
+                meter.3
+            };
+            let mut outgoing = BTreeMap::<(i64, i32), Vec<usize>>::new();
+            let mut next_edges = BTreeMap::<(i64, i32), Vec<usize>>::new();
+            for i in measure_notes {
+                let note = &notes[i];
+                let fragment = &xml[note.note_start..note.note_end];
+                let midi = note.pitch.as_ref().expect("pitched tie candidate").midi;
+                let start = note.start;
+                if note_fragment_has_tie_role(fragment, "stop") {
+                    let candidates = if start == 0 {
+                        previous_ends.get(&(0, midi))
+                    } else {
+                        outgoing.get(&(start, midi))
+                    };
+                    if let Some(candidates) = candidates {
+                        let mut same_lane = candidates.iter().filter(|&&j| {
+                            notes[j].staff == note.staff && notes[j].voice == note.voice
+                        });
+                        let predecessor = match (same_lane.next(), same_lane.next(), candidates.as_slice()) {
+                            (Some(j), None, _) | (None, None, [j]) => Some(*j),
+                            _ => None,
+                        };
+                        if let Some(j) = predecessor {
+                            let previous = &notes[j];
+                            let previous_xml = &xml[previous.note_start..previous.note_end];
+                            if let Some(origin) = origins.get(&j).copied().or_else(|| {
+                                (!note_fragment_has_tie_role(previous_xml, "stop")).then_some(j)
+                            }) {
+                                origins.insert(i, origin);
+                            }
+                        }
+                    }
+                }
+                if note_fragment_has_tie_role(fragment, "start") {
+                    let end = start.saturating_add(note.duration);
+                    outgoing.entry((end, midi)).or_default().push(i);
+                    if end == span {
+                        next_edges.entry((0, midi)).or_default().push(i);
+                    }
+                }
+            }
+            previous_ends = next_edges;
+        }
+    }
+    origins
+}
+
 fn confusing_tied_tail_accent_keys(
     xml: &str,
     planned: &[AssertiveVisibleArticulationRow],
 ) -> Vec<AccentAttackOwnershipKey> {
     let notes = parse_atomic_notes(xml);
     let mut candidates = Vec::<AccentAttackOwnershipKey>::new();
-    for tail in notes.iter().filter(|note| {
-        note.visible && !note.is_chord && note.pitch.is_some() && note.duration > 0
-    }) {
+    for (tail, attack) in tied_accent_attack_origins(xml, &notes) {
+        let (tail, attack) = (&notes[tail], &notes[attack]);
         let Some(tail_fragment) = xml.get(tail.note_start..tail.note_end) else {
             continue;
         };
@@ -136,26 +200,6 @@ fn confusing_tied_tail_accent_keys(
             || (existing_tail_accent
                 && remove_first_accent_and_cleanup_articulations(tail_fragment).is_none())
         {
-            continue;
-        }
-        let mut attack_owners = notes.iter().filter(|attack| {
-            attack.visible
-                && !attack.is_chord
-                && attack.pitch.is_some()
-                && attack.measure == tail.measure
-                && attack.staff == tail.staff
-                && attack.voice == tail.voice
-                && attack.start < tail.start
-                && attack.start.saturating_add(attack.duration) == tail.start
-                && same_relational_pitch(attack, tail)
-                && xml
-                    .get(attack.note_start..attack.note_end)
-                    .is_some_and(|fragment| note_fragment_has_tie_role(fragment, "start"))
-        });
-        let Some(attack) = attack_owners.next() else {
-            continue;
-        };
-        if attack_owners.next().is_some() {
             continue;
         }
         let Some(attack_fragment) = xml.get(attack.note_start..attack.note_end) else {

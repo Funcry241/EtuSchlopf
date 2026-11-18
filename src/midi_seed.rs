@@ -3,9 +3,9 @@
 // Preserves behavior from the former FLP module; no wrapper/include shell.
 
 // --- mechanical module boundary: former src/flp.rs ---
-use crate::midi::{MidiKeySignature, read_standard_midi};
-use crate::midi::notation_time::{NotationEventKind, NotationTimePlan};
-use crate::midi::source_time::MetricTimeline;
+use crate::midi::MidiKeySignature;
+use crate::midi::notation_time::{NotationEventKind, NotationTimePlan, PreparedPerformanceTiming, read_midi_with_notation};
+use crate::midi::source_time::{MetricTimeline, supported_notation_meter};
 use crate::pipeline_profile::{base_solver_profiles, CandidateProfile};
 use crate::source_selection::{
     bind_productive_source_selection_plan,
@@ -225,33 +225,44 @@ pub(crate) struct SeedArrangementInventory {
     pub(crate) occurrences: Vec<SeedArrangementOccurrence>,
 }
 
-/// Returns the source of the independently held note when an exact
-/// source pair has two written releases inside one measure.
-fn select_exact_pair_sustain_source(
+/// A uniquely held source may occupy the independent lane when the
+/// remaining attacks carry the primary cursor through its release.
+fn select_continuous_sustain_source(
     onsets: &[i64],
     notes_by_onset: &BTreeMap<i64, Vec<MidiSeedNote>>,
     measure_end: i64,
 ) -> Option<usize> {
     let [start, next, ..] = onsets else { return None; };
-    let [first, second] = notes_by_onset.get(start)?.as_slice() else { return None; };
-    let (short, long) = if first.len <= second.len { (first, second) } else { (second, first) };
-    let end = start.checked_add(long.len)?;
-    if short.len != next - start || *next >= end || end > measure_end
-        || !matches!(short.len, 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6)
-        || !matches!(long.len, 288 | 192 | 144 | 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6)
+    let group = notes_by_onset.get(start)?;
+    let exact_value = |length| matches!(length, 384 | 288 | 192 | 144 | 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6);
+    let head_duration = next - start;
+    if !exact_value(head_duration) {
+        return None;
+    }
+    let mut held = group.iter().filter(|note| note.len > head_duration);
+    let source = held.next()?;
+    if held.next().is_some() || !exact_value(source.len)
+        || !group.iter().any(|note| note.len == head_duration)
+        || group.iter().any(|note| note.source_ordinal != source.source_ordinal
+            && !exact_value(note.len))
     {
         return None;
     }
-
+    let end = start.checked_add(source.len)?;
+    if end > measure_end {
+        return None;
+    }
     for (&onset, release) in onsets[1..].iter()
         .zip(onsets[2..].iter().copied().chain(std::iter::once(measure_end)))
     {
         let notes = notes_by_onset.get(&onset)?;
-        if release > end || notes.iter().any(|note| note.midi == long.midi || note.len != release - onset) {
+        if release > end || !exact_value(release - onset)
+            || notes.iter().any(|note| note.midi == source.midi || note.len != release - onset)
+        {
             return None;
         }
         if release == end {
-            return Some(long.source_ordinal);
+            return Some(source.source_ordinal);
         }
     }
     None
@@ -397,11 +408,16 @@ fn incoming_tied_melody(
     notes_by_onset: &BTreeMap<i64, Vec<MidiSeedNote>>,
     beat_end: i64,
 ) -> Option<Vec<MidiSeedNote>> {
-    let upper = match incoming {
-        [note] if !note.chord => note,
-        [lower, upper] if !lower.chord && upper.chord && lower.interval == upper.interval => upper,
-        _ => return None,
-    };
+    let first = incoming.first()?;
+    if first.chord || incoming.iter().skip(1).any(|note| {
+        !note.chord || note.interval != first.interval
+    }) {
+        return None;
+    }
+    let upper = incoming.iter().max_by_key(|note| note.pitch)?;
+    if incoming.iter().filter(|note| note.pitch == upper.pitch).count() != 1 {
+        return None;
+    }
     let start = upper.interval.start;
     let release = upper.interval.end;
     let upper_pitch = upper.pitch?;
@@ -1011,7 +1027,6 @@ impl MidiSeedRhythmicCourses {
                         });
                     }
                     let next = starts.get(index + 1).copied().unwrap_or(bar.end);
-                    let following = starts.get(index + 2).copied().unwrap_or(bar.end);
                     let across_bar = if preserve_attacks && start >= independent_end && start >= upper_line_end
                     {
                         metric.measure(measure + 1).map_or_else(Vec::new, |next_bar| {
@@ -1033,11 +1048,8 @@ impl MidiSeedRhythmicCourses {
                                 tie_stop: true, tie_start: false, ..head });
                         independent_end = bar.end;
                     }
-                    let one_exact_intervening_head = by_start.get(&next).is_some_and(|notes| {
-                        matches!(notes.as_slice(), [note] if note.len == following - next)
-                    });
-                    let exact_pair_sustain = if start >= independent_end {
-                        select_exact_pair_sustain_source(&starts[index..], &by_start, bar.end)
+                    let independent_sustain = if start >= independent_end {
+                        select_continuous_sustain_source(&starts[index..], &by_start, bar.end)
                             .or_else(|| preserve_attacks.then(|| {
                                 select_inferred_sustain_source(&starts[index..], &by_start, bar.end)
                             }).flatten())
@@ -1045,7 +1057,7 @@ impl MidiSeedRhythmicCourses {
                         None
                     };
                     if preserve_attacks && course.staff == 1
-                        && let Some(ordinal) = exact_pair_sustain
+                        && let Some(ordinal) = independent_sustain
                         && let Some(sustain) = by_start[&start].iter().find(|n| n.source_ordinal == ordinal)
                         && by_start[&start].iter().all(|n| n.midi < sustain.midi || n.source_ordinal == ordinal)
                     {
@@ -1057,7 +1069,7 @@ impl MidiSeedRhythmicCourses {
                     }
                     let use_upper_cursor = preserve_attacks && course.staff == 1
                         && start >= upper_line_end && start >= independent_end
-                        && exact_pair_sustain.is_none();
+                        && independent_sustain.is_none();
                     let paired_sustains = if use_upper_cursor {
                         select_upper_sustains_with_distinct_releases(&starts[index..], &by_start, begin, bar.end, beat)
                     } else { None };
@@ -1083,8 +1095,8 @@ impl MidiSeedRhythmicCourses {
                     let group = by_start.get_mut(&start).expect("planned onset exists");
                     group.sort_by_key(|source| (source.midi, source.source_ordinal));
                     if course.staff == 1 { group.reverse(); }
-                    if exact_pair_sustain == Some(group[0].source_ordinal) {
-                        let primary = group.iter().position(|note| Some(note.source_ordinal) != exact_pair_sustain)
+                    if independent_sustain.is_some() && group[0].len != next - start {
+                        let primary = group.iter().position(|note| note.len == next - start)
                             .expect("independent sustain has a primary partner");
                         group.swap(0, primary);
                     }
@@ -1119,6 +1131,18 @@ impl MidiSeedRhythmicCourses {
                     }
                     let primary_begin = planned.len();
                     let mut head_end = next;
+                    let pulse = crate::midi::source_time::notation_pulse_duration(
+                        metric.divisions, i64::from(bar.beats), i64::from(bar.beat_type),
+                    );
+                    // An aligned compound-meter chord can release before the
+                    // next attack when its silence has an exact written value.
+                    let common_release = primary.first().filter(|head| {
+                        preserve_attacks && pulse > beat && (start - begin) % pulse == 0
+                            && head.len < pulse
+                            && matches!(head.len, 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6)
+                            && matches!(next - start - head.len, 384 | 288 | 192 | 144 | 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6)
+                            && primary.iter().all(|member| member.len == head.len)
+                    }).map(|head| start + head.len);
                     for (member, source) in primary.iter().enumerate() {
                         // The host and member can have independent releases when
                         // the host does not need a tied metric partition.
@@ -1126,7 +1150,9 @@ impl MidiSeedRhythmicCourses {
                         let ends_at_beat = preserve_attacks && primary.len() == 1
                             && source_end < next && (source_end - begin) % beat == 0
                             && matches!(source.len, 48 | 36 | 24 | 18 | 12 | 9 | 6);
-                        let end = if ends_at_beat {
+                        let end = if let Some(release) = common_release {
+                            release
+                        } else if ends_at_beat {
                             source_end
                         } else if member > 0 && head_fits_one_beat
                             && matches!(source.len, 384 | 288 | 192 | 144 | 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6)
@@ -1135,20 +1161,14 @@ impl MidiSeedRhythmicCourses {
                         } else {
                             next
                         };
-                        // A two-note onset can carry a separate sustain across
-                        // one complete intervening head within the same beat.
-                        let separate = start >= upper_line_end && (exact_pair_sustain == Some(source.source_ordinal)
-                            || member > 0 && group.len() == 2
-                            && group[0].len == head_duration && one_exact_intervening_head
-                            && next < source_end && source_end == following
-                            && source.len <= beat - (start - begin) % beat
-                            && start >= independent_end);
+                        let separate = start >= upper_line_end
+                            && independent_sustain == Some(source.source_ordinal);
                         let occurrence = PlannedSeedOccurrence {
                             course: course.creation, interval: start..if separate { source_end } else { end },
                             source: Some(source.source_ordinal), pitch: Some(source.midi),
                             chord: member > 0 && !separate,
                             independent: separate,
-                            opposite_stem: start < upper_line_end || upper_sustain.is_some() || paired_sustains.is_some() || !across_bar.is_empty() || exact_pair_sustain == Some(source.source_ordinal)
+                            opposite_stem: start < upper_line_end || upper_sustain.is_some() || paired_sustains.is_some() || !across_bar.is_empty() || independent_sustain == Some(source.source_ordinal)
                                 && group[0].midi == source.midi,
                             source_voice: None, tie_stop: false, tie_start: false,
                         };
@@ -1198,7 +1218,7 @@ impl MidiSeedRhythmicCourses {
         if self.emission_snapshot.is_some() || !self.occurrences.is_empty()
             || self.sources != sources || self.metric.len() != measures
             || self.metric.divisions != 96
-            || self.metric.segments().any(|bar| !matches!(bar.beats, 2..=4) || bar.beat_type != 4)
+            || self.metric.segments().any(|bar| !supported_notation_meter(bar.beats, bar.beat_type))
             || self.courses.iter().any(|course| course.coverage.start < 0
                 || course.coverage.is_empty() || end.is_none_or(|end| course.coverage.end > end))
         {
@@ -1441,9 +1461,15 @@ pub fn midi_to_musicxml_seed_with_profile_and_hotspots(
     profile: CandidateProfile,
     hotspots: Option<&HotspotPlan>,
 ) -> anyhow::Result<(String, MidiSeedStats)> {
-    let decoded = read_standard_midi(path)
-        .with_context(|| format!("Konnte MIDI nicht als produktive Quelle lesen: {}", path.display()))?;
-    let notation_time = std::sync::Arc::new(NotationTimePlan::from_midi(&decoded)?);
+    let prepared = PreparedPerformanceTiming::for_path(path);
+    let standalone;
+    let (decoded, notation_time) = if let Some(input) = &prepared {
+        input.source_and_plan()
+    } else {
+        standalone = read_midi_with_notation(path)
+            .with_context(|| format!("Konnte MIDI nicht als produktive Quelle lesen: {}", path.display()))?;
+        (&standalone, std::sync::Arc::new(NotationTimePlan::from_midi(&standalone)?))
+    };
     let metric = &notation_time.metric;
     let preserve_attacks = notation_time.preserves_attacks();
     let allow_removal = !preserve_attacks;
@@ -1485,7 +1511,7 @@ pub fn midi_to_musicxml_seed_with_profile_and_hotspots(
         }));
         false
     });
-    let source_voices = qualified_source_voices(&notes, &decoded, metric, &notation_time);
+    let source_voices = qualified_source_voices(&notes, decoded, metric, &notation_time);
     let mut grace_notes = notes.iter().filter(|n| n.len == 0).copied().collect::<Vec<_>>();
     notes.retain(|n| n.len > 0);
     if let Some(assignments) = &source_voices {

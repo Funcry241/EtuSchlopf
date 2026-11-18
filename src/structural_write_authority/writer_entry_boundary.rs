@@ -372,16 +372,20 @@ pub(super) fn authorized_reference_writer_entry(
     audit.parse_after_ok = Document::parse(&candidate).is_ok();
     audit.note_count_after = candidate.matches("<note").count();
 
+    let expected_main = plan.rows.iter().filter(|row| row.planned_lane == AuthorizedPlannedLane::MainVoiceRun);
+    let expected_beam_tags = expected_main.clone().map(|row| {
+        usize::from(row.planned_primary_beam != StructuralBeamState::Absent)
+            + usize::from(row.planned_secondary_beam != StructuralBeamState::Absent)
+    }).sum::<usize>();
     let execution_green = audit.source_measure_found
         && audit.source_fingerprint_match
         && audit.source_events_found == plan.rows.len()
         && audit.source_event_cursor_match
-        && audit.main_lane_events == 5
-        && audit.hidden_carrier_events == 1
-        && audit.overlap_rest_events == 1
-        && audit.chord_normalizations == 1
-        && audit.beam_tags_written == 7
-        && audit.full_backups_inserted == 1
+        && audit.main_lane_events == expected_main.count()
+        && audit.main_lane_events + audit.hidden_carrier_events + audit.overlap_rest_events == plan.rows.len()
+        && audit.chord_normalizations == audit.hidden_carrier_events
+        && audit.beam_tags_written == expected_beam_tags
+        && audit.full_backups_inserted + 1 == plan.full_backups_to_measure_start
         && audit.partial_backups_inserted == 0
         && audit.parse_before_ok
         && audit.parse_after_ok
@@ -542,14 +546,9 @@ fn apply_authorized_serialization_plan(
     audit.main_lane_events = main_rows.len();
     audit.hidden_carrier_events = hidden_rows.len();
     audit.overlap_rest_events = overlap_rows.len();
-    if main_rows.len() != 5 || hidden_rows.len() != 1 || overlap_rows.len() != 1 {
+    if main_rows.is_empty() || hidden_rows.is_empty() || overlap_rows.is_empty() {
         return (source_xml.to_string(), None);
     }
-
-    let hidden_row = hidden_rows[0];
-    let Some(hidden_record) = target.record(hidden_row.source_event_ordinal) else {
-        return (source_xml.to_string(), None);
-    };
 
     let renderer_contiguity = target.renderer_beam_member_contiguity(source_xml, plan);
     audit.renderer_beam_groups_checked = renderer_contiguity.beam_groups_checked;
@@ -560,12 +559,24 @@ fn apply_authorized_serialization_plan(
     audit.renderer_contiguous_target_members = renderer_contiguity.green;
 
     let mut edits = Vec::new();
-    let hidden_text = &source_xml[hidden_record.range.clone()];
-    edits.push(TextEdit {
-        start: hidden_record.range.start,
-        end: hidden_record.range.end,
-        replacement: String::new(),
-    });
+    let mut insertion = String::new();
+    for row in &hidden_rows {
+        let Some(record) = target.record(row.source_event_ordinal) else {
+            return (source_xml.to_string(), None);
+        };
+        let hidden_text = &source_xml[record.range.clone()];
+        edits.push(TextEdit { start: record.range.start, end: record.range.end, replacement: String::new() });
+        if row.planned_cursor_before > 0 {
+            let _ = write!(
+                insertion,
+                "\n      <forward><duration>{}</duration><voice>{}</voice><staff>{}</staff></forward>",
+                row.planned_cursor_before, record.voice, record.staff,
+            );
+        }
+        let _ = write!(insertion, "\n{hidden_text}\n      <backup><duration>{}</duration></backup>",
+            row.planned_cursor_after,
+        );
+    }
 
     for row in &main_rows {
         let Some(record) = target.record(row.source_event_ordinal) else {
@@ -582,21 +593,13 @@ fn apply_authorized_serialization_plan(
         });
     }
 
-    let insertion = format!(
-        "\n      <forward><duration>{}</duration><voice>{}</voice><staff>{}</staff></forward>\n{}\n      <backup><duration>{}</duration></backup>",
-        hidden_row.planned_cursor_before,
-        hidden_record.voice,
-        hidden_record.staff,
-        hidden_text,
-        hidden_row.planned_cursor_after,
-    );
     let insertion_backup_end = target.insertion_backup_end();
     edits.push(TextEdit {
         start: insertion_backup_end,
         end: insertion_backup_end,
         replacement: insertion,
     });
-    audit.full_backups_inserted = 1;
+    audit.full_backups_inserted = hidden_rows.len();
     audit.partial_backups_inserted = 0;
     let geometry = edits.iter().map(|edit|
         ExactEdit::bound(edit.start, edit.end, edit.replacement.clone())
@@ -673,17 +676,13 @@ fn rewrite_main_lane_note(
 }
 
 fn remove_beam_elements(original: &str) -> String {
+    let Ok(document) = Document::parse(original) else { return original.to_string() };
     let mut rewritten = original.to_string();
-    while let Some(start) = rewritten.find("<beam") {
-        let Some(open_end_rel) = rewritten[start..].find('>') else {
-            return original.to_string();
-        };
-        let content_start = start + open_end_rel + 1;
-        let Some(close_start_rel) = rewritten[content_start..].find("</beam>") else {
-            return original.to_string();
-        };
-        let end = content_start + close_start_rel + "</beam>".len();
-        rewritten.replace_range(start..end, "");
+    let owned = document.root_element().children().filter(|child| {
+        child.has_tag_name("beam") && matches!(child.attribute("number"), None | Some("1" | "2"))
+    }).collect::<Vec<_>>();
+    for beam in owned.into_iter().rev() {
+        rewritten.replace_range(beam.range(), "");
     }
     rewritten
 }
@@ -815,17 +814,33 @@ pub(super) mod tests {
 
     pub(in crate::structural_write_authority) fn executed_cursor_event() -> (String, String, crate::master_state_identity::ExactTransformationReceipt) {
         let pre = super::super::tests::bound_cursor_source();
-        let (views, _) = super::super::adapt_structural_snapshot_read_only(&pre, 96, "boundary-fixture");
+        let (post, receipt) = execute_bound_cursor_event(&pre);
+        (pre, post, receipt)
+    }
+
+    #[test]
+    fn writer_keeps_a_normal_chord_inside_a_planned_beam() {
+        let pre = super::super::tests::bound_cursor_source();
+        let addition = "<note><chord/><pitch><step>A</step><octave>4</octave></pitch><duration>24</duration><voice>2</voice><staff>2</staff></note>";
+        let marker = "  <note>\n    <pitch><step>A</step>";
+        let pre = pre.replacen(marker, &format!("{addition}{marker}"), 1);
+        let (post, receipt) = execute_bound_cursor_event(&pre);
+        assert_eq!(receipt.realize_post_document(&pre).as_deref(), Some(post.as_str()));
+        assert!(post.contains(addition));
+    }
+
+    fn execute_bound_cursor_event(pre: &str) -> (String, crate::master_state_identity::ExactTransformationReceipt) {
+        let (views, _) = super::super::adapt_structural_snapshot_read_only(pre, 96, "boundary-fixture");
         let intents = super::super::detect_structural_repair_intents_read_only(&views);
         let detector = super::super::audit_identity_free_detector_module_boundary(views.len(), intents.len(), "boundary-fixture");
         let semantic = super::super::audit_identity_free_semantic_event_equivalence(&intents, views.len(), "boundary-fixture");
-        let metamorphic = super::super::audit_identity_free_metamorphic_safety_net(&pre, 96, "boundary-fixture");
+        let metamorphic = super::super::audit_identity_free_metamorphic_safety_net(pre, 96, "boundary-fixture");
         let (_, token) = super::super::authorization_verifier::authorize_repair_candidate_for_writer(
             &intents, &detector, &semantic, &metamorphic, "boundary-fixture");
         let (post, audit, _, receipt) = authorized_reference_writer_entry(
-            token.unwrap(), &pre, "boundary-fixture");
+            token.unwrap(), pre, "boundary-fixture");
         assert!(audit.write_produced());
-        (pre, post, receipt.unwrap())
+        (post, receipt.unwrap())
     }
 
 

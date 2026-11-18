@@ -1,0 +1,17 @@
+RunId: corpus-0.10.1839-1795033175-15904
+FullCorpus: ja
+ProjectCount: 14
+Etüde Nr. 1	OK	Exit 0	Outputs complete
+Etüde Nr. 2	OK	Exit 0	Outputs complete
+Etüde Nr. 3	OK	Exit 0	Outputs complete
+Etüde Nr. 4	OK	Exit 0	Outputs complete
+Etüde Nr. 5	OK	Exit 0	Outputs complete
+Etüde Nr. 6	OK	Exit 0	Outputs complete
+Etüde Nr. 7	OK	Exit 0	Outputs complete
+Etüde Nr. 8	OK	Exit 0	Outputs complete
+Etüde Nr. 9	OK	Exit 0	Outputs complete
+Chopin_op10_no3_p01	OK	Exit 0	Outputs complete
+Etüde Nr. 10	OK	Exit 0	Outputs complete
+Mozart_K331_1st-mov_p01	OK	Exit 0	Outputs complete
+Schubert_D783_no15_p18_Import	OK	Exit 0	Outputs complete
+BWV847_Fuge	OK	Exit 0	Outputs complete

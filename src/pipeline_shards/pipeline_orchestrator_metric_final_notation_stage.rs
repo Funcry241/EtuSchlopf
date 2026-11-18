@@ -449,11 +449,20 @@ fn run_metric_beam_and_final_notation_stage(
         final_chord_obligation_evidence.push_str(&format!(
             "FinalChordNotationObligations: Unknown; {error}; canonical_role_authority=none\n"));
     }
+    let countervoice_stems = notation::project_master_countervoice_stems(&final_chord_encoding_candidate)
+        .context("Master-Gegenstimmenhaelse konnten nicht an den FinalChord-Plan gebunden werden")?;
+    let master_export_candidate = countervoice_stems.as_ref()
+        .map_or(final_chord_encoding_candidate.as_str(), |(xml, _)| xml.as_str());
+    let original_chains = if let Some((post, receipt)) = countervoice_stems.as_ref() {
+        original_chains.through_master_countervoice_stems(&final_chord_encoding_candidate, post, receipt)
+    } else {
+        original_chains
+    };
     let functional_master_respelling = functional_master_respelling.bind_original_chains(original_chains);
     let (master_written, master_export_fifths_receipt, functional_respelling_receipt) =
         structural_write_authority::write_master_musicxml_output_authorized(
             &source.musicxml_out,
-            &final_chord_encoding_candidate,
+            master_export_candidate,
             functional_master_respelling,
         );
     master_written.with_context(|| {
@@ -466,6 +475,7 @@ fn run_metric_beam_and_final_notation_stage(
         &initial_render.final_export_xml,
         &final_chord_encoding_candidate,
         final_chord_encoding_receipt,
+        countervoice_stems,
         master_export_fifths_receipt,
         functional_respelling_receipt,
     );

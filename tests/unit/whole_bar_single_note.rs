@@ -22,7 +22,21 @@ fn run(xml: &str, context: RhythmContext, enabled: bool) -> String {
     out
 }
 fn compare_excluded(xml: &str, context: RhythmContext) {
-    assert_eq!(run(xml, context, true), run(xml, context, false));
+    let actual = run(xml, context, true);
+    if (context.beats, context.beat_type) == (6, 8) {
+        // A whole-bar sustain is excluded from the single-note rule.
+        // In compound meter it spans two complete dotted pulses.
+        let notes = collect_raw_notes(&actual);
+        assert_eq!(notes.len(), 2);
+        assert!(notes.iter().all(|note| {
+            note.text.contains("<duration>144</duration>")
+                && note.text.contains("<type>quarter</type>")
+                && note.text.contains("<dot/>")
+        }));
+        assert_preserved(xml, &actual);
+    } else {
+        assert_eq!(actual, run(xml, context, false));
+    }
 }
 fn sound(xml: &str) -> Vec<(i32, String, u8, i64, i64)> {
     let raw = collect_raw_notes(xml);

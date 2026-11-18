@@ -2549,7 +2549,10 @@
                 ) {
                     vec![duration]
                 } else {
-                    split_duration_for_metric_notation(start, duration, beat_duration, rhythm_context.divisions)
+                    let pulse = crate::midi::source_time::notation_pulse_duration(
+                        rhythm_context.divisions, rhythm_context.beats, rhythm_context.beat_type,
+                    );
+                    split_duration_for_metric_notation(start, duration, pulse, rhythm_context.divisions)
                 };
                 if parts.is_empty() {
                     if let Some(courses) = course_measure.as_deref_mut() {

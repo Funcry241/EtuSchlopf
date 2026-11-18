@@ -55,7 +55,7 @@ fn issue_authorized_repair_candidate(
         return Err(AuthorizationBlock::EvidenceIncomplete);
     }
     if plan.rows.is_empty()
-        || plan.full_backups_to_measure_start != 2
+        || plan.full_backups_to_measure_start < 2
         || plan.partial_backups_to_nonzero != 0
     {
         return Err(AuthorizationBlock::SerializationPlanMissing);

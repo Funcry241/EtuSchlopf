@@ -7,10 +7,10 @@
 
 ## Dein erstes Stück
 
-1. Lade die [Windows-Testversion](https://github.com/Funcry241/EtuSchlopf/releases) herunter. Für die PDF-Ausgabe installiere [MuseScore](https://musescore.org/de/download).
+1. Lade die [Windows-Testversion r1933](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1933-windows-preview) herunter. Für die PDF-Ausgabe installiere [MuseScore](https://musescore.org/de/download).
 2. Lege MIDI und WAV in denselben Ordner. Verwende denselben Dateinamen vor der Endung, etwa `Mein Stück.mid` und `Mein Stück.wav`.
 3. Ziehe die MIDI auf die EXE oder öffne die EXE und gib den Pfad zur MIDI ein.
-4. Öffne das PDF im Ergebnisordner. Für Änderungen in MuseScore öffne `Mein Stück.render.musicxml`.
+4. Öffne das PDF im Ergebnisordner. Für Änderungen in MuseScore öffne `Mein Stück.render.musicxml` oder die Master-Datei `Mein Stück.musicxml`, wenn der PDF-Export diese direkt verwendet.
 
 Die Testversion ist für Windows x64 und startet ohne Rust oder Cargo. Der Starter legt neben der MIDI einen neuen Laufordner unter `EtuSchlopf-Ergebnisse` an und arbeitet mit Kopien der Eingaben. Bei einem Fehler liefert die Konsole den ersten Hinweis. Ein vorhandener Ergebnisbericht trägt die Endung `.result.txt`.
 
@@ -18,17 +18,17 @@ Die Testversion ist für Windows x64 und startet ohne Rust oder Cargo. Der Start
 
 ## Notenbilder
 
-| Bach · Fuge c-Moll BWV 847 | Chopin · Etüde op. 10 Nr. 3 | Schubert · Deutscher Tanz D. 783 Nr. 15 |
-| --- | --- | --- |
-| [![Bach](docs/images/bwv847-fuge-r1921-ausschnitt.png)](docs/examples/bwv847-fuge-r1921.pdf) | [![Chopin](docs/images/chopin-op10-no3-p01-r1921-ausschnitt.png)](docs/examples/chopin-op10-no3-p01-r1921.pdf) | [![Schubert](docs/images/schubert-d783-no15-p18-r1921-ausschnitt.png)](docs/examples/schubert-d783-no15-p18-r1921.pdf) |
+| Bach · Fuge c-Moll BWV 847 | Chopin · Etüde E-Dur op. 10 Nr. 3 | Mozart · Klaviersonate A-Dur KV 331, Andante grazioso | Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15 |
+| --- | --- | --- | --- |
+| [![Bach · Fuge c-Moll BWV 847](docs/images/bwv847-fuge-r1933-ausschnitt.png)](docs/examples/bwv847-fuge-r1933.pdf) | [![Chopin · Etüde E-Dur op. 10 Nr. 3](docs/images/chopin-op10-no3-p01-r1933-ausschnitt.png)](docs/examples/chopin-op10-no3-p01-r1933.pdf) | [![Mozart · Klaviersonate A-Dur KV 331, Andante grazioso](docs/images/mozart-k331-p01-r1933-ausschnitt.png)](docs/examples/mozart-k331-p01-r1933.pdf) | [![Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15](docs/images/schubert-d783-no15-p18-r1933-ausschnitt.png)](docs/examples/schubert-d783-no15-p18-r1933.pdf) |
 
-[Alle 13 Notenbilder mit PDF, Druckvorlagen und Quellen](docs/examples/README.md)
+[Alle 14 Notenbilder mit PDF, Druckvorlagen und Quellen](docs/examples/README.md)
 
 ## Stand auf main
 
-Der angenommene Quellstand **r1921 / 0.10.1839** erzeugte im Windows-Korpuslauf vollständige Ausgaben für alle 13 Stücke. In dieser Revision betreffen die Änderungen vor allem die Richtung der Notenhälse, die Zuordnung am Stimmeinsatz, die Registerkontinuität und den Umgang mit lokalen Pausen. [Windows-Abnahme und Prüfsummen](docs/evidence/r1921/README.md) · [Mathematik und Notationsentscheidungen](docs/MATHEMATIK.md)
+**r1933 / 0.10.1839** hat den Windows-Vollkorpus mit 14 vollständigen Ausgaben bestanden. Der Stand umfasst quellgebundene Notendauern und Stimmverläufe, lokale Entscheidungen für Balken und Pausen sowie den dokumentierten direkten PDF-Export aus der Master-MusicXML. [Windows-Abnahme und Prüfsummen](docs/evidence/r1933/README.md) · [Mathematik und Notationsentscheidungen](docs/MATHEMATIK.md)
 
-EtuSchlopf ist experimentell. Prüfe das Notenbild am eigenen Stück. Die bisherige Windows-Vorschau ist für 2/4, 3/4 und 4/4 sowie für Taktwechsel an Taktgrenzen ausgelegt. Als nächste Prüfvorlage ist Mozarts Andante-grazioso-Thema aus KV 331 im 6/8-Takt vorgesehen. Der Mozart-Import hat eine eigene Abnahme.
+EtuSchlopf ist experimentell. Prüfe das Notenbild am eigenen Stück. Neben den bisherigen Referenzen in 2/4, 3/4 und 4/4 umfasst die Abnahme jetzt das Andante-grazioso-Thema aus Mozarts KV 331 im 6/8-Takt.
 
 ## Dokumentation und Beiträge
 

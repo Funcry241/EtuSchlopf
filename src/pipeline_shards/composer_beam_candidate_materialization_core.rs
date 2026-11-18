@@ -120,17 +120,14 @@ fn close_committed_cross_staff_beam_gestures( xml: &mut String, ) -> (ExternalFe
     }
     let mut out = String::with_capacity(xml.len() + 512);
     let mut last = 0_usize;
-    let mut inherited_divisions = 1_i64;
+    let mut metric = BeatScopedMetric::default();
     let mut total = ExternalFeedbackBeamClosureStats::default();
     for span in spans {
         out.push_str(&xml[last..span.start]);
         let measure_text = &xml[span.start..span.end];
-        inherited_divisions = partial_beat_first_i64(measure_text, "divisions")
-            .unwrap_or(inherited_divisions)
-            .max(1);
+        metric.update(measure_text);
         let (patched, stats) = close_committed_cross_staff_beam_gestures_in_segment(
-            measure_text,
-            inherited_divisions,
+            measure_text, metric.pulse(), metric.divisions,
         );
         total.cross_staff_groups += stats.cross_staff_groups;
         total.rows_written += stats.rows_written;
@@ -152,14 +149,17 @@ fn close_committed_cross_staff_beam_gestures( xml: &mut String, ) -> (ExternalFe
 
 fn close_committed_cross_staff_beam_gestures_in_segment(
     measure_text: &str,
-    divisions: i64,
+    beat_unit: i64,
+    quarter: i64,
 ) -> (String, ExternalFeedbackBeamClosureStats) {
     let raw_notes = partial_beat_raw_notes(measure_text);
     let infos = partial_beat_note_infos(measure_text, &raw_notes);
-    let beat_unit = divisions.max(1);
+    let Some(clef_boundaries) = metric_beam_clef_boundaries(measure_text) else {
+        return (measure_text.to_string(), ExternalFeedbackBeamClosureStats::default());
+    };
     let mut stats = ExternalFeedbackBeamClosureStats::default();
     let mut states: BTreeMap<usize, Vec<(usize, &'static str)>> = BTreeMap::new();
-    for mut group in structural_cross_staff_voice_beam_groups(&infos, beat_unit) {
+    for mut group in structural_cross_staff_voice_beam_groups(&infos, beat_unit, quarter, &clef_boundaries) {
         group.sort_by_key(|info| (info.start, info.index));
         let Some(plan) = structural_metric_beam_hierarchy_plan(&group, 2) else {
             continue;

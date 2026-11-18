@@ -81,6 +81,16 @@ impl SourceTimeDomain {
     }
 }
 
+/// Duration of a written main pulse, including ternary grouping in compound meter.
+pub(crate) fn notation_pulse_duration(divisions: i64, beats: i64, beat_type: i64) -> i64 {
+    let denominator_units = if beat_type == 8 && beats >= 6 && beats % 3 == 0 { 3 } else { 1 };
+    (divisions.saturating_mul(4).saturating_mul(denominator_units) / beat_type.max(1)).max(1)
+}
+
+pub(crate) fn supported_notation_meter(beats: u8, beat_type: u16) -> bool {
+    matches!((beats, beat_type), (2..=4, 4) | (6, 8))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MetricMeasure {
     pub(crate) start: i64,
@@ -198,9 +208,9 @@ impl MetricTimeline {
         })
     }
 
-    pub(crate) fn from_written_meter(beats: u8, pickup: i64, extent: i64) -> Result<Self> {
+    pub(crate) fn from_written_meter(beats: u8, beat_type: u16, pickup: i64, extent: i64) -> Result<Self> {
         let domain = SourceTimeDomain { source_ppq: 96, divisions: 96 };
-        let meter = MeterChange { tick: 0, beats, beat_type: 4 };
+        let meter = MeterChange { tick: 0, beats, beat_type };
         let mut timeline = Self::from_midi(domain, &[meter], extent - pickup)?;
         if pickup == 0 {
             return Ok(timeline);
@@ -218,7 +228,7 @@ impl MetricTimeline {
             full_duration: pickup,
             count: 1,
             beats,
-            beat_type: 4,
+            beat_type,
             truncated_last: false,
         });
         timeline.count = timeline.count.checked_add(1)

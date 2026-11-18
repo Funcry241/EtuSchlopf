@@ -226,6 +226,13 @@ fn exact_independent_release_can_pass_a_beat_and_an_exact_primary_chord() {
             assert_eq!(written.interval, note.pos..note.pos + note.len);
         }
 
+        let mut enlarged_onset = notes.to_vec();
+        enlarged_onset.insert(2, source(6, 0, 24, 61));
+        let (_, plan) = emitted(&enlarged_onset, 1);
+        assert!(plan.planned.iter().any(|note| {
+            note.source == Some(0) && note.independent && note.interval == (start..start + 96)
+        }));
+
         let mut chord_has_own_release = notes;
         chord_has_own_release[3].len = 24;
         let (_, plan) = emitted(&chord_has_own_release, 1);
@@ -480,7 +487,7 @@ fn simultaneous_sustains_keep_one_attack_each_across_a_barline() {
 
 #[test]
 fn last_attack_keeps_its_exact_release_across_a_barline() {
-    let metric = MetricTimeline::from_written_meter(2, 48, 624).unwrap();
+    let metric = MetricTimeline::from_written_meter(2, 4, 48, 624).unwrap();
     let notes = [
         MidiSeedNote { midi: 77, len: 192, ..note(0, 0, 1) },
         MidiSeedNote { midi: 65, len: 48, ..note(1, 192, 1) },
@@ -897,7 +904,7 @@ fn independent_accompaniment_keeps_its_playing_hand_across_staff_projection() {
 
 #[test]
 fn adjacent_split_keeps_the_upper_line_and_its_metric_release() {
-    let metric = MetricTimeline::from_written_meter(2, 0, 192).unwrap();
+    let metric = MetricTimeline::from_written_meter(2, 4, 0, 192).unwrap();
     let profile = CandidateProfile::span12();
     let source = jump_fixture(&[
         (48, 42, 2, 24), (48, 58, 2, 24),

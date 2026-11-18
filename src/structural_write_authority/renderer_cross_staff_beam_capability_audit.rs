@@ -5,7 +5,7 @@
 //! module inspects only the already written candidate. It does not select a
 //! musical repair, change XML, or infer success from beam tags alone.
 
-use super::locator_resolution::{direct_child_i64, direct_child_text};
+use super::locator_resolution::{direct_child_i64, direct_child_text, stable_xml_snapshot_fingerprint};
 use roxmltree::{Document, Node};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -15,7 +15,6 @@ pub struct RendererCrossStaffBeamCapabilityAudit {
     parse_ok: bool,
     primary_beam_groups: usize,
     cross_staff_beam_groups: usize,
-    unique_cross_staff_target: bool,
     target_members: usize,
     target_xml_element_ordinals: Vec<usize>,
     target_xml_contiguous: bool,
@@ -33,7 +32,6 @@ pub struct RendererCrossStaffBeamCapabilityAudit {
     target_consistent_explicit_stem_direction: bool,
     in_score_cross_staff_controls: usize,
     isolated_renderer_roundtrip_evidence_rows: usize,
-    context_equivalent_renderer_evidence_rows: usize,
     renderer_primitive_capability_proven: bool,
     renderer_context_equivalence_proven: bool,
     xml_preconditions_green: bool,
@@ -60,6 +58,7 @@ struct BeamMember {
 
 #[derive(Debug, Clone)]
 struct BeamGroup {
+    context_fingerprint: u64,
     members: Vec<BeamMember>,
 }
 
@@ -77,13 +76,23 @@ impl RendererCrossStaffBeamCapabilityAudit {
 
 pub fn audit_renderer_cross_staff_beam_capability(
     post_writer_xml: &str,
+    source_stage: &str,
+    isolated_renderer_roundtrip_evidence_rows: usize,
+    _unbound_context_row_count: usize,
+) -> RendererCrossStaffBeamCapabilityAudit {
+    audit_renderer_cross_staff_beam_capability_with_group_proofs(
+        post_writer_xml, source_stage, isolated_renderer_roundtrip_evidence_rows, &BTreeSet::new(),
+    )
+}
+
+fn audit_renderer_cross_staff_beam_capability_with_group_proofs(
+    post_writer_xml: &str,
     _source_stage: &str,
     isolated_renderer_roundtrip_evidence_rows: usize,
-    context_equivalent_renderer_evidence_rows: usize,
+    context_equivalent_renderer_groups: &BTreeSet<u64>,
 ) -> RendererCrossStaffBeamCapabilityAudit {
     let mut audit = RendererCrossStaffBeamCapabilityAudit {
         isolated_renderer_roundtrip_evidence_rows,
-        context_equivalent_renderer_evidence_rows,
         #[cfg(test)]
         verdict: "renderer_cross_staff_beam_capability_not_audited".to_string(),
         ..RendererCrossStaffBeamCapabilityAudit::default()
@@ -107,7 +116,6 @@ pub fn audit_renderer_cross_staff_beam_capability(
         .filter(|group| distinct_staff_count(group) > 1)
         .collect::<Vec<_>>();
     audit.cross_staff_beam_groups = cross_staff.len();
-    audit.unique_cross_staff_target = cross_staff.len() == 1;
     audit.in_score_cross_staff_controls = cross_staff.len().saturating_sub(1);
 
     let Some(target) = cross_staff.first() else {
@@ -195,13 +203,17 @@ pub fn audit_renderer_cross_staff_beam_capability(
     audit.target_consistent_explicit_stem_direction =
         audit.target_explicit_stems == target.members.len() && audit.target_stem_directions == 1;
 
-    audit.xml_preconditions_green = audit.unique_cross_staff_target
-        && audit.target_members >= 2
-        && audit.target_xml_contiguous
-        && audit.target_same_voice
-        && audit.target_staff_count == 2
-        && audit.target_primary_beam_grammar_green
-        && audit.target_secondary_beam_grammar_green;
+    audit.xml_preconditions_green = cross_staff.iter().all(|group| {
+        group.members.len() >= 2
+            && distinct_staff_count(group) == 2
+            && group.members.windows(2).all(|pair| {
+                pair[1].element_ordinal == pair[0].element_ordinal.saturating_add(1)
+                    && pair[0].voice == pair[1].voice
+            })
+            && group.members.first().is_some_and(|member| !member.voice.is_empty())
+            && primary_grammar_green(group)
+            && secondary_grammar_green(group)
+    });
 
     // v0.10.1165 proved the isolated A-B-A renderer primitive, but the same
     // structural class still fails in the productive full-score context.
@@ -209,14 +221,15 @@ pub fn audit_renderer_cross_staff_beam_capability(
     // context-equivalent positive row from the contextual probe matrix.
     audit.renderer_primitive_capability_proven =
         audit.xml_preconditions_green && audit.isolated_renderer_roundtrip_evidence_rows > 0;
-    audit.renderer_context_equivalence_proven =
-        audit.xml_preconditions_green && audit.context_equivalent_renderer_evidence_rows > 0;
+    let contexts = cross_staff.iter().map(|group| group.context_fingerprint).collect::<BTreeSet<_>>();
+    audit.renderer_context_equivalence_proven = audit.xml_preconditions_green
+        && contexts.len() == cross_staff.len()
+        && contexts.is_subset(context_equivalent_renderer_groups);
     audit.renderer_capability_proven =
         audit.renderer_primitive_capability_proven && audit.renderer_context_equivalence_proven;
     audit.isolated_renderer_probe_required =
         audit.xml_preconditions_green && !audit.renderer_primitive_capability_proven;
-    audit.release_hold_required =
-        audit.unique_cross_staff_target && !audit.renderer_capability_proven;
+    audit.release_hold_required = !audit.renderer_capability_proven;
     #[cfg(test)]
     {
         audit.verdict = if audit.renderer_capability_proven {
@@ -270,7 +283,11 @@ fn collect_primary_beam_groups(document: &Document<'_>) -> Vec<BeamGroup> {
                 "end" => {
                     if let Some(mut group) = active.remove(&voice) {
                         group.push(member);
-                        groups.push(BeamGroup { members: group });
+                        let context_fingerprint = stable_xml_snapshot_fingerprint(&format!(
+                            "{}|{}|{}", measure.parent().and_then(|part| part.attribute("id")).unwrap_or(""),
+                            group[0].element_ordinal, &document.input_text()[measure.range()],
+                        ));
+                        groups.push(BeamGroup { context_fingerprint, members: group });
                     }
                 }
                 _ => {}
@@ -346,9 +363,27 @@ mod tests {
 <note><pitch><step>B</step><octave>3</octave></pitch><duration>24</duration><voice>2</voice><type>16th</type><stem>down</stem><staff>2</staff><beam number="1">end</beam><beam number="2">end</beam></note>
 </measure></part></score-partwise>"#;
 
+    fn context_fingerprints(xml: &str) -> BTreeSet<u64> {
+        collect_primary_beam_groups(&Document::parse(xml).unwrap())
+            .into_iter().map(|group| group.context_fingerprint).collect()
+    }
+
+    #[test]
+    fn independent_groups_require_their_own_contextual_proof() {
+        let original = context_fingerprints(CROSS_STAFF);
+        let measure = &CROSS_STAFF[CROSS_STAFF.find("<measure").unwrap()..CROSS_STAFF.find("</part>").unwrap()];
+        let second = measure.replace("number=\"x\"", "number=\"y\"");
+        let combined = CROSS_STAFF.replace("</part>", &format!("{second}</part>"));
+        let both = context_fingerprints(&combined);
+        assert_eq!(both.len(), 2);
+        assert!(original.is_subset(&both));
+        assert!(!audit_renderer_cross_staff_beam_capability_with_group_proofs(&combined, "test", 1, &original).green());
+        assert!(audit_renderer_cross_staff_beam_capability_with_group_proofs(&combined, "test", 1, &both).green());
+    }
+
     #[test]
     fn xml_green_without_renderer_roundtrip_stays_blocked() {
-        let audit = audit_renderer_cross_staff_beam_capability(CROSS_STAFF, "test", 0, 0);
+        let audit = audit_renderer_cross_staff_beam_capability_with_group_proofs(CROSS_STAFF, "test", 0, &BTreeSet::new());
         assert!(audit.xml_preconditions_green);
         assert!(!audit.green());
         assert!(audit.requires_release_hold());
@@ -363,7 +398,7 @@ mod tests {
 
     #[test]
     fn context_equivalent_roundtrip_evidence_can_close_capability_without_a_write() {
-        let audit = audit_renderer_cross_staff_beam_capability(CROSS_STAFF, "test", 1, 1);
+        let audit = audit_renderer_cross_staff_beam_capability_with_group_proofs(CROSS_STAFF, "test", 1, &context_fingerprints(CROSS_STAFF));
         assert!(audit.green());
         assert!(!audit.requires_release_hold());
         assert!(!audit.write_produced);
@@ -371,7 +406,7 @@ mod tests {
 
     #[test]
     fn isolated_primitive_evidence_alone_stays_blocked_by_context() {
-        let audit = audit_renderer_cross_staff_beam_capability(CROSS_STAFF, "test", 5, 0);
+        let audit = audit_renderer_cross_staff_beam_capability_with_group_proofs(CROSS_STAFF, "test", 5, &BTreeSet::new());
         assert!(audit.renderer_primitive_capability_proven);
         assert!(!audit.renderer_context_equivalence_proven);
         assert!(!audit.green());
@@ -385,7 +420,7 @@ mod tests {
     #[test]
     fn same_staff_group_is_not_a_cross_staff_target() {
         let xml = CROSS_STAFF.replace("<staff>1</staff>", "<staff>2</staff>");
-        let audit = audit_renderer_cross_staff_beam_capability(&xml, "test", 0, 0);
+        let audit = audit_renderer_cross_staff_beam_capability_with_group_proofs(&xml, "test", 0, &BTreeSet::new());
         assert_eq!(audit.cross_staff_beam_groups, 0);
         assert!(!audit.requires_release_hold());
         assert_eq!(

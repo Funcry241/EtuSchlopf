@@ -16,8 +16,8 @@ use std::ops::{Bound::Excluded, Range};
 
 type PickupPhrase = (PhraseNotationIntentProjection, Range<usize>, Range<usize>);
 
-/// A single-note pickup can lead into a connected upper line across written
-/// voices. The first sustained arrival must outlive an accompanying attack.
+/// A unique upper pickup line can continue across written voices.
+/// A sustained arrival must outlive an accompanying attack.
 pub(super) fn select_connected_pickup_phrase(xml: &str) -> Result<Option<PickupPhrase>> {
     let document = Document::parse(xml)?;
     let mut parts = document.root_element().children().filter(|node| is_el(*node, "part"));
@@ -29,9 +29,11 @@ pub(super) fn select_connected_pickup_phrase(xml: &str) -> Result<Option<PickupP
         return Ok(None);
     }
     let pickup_attacks = melody_attacks(pickup);
-    let Some((start, [first])) = pickup_attacks.first_key_value()
-        .map(|(onset, group)| (onset, group.as_slice())) else { return Ok(None); };
-    if pickup_attacks.len() != 1 || *start != 0 || first.tie_start {
+    let Some((start, opening)) = pickup_attacks.first_key_value() else { return Ok(None); };
+    let Some(first) = opening.iter().max_by_key(|note| note.pitch) else { return Ok(None); };
+    if pickup_attacks.len() != 1 || *start != 0 || first.tie_start
+        || opening.iter().filter(|note| note.pitch == first.pitch).count() != 1
+    {
         return Ok(None);
     }
     let following = melody_attacks(next);
@@ -490,6 +492,11 @@ mod tests {
             assert_eq!(intent.attack_count, 4);
             assert_eq!(&xml[start], pickup);
             assert_eq!(&xml[end], arrival);
+            let accompaniment = note("G", 3 + transpose, opening_voice, 2, "<chord/>", "");
+            let accompanied = xml.replace(&pickup, &format!("{pickup}{accompaniment}"));
+            let (_, start, end) = select_connected_pickup_phrase(&accompanied).unwrap().unwrap();
+            assert_eq!(&accompanied[start], pickup);
+            assert_eq!(&accompanied[end], arrival);
             let duplicate = xml.replace(&arrival, &format!("{arrival}{arrival}"));
             assert!(select_connected_pickup_phrase(&duplicate).unwrap().is_none());
             let continuation = xml.replace("type=\"start\"", "type=\"stop\"");

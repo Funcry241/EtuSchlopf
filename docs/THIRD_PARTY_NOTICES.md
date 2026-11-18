@@ -121,7 +121,7 @@ keine Rechte an eingelesenen Aufnahmen, Aufführungsdaten oder fremden
 Notenausgaben. Bei Veröffentlichung von Ein- oder Ausgaben sind die Rechte an
 den jeweils enthaltenen Werken, Aufnahmen und Ausgaben zu berücksichtigen.
 
-Die [Quellen, Bearbeitungen und Lizenzangaben für Bach, Chopin und Schubert](examples/README.md#quellen-und-rechte) stehen bei den Notenbildern.
+Die [Quellen, Bearbeitungen und Lizenzangaben für Bach, Chopin, Mozart und Schubert](examples/README.md#quellen-und-rechte) stehen bei den Notenbildern.
 
 ### Chopin, Etüde E-Dur op. 10 Nr. 3, Aufführung p01
 
@@ -143,6 +143,10 @@ Referenzpaar enthält die beiden Dateien unverändert.
 Für gedruckte oder gescannte Notenausgaben gelten die Rechte der jeweiligen
 Ausgabe. Die als Vergleich verlinkte [Henle-Urtext-Ausgabe HN 656](https://www.henle.de/de/Etuede-E-dur-op.-10-Nr.-3/HN-656)
 wird separat vom Verlag angeboten.
+
+### Mozart, KV 331, Andante grazioso, Einspielung p01
+
+**Mozart, Klaviersonate A-Dur KV 331, Andante grazioso, Einspielung p01.** Quelle der Performance-MIDI und WAV ist Werner Goebl, *The Vienna 4×22 Piano Corpus*, Version 1.0 (2017), mdw – Universität für Musik und darstellende Kunst Wien. [Datensatz](https://doi.org/10.21939/4X22) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). EtuSchlopf hat daraus den Notensatz und dessen Vorschaubild erzeugt.
 
 ## Umfang und Wiederholung der Prüfung
 

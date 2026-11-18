@@ -20,7 +20,7 @@ struct FinalBeamEvent {
     staff: String,
     onset: i64,
     duration: i64,
-    beat_unit: i64,
+    beam_capacity: u32,
     pitch: String,
     rest: bool,
     chord: bool,
@@ -56,6 +56,20 @@ pub(super) fn final_beam_has_child(node: roxmltree::Node<'_, '_>, tag: &str) -> 
         .any(|child| child.is_element() && child.tag_name().name() == tag)
 }
 
+pub(super) fn final_beam_note_capacity(note: roxmltree::Node<'_, '_>) -> u32 {
+    match final_beam_child_text(note, "type").as_deref() {
+        Some("eighth") => 1,
+        Some("16th") => 2,
+        Some("32nd") => 3,
+        Some("64th") => 4,
+        Some("128th") => 5,
+        Some("256th") => 6,
+        Some("512th") => 7,
+        Some("1024th") => 8,
+        _ => 0,
+    }
+}
+
 fn final_beam_pitch_token(note: roxmltree::Node<'_, '_>) -> String {
     if final_beam_has_child(note, "rest") {
         return "rest".to_string();
@@ -72,7 +86,7 @@ fn final_beam_pitch_token(note: roxmltree::Node<'_, '_>) -> String {
     format!("{step}:{alter}:{octave}")
 }
 
-fn final_beam_states(note: roxmltree::Node<'_, '_>) -> std::collections::BTreeMap<u32, String> {
+pub(super) fn final_beam_states(note: roxmltree::Node<'_, '_>) -> std::collections::BTreeMap<u32, String> {
     let mut states = std::collections::BTreeMap::new();
     for beam in note
         .children()
@@ -235,7 +249,7 @@ pub(super) fn parse_final_beam_source(xml: &str) -> Option<FinalBeamSource> {
                             staff: staff.clone(),
                             onset,
                             duration,
-                            beat_unit: if beat_type == 4 { divisions } else { 0 },
+                            beam_capacity: final_beam_note_capacity(child),
                             pitch: final_beam_pitch_token(child),
                             rest: final_beam_has_child(child, "rest"),
                             chord,
@@ -326,12 +340,8 @@ fn final_pdf_source_higher_beam_regression_key(event: &FinalBeamEvent) -> String
 
 fn final_pdf_source_higher_beam_regression_group_key(event: &FinalBeamEvent) -> String {
     format!(
-        "{}|{}|{}|{}|{}",
-        event.part,
-        event.bar,
-        event.staff,
-        event.voice,
-        event.onset.div_euclid(event.beat_unit.max(1))
+        "{}|{}|{}|{}",
+        event.part, event.bar, event.staff, event.voice
     )
 }
 
@@ -341,107 +351,71 @@ pub(super) fn final_pdf_source_higher_beam_regression_candidates(
 ) -> Option<usize> {
     let master = parse_final_beam_source(master_xml)?;
     let candidate = parse_final_beam_source(candidate_xml)?;
-    let mut master_rows: std::collections::BTreeMap<String, Vec<&FinalBeamEvent>> =
-        std::collections::BTreeMap::new();
-    let mut candidate_rows: std::collections::BTreeMap<String, Vec<&FinalBeamEvent>> =
-        std::collections::BTreeMap::new();
-    let mut candidate_groups: std::collections::BTreeMap<String, Vec<&FinalBeamEvent>> =
-        std::collections::BTreeMap::new();
-    for event in &master.events {
-        master_rows
-            .entry(final_pdf_source_higher_beam_regression_key(event))
-            .or_default()
-            .push(event);
+    let mut master_lanes = std::collections::BTreeMap::<_, Vec<_>>::new();
+    let mut master_identity_count = std::collections::BTreeMap::<_, usize>::new();
+    let mut candidate_rows = std::collections::BTreeMap::<_, Vec<_>>::new();
+    for event in master.events.iter().filter(|event| !event.hidden && !event.rest
+        && !event.chord && event.duration > 0)
+    {
+        *master_identity_count.entry(final_pdf_source_higher_beam_regression_key(event))
+            .or_default() += 1;
+        master_lanes.entry(final_pdf_source_higher_beam_regression_group_key(event))
+            .or_default().push(event);
     }
-    for event in &candidate.events {
-        candidate_rows
-            .entry(final_pdf_source_higher_beam_regression_key(event))
-            .or_default()
-            .push(event);
-        if !event.hidden
-            && !event.rest
-            && !event.chord
-            && event.duration > 0
-            && event.beat_unit > 0
-        {
-            candidate_groups
-                .entry(final_pdf_source_higher_beam_regression_group_key(event))
-                .or_default()
-                .push(event);
-        }
+    for event in candidate.events.iter().filter(|event| !event.hidden && !event.chord) {
+        candidate_rows.entry(final_pdf_source_higher_beam_regression_key(event))
+            .or_default().push(event);
     }
-    let primary = ["begin", "continue", "continue", "end"];
-    let secondary_master = ["begin", "continue", "continue", "end"];
-    let secondary_missing_begin = [None, Some("continue"), Some("continue"), Some("end")];
-    let expected_primary = primary.map(Some);
-    let expected_secondary_master = secondary_master.map(Some);
-    let mut candidates = 0_usize;
-    for mut group in candidate_groups.into_values() {
-        group.sort_by_key(|event| (event.onset, event.sequence));
-        let Some(first) = group.first().copied() else {
-            continue;
-        };
-        let beat_start = first.onset.div_euclid(first.beat_unit) * first.beat_unit;
-        let beat_end = beat_start.saturating_add(first.beat_unit);
-        let complete_four_sixteenths = group.len() == 4
-            && group
-                .iter()
-                .all(|event| event.duration.saturating_mul(4) == event.beat_unit)
-            && group
-                .first()
-                .is_some_and(|event| event.onset == beat_start)
-            && group.last().is_some_and(|event| {
-                event.onset.saturating_add(event.duration) == beat_end
-            })
-            && group.windows(2).all(|pair| {
-                pair[0].onset.saturating_add(pair[0].duration) == pair[1].onset
-            });
-        if !complete_four_sixteenths {
-            continue;
-        }
-        let mut master_group = Vec::with_capacity(group.len());
-        let mut unique = true;
-        for candidate_event in &group {
-            let key = final_pdf_source_higher_beam_regression_key(candidate_event);
-            let Some(candidate_matches) = candidate_rows.get(&key) else {
-                unique = false;
-                break;
-            };
-            let Some(master_matches) = master_rows.get(&key) else {
-                unique = false;
-                break;
-            };
-            if candidate_matches.len() != 1 || master_matches.len() != 1 {
-                unique = false;
-                break;
+    let mut candidates = 0;
+    for mut lane in master_lanes.into_values() {
+        lane.sort_by_key(|event| (event.onset, event.sequence));
+        let highest_level = lane.iter().flat_map(|event| event.beams.keys().copied())
+            .max().unwrap_or(1);
+        for level in 2..=highest_level.min(8) {
+            let mut start: Option<usize> = None;
+            for (index, event) in lane.iter().enumerate() {
+                let primary = event.beams.get(&1).map(String::as_str);
+                if event.beam_capacity < level || !matches!(primary, Some("begin" | "continue" | "end")) {
+                    start = None;
+                    continue;
+                }
+                if start.is_some() && (primary == Some("begin")
+                    || lane[index - 1].beams.get(&1).is_some_and(|state| state == "end")
+                    || lane[index - 1].onset.saturating_add(lane[index - 1].duration) != event.onset)
+                {
+                    start = None;
+                }
+                match event.beams.get(&level).map(String::as_str) {
+                    Some("begin") => start = Some(index),
+                    Some("continue") => {}
+                    Some("end") => {
+                        let Some(first) = start.take() else { continue; };
+                        let mut erased = false;
+                        let exact_binding = lane[first..=index].iter().all(|source| {
+                            let key = final_pdf_source_higher_beam_regression_key(source);
+                            let Some([target]) = candidate_rows.get(&key).map(Vec::as_slice) else {
+                                return false;
+                            };
+                            if master_identity_count.get(&key) != Some(&1)
+                                || source.beams.get(&1) != target.beams.get(&1)
+                            {
+                                return false;
+                            }
+                            match target.beams.get(&level) {
+                                Some(state) => source.beams.get(&level) == Some(state),
+                                None => {
+                                    erased = true;
+                                    true
+                                }
+                            }
+                        });
+                        if exact_binding && erased {
+                            candidates += 1;
+                        }
+                    }
+                    _ => start = None,
+                }
             }
-            master_group.push(master_matches[0]);
-        }
-        if !unique {
-            continue;
-        }
-        let candidate_primary = group
-            .iter()
-            .map(|event| event.beams.get(&1).map(String::as_str))
-            .collect::<Vec<_>>();
-        let master_primary = master_group
-            .iter()
-            .map(|event| event.beams.get(&1).map(String::as_str))
-            .collect::<Vec<_>>();
-        let candidate_secondary = group
-            .iter()
-            .map(|event| event.beams.get(&2).map(String::as_str))
-            .collect::<Vec<_>>();
-        let master_secondary = master_group
-            .iter()
-            .map(|event| event.beams.get(&2).map(String::as_str))
-            .collect::<Vec<_>>();
-        if candidate_primary.as_slice() == expected_primary.as_slice()
-            && master_primary.as_slice() == expected_primary.as_slice()
-            && candidate_secondary.as_slice() == secondary_missing_begin.as_slice()
-            && master_secondary.as_slice() == expected_secondary_master.as_slice()
-        {
-            candidates = candidates.saturating_add(1);
         }
     }
     Some(candidates)

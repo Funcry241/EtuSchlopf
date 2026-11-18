@@ -1,0 +1,35 @@
+# Local attack and release evidence for inferred performance timing
+
+SelectorDerivationContract: causal_class_first_v1
+SelectorChange: yes
+SelectorRole: repair_scope
+KnownWitnessUsedForFeatureDerivation: no
+TargetConditionedFeatureNarrowing: no
+ClassDefinitionPrecedesCorpusDistribution: yes
+UniquenessIsOutcomeNotGoal: yes
+RepairSelectorSeparatedFromErrorClass: yes
+CausalFeatureNecessityReview: complete
+CorpusDistributionPurpose: measurement_only
+CorpusDistributionMayRefineClassToKnownWitness: no
+MultiplicityInvarianceContract: candidate_duplication_v1
+IndependentCandidateDuplicationInvariant: yes
+ScorewideMultiplicityAsWriteAuthority: forbidden
+GlobalRankingOfIndependentCandidates: forbidden
+MultiplicityDecisionScope: local_candidate_or_explicit_conflict_group
+CandidateDuplicationProbe: required_before_productive_write
+ParentErrorClassContract: docs/selector_derivation_contract_source_time_notation_projection.md
+ScopeNarrowingBasis: authority_or_safety_only
+DiscriminativeContextOnlyNarrowing: forbidden
+MultiplicityInvarianceContract: candidate_duplication_v1
+IndependentCandidateDuplicationInvariant: yes
+ScorewideMultiplicityAsWriteAuthority: forbidden
+GlobalRankingOfIndependentCandidates: forbidden
+MultiplicityDecisionScope: local_candidate_or_explicit_conflict_group
+CandidateDuplicationProbe: required_before_productive_write
+CausalFeature: short time-ordered neighboring pitches approach a sustained host, and ambiguous host assignments retain regular timing
+CausalFeature: a distinguishable later attack fits the local subpulse; simultaneous chord members can share the subdivision
+CausalFeature: close measured releases and a locally aligned repeat provide a common written duration consistent with both chords and bounded by subsequent same-key attacks
+NonCausalContextExcluded: project identity, measure labels, absolute pitch, chord cardinality as an ornament discriminator, and end-of-phrase location
+
+The existing performance timing owner projects onsets and selects durations.
+Source identities and measured attacks remain available for later verification.

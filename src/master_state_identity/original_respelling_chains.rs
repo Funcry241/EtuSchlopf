@@ -84,6 +84,23 @@ impl OriginalFunctionalRespellingChains {
         Ok(())
     }
 
+    pub(crate) fn through_master_countervoice_stems(
+        &self, before: &str, after: &str, receipt: &PreservingTransformationReceipt,
+    ) -> Self {
+        let received = (|| -> anyhow::Result<_> {
+            let state = self.received.as_ref().map_err(|error| anyhow::anyhow!("{error}"))?;
+            ensure!(self.epoch == OriginalChainEpoch::FinalChord,
+                "Countervoice stems require a bound FinalChord course");
+            receipt.validate_preserving_transition::<crate::pipeline::NotationPolishPreservingMint>(before, after)?;
+            let transport = receipt.recorded_representation()
+                .ok_or_else(|| anyhow::anyhow!("Countervoice stems lack their original representation transport"))?;
+            let next = state.continue_preserving_representation(receipt, transport)?;
+            next.validate_binding(after)?;
+            Ok(Arc::new(next))
+        })().map_err(|error| error.to_string());
+        Self { received, epoch: self.epoch }
+    }
+
     pub(crate) fn after_original_master_export(
         &self, before: &str, after: &str, receipt: Option<&ExactTransformationReceipt>,
     ) -> Self {
