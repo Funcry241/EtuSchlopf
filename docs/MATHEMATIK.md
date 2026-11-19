@@ -1,6 +1,6 @@
 # Mathematik in EtuSchlopf
 
-**Quellstand r1933 / 0.10.1839.** Der Windows-Korpuslauf umfasst 14 Stücke mit vollständiger PDF-Ausgabe. Der [Prüfbeleg](evidence/r1933/README.md) und die [Notenbilder](examples/README.md#notenbilder) dokumentieren diesen Stand.
+**Quellstand r1938 / 0.10.1839.** Der Windows-Korpuslauf umfasst 14 Stücke mit vollständiger PDF-Ausgabe. Der [Prüfbeleg](evidence/r1938/README.md) und die [Notenbilder](examples/README.md#notenbilder) dokumentieren diesen Stand.
 
 EtuSchlopf verwendet Mathematik für musikalische Entscheidungen, Darstellungsentscheidungen, Messungen und technische Beweise. Diese Aufgaben sind verschieden: Eine Erhaltungsbilanz beweist keine Lesbarkeit; ein lesbarer Registerkurs beweist keine menschliche Spielbarkeit; eine bestandene Prüfung erlaubt nur den Übergang, dessen Bedingungen sie tatsächlich abdeckt.
 
@@ -273,11 +273,15 @@ für die betroffenen erreichbaren Leser $L$ und ihre Beobachtung $O_L$, einschli
 
 Hashes sind davon getrennt: Sie binden Bytes unter ihren jeweiligen Kollisionsannahmen. FNV-1a ist kein kryptografischer Beweis; auch SHA-256 ist mathematisch nicht injektiv über beliebig lange Eingaben. Provenienz, tatsächlich mitgeführte Ereignisidentität und bytebezogene Integritätsprüfung erfüllen verschiedene Aufgaben.
 
-## Quellzeit, Pausen und Balken in r1933
+## Quellzeit, Pausen und Balken in r1938
 
-Ein Ton belegt das halboffene Zeitintervall $[s,e)$. Der MIDI-Seed hält den Quellanschlag und die zugehörige Loslasszeit zusammen. Eine unabhängige Haltedauer braucht einen eigenen Verlauf, während die übrigen Anschläge den Cursor der Hauptstimme weiterführen. Ein späterer Anschlag derselben Tonhöhe innerhalb des betrachteten Intervalls schließt die betreffende Trennung aus. [MIDI-Seed](../src/midi_seed.rs)
+Ein Ton belegt das halboffene Quellzeitintervall $[s,e)$. Der MIDI-Seed hält den Quellanschlag und die Loslasszeit zusammen. Für eine gehaltene Oberstimme prüft er, ob sich deren Fortsetzung im vorhandenen metrischen Zeitfenster eindeutig bestimmen lässt. Jeder Folgeanschlag muss an die belegte Loslasszeit des vorigen Tons anschließen. Die Dauern müssen sich im Notenraster exakt darstellen lassen und das Fenster vollständig ausfüllen. Ein erneuter Anschlag derselben Tonhöhe innerhalb des Halteintervalls verhindert die Trennung. Wenn die neue Zuordnung uneindeutig ist, gilt der bisherige Ableitungsweg. [MIDI-Seed](../src/midi_seed.rs) · [Vertrag der zeitlich belegten Fortsetzung](selector_derivation_contract_timed_held_upper_voice_implementation.md)
 
-Für eine notierte Pause $R$ und die klingenden Intervalle $I_j$ derselben Stimme bestimmt die Intervallvereinigung die belegte Zeit. Die verbleibenden Pausen ergeben sich aus $R\setminus\bigcup_j I_j$, soweit sie sich exakt metrisch darstellen lassen. Gleichzeitige Akkordtöne zählen in der Belegung einmal. Der Cursor und die klingenden Ereignisse werden nach der Serialisierung erneut geprüft. [Pausen und Cursor](../src/render/silent_voice_visible_measure_coverage_render_writer.rs)
+Für das metrische Einsatzfenster $M$ einer geschriebenen Stimme sammelt EtuSchlopf deren klingende Intervalle $I_j$ systemübergreifend. Bereits sichtbare Belegung im Zielsystem sei $V$. Kandidaten für sichtbare Pausen sind die zusammenhängenden Teilintervalle von
+
+$$M \setminus \left(V \cup \bigcup_j I_j\right).$$
+
+Der zuständige Planer übernimmt nur Teilintervalle, deren Anfang und Ende sich exakt im metrischen Raster schreiben lassen. Gleichzeitige Töne zählen bei der Intervallvereinigung einmal. [Planer für sichtbare Pausen](../src/pipeline_shards/composer_beat_scoped_rest_completion_planning_core.rs) · [Vertrag der exakten Pausenprojektion](written_voice_entry_rest_exact_projection.md)
 
 Ein Balkenplan verbindet metrisch zusammengehörige Anschläge. Auf höheren Ebenen prüft die Rücklesung zusammenhängende Segmente gegen die gebundene Vorlage. Ein fehlendes Segment kann am Anfang, im Inneren oder am Ende auftreten. Eine Pause kann zwei freie Anschläge verbinden, wenn beide jeweils nur diesen passenden Nachbarn haben. Vollständige Balkengruppen behalten ihre Zugehörigkeit. [Metrische Balkenplanung](../src/pipeline_shards/composer_metric_beam_planning_core.rs) · [Rücklesung](../src/render/final_beam_observation_planning_core.rs)
 
@@ -292,7 +296,7 @@ Der Korpusnachweis unterscheidet zwischen einer beobachteten Render-Materialisie
 | Schubert, Deutscher Tanz D. 783 Nr. 15, p18 | r1872, Exitcode 0, 0 Blocker, 0 Warnungen und 100 % im Notenerhaltsmaß. 3.097 Tests bestanden, vier waren ignoriert. Der Windows-Renderer gab das zweiseitige Notenbild frei. [Abnahme r1872](evidence/r1872/README.md). |
 | Mozart, KV 331, Andante grazioso, p01 | r1933, 6/8-Takt, direkter PDF-Export aus der Master-MusicXML. [Notenbild](examples/mozart-k331-p01-r1933.pdf). |
 
-Für r1933 liegt der [Windows-Vollkorpuslauf mit 14 Stücken](evidence/r1933/README.md) vor. Das Notenerhaltsmaß folgt der im Lauf definierten Grundgesamtheit. Es bewertet weder den Abgleich aller Notenwerte mit der Druckvorlage noch das Notenbild als Ganzes.
+Für r1938 liegt der [Windows-Vollkorpuslauf mit 14 Stücken](evidence/r1938/README.md) vor. Die vorbereitete [Ballade op. 38](examples/chopin-op38-p01.md) gehört noch nicht zu dieser Abnahme. Das Notenerhaltsmaß folgt der im Lauf definierten Grundgesamtheit. Es bewertet weder den Abgleich aller Notenwerte mit der Druckvorlage noch das Notenbild als Ganzes.
 
 ### Historischer Vollkorpuslauf r1683
 

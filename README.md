@@ -12,7 +12,7 @@
 3. Ziehe die MIDI auf die EXE oder öffne die EXE und gib den Pfad zur MIDI ein.
 4. Öffne das PDF im Ergebnisordner. Für Änderungen in MuseScore öffne `Mein Stück.render.musicxml` oder die Master-Datei `Mein Stück.musicxml`, wenn der PDF-Export diese direkt verwendet.
 
-Die Testversion ist für Windows x64 und startet ohne Rust oder Cargo. Der Starter legt neben der MIDI einen neuen Laufordner unter `EtuSchlopf-Ergebnisse` an und arbeitet mit Kopien der Eingaben. Bei einem Fehler liefert die Konsole den ersten Hinweis. Ein vorhandener Ergebnisbericht trägt die Endung `.result.txt`.
+Der Windows-Download enthält r1933. Die Notengalerie und der Quellstand auf GitHub zeigen r1938. Die Testversion ist für Windows x64 und startet ohne Rust oder Cargo. Der Starter legt neben der MIDI einen neuen Laufordner unter `EtuSchlopf-Ergebnisse` an und arbeitet mit Kopien der Eingaben. Bei einem Fehler liefert die Konsole den ersten Hinweis. Ein vorhandener Ergebnisbericht trägt die Endung `.result.txt`.
 
 > **In English:** EtuSchlopf uses a matching MIDI and WAV pair to produce piano sheet music as PDF and MusicXML. The Windows x64 preview uses MuseScore for PDF export. Issues in English are welcome.
 
@@ -20,15 +20,15 @@ Die Testversion ist für Windows x64 und startet ohne Rust oder Cargo. Der Start
 
 | Bach · Fuge c-Moll BWV 847 | Chopin · Etüde E-Dur op. 10 Nr. 3 | Mozart · Klaviersonate A-Dur KV 331, Andante grazioso | Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15 |
 | --- | --- | --- | --- |
-| [![Bach · Fuge c-Moll BWV 847](docs/images/bwv847-fuge-r1933-ausschnitt.png)](docs/examples/bwv847-fuge-r1933.pdf) | [![Chopin · Etüde E-Dur op. 10 Nr. 3](docs/images/chopin-op10-no3-p01-r1933-ausschnitt.png)](docs/examples/chopin-op10-no3-p01-r1933.pdf) | [![Mozart · Klaviersonate A-Dur KV 331, Andante grazioso](docs/images/mozart-k331-p01-r1933-ausschnitt.png)](docs/examples/mozart-k331-p01-r1933.pdf) | [![Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15](docs/images/schubert-d783-no15-p18-r1933-ausschnitt.png)](docs/examples/schubert-d783-no15-p18-r1933.pdf) |
+| [![Bach · Fuge c-Moll BWV 847](docs/images/bwv847-fuge-r1938-ausschnitt.png)](docs/examples/bwv847-fuge-r1938.pdf) | [![Chopin · Etüde E-Dur op. 10 Nr. 3](docs/images/chopin-op10-no3-p01-r1938-ausschnitt.png)](docs/examples/chopin-op10-no3-p01-r1938.pdf) | [![Mozart · Klaviersonate A-Dur KV 331, Andante grazioso](docs/images/mozart-k331-p01-r1938-ausschnitt.png)](docs/examples/mozart-k331-p01-r1938.pdf) | [![Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15](docs/images/schubert-d783-no15-p18-r1938-ausschnitt.png)](docs/examples/schubert-d783-no15-p18-r1938.pdf) |
 
 [Alle 14 Notenbilder mit PDF, Druckvorlagen und Quellen](docs/examples/README.md)
 
 ## Stand auf main
 
-**r1933 / 0.10.1839** hat den Windows-Vollkorpus mit 14 vollständigen Ausgaben bestanden. Der Stand umfasst quellgebundene Notendauern und Stimmverläufe, lokale Entscheidungen für Balken und Pausen sowie den dokumentierten direkten PDF-Export aus der Master-MusicXML. [Windows-Abnahme und Prüfsummen](docs/evidence/r1933/README.md) · [Mathematik und Notationsentscheidungen](docs/MATHEMATIK.md)
+**r1938 / 0.10.1839** hat den Windows-Vollkorpus mit 14 vollständigen Ausgaben bestanden. Der Stand berechnet sichtbare Einsatzpausen aus der Belegung derselben geschriebenen Stimme und prüft gehaltene Oberstimmen anhand der Anschlag- und Loslasszeiten aus der MIDI. [Windows-Abnahme und Prüfsummen](docs/evidence/r1938/README.md) · [Mathematik und Notationsentscheidungen](docs/MATHEMATIK.md)
 
-EtuSchlopf ist experimentell. Prüfe das Notenbild am eigenen Stück. Neben den bisherigen Referenzen in 2/4, 3/4 und 4/4 umfasst die Abnahme jetzt das Andante-grazioso-Thema aus Mozarts KV 331 im 6/8-Takt.
+EtuSchlopf ist experimentell. Prüfe das Notenbild am eigenen Stück. Zum abgenommenen Korpus gehört das Andante-grazioso-Thema aus Mozarts KV 331 im 6/8-Takt. Als nächste Referenz ist Chopins Ballade op. 38 mit Original-MIDI, Original-WAV und historischer Druckvorlage dokumentiert. Ihr Import steht noch aus. [Chopin-Referenz und Lizenz](docs/examples/chopin-op38-p01.md)
 
 ## Dokumentation und Beiträge
 
@@ -38,4 +38,4 @@ Nenne im Fehlerbericht die Version, die Meldung und bei einem Notationsfehler di
 
 ## Lizenz
 
-Der Code steht unter der [MIT-Lizenz](LICENSE). Für Fremdkomponenten und Musikdateien gelten die jeweils ausgewiesenen Rechte. [Fremdlizenzen](docs/THIRD_PARTY_NOTICES.md) · [Musikquellen und Namensnennung](docs/examples/README.md#quellen-und-rechte)
+Der Code steht unter der [MIT-Lizenz](LICENSE). Für Fremdkomponenten und Musikdateien gelten die jeweils ausgewiesenen Rechte. [Fremdlizenzen](docs/THIRD_PARTY_NOTICES.md) · [Musikquellen und Namensnennung](docs/examples/README.md#quellen-und-rechte) · [Chopin op. 38](docs/examples/chopin-op38-p01.md)

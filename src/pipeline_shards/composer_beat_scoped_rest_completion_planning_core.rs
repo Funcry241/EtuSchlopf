@@ -9,6 +9,39 @@ struct BeatScopedRestCompletionGapPlan {
     gap_end: i64,
 }
 
+// A notated gap belongs to a logical voice across staves. A sounding
+// overlap invalidates a silence claim; visible rests can cover any subspan.
+fn uncovered_voice_rest_spans(
+    span: std::ops::Range<i64>,
+    sounding: impl IntoIterator<Item = std::ops::Range<i64>>,
+    rests: impl IntoIterator<Item = std::ops::Range<i64>>,
+) -> Option<Vec<std::ops::Range<i64>>> {
+    if span.start < 0 || span.start >= span.end {
+        return None;
+    }
+    let overlaps = |other: &std::ops::Range<i64>| {
+        other.start < other.end && other.start < span.end && span.start < other.end
+    };
+    if sounding.into_iter().any(|other| overlaps(&other)) {
+        return None;
+    }
+
+    let mut covered = rests.into_iter().filter(overlaps).collect::<Vec<_>>();
+    covered.sort_unstable_by_key(|part| (part.start, part.end));
+    let mut cursor = span.start;
+    let mut uncovered = Vec::new();
+    for part in covered {
+        if cursor < part.start {
+            uncovered.push(cursor..part.start);
+        }
+        cursor = cursor.max(part.end.min(span.end));
+    }
+    if cursor < span.end {
+        uncovered.push(cursor..span.end);
+    }
+    Some(uncovered)
+}
+
 fn plan_visible_voice_rest_completion_gaps(
     note_infos: &[PartialBeatNoteInfo],
     measure_duration: i64,
@@ -35,29 +68,23 @@ fn plan_visible_voice_rest_completion_gaps(
             if gap_end <= gap_start {
                 continue;
             }
-            // A staff-local visual gap is not a proven voice silence while the
-            // same voice carries pitched material on another staff (or in a hidden/
-            // chord anchor) inside that span. Treating such cross-staff motion as
-            // silence would insert cursor-advancing rests into an already occupied
-            // MusicXML lane and can push the measure beyond its metric duration.
-            let same_voice_pitched_material_in_gap = note_infos.iter().any(|candidate| {
-                candidate.voice == voice
-                    && !candidate.is_rest
-                    && candidate.duration > 0
-                    && candidate.start < gap_end
-                    && candidate.start.saturating_add(candidate.duration) > gap_start
-            });
-            if same_voice_pitched_material_in_gap {
+            let same_voice = note_infos.iter().filter(|note| note.voice == voice);
+            let interval = |note: &PartialBeatNoteInfo| {
+                note.start..note.start.saturating_add(note.duration)
+            };
+            let Some(uncovered) = uncovered_voice_rest_spans(
+                gap_start..gap_end,
+                same_voice.clone().filter(|note| !note.is_rest).map(interval),
+                same_voice.filter(|note| {
+                    note.staff == staff && note.is_rest && !note.is_hidden && !note.is_chord
+                }).map(interval),
+            ) else {
                 cross_staff_suppressed_staffs.insert(staff.clone());
                 continue;
-            }
-            if existing_visible_rests_cover_range(
-                note_infos,
-                &staff,
-                &voice,
-                gap_start,
-                gap_end,
-            ) {
+            };
+            // The existing between-note writer inserts one contiguous span at
+            // the destination. A partially covered span needs a different anchor.
+            if !matches!(uncovered.as_slice(), [span] if *span == (gap_start..gap_end)) {
                 continue;
             }
             plans.push(BeatScopedRestCompletionGapPlan {
@@ -95,40 +122,6 @@ fn plan_exact_metric_visible_rest_durations(
     }
 }
 
-fn existing_visible_rests_cover_range(
-    note_infos: &[PartialBeatNoteInfo],
-    staff: &str,
-    voice: &str,
-    start: i64,
-    end: i64,
-) -> bool {
-    let mut rests = note_infos
-        .iter()
-        .filter(|info| {
-            info.staff == staff
-                && info.voice == voice
-                && info.is_rest
-                && !info.is_hidden
-                && !info.is_chord
-                && info.duration > 0
-                && info.start >= start
-                && info.start < end
-        })
-        .collect::<Vec<_>>();
-    rests.sort_by_key(|info| (info.start, info.index));
-    let mut cursor = start;
-    for rest in rests {
-        if rest.start != cursor {
-            return false;
-        }
-        cursor = rest.start + rest.duration;
-        if cursor > end {
-            return false;
-        }
-    }
-    cursor == end
-}
-
 #[cfg(test)]
 mod beat_scoped_rest_completion_planning_boundary_tests {
     use super::{
@@ -138,9 +131,19 @@ mod beat_scoped_rest_completion_planning_boundary_tests {
         close_beat_scoped_rest_completion_crossing_rests_in_xml, partial_beat_note_infos,
         partial_beat_raw_notes, patch_beat_scoped_beaming_in_measure,
         patch_beat_scoped_rest_completion_in_measure, plan_exact_metric_visible_rest_durations,
-        plan_visible_voice_rest_completion_gaps, BeatScopedRestCompletionGapPlan,
+        plan_visible_voice_rest_completion_gaps, uncovered_voice_rest_spans, BeatScopedRestCompletionGapPlan,
         BeatScopedMetric, BeatScopedRestPatchStats,
     };
+
+    #[test]
+    fn voice_coverage_accounts_for_sounding_overlap_and_unions_rest_intervals() {
+        assert_eq!(uncovered_voice_rest_spans(0..84, std::iter::once(18..30), []), None);
+        let uncovered = uncovered_voice_rest_spans(
+            0..84, std::iter::once(84..96), [18..36, 0..24, 66..102],
+        ).unwrap();
+        assert!(matches!(uncovered.as_slice(), [span] if *span == (36..66)));
+        assert_eq!(uncovered_voice_rest_spans(0..84, [], [0..42, 42..84]), Some(vec![]));
+    }
 
     #[test]
     fn exact_metric_rest_plan_preserves_the_requested_cursor_duration() {

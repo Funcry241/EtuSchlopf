@@ -407,6 +407,81 @@ fn upper_stepwise_continuation_keeps_its_own_voice_over_lower_activity() {
 }
 
 #[test]
+fn timed_upper_continuation_preserves_source_attacks_across_pitch_variants() {
+    let metric = MidiSeedRhythmicCourses::create_primary_presentations(&[], 2, MEASURE_DIVISIONS).unwrap().metric;
+    for interval in [-1, 0, 4] {
+        let passage = |base: usize, bar_start, displacement, transpose| {
+            let source = |ordinal, offset, len, midi| MidiSeedNote {
+                source_ordinal: base + ordinal, pos: bar_start + displacement + offset,
+                len, midi: midi + transpose, staff: 1,
+            };
+            [
+                source(0, 0, 36, 74),
+                source(1, 0, 12, 63),
+                source(2, 12, 12, 66),
+                source(3, 24, 12, 65),
+                source(4, 36, 24, 74 + interval),
+                source(5, 36, 12, 64),
+                source(6, 48, 12, 67),
+                source(7, 60, 36, 74 + interval),
+                source(8, 60, 12, 63),
+                source(9, 72, 24, 62),
+                source(10, 96, MEASURE_DIVISIONS - displacement - 96, 64),
+            ]
+        };
+        let notes = passage(0, 0, 96, 0).into_iter()
+            .chain(passage(11, MEASURE_DIVISIONS, 192, 3)).collect::<Vec<_>>();
+        let mut plan = MidiSeedRhythmicCourses::create_metric_presentations(&notes, &metric, None, true)
+            .unwrap();
+        let (xml, _, attacks) = build_musicxml("Synthetic", &notes, 2, &mut plan, None).unwrap();
+        let upper = plan.planned.iter().filter(|note| note.independent)
+            .filter_map(|note| note.source).collect::<Vec<_>>();
+        assert_eq!(upper, [0, 4, 7, 11, 15, 18]);
+        for source in &notes {
+            let sounding = plan.planned.iter().filter(|note| note.source == Some(source.source_ordinal))
+                .collect::<Vec<_>>();
+            let [note] = sounding.as_slice() else { panic!("expected a single source binding"); };
+            assert_eq!(note.interval, source.pos..source.pos + source.len);
+            assert_eq!(note.pitch, Some(source.midi));
+        }
+        assert_eq!(attacks.len(), notes.len());
+        plan.validate_seed_binding(&xml).unwrap();
+    }
+}
+
+#[test]
+fn timed_upper_continuation_refuses_equal_time_alternatives_and_missing_release_attack() {
+    let source = |source_ordinal, pos, len, midi| MidiSeedNote { source_ordinal, pos, len, midi, staff: 1 };
+    let sustain = source(0, 0, 48, 74);
+    let groups = BTreeMap::from([
+        (0, vec![sustain, source(1, 0, 24, 63)]),
+        (24, vec![source(2, 24, 24, 65)]),
+        (48, vec![source(3, 48, 24, 73), source(4, 48, 24, 64)]),
+        (72, vec![source(5, 72, 24, 72)]),
+        (96, vec![source(6, 96, 24, 67)]),
+    ]);
+    assert!(select_timed_upper_continuation(&groups, sustain, 96, 384).is_none());
+    let starts = groups.keys().copied().collect::<Vec<_>>();
+    let legacy = upper_sustain_continuation(&starts, &groups, sustain, 96).unwrap();
+    let notes = groups.values().flatten().copied().collect::<Vec<_>>();
+    let metric = MidiSeedRhythmicCourses::create_primary_presentations(&[], 1, 384).unwrap().metric;
+    let plan = MidiSeedRhythmicCourses::create_metric_presentations(&notes, &metric, None, true).unwrap();
+    assert_eq!(
+        plan.planned.iter().filter(|note| note.independent).filter_map(|note| note.source).collect::<Vec<_>>(),
+        legacy.iter().map(|note| note.source_ordinal).collect::<Vec<_>>(),
+    );
+
+    let mut unforced = groups.clone();
+    unforced.get_mut(&48).unwrap().pop();
+    assert!(select_timed_upper_continuation(&unforced, sustain, 96, 384).is_none());
+
+    let mut missing = groups;
+    missing.remove(&48);
+    missing.get_mut(&24).unwrap()[0].len = 48;
+    assert!(select_timed_upper_continuation(&missing, sustain, 96, 384).is_none());
+}
+
+#[test]
 fn upper_sustain_keeps_its_release_over_multiple_lower_attacks() {
     let metric = MidiSeedRhythmicCourses::create_primary_presentations(&[], 2, 384).unwrap().metric;
     let mut notes = [

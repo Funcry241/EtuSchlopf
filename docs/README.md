@@ -3,7 +3,7 @@
 EtuSchlopf ist ein experimentelles, privat gepflegtes Projekt. Beginne je nach
 Aufgabe mit einem der folgenden Einstiege:
 
-Der veröffentlichte Quellstand auf `main` ist **r1933**. Die [Windows-Testversion](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1933-windows-preview) und die [native Windows-Abnahme](evidence/r1933/README.md) gehören zu diesem Stand.
+Der veröffentlichte Quellstand auf `main` ist **r1938**. Die [native Windows-Abnahme](evidence/r1938/README.md) dokumentiert diesen Stand. Der verfügbare [Windows-Download](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1933-windows-preview) enthält r1933.
 
 | Aufgabe | Einstieg |
 | --- | --- |
@@ -16,11 +16,11 @@ Der veröffentlichte Quellstand auf `main` ist **r1933**. Die [Windows-Testversi
 | Umgang miteinander und Moderation | [Verhaltenskodex](CODE_OF_CONDUCT.md) |
 | Bedienhürden und bekannte Grenzen | [Barrierefreiheit](ACCESSIBILITY.md) |
 | Welche Mathematik wo genutzt wird und was das Notenbild ändert | [Mathematik hinter EtuSchlopf](MATHEMATIK.md) |
-| Entwicklungsstand und native Abnahme prüfen | [Bach r1749](evidence/r1749/README.md) · [Chopin r1792](evidence/r1792/README.md) · [Schubert r1872](evidence/r1872/README.md) · [Korpus r1933](evidence/r1933/README.md) · [Korpus r1921](evidence/r1921/README.md) · [Korpus r1886](evidence/r1886/README.md) |
+| Entwicklungsstand und native Abnahme prüfen | [Korpus r1938](evidence/r1938/README.md) · [Bach r1749](evidence/r1749/README.md) · [Chopin r1792](evidence/r1792/README.md) · [Schubert r1872](evidence/r1872/README.md) · [Korpus r1933](evidence/r1933/README.md) · [Korpus r1921](evidence/r1921/README.md) · [Korpus r1886](evidence/r1886/README.md) |
 | Windows-Testversion und frühere Laufzeitmessung prüfen | [Prüfbelege r1577](evidence/r1577/README.md) |
 | Architektur und zuständige Verträge finden | [Architektureinstieg](assistant_memory/000_start_here.md) |
 | Separate PDF-/Export-Diagnosen verwenden | [Diagnosewerkzeuge](../tools/assistant_diagnostics/README.md) |
-| Lizenzen und Fremdkomponenten | [Fremdlizenzhinweise](THIRD_PARTY_NOTICES.md) |
+| Lizenzen und Fremdkomponenten | [Fremdlizenzhinweise](THIRD_PARTY_NOTICES.md) und [Musikquellen](examples/README.md#quellen-und-rechte) |
 | Community-Dateien auf GitHub veröffentlichen | [Veröffentlichungsablauf](community/GITHUB_PUBLISHING.md) |
 
 Viele weitere Dateien in diesem Ordner dokumentieren einzelne Entwicklungsstände

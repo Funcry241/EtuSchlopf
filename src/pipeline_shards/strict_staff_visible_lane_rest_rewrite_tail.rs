@@ -1311,7 +1311,7 @@ fn apply_lower_staff_overlapping_visible_rest_suppression(
 
 
 
-struct UpperStaffInitialRestCandidate {
+struct VoiceEntryRestCandidate {
     measure_start: usize,
     insertion: usize,
     replacement: String,
@@ -1320,24 +1320,92 @@ struct UpperStaffInitialRestCandidate {
 }
 
 
-fn select_measure_local_upper_initial_rest_candidates(
-    candidates: Vec<UpperStaffInitialRestCandidate>,
-) -> Vec<UpperStaffInitialRestCandidate> {
-    let mut candidates_by_measure = BTreeMap::<usize, Vec<UpperStaffInitialRestCandidate>>::new();
+fn select_non_conflicting_voice_entry_rests(
+    candidates: Vec<VoiceEntryRestCandidate>,
+) -> Vec<VoiceEntryRestCandidate> {
+    let mut candidates_by_anchor = BTreeMap::<(usize, usize), Vec<VoiceEntryRestCandidate>>::new();
     for candidate in candidates {
-        candidates_by_measure.entry(candidate.measure_start).or_default().push(candidate);
+        candidates_by_anchor.entry((candidate.measure_start, candidate.insertion)).or_default().push(candidate);
+    }
+    candidates_by_anchor.into_values().filter_map(|mut group| {
+        if group.len() == 1 { group.pop() } else { None }
+    }).collect()
+}
+
+fn plan_voice_entry_rests(
+    fragments: &[RenderXmlTimelineFragmentSpan],
+    measure_start: usize,
+    measure_label: usize,
+    expected: i32,
+    beat_unit: i32,
+) -> Vec<VoiceEntryRestCandidate> {
+    let mut entries = BTreeMap::<&str, (&RenderXmlTimelineFragmentSpan, bool)>::new();
+    for fragment in fragments.iter().filter(|frag| {
+        frag.is_visible_pitched && !frag.is_chord && frag.duration > 0
+    }) {
+        let staff = fragment.staff.trim();
+        let entry = entries.entry(staff).or_insert((fragment, false));
+        if fragment.onset < entry.0.onset {
+            *entry = (fragment, false);
+        } else if fragment.onset == entry.0.onset && fragment.voice != entry.0.voice {
+            entry.1 = true;
+        }
     }
 
-    let mut selected = Vec::new();
-    for (_measure_start, mut candidate_group) in candidates_by_measure {
-        if candidate_group.len() != 1 {
-            continue;
+    entries.into_values().filter_map(|(entry, ambiguous)| {
+        let staff = entry.staff.trim();
+        let voice = entry.voice.trim();
+        let onset = i64::from(entry.onset);
+        if ambiguous || onset <= 0 || staff.is_empty() || staff == "?"
+            || voice.is_empty() || voice == "?"
+            || fragments.iter().any(|fragment| {
+                fragment.onset == entry.onset && fragment.duration == 0
+                    && fragment.staff == entry.staff && fragment.voice == entry.voice
+                    && fragment.is_visible_pitched
+            })
+        {
+            return None;
         }
-        if let Some(candidate) = candidate_group.pop() {
-            selected.push(candidate);
+
+        let same_voice = fragments.iter().filter(|frag| frag.voice.trim() == voice);
+        let interval = |frag: &RenderXmlTimelineFragmentSpan| {
+            i64::from(frag.onset)..i64::from(frag.onset) + i64::from(frag.duration)
+        };
+        let uncovered = uncovered_voice_rest_spans(
+            0..onset,
+            same_voice.clone().filter(|frag| frag.is_note && !frag.is_rest).map(interval),
+            same_voice.filter(|frag| frag.is_visible_rest).map(interval),
+        )?;
+        let first = uncovered.first()?;
+        let rewind = onset - first.start;
+        let mut replacement = format!("\n      <backup><duration>{rewind}</duration></backup>");
+        let mut cursor = first.start;
+        let mut total_duration = 0_i64;
+        for gap in uncovered {
+            if gap.start > cursor {
+                replacement.push_str(&render_forward_fragment(i32::try_from(gap.start - cursor).ok()?));
+            }
+            let duration = gap.end - gap.start;
+            let durations = plan_exact_metric_visible_rest_durations(
+                gap.start, duration, i64::from(expected), i64::from(beat_unit),
+            )?;
+            for duration in durations {
+                replacement.push_str(&render_visible_rest_note_fragment(i32::try_from(duration).ok()?, staff, voice)?);
+            }
+            total_duration += duration;
+            cursor = gap.end;
         }
-    }
-    selected
+        if cursor < onset {
+            replacement.push_str(&render_forward_fragment(i32::try_from(onset - cursor).ok()?));
+        }
+        Some(VoiceEntryRestCandidate {
+            measure_start,
+            insertion: entry.start,
+            replacement,
+            duration: i32::try_from(total_duration).ok()?,
+            measure_label,
+        })
+    }).collect()
 }
 
 fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
@@ -1356,18 +1424,9 @@ fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
     {
         let measure = &xml[measure_start..measure_end];
         let fragments = collect_render_timeline_fragments_in_segment(measure, measure_start, scope_number);
-        let has_octave_context = measure.contains("octave-shift") || measure.contains("<clef number=\"2\"><sign>G</sign>");
-
-        let mut pitched_by_onset: Vec<RenderXmlTimelineFragmentSpan> = fragments
-            .iter()
-            .filter(|frag| frag.is_visible_pitched && !frag.is_chord && !frag.is_hidden && frag.duration > 0)
-            .cloned()
-            .collect();
-        pitched_by_onset.sort_by_key(|frag| (frag.voice.clone(), frag.onset, frag.start));
-        let staff_switches = pitched_by_onset
-            .windows(2)
-            .filter(|pair| pair[0].voice == pair[1].voice && pair[0].staff != pair[1].staff)
-            .count();
+        initial_candidates.extend(plan_voice_entry_rests(
+            &fragments, measure_start, scope_number, expected, beat_unit,
+        ));
 
         let upper_first = fragments
             .iter()
@@ -1379,52 +1438,6 @@ fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
                     && frag.duration > 0
             })
             .min_by_key(|frag| (frag.onset, frag.start));
-
-        if let Some(first_upper) = upper_first {
-            let first_onset = first_upper.onset;
-            let has_upper_start_rest = fragments.iter().any(|frag| {
-                frag.staff.trim() == "1"
-                    && frag.is_visible_rest
-                    && !frag.is_chord
-                    && !frag.is_hidden
-                    && frag.onset <= 0
-                    && frag.onset.saturating_add(frag.duration.max(0)) >= first_onset
-            });
-            let lower_or_crossstaff_before_upper = fragments.iter().any(|frag| {
-                frag.staff.trim() == "2"
-                    && frag.is_visible_pitched
-                    && !frag.is_hidden
-                    && frag.onset < first_onset
-                    && frag.onset.saturating_add(frag.duration.max(0)) > 0
-            });
-            let metric_plan = crate::model::metric_rest_notation::plan_partial_visible_rest_durations(
-                0,
-                i64::from(first_onset),
-                i64::from(expected),
-                i64::from(beat_unit),
-            );
-            let initial_metric_single_rest = metric_plan.as_slice() == [i64::from(first_onset)];
-            let upper_begins_after_cross_staff_material = first_onset > 0
-                && first_onset <= beat_unit
-                && !has_upper_start_rest
-                && initial_metric_single_rest
-                && (lower_or_crossstaff_before_upper || staff_switches > 0 || has_octave_context);
-            if upper_begins_after_cross_staff_material
-                && let Some(rest_fragment) =
-                    render_visible_rest_note_fragment(first_onset, "1", &first_upper.voice)
-            {
-                let replacement = format!(
-                    "\n      <backup><duration>{first_onset}</duration></backup>{rest_fragment}"
-                );
-                initial_candidates.push(UpperStaffInitialRestCandidate {
-                    measure_start,
-                    insertion: first_upper.start,
-                    replacement,
-                    duration: first_onset,
-                    measure_label: scope_number,
-                });
-            }
-        }
 
         let mut upper_rests: Vec<RenderXmlTimelineFragmentSpan> = fragments
             .iter()
@@ -1495,7 +1508,7 @@ fn apply_upper_staff_initial_rest_and_beat_local_coalescing(
     }
 
     let initial_seen = initial_candidates.len();
-    let initial_candidates = select_measure_local_upper_initial_rest_candidates(initial_candidates);
+    let initial_candidates = select_non_conflicting_voice_entry_rests(initial_candidates);
     let mut initial_written = 0_usize;
     let mut initial_duration = 0_i32;
     let mut initial_scopes = BTreeSet::<usize>::new();
@@ -1836,18 +1849,21 @@ mod upper_initial_metric_rest_coalescing_safety_tests {
     }
 
     #[test]
-    fn same_measure_initial_rest_candidate_ambiguity_fails_closed() {
-        let candidate = |insertion| UpperStaffInitialRestCandidate {
+    fn conflicting_entry_anchors_are_rejected_without_discarding_independent_anchors() {
+        let candidate = |insertion| VoiceEntryRestCandidate {
             measure_start: 0,
             insertion,
             replacement: String::new(),
             duration: 24,
             measure_label: 1,
         };
-        let candidates = vec![candidate(10), candidate(20)];
-        let selected = select_measure_local_upper_initial_rest_candidates(candidates);
-        assert!(selected.is_empty());
+        let candidates = vec![candidate(10), candidate(20), candidate(10)];
+        let selected = select_non_conflicting_voice_entry_rests(candidates);
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].insertion, 20);
     }
+
+    include!("../../tests/unit/voice_entry_rest_coverage.rs");
 
     #[test]
     fn true_initial_voice_silence_can_coalesce_to_half_rest() {

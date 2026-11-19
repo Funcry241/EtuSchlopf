@@ -376,6 +376,60 @@ fn upper_sustain_continuation(
     })).then(|| std::iter::once(sustain).chain(continuation).collect())
 }
 
+// The primary cursor can represent only exact, onset-bounded groups here.
+fn select_timed_upper_continuation(
+    notes_by_onset: &BTreeMap<i64, Vec<MidiSeedNote>>,
+    sustain: MidiSeedNote,
+    beat_end: i64,
+    measure_end: i64,
+) -> Option<Vec<MidiSeedNote>> {
+    let release = sustain.pos.checked_add(sustain.len)?;
+    if sustain.len <= 0 || release >= beat_end || beat_end > measure_end {
+        return None;
+    }
+    let exact_duration = |duration| matches!(duration, 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6);
+    if !exact_duration(sustain.len) {
+        return None;
+    }
+
+    let mut upper_end = release;
+    let mut line = vec![sustain];
+    let mut groups = notes_by_onset.range(sustain.pos..beat_end).peekable();
+    let following_onset = notes_by_onset.range(beat_end..).next().map_or(measure_end, |(&pos, _)| pos);
+
+    while let Some((&onset, group)) = groups.next() {
+        let next = groups.peek().map_or(following_onset, |(pos, _)| **pos);
+        let primary_duration = next - onset;
+        if next > beat_end || !exact_duration(primary_duration) || onset > upper_end {
+            return None;
+        }
+        if onset == sustain.pos {
+            if group.iter().any(|note| {
+                note.source_ordinal != sustain.source_ordinal && note.len != primary_duration
+            }) {
+                return None;
+            }
+            continue;
+        }
+        let mut candidates = group.iter().filter(|note| note.len != primary_duration);
+        if onset == upper_end {
+            // A group that fits entirely on the primary cursor does not
+            // establish a continuation of the upper voice at this release.
+            let candidate = candidates.next()?;
+            if candidates.next().is_some() || !exact_duration(candidate.len)
+                || candidate.len > beat_end - onset
+            {
+                return None;
+            }
+            upper_end = onset + candidate.len;
+            line.push(*candidate);
+        } else if candidates.next().is_some() {
+            return None;
+        }
+    }
+    (upper_end == beat_end).then_some(line)
+}
+
 fn upper_stepwise_attacks(
     notes_by_onset: &BTreeMap<i64, Vec<MidiSeedNote>>,
     mut pos: i64,
@@ -982,6 +1036,7 @@ impl MidiSeedRhythmicCourses {
                 let mut independent_end = independent.last().map_or(begin, |note| note.interval.end);
                 let mut upper_line = BTreeSet::new();
                 let mut upper_line_end = begin;
+                let mut timed_upper_line = false;
                 let beat = (metric.divisions * 4 / i64::from(bar.beat_type)).max(1);
                 let opening_melody = if course.staff == 1 && !sources.iter().any(|note| {
                     note.len == 0 && note.staff == course.staff && (begin..begin + beat).contains(&note.pos)
@@ -1057,12 +1112,19 @@ impl MidiSeedRhythmicCourses {
                         None
                     };
                     if preserve_attacks && course.staff == 1
+                        && (!timed_upper_line || start >= upper_line_end)
                         && let Some(ordinal) = independent_sustain
                         && let Some(sustain) = by_start[&start].iter().find(|n| n.source_ordinal == ordinal)
                         && by_start[&start].iter().all(|n| n.midi < sustain.midi || n.source_ordinal == ordinal)
                     {
                         let beat_end = (start + beat - (start - begin) % beat).min(bar.end);
-                        if let Some(line) = upper_sustain_continuation(&starts[index..], &by_start, *sustain, beat_end) {
+                        let timed = (start >= upper_line_end).then(|| {
+                            select_timed_upper_continuation(&by_start, *sustain, beat_end, bar.end)
+                        }).flatten();
+                        timed_upper_line = timed.is_some();
+                        if let Some(line) = timed.or_else(|| {
+                            upper_sustain_continuation(&starts[index..], &by_start, *sustain, beat_end)
+                        }) {
                             upper_line = line.iter().map(|n| n.source_ordinal).collect();
                             upper_line_end = beat_end;
                         }

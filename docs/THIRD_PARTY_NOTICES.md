@@ -148,6 +148,18 @@ wird separat vom Verlag angeboten.
 
 **Mozart, Klaviersonate A-Dur KV 331, Andante grazioso, Einspielung p01.** Quelle der Performance-MIDI und WAV ist Werner Goebl, *The Vienna 4×22 Piano Corpus*, Version 1.0 (2017), mdw – Universität für Musik und darstellende Kunst Wien. [Datensatz](https://doi.org/10.21939/4X22) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). EtuSchlopf hat daraus den Notensatz und dessen Vorschaubild erzeugt.
 
+### Chopin, Ballade Nr. 2 F-Dur op. 38, Andantino, Einspielung p01
+
+Für die nächste Referenz sind Original-WAV und Performance-MIDI derselben
+Einspielung aus Werner Goebls *The Vienna 4×22 Piano Corpus*, Version 1.0
+(2017), mdw – Universität für Musik und darstellende Kunst Wien, vorgesehen.
+Für beide Originaldateien gilt CC BY 4.0. Die Vergleichsvorlage ist die
+gemeinfreie deutsche Erstausgabe von Breitkopf & Härtel. Die Herkunft,
+Archiveinträge und SHA-256-Prüfsummen stehen beim Referenzpaar.
+[Quellen und Namensnennung](examples/chopin-op38-p01.md) ·
+[Datensatz](https://doi.org/10.21939/4X22) ·
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
 ## Umfang und Wiederholung der Prüfung
 
 Stand: 25.10.2026, Ausgangscommit
