@@ -32,6 +32,8 @@ jobs:
       - name: Install the pinned external renderer for the beam roundtrip
         run: |
           set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth libegl1 libegl-mesa0 libgl1 libgl1-mesa-dri libglx-mesa0 libopengl0 libasound2 libjack-jackd2-0 libpipewire-0.3-0 libxcb-keysyms1 libxcb-icccm4 libxcb-randr0 libxcb-shape0 libxcb-xfixes0 libxcb-sync1 libxcb-xinerama0 libxcb-cursor0 libxkbcommon-x11-0
           cd "$RUNNER_TEMP"
           curl --retry 3 --fail --location --silent --show-error -o MuseScore.AppImage 'https://github.com/musescore/MuseScore/releases/download/v4.7.5/MuseScore-Studio-4.7.5.260831071-x86_64.AppImage'
           echo 'a31b2da2dbcc2191bcc98beb7be5c15f2f517bedb3444def96fe3088b74d3a1e  MuseScore.AppImage' | sha256sum --check
