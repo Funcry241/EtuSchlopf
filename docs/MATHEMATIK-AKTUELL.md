@@ -50,7 +50,7 @@ Die Zusammenstellung verlangt außerdem die zuständige Authority, die Herkunft 
 Der Entwurf ordnet zulässige Seitenpläne nach drei Kriterien.
 
 ```math
-x^\star\in\underset{x\in\mathcal F}{\operatorname{argmin}_{\mathrm{lex}}}
+x^\star\in\underset{x\in\mathcal F}{\mathrm{argmin}_{\mathrm{lex}}}
  \bigl(N_{\mathrm{Seiten}}(x),D(x),U(x)\bigr).
 ```
 
@@ -262,7 +262,7 @@ Die Sprungwarnung prüft zusätzlich, ob sich beide Tonhöhengrenzen aufeinander
 Für zwei zulässige Lösungen entscheidet beim lexikografischen Vergleich der erste abweichende Eintrag. Der Auswahlschlüssel für die allgemeine Kandidatenbewertung ordnet die Größen so
 
 ```math
-K=(B,C,H,W,I,\operatorname{rev}(R),M).
+K=(B,C,H,W,I,\mathrm{rev}(R),M).
 ```
 
 $B$ zählt Blocker, $C$ kritische Fälle, $H$ ist die größte kritische Härte, $W$ und $I$ zählen Warnungen und Hinweise. Es folgen der absteigend geordnete Notenerhalt $R$ und die Anzahl $M$ verschobener Noten. Wenn ein Kandidat einen zusätzlichen Blocker hat, können ihm weniger Warnungen bei diesem Vergleich keinen Vorrang verschaffen. [Kandidatenauswahl](../src/pipeline_shards/staff_voice_move_restify_atomic_patch_tail.rs)
