@@ -1,0 +1,114 @@
+name: Geprüfte Entwicklungsvorschau r1965 veröffentlichen
+on:
+  push:
+    branches: [publish/r1965-verified-preview]
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: publish-r1965-verified-preview
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'Funcry241/EtuSchlopf' && github.ref == 'refs/heads/publish/r1965-verified-preview'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CI_RUN: '44791056684'
+      CI_BRANCH: take/r1965-performance
+      CI_COMMIT: c8ae8b3bada4ed72e20767d7c8d290b098fe9699
+      SOURCE_COMMIT: 629ce771343fe2eca0fb47535d7c3b323fb35708
+      TAG: v0.10.1839-r1965-ci-preview
+    steps:
+      - name: Erfolgreichen Windows-Lauf und einziges Artefakt prüfen
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN"
+          gh api "$endpoint" > run.json
+          jq -e --arg repo "$GITHUB_REPOSITORY" --arg branch "$CI_BRANCH" --arg sha "$CI_COMMIT" --arg id "$CI_RUN" '
+            (.id | tostring) == $id and .repository.full_name == $repo and .head_repository.full_name == $repo
+            and .head_branch == $branch and .head_sha == $sha and .status == "completed" and .conclusion == "success"
+            and .path == ".github/workflows/windows-download.yml"
+          ' run.json >/dev/null
+          gh api "$endpoint/artifacts?per_page=100" > artifacts.json
+          jq -e --arg id "$CI_RUN" --arg sha "$CI_COMMIT" '
+            .total_count == 1 and (.artifacts | length) == 1 and (.artifacts[0] |
+              .name == "EtuSchlopf-r1965-Windows-x64-CI" and .expired == false and .size_in_bytes > 0
+              and (.workflow_run.id | tostring) == $id and .workflow_run.head_sha == $sha
+              and (.digest | test("^sha256:[0-9a-f]{64}$")))
+          ' artifacts.json >/dev/null
+          artifact=$(jq -r '.artifacts[0].id' artifacts.json)
+          digest=$(jq -r '.artifacts[0].digest | sub("^sha256:";"")' artifacts.json)
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact/zip" > bundle.zip
+          echo "$digest  bundle.zip" | sha256sum --check --strict
+
+      - name: Vier Dateien und gebundenen Quellstand prüfen
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import re
+          import shutil
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          files = {"EtuSchlopf-Windows-x64.exe", "EtuSchlopf-Beispiel-r1965-CI.zip", "runtime-provenance.txt"}
+          dist = Path("dist")
+          dist.mkdir()
+          with ZipFile("bundle.zip") as bundle:
+              names = bundle.namelist()
+              if len(names) != 4 or set(names) != files | {"SHA256SUMS.txt"}:
+                  raise ValueError("Unerwartete Dateien im Build-Artefakt")
+              for name in names:
+                  with bundle.open(name) as source, (dist / name).open("xb") as target:
+                      shutil.copyfileobj(source, target)
+          sums = (dist / "SHA256SUMS.txt").read_text("ascii").splitlines()
+          matches = [re.fullmatch(r"[0-9a-f]{64}  ([A-Za-z0-9.-]+)", row) for row in sums]
+          if len(matches) != len(files) or any(m is None for m in matches) or {m[1] for m in matches} != files:
+              raise ValueError("Prüfsummenliste ist unvollständig oder enthält unbekannte Namen")
+          Path("verify-sums.txt").write_text("\n".join(sums) + "\n", encoding="ascii")
+          expected = {
+              "revision": "r1965", "status": "ci_preview",
+              "base_commit": "d34aadbe42fd058e2daf7a35eb8d788018433a06",
+              "source_commit": os.environ["SOURCE_COMMIT"], "workflow_commit": os.environ["CI_COMMIT"],
+              "source_diff_sha256": "1657f0881c03fca3d1e32fcd0729b6712ce5508f34833bc565d6c11a945f870e",
+              "input_take_sha256": "568cd3fca2fd302c5c66daf797f2c1e8b670a713241f1daee45098917b436386",
+              "workflow": f'{os.environ["GITHUB_SERVER_URL"]}/{os.environ["GITHUB_REPOSITORY"]}/actions/runs/{os.environ["CI_RUN"]}',
+          }
+          provenance = (dist / "runtime-provenance.txt").read_text("ascii").splitlines()
+          if sorted(provenance) != sorted(f"{key}={value}" for key, value in expected.items()):
+              raise ValueError("Herkunft des Build-Artefakts stimmt nicht mit dem ausgewählten Build überein")
+          PY
+          (cd dist && sha256sum --check --strict ../verify-sums.txt)
+
+      - name: Entwicklungs-Vorabversion am geprüften Quellcommit bereitstellen
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          gh api "repos/$repo/git/matching-refs/tags/$TAG" --jq '.[].ref' > tag-refs.txt
+          if grep -Fx "refs/tags/$TAG" tag-refs.txt >/dev/null; then
+            test "$(gh api "repos/$repo/commits/$TAG" --jq .sha)" = "$SOURCE_COMMIT"
+          fi
+          if gh release view "$TAG" --repo "$repo" --json assets,isDraft,isPrerelease > existing.json 2>/dev/null; then
+            jq -e '.isDraft == false and .isPrerelease == true and (.assets | length) == 4' existing.json >/dev/null
+            gh api "repos/$repo/releases/tags/$TAG" --jq '.assets[] | [.name,.digest] | @tsv' | sort > published.tsv
+            (cd dist && sha256sum *) | awk '{ print $2 "\tsha256:" $1 }' | sort > expected.tsv
+            diff -u expected.tsv published.tsv
+            exit 0
+          fi
+          cat > notes.md <<'NOTES'
+          Getestete Entwicklungsvorschau für Windows x64. Bei der automatischen Zeitplanung für Mozart KV 331 sank die mediane CPU-Zeit im lokalen Linux-Vergleich über je acht Messungen von 0,400 auf 0,267 Sekunden. Die Messung betrifft diesen Rechenschritt.
+
+          Der [Windows-Prüflauf](https://github.com/Funcry241/EtuSchlopf/actions/runs/44791056684) testet die EXE und rendert das beiliegende synthetische Beispiel. Die native Take-Abnahme liegt für [r1964](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1964-windows-preview) vor.
+
+          [Mozart-Notenbild aus r1964](https://github.com/Funcry241/EtuSchlopf/blob/629ce771343fe2eca0fb47535d7c3b323fb35708/docs/examples/mozart-k331-p01-r1964.pdf) · [Mathematik hinter der Dauererkennung](https://github.com/Funcry241/EtuSchlopf/blob/629ce771343fe2eca0fb47535d7c3b323fb35708/docs/MATHEMATIK-VOLLKORPUS.md)
+          NOTES
+          gh release create "$TAG" dist/* --repo "$repo" --target "$SOURCE_COMMIT" --prerelease --latest=false \
+            --title 'EtuSchlopf r1965 · Getestete Windows-Entwicklungsvorschau' --notes-file notes.md
