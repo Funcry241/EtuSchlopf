@@ -1001,3 +1001,72 @@ fn adjacent_split_keeps_the_upper_line_and_its_metric_release() {
         }
     }
 }
+
+#[test]
+fn declared_seed_preserves_intervals_grace_and_independent_copies() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static SERIAL: AtomicUsize = AtomicUsize::new(0);
+    let directory = std::env::temp_dir().join(format!(
+        "etuschlopf-written-seed-{}-{}", std::process::id(), SERIAL.fetch_add(1, Ordering::Relaxed),
+    ));
+    std::fs::create_dir_all(&directory).unwrap();
+    struct Cleanup(std::path::PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
+    }
+    let _cleanup = Cleanup(directory.clone());
+    let path = directory.join("written.mid");
+    let intervals = [(71, 0, 72), (69, 0, 48), (72, 24, 24), (73, 96, 24), (76, 330, 480)];
+    let mut track = Vec::new();
+    let mut map = Vec::new();
+    let mut source_tick = 0;
+    let mut source = 0;
+    for copy_offset in [0, 1152] {
+        for &(pitch, onset, length) in &intervals {
+            if onset == 96 {
+                track.extend([1, 144, 68, 88, 1, 128, 68, 0]);
+                map.push(format!("{}\tv2 grace {source} 0 68 {}", source_tick + 1, source + 1));
+                source += 1;
+                source_tick += 2;
+            }
+            track.extend([1, 144, pitch, 88, 1, 128, pitch, 0]);
+            map.push(format!("{}\tv2 note {source} 0 {pitch} {} {length}", source_tick + 1, onset + copy_offset));
+            source += 1;
+            source_tick += 2;
+        }
+    }
+    track.extend([0, 255, 47, 0]);
+    let mut midi = b"MThd\0\0\0\x06\0\0\0\x01\0\x60MTrk".to_vec();
+    midi.extend(u32::try_from(track.len()).unwrap().to_be_bytes());
+    midi.extend(track);
+    std::fs::write(&path, &midi).unwrap();
+    std::fs::write(path.with_extension("notation-time"), format!(
+        "ETUSCHLOPF-NOTATION-TIME-V1\nmidi-sha256 {}\nkey midi\n0\tv2 meter 4 pickup 0\n{}\n",
+        crate::sha256::hex(&midi), map.join("\n"),
+    )).unwrap();
+    let (xml, stats) = midi_to_musicxml_seed_with_profile_and_hotspots(
+        &path, "Independent written intervals", midi_seed_solver_profiles()[0].clone(), None,
+    ).unwrap();
+    let plan = stats.rhythmic_courses;
+    assert!(plan.bound_written_durations);
+    let fragments = |source, offset| {
+        plan.planned.iter().filter(|part| part.source == Some(source))
+            .map(|part| (part.interval.start - offset..part.interval.end - offset, part.tie_stop, part.tie_start))
+            .collect::<Vec<_>>()
+    };
+    for (source, &(start, end)) in [(0, 72), (0, 48), (24, 48), (96, 96), (96, 120), (330, 810)].iter().enumerate() {
+        let parts = fragments(source, 0);
+        assert_eq!(parts, fragments(source + 6, 1152));
+        assert_eq!(parts.first().unwrap().0.start, start);
+        assert_eq!(parts.last().unwrap().0.end, end);
+        assert!(!parts.first().unwrap().1);
+        assert!(!parts.last().unwrap().2);
+    }
+    assert!(fragments(5, 0).len() > 2);
+    let mut shifted = plan.planned.clone();
+    let first = shifted.iter_mut().find(|part| part.source == Some(0)).unwrap();
+    first.interval = 6..78;
+    assert!(bound_duration::validate_partition(&plan.sources, &shifted).is_err());
+    let changed = xml.replacen("<duration>72</duration>", "<duration>48</duration>", 1);
+    assert!(bound_duration::verify_written_intervals(&changed, &plan.metric, &plan.planned).is_err());
+}

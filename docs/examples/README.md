@@ -4,26 +4,28 @@ Hier stehen die Quellen und Rechte der Musikreferenzen von EtuSchlopf. Die [Frem
 
 ## Notenbilder
 
-Die PDFs und Ausschnitte stammen aus dem [Windows-Korpuslauf r1961](../evidence/r1961/README.md). Klicke auf ein Bild, um das vollständige PDF zu öffnen.
+Klicke auf eine Vorschau, um das vollständige PDF zu öffnen. Die Bilder zeigen jeweils den Anfang der ersten Seite.
 
-| Stück | Seiten | Ausschnitt und PDF |
-| --- | ---: | --- |
-| Bach · Fuge c-Moll BWV 847 | 3 | [![Bach · Fuge c-Moll BWV 847, Ausschnitt](../images/bwv847-fuge-r1961-ausschnitt.png)](bwv847-fuge-r1961.pdf) |
-| Chopin · Etüde E-Dur op. 10 Nr. 3 | 1 | [![Chopin · Etüde E-Dur op. 10 Nr. 3, Ausschnitt](../images/chopin-op10-no3-p01-r1961-ausschnitt.png)](chopin-op10-no3-p01-r1961.pdf) |
-| Mozart · Klaviersonate A-Dur KV 331, Andante grazioso | 2 | [![Mozart · Klaviersonate A-Dur KV 331, Andante grazioso, Ausschnitt](../images/mozart-k331-p01-r1961-ausschnitt.png)](mozart-k331-p01-r1961.pdf) |
-| Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15 | 2 | [![Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15, Ausschnitt](../images/schubert-d783-no15-p18-r1961-ausschnitt.png)](schubert-d783-no15-p18-r1961.pdf) |
-| Etüde Nr. 1 | 3 | [![Etüde Nr. 1, Ausschnitt](../images/etude-1-r1961-ausschnitt.png)](etude-1-r1961.pdf) |
-| Etüde Nr. 2 | 5 | [![Etüde Nr. 2, Ausschnitt](../images/etude-2-r1961-ausschnitt.png)](etude-2-r1961.pdf) |
-| Etüde Nr. 3 | 4 | [![Etüde Nr. 3, Ausschnitt](../images/etude-3-r1961-ausschnitt.png)](etude-3-r1961.pdf) |
-| Etüde Nr. 4 | 3 | [![Etüde Nr. 4, Ausschnitt](../images/etude-4-r1961-ausschnitt.png)](etude-4-r1961.pdf) |
-| Etüde Nr. 5 | 6 | [![Etüde Nr. 5, Ausschnitt](../images/etude-5-r1961-ausschnitt.png)](etude-5-r1961.pdf) |
-| Etüde Nr. 6 | 6 | [![Etüde Nr. 6, Ausschnitt](../images/etude-6-r1961-ausschnitt.png)](etude-6-r1961.pdf) |
-| Etüde Nr. 7 | 6 | [![Etüde Nr. 7, Ausschnitt](../images/etude-7-r1961-ausschnitt.png)](etude-7-r1961.pdf) |
-| Etüde Nr. 8 | 6 | [![Etüde Nr. 8, Ausschnitt](../images/etude-8-r1961-ausschnitt.png)](etude-8-r1961.pdf) |
-| Etüde Nr. 9 | 4 | [![Etüde Nr. 9, Ausschnitt](../images/etude-9-r1961-ausschnitt.png)](etude-9-r1961.pdf) |
-| Etüde Nr. 10 | 6 | [![Etüde Nr. 10, Ausschnitt](../images/etude-10-r1961-ausschnitt.png)](etude-10-r1961.pdf) |
+Mozarts *Andante grazioso* stammt aus dem Windows-Einzellauf r1964 mit der Original-MIDI und der WAV derselben Einspielung. Bei allen 474 regulären Noten stimmen Einsatz und Tonhöhe mit der Referenz überein. Bei 460 stimmt auch die geschriebene Dauer. Für die anderen 13 Stücke zeigt die Galerie die Ausgaben des vollständigen Windows-Korpuslaufs r1961. [Mozart-Einzellauf r1964](../evidence/r1964/README.md) · [Vollkorpus r1961](../evidence/r1961/README.md)
 
-[Notenbilder r1938](../evidence/r1938/score_sha256.tsv) · [Notenbilder r1921](../evidence/r1921/score_sha256.tsv) · [Notenbilder r1886](../evidence/r1886/score_sha256.tsv)
+| Stück | Im Notenbild | Windows-Lauf | Ausschnitt und PDF |
+| --- | --- | --- | --- |
+| Mozart · Klaviersonate A-Dur KV 331 | Im Thema des Andante grazioso prägt die Folge aus punktierter Achtel, Sechzehntel und Achtel den ersten Takt. | r1964 · 6/8 · 36 Takte · 2 Seiten | [![Mozart · Klaviersonate A-Dur KV 331, Anfang der ersten Seite](../images/mozart-k331-p01-r1964-ausschnitt.png)](mozart-k331-p01-r1964.pdf) |
+| Bach · Fuge c-Moll BWV 847 | Das Fugenthema beginnt einstimmig. Die späteren Einsätze verteilen sich auf drei Stimmen. | r1961 · 4/4 · 31 Takte · 3 Seiten | [![Bach · Fuge c-Moll BWV 847, Anfang der ersten Seite](../images/bwv847-fuge-r1961-ausschnitt.png)](bwv847-fuge-r1961.pdf) |
+| Chopin · Etüde E-Dur op. 10 Nr. 3 | Die Melodie steht über einer dicht gesetzten Begleitung. Die Ausgabe enthält einen Auftakt und vier Vorschlagsnoten. | r1961 · 2/4 · 22 Takte · 1 Seite | [![Chopin · Etüde E-Dur op. 10 Nr. 3, Anfang der ersten Seite](../images/chopin-op10-no3-p01-r1961-ausschnitt.png)](chopin-op10-no3-p01-r1961.pdf) |
+| Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15 | Der Tanz beginnt mit einem Auftakt. Im ersten vollen Takt begleiten Basston und nachschlagende Akkorde die Oberstimme. | r1961 · 3/4 · 33 Takte · 2 Seiten | [![Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15, Anfang der ersten Seite](../images/schubert-d783-no15-p18-r1961-ausschnitt.png)](schubert-d783-no15-p18-r1961.pdf) |
+| Etüde Nr. 1 | Im ersten System treffen kurze Figuren im Bass auf gebundene Töne im oberen System. | r1961 · 4/4 · 18 Takte · 3 Seiten | [![Etüde Nr. 1, Anfang der ersten Seite](../images/etude-1-r1961-ausschnitt.png)](etude-1-r1961.pdf) |
+| Etüde Nr. 2 | Zu Beginn ziehen sich Haltebögen durch die Oberstimme, während sich die Basslinie in kürzeren Werten bewegt. | r1961 · 4/4 · 31 Takte · 5 Seiten | [![Etüde Nr. 2, Anfang der ersten Seite](../images/etude-2-r1961-ausschnitt.png)](etude-2-r1961.pdf) |
+| Etüde Nr. 3 | Das erste System zeigt gebundene Töne oben und kürzere Gruppen mit Pausen unten. | r1961 · 4/4 · 29 Takte · 4 Seiten | [![Etüde Nr. 3, Anfang der ersten Seite](../images/etude-3-r1961-ausschnitt.png)](etude-3-r1961.pdf) |
+| Etüde Nr. 4 | Das obere System beginnt mit Achtelgruppen. Im unteren System setzt die Begleitung nach Pausen ein. | r1961 · 4/4 · 31 Takte · 3 Seiten | [![Etüde Nr. 4, Anfang der ersten Seite](../images/etude-4-r1961-ausschnitt.png)](etude-4-r1961.pdf) |
+| Etüde Nr. 5 | Die obere Linie steigt zunächst in Achteln an und wendet sich dann abwärts. | r1961 · 4/4 · 51 Takte · 6 Seiten | [![Etüde Nr. 5, Anfang der ersten Seite](../images/etude-5-r1961-ausschnitt.png)](etude-5-r1961.pdf) |
+| Etüde Nr. 6 | Zu Beginn folgen im oberen System kurze Notengruppen aufeinander. Später bewegen sich beide Hände gleichzeitig. | r1961 · 4/4 · 44 Takte · 6 Seiten | [![Etüde Nr. 6, Anfang der ersten Seite](../images/etude-6-r1961-ausschnitt.png)](etude-6-r1961.pdf) |
+| Etüde Nr. 7 | Die erste Zeile beginnt mit einer aufsteigenden Sechzehntelfigur im oberen System. | r1961 · 4/4 · 48 Takte · 6 Seiten | [![Etüde Nr. 7, Anfang der ersten Seite](../images/etude-7-r1961-ausschnitt.png)](etude-7-r1961.pdf) |
+| Etüde Nr. 8 | Die erste Zeile zeigt Pausentakte im oberen System. Die Bewegung liegt zunächst im Bass. | r1961 · 4/4 · 47 Takte · 6 Seiten | [![Etüde Nr. 8, Anfang der ersten Seite](../images/etude-8-r1961-ausschnitt.png)](etude-8-r1961.pdf) |
+| Etüde Nr. 9 | Das Stück beginnt im unteren System. Die obere Stimme setzt in der ersten Zeile mit Akkorden ein. | r1961 · 4/4 · 38 Takte · 4 Seiten | [![Etüde Nr. 9, Anfang der ersten Seite](../images/etude-9-r1961-ausschnitt.png)](etude-9-r1961.pdf) |
+| Etüde Nr. 10 | Im ersten System wechseln Akkorde und gebundene Noten. Die untere Stimme führt ihre eigene Linie. | r1961 · 4/4 · 46 Takte · 6 Seiten | [![Etüde Nr. 10, Anfang der ersten Seite](../images/etude-10-r1961-ausschnitt.png)](etude-10-r1961.pdf) |
+
+[Mozart in der früheren Ausgabe r1961](mozart-k331-p01-r1961.pdf) · [Notenbilder r1938](../evidence/r1938/score_sha256.tsv) · [Notenbilder r1921](../evidence/r1921/score_sha256.tsv) · [Notenbilder r1886](../evidence/r1886/score_sha256.tsv)
 
 ## Frühere Notenbilder und Druckvorlagen
 
@@ -76,7 +78,7 @@ den Akkord der linken Hand. Die Ausschnitte führen zum jeweiligen vollständige
 
 ### Mozart · Klaviersonate A-Dur KV 331, Andante grazioso, Einspielung p01
 
-**Mozart, Klaviersonate A-Dur KV 331, Andante grazioso, Einspielung p01.** Quelle der Performance-MIDI und WAV ist Werner Goebl, *The Vienna 4×22 Piano Corpus*, Version 1.0 (2017), mdw – Universität für Musik und darstellende Kunst Wien. [Datensatz](https://doi.org/10.21939/4X22) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). EtuSchlopf hat daraus den Notensatz und dessen Vorschaubild erzeugt. Die Eingaben stammen aus den unveränderten Originaldateien der mdw. [EtuSchlopf-PDF r1961](mozart-k331-p01-r1961.pdf).
+**Mozart, Klaviersonate A-Dur KV 331, Andante grazioso, Einspielung p01.** Quelle der Performance-MIDI und WAV ist Werner Goebl, *The Vienna 4×22 Piano Corpus*, Version 1.0 (2017), mdw – Universität für Musik und darstellende Kunst Wien. [Datensatz](https://doi.org/10.21939/4X22) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). EtuSchlopf hat daraus den Notensatz und dessen Vorschaubild erzeugt. Die unveränderte MIDI und WAV der mdw bilden die Eingaben des Windows-Laufs r1964. [EtuSchlopf-PDF r1964](mozart-k331-p01-r1964.pdf) · [Vorschau](../images/mozart-k331-p01-r1964-ausschnitt.png).
 
 ### Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15, Aufführung p18
 

@@ -1,6 +1,6 @@
 kind=EtuSchlopfTake
 version=0.10.1839
-revision=r1961
-name=ExactVoicePassages
-parent_revision=r1960
+revision=r1964
+name=AutomaticWrittenDurations
+parent_revision=r1963
 change_class=GovernedChange

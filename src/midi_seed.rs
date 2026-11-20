@@ -5,7 +5,7 @@
 // --- mechanical module boundary: former src/flp.rs ---
 use crate::midi::MidiKeySignature;
 use crate::midi::notation_time::{NotationEventKind, NotationTimePlan, PreparedPerformanceTiming, read_midi_with_notation};
-use crate::midi::source_time::{MetricTimeline, supported_notation_meter};
+use crate::midi::source_time::{MetricMeasure, MetricTimeline, supported_notation_meter};
 use crate::pipeline_profile::{base_solver_profiles, CandidateProfile};
 use crate::source_selection::{
     bind_productive_source_selection_plan,
@@ -21,6 +21,9 @@ use crate::source_selection::{
 use anyhow::{anyhow, Context};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+
+#[path = "midi_seed/bound_duration.rs"]
+mod bound_duration;
 
 const DIVISIONS: i64 = 96;
 #[cfg(test)]
@@ -201,6 +204,7 @@ pub(crate) struct MidiSeedRhythmicCourses {
     metric: MetricTimeline,
     emission_snapshot: Option<String>,
     source_voices: bool,
+    bound_written_durations: bool,
     preserve_attacks: bool,
 }
 
@@ -833,6 +837,88 @@ fn assigned_voice_staff_lifetimes(
     Ok(ranges)
 }
 
+/// Written ends for the primary attacks of one staff at the same position.
+fn primary_written_ends<'a>(
+    primary: &'a [&'a MidiSeedNote],
+    start: i64,
+    next: i64,
+    bar: &MetricMeasure,
+    divisions: i64,
+    preserve_attacks: bool,
+) -> impl Iterator<Item = i64> + use<'a> {
+    let begin = bar.start;
+    let beat = (divisions * 4 / i64::from(bar.beat_type)).max(1);
+    let pulse = crate::midi::source_time::notation_pulse_duration(
+        divisions, i64::from(bar.beats), i64::from(bar.beat_type),
+    );
+    let exact_value = |length| matches!(length, 384 | 288 | 192 | 144 | 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6);
+    let head_duration = next - start;
+    let head_fits_one_beat = head_duration <= beat - (start - begin) % beat && exact_value(head_duration);
+    let common_release = primary.first().filter(|head| {
+        preserve_attacks && pulse > beat && (start - begin) % pulse == 0
+            && head.len < pulse
+            && matches!(head.len, 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6)
+            && exact_value(next - start - head.len)
+            && primary.iter().all(|member| member.len == head.len)
+    }).map(|head| start + head.len);
+    primary.iter().enumerate().map(move |(member, source)| {
+        let source_end = start + source.len;
+        let ends_at_beat = preserve_attacks && primary.len() == 1
+            && source_end < next && (source_end - begin) % beat == 0
+            && matches!(source.len, 48 | 36 | 24 | 18 | 12 | 9 | 6);
+        if let Some(release) = common_release {
+            release
+        } else if ends_at_beat {
+            source_end
+        } else if member > 0 && head_fits_one_beat && exact_value(source.len) {
+            next.min(source_end)
+        } else {
+            next
+        }
+    })
+}
+
+/// Complete only unresolved regular events after the seed has assigned their staff.
+fn resolve_open_performance_durations(
+    notes: &mut [MidiSeedNote], time: &mut NotationTimePlan,
+) -> anyhow::Result<()> {
+    let mut staves = BTreeMap::<u8, BTreeMap<i64, Vec<&MidiSeedNote>>>::new();
+    for note in notes.iter().filter(|note| note.len > 0) {
+        staves.entry(note.staff).or_default().entry(note.pos).or_default().push(note);
+    }
+    for (staff, starts) in staves {
+        let mut starts = starts.into_iter().peekable();
+        while let Some((start, mut members)) = starts.next() {
+            if !members.iter().any(|member| time.duration_is_open(member.source_ordinal)) {
+                continue;
+            }
+            let bar = time.metric.ordinal_at(start).and_then(|i| time.metric.measure(i))
+                .context("Unresolved performance onset outside the written meter")?;
+            let following = starts.peek().map(|(position, _)| *position);
+            let next = following.unwrap_or(bar.end).min(bar.end);
+            members.sort_by_key(|note| (note.midi, note.source_ordinal));
+            if staff == 1 { members.reverse(); }
+            let ends = primary_written_ends(&members, start, next, &bar, time.metric.divisions, true);
+            for (note, end) in members.iter().zip(ends) {
+                if time.duration_is_open(note.source_ordinal) {
+                    // Without a following attack the final silence provides no
+                    // continuation. A barline cannot disprove a held note either.
+                    let length = if following.is_none() || start + note.len > bar.end {
+                        note.len
+                    } else {
+                        end - start
+                    };
+                    time.resolve_duration(note.source_ordinal, length)?;
+                }
+            }
+        }
+    }
+    for note in notes {
+        note.len = time.event(note.source_ordinal)?.len;
+    }
+    Ok(())
+}
+
 impl MidiSeedRhythmicCourses {
     pub(crate) fn physical_measure_duration(&self, ordinal: usize) -> Option<i64> {
         self.metric.measure(ordinal).map(|measure| measure.end - measure.start)
@@ -957,11 +1043,22 @@ impl MidiSeedRhythmicCourses {
         Self::create_metric_presentations(sources, &metric, None, false)
     }
 
+    #[cfg(test)]
     fn create_metric_presentations(
         sources: &[MidiSeedNote],
         metric: &MetricTimeline,
         source_voices: Option<&BTreeMap<usize, SourceVoice>>,
         preserve_attacks: bool,
+    ) -> anyhow::Result<Self> {
+        Self::plan_metric_presentations(sources, metric, source_voices, preserve_attacks, None)
+    }
+
+    fn plan_metric_presentations(
+        sources: &[MidiSeedNote],
+        metric: &MetricTimeline,
+        source_voices: Option<&BTreeMap<usize, SourceVoice>>,
+        preserve_attacks: bool,
+        bound_time: Option<&NotationTimePlan>,
     ) -> anyhow::Result<Self> {
         let measures = metric.len();
         let end = metric.measure(measures.saturating_sub(1))
@@ -1013,7 +1110,15 @@ impl MidiSeedRhythmicCourses {
             let planned = source_voice_fragments(sources, metric, source_voices, &courses)?;
             return Ok(Self {
                 courses, sources: sources.to_vec(), planned, occurrences: Vec::new(),
-                metric: metric.clone(), emission_snapshot: None, source_voices: true, preserve_attacks,
+                metric: metric.clone(), emission_snapshot: None, source_voices: true, bound_written_durations: false, preserve_attacks,
+            });
+        }
+        if let Some(time) = bound_time {
+            let planned = bound_duration::plan(sources, metric, &courses, time)?;
+            return Ok(Self {
+                courses, sources: sources.to_vec(), planned, occurrences: Vec::new(),
+                metric: metric.clone(), emission_snapshot: None, source_voices: false,
+                bound_written_durations: true, preserve_attacks,
             });
         }
         let mut grouped = BTreeMap::<(i64, u8), BTreeMap<i64, Vec<MidiSeedNote>>>::new();
@@ -1168,9 +1273,6 @@ impl MidiSeedRhythmicCourses {
                             source: Some(grace.source_ordinal), pitch: Some(grace.midi), chord: false, independent: false, opposite_stem: false, source_voice: None, tie_stop: false, tie_start: false,
                         });
                     }
-                    let head_duration = next - start;
-                    let head_fits_one_beat = head_duration <= beat - (start - begin) % beat
-                        && matches!(head_duration, 384 | 288 | 192 | 144 | 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6);
                     let primary = group.iter().filter(|source| {
                         Some(source.source_ordinal) != upper_sustain
                             && !paired_sustains.as_ref().is_some_and(|pair| pair.iter().any(|(held, _)| held.source_ordinal == source.source_ordinal))
@@ -1193,36 +1295,9 @@ impl MidiSeedRhythmicCourses {
                     }
                     let primary_begin = planned.len();
                     let mut head_end = next;
-                    let pulse = crate::midi::source_time::notation_pulse_duration(
-                        metric.divisions, i64::from(bar.beats), i64::from(bar.beat_type),
-                    );
-                    // An aligned compound-meter chord can release before the
-                    // next attack when its silence has an exact written value.
-                    let common_release = primary.first().filter(|head| {
-                        preserve_attacks && pulse > beat && (start - begin) % pulse == 0
-                            && head.len < pulse
-                            && matches!(head.len, 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6)
-                            && matches!(next - start - head.len, 384 | 288 | 192 | 144 | 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6)
-                            && primary.iter().all(|member| member.len == head.len)
-                    }).map(|head| start + head.len);
-                    for (member, source) in primary.iter().enumerate() {
-                        // The host and member can have independent releases when
-                        // the host does not need a tied metric partition.
+                    let ends = primary_written_ends(&primary, start, next, &bar, metric.divisions, preserve_attacks);
+                    for (member, (source, end)) in primary.iter().zip(ends).enumerate() {
                         let source_end = start + source.len;
-                        let ends_at_beat = preserve_attacks && primary.len() == 1
-                            && source_end < next && (source_end - begin) % beat == 0
-                            && matches!(source.len, 48 | 36 | 24 | 18 | 12 | 9 | 6);
-                        let end = if let Some(release) = common_release {
-                            release
-                        } else if ends_at_beat {
-                            source_end
-                        } else if member > 0 && head_fits_one_beat
-                            && matches!(source.len, 384 | 288 | 192 | 144 | 96 | 72 | 48 | 36 | 24 | 18 | 12 | 9 | 6)
-                        {
-                            next.min(start + source.len)
-                        } else {
-                            next
-                        };
                         let separate = start >= upper_line_end
                             && independent_sustain == Some(source.source_ordinal);
                         let occurrence = PlannedSeedOccurrence {
@@ -1271,7 +1346,7 @@ impl MidiSeedRhythmicCourses {
         }
         Ok(Self {
             courses, sources: sources.to_vec(), planned, occurrences: Vec::new(),
-            metric: metric.clone(), emission_snapshot: None, source_voices: false, preserve_attacks,
+            metric: metric.clone(), emission_snapshot: None, source_voices: false, bound_written_durations: false, preserve_attacks,
         })
     }
 
@@ -1322,6 +1397,9 @@ impl MidiSeedRhythmicCourses {
             return Err(anyhow!("Rhythmic seed already emitted"));
         }
         self.validate_occurrences(xml)?;
+        if self.bound_written_durations {
+            bound_duration::verify_written_intervals(xml, &self.metric, &self.planned)?;
+        }
         self.emission_snapshot = Some(xml.to_owned());
         Ok(())
     }
@@ -1525,7 +1603,7 @@ pub fn midi_to_musicxml_seed_with_profile_and_hotspots(
 ) -> anyhow::Result<(String, MidiSeedStats)> {
     let prepared = PreparedPerformanceTiming::for_path(path);
     let standalone;
-    let (decoded, notation_time) = if let Some(input) = &prepared {
+    let (decoded, mut notation_time) = if let Some(input) = &prepared {
         input.source_and_plan()
     } else {
         standalone = read_midi_with_notation(path)
@@ -1713,8 +1791,12 @@ pub fn midi_to_musicxml_seed_with_profile_and_hotspots(
             staff: event.final_staff,
         })
         .collect();
-    let rhythmic_courses = MidiSeedRhythmicCourses::create_metric_presentations(
-        &notes, metric, source_voices.as_ref(), preserve_attacks,
+    if source_voices.is_none() && notation_time.has_open_durations() {
+        resolve_open_performance_durations(&mut notes, std::sync::Arc::make_mut(&mut notation_time))?;
+    }
+    let rhythmic_courses = MidiSeedRhythmicCourses::plan_metric_presentations(
+        &notes, &notation_time.metric, source_voices.as_ref(), preserve_attacks,
+        notation_time.binds_written_intervals().then_some(notation_time.as_ref()),
     )?;
     let stats = MidiSeedStats {
         solver_profile: profile.display_name().to_string(),
@@ -3542,11 +3624,12 @@ fn append_staff_voice(
     }
     let mut independent_cursor = None;
     let mut source_cursor = bar.start;
+    let explicit_cursor = rhythmic_courses.source_voices || rhythmic_courses.bound_written_durations;
     for occurrence in planned {
-        if rhythmic_courses.source_voices && !occurrence.chord {
+        if explicit_cursor && !occurrence.chord {
             append_cursor_motion(xml, source_cursor, occurrence.interval.start);
             source_cursor = occurrence.interval.end;
-        } else if occurrence.independent && !occurrence.chord && !rhythmic_courses.source_voices {
+        } else if occurrence.independent && !occurrence.chord && !explicit_cursor {
             let cursor = *independent_cursor.get_or_insert_with(|| {
                 let measure_duration = bar.end - bar.start;
                 xml.push_str(&format!("      <backup><duration>{measure_duration}</duration></backup>\n"));
@@ -3576,11 +3659,12 @@ fn append_staff_voice(
             (None, None) => append_rest(xml, duration, staff, voice),
             _ => return Err(anyhow!("Inconsistent planned rhythmic occurrence")),
         }
-        rhythmic_courses.capture_emission(staff, occurrence.source_voice, occurrence.interval,
+        let course_voice = if rhythmic_courses.bound_written_durations { None } else { occurrence.source_voice };
+        rhythmic_courses.capture_emission(staff, course_voice, occurrence.interval,
             occurrence.source, byte_start..xml.len())?;
         *raw_note_index = (*raw_note_index).saturating_add(1);
     }
-    if rhythmic_courses.source_voices {
+    if explicit_cursor {
         append_cursor_motion(xml, source_cursor, bar.end);
     }
     if let Some(cursor) = independent_cursor

@@ -24,6 +24,7 @@ pub(super) struct FreePerformance {
     pub(super) pickup: i64,
     pub(super) key: Option<MidiKeySignature>,
     pub(super) events: Vec<NotationEvent>,
+    pub(super) open_durations: BTreeSet<usize>,
 }
 
 fn median(mut values: Vec<f64>) -> f64 {
@@ -1059,7 +1060,7 @@ fn written_lengths(
     repetitions: &[Repeat],
     trace: &RhythmTrace,
     pulse: i64,
-) -> Vec<i64> {
+) -> (Vec<i64>, BTreeSet<usize>) {
     let mut at_position: BTreeMap<i64, Vec<f64>> = BTreeMap::default();
     for attack in regular {
         at_position
@@ -1094,7 +1095,7 @@ fn written_lengths(
             }
         });
     map.push((last + 8 * UNIT, end + 8.0 * tail_tempo));
-    let mut expected: Vec<_> = regular
+    let measured: Vec<_> = regular
         .iter()
         .map(|attack| {
             let release = attack.time + attack.hold;
@@ -1105,13 +1106,17 @@ fn written_lengths(
             let (high, end) = map[right];
             let fraction = ((release - start) / (end - start)).clamp(0.0, 1.0);
             let bound = low as f64 + (high - low) as f64 * fraction;
-            1.2 * ((bound - positions[attack.id] as f64) / UNIT as f64).max(0.6)
+            (bound - positions[attack.id] as f64) / UNIT as f64
         })
         .collect();
     let indices: BTreeMap<_, _> = regular
         .iter()
         .enumerate()
         .map(|(index, a)| (a.id, index))
+        .collect();
+    let mut expected: Vec<_> = measured
+        .iter()
+        .map(|&duration| 1.2 * duration.max(0.6))
         .collect();
     let unpaired = expected.clone();
     for alignment in repetitions {
@@ -1178,16 +1183,26 @@ fn written_lengths(
                 .collect()
         })
         .collect();
-    let independent_lengths: Vec<_> = assign_continuations(&costs)
-        .into_iter()
+    let successors = assign_continuations(&costs);
+    let connected: Vec<_> = regular
+        .iter()
+        .zip(successors)
+        .map(|(attack, target)| {
+            let next = regular.get(target)?;
+            let length = positions[next.id] - positions[attack.id];
+            VALUES.contains(&length).then_some(WrittenSuccessor {
+                length,
+                same_source: (attack.track, attack.channel) == (next.track, next.channel),
+            })
+        })
+        .collect();
+    let chord_ends = unconnected_chord_ends(regular, positions, &connected, &measured, pulse);
+    let mut lengths: Vec<_> = connected
+        .iter()
         .enumerate()
-        .map(|(index, column)| {
-            let source = regular[index];
-            if let Some(next) = regular.get(column) {
-                let gap = positions[next.id] - positions[source.id];
-                if VALUES.contains(&gap) {
-                    return gap;
-                }
+        .map(|(index, successor)| {
+            if let Some(next) = successor {
+                return next.length;
             }
             let observed = expected[index];
             let error = |length| {
@@ -1211,13 +1226,151 @@ fn written_lengths(
         trace,
         positions,
         &indices,
-        &independent_lengths,
+        &lengths,
     );
-    independent_lengths
-        .into_iter()
-        .zip(shared)
-        .map(|(length, shared)| shared.unwrap_or(length))
-        .collect()
+    let mut open_durations = BTreeSet::new();
+    for (index, length) in lengths.iter_mut().enumerate() {
+        if let Some(end) = shared[index].or(chord_ends[index]) {
+            *length = end;
+        } else if connected[index].is_none() {
+            // Release rounding supplies a proposal. Staff and voice context may
+            // still establish a different end before the seed receives it.
+            open_durations.insert(regular[index].id);
+        }
+    }
+    (lengths, open_durations)
+}
+
+#[derive(Clone, Copy)]
+struct WrittenSuccessor {
+    length: i64,
+    same_source: bool,
+}
+
+impl WrittenSuccessor {
+    fn local_length(self) -> Option<i64> {
+        self.same_source.then_some(self.length)
+    }
+}
+
+/// A dying voice can share a chord release even when the following chord has
+/// fewer notes. Only independent, assigned successors can witness its end.
+fn unconnected_chord_ends(
+    regular: &[Attack],
+    positions: &[i64],
+    connected: &[Option<WrittenSuccessor>],
+    measured: &[f64],
+    pulse: i64,
+) -> Vec<Option<i64>> {
+    let mut chords = BTreeMap::<_, BTreeMap<i64, Vec<usize>>>::new();
+    for (index, attack) in regular.iter().enumerate() {
+        chords
+            .entry((attack.track, attack.channel))
+            .or_default()
+            .entry(positions[attack.id])
+            .or_default()
+            .push(index);
+    }
+    let mut shared = vec![None; regular.len()];
+    for (&(track, channel), timeline) in &chords {
+        for (&start, members) in timeline {
+            if members.len() < 2 {
+                continue;
+            }
+            if members.iter().all(|&i| connected[i].is_none()) {
+                if let Some(length) =
+                    pulsed_release_before_rest(timeline, start, pulse, connected, measured)
+                {
+                    for &i in members {
+                        shared[i] = Some(length);
+                    }
+                }
+                continue;
+            }
+            let (first, last) = members
+                .iter()
+                .map(|&i| regular[i].time)
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(low, high), t| {
+                    (low.min(t), high.max(t))
+                });
+            for &i in members.iter().filter(|&&i| connected[i].is_none()) {
+                let attack = regular[i];
+                let release = attack.time + attack.hold;
+                if release <= last {
+                    continue;
+                }
+                let mut witnesses = members.iter().filter_map(|&j| {
+                    let other = regular[j];
+                    let end = other.time + other.hold;
+                    (end > last && (release - end).abs() <= last - first)
+                        .then(|| connected[j].and_then(WrittenSuccessor::local_length))
+                        .flatten()
+                });
+                let Some(length) = witnesses.next() else {
+                    continue;
+                };
+                if witnesses.all(|other| other == length)
+                    && !regular.iter().any(|other| {
+                        other.track == track
+                            && other.channel == channel
+                            && other.pitch == attack.pitch
+                            && positions[other.id] > start
+                            && positions[other.id] < start + length
+                    })
+                {
+                    shared[i] = Some(length);
+                }
+            }
+        }
+    }
+    shared
+}
+
+/// Two preceding pulses establish a local subdivision only when every voice of
+/// both chord attacks independently reaches the immediately following onset.
+/// If that subdivision falls silent, a comparable articulation supports the
+/// same written value followed by a rest. New articulation is independent.
+fn pulsed_release_before_rest(
+    timeline: &BTreeMap<i64, Vec<usize>>,
+    position: i64,
+    pulse: i64,
+    connected: &[Option<WrittenSuccessor>],
+    measured: &[f64],
+) -> Option<i64> {
+    use std::ops::Bound::{Excluded, Unbounded};
+
+    let next_onset = |start| {
+        timeline
+            .range((Excluded(start), Unbounded))
+            .next()
+            .map(|(&p, _)| p)
+    };
+    let first = position - 2 * pulse;
+    let length = next_onset(first)? - first;
+    if length >= pulse || next_onset(position)? <= position + length {
+        return None;
+    }
+    let mut shortest = f64::INFINITY;
+    let mut longest = f64::NEG_INFINITY;
+    for start in [first, position - pulse] {
+        let chord = timeline.get(&start)?;
+        if chord.len() < 2
+            || next_onset(start)? != start + length
+            || chord
+                .iter()
+                .any(|&i| connected[i].and_then(WrittenSuccessor::local_length) != Some(length))
+        {
+            return None;
+        }
+        for &i in chord {
+            shortest = shortest.min(measured[i]);
+            longest = longest.max(measured[i]);
+        }
+    }
+    timeline[&position]
+        .iter()
+        .all(|&i| (shortest..=longest).contains(&measured[i]))
+        .then_some(length)
 }
 
 fn shared_written_releases(
@@ -1604,7 +1757,7 @@ pub(super) fn infer_performance(
         "Gleichnamige Anschlaege fallen im Performanceraster zusammen"
     );
     regular.sort_by_key(|a| (positions[a.id], a.pitch, a.id));
-    let lengths = written_lengths(
+    let (lengths, open_durations) = written_lengths(
         &regular,
         &positions,
         nominal,
@@ -1666,6 +1819,7 @@ pub(super) fn infer_performance(
         pickup,
         key,
         events,
+        open_durations,
     })
 }
 
@@ -2053,5 +2207,144 @@ mod corroborated_onsets_tests {
         groups[10].time += 0.4;
         assert!(!incoming_pulse_supports(&groups, &trace.onsets, 8, 2));
         assert_eq!(corroborated_onsets(meter, &trace, &groups, &[], &[]).unwrap(), trace.onsets);
+    }
+}
+
+#[cfg(test)]
+mod unconnected_chord_end_tests {
+    use super::*;
+
+    fn local(length: i64) -> Option<WrittenSuccessor> {
+        Some(WrittenSuccessor {
+            length,
+            same_source: true,
+        })
+    }
+
+    #[test]
+    fn coincident_releases_need_an_unambiguous_successor_without_reattack() {
+        let attack = |id, time: f64, end: f64, pitch| Attack {
+            id,
+            time,
+            hold: end - time,
+            pitch,
+            velocity: 70,
+            track: 1,
+            channel: 0,
+        };
+        let notes = [
+            attack(0, 0.0, 0.52, 42),
+            attack(1, 0.02, 0.53, 53),
+            attack(2, 0.04, 0.51, 60),
+            attack(3, 0.02, 0.75, 67),
+        ];
+        let positions = [0; 4];
+        let connected = [local(48), None, local(48), None];
+        assert_eq!(
+            unconnected_chord_ends(&notes, &positions, &connected, &[2.0; 4], 48),
+            [None, Some(48), None, None]
+        );
+        assert_eq!(
+            unconnected_chord_ends(
+                &notes,
+                &positions,
+                &[local(48), None, local(72), None],
+                &[2.0; 4],
+                48
+            ),
+            [None; 4]
+        );
+        let remote = Some(WrittenSuccessor {
+            length: 48,
+            same_source: false,
+        });
+        assert_eq!(
+            unconnected_chord_ends(
+                &notes,
+                &positions,
+                &[remote, None, remote, None],
+                &[2.0; 4],
+                48
+            ),
+            [None; 4]
+        );
+        let mut repeated = notes.to_vec();
+        repeated.push(attack(4, 0.6, 1.1, 53));
+        assert_eq!(
+            unconnected_chord_ends(
+                &repeated,
+                &[0, 0, 0, 0, 24],
+                &[local(48), None, local(48), None, None],
+                &[2.0; 5],
+                48
+            ),
+            [None; 5]
+        );
+        let mut independent = notes;
+        independent[1].channel = 1;
+        assert_eq!(
+            unconnected_chord_ends(&independent, &positions, &connected, &[2.0; 4], 48),
+            [None; 4]
+        );
+    }
+
+    #[test]
+    fn a_predicted_chord_release_requires_matching_local_pulses_and_articulation() {
+        let timeline = BTreeMap::from([
+            (12, vec![0, 1]),
+            (36, vec![2]),
+            (84, vec![3, 4]),
+            (108, vec![5]),
+            (156, vec![6, 7]),
+            (228, vec![8]),
+        ]);
+        let mut connected = [
+            local(24),
+            local(24),
+            None,
+            local(24),
+            local(24),
+            None,
+            None,
+            None,
+            None,
+        ];
+        let mut measured = [0.8, 1.0, 1.4, 0.7, 0.9, 1.4, 0.83, 0.9, 1.5];
+        assert_eq!(
+            pulsed_release_before_rest(&timeline, 156, 72, &connected, &measured),
+            Some(24)
+        );
+        // An independent distant occurrence has no vote in this phrase.
+        let mut more = timeline.clone();
+        more.extend([(420, vec![2, 5]), (444, vec![8])]);
+        assert_eq!(
+            pulsed_release_before_rest(&more, 156, 72, &connected, &measured),
+            Some(24)
+        );
+        // The current keys are released distinctly earlier. Preserve the rest.
+        measured[6] = 0.25;
+        assert_eq!(
+            pulsed_release_before_rest(&timeline, 156, 72, &connected, &measured),
+            None
+        );
+        // Two durations below the rounding floor remain distinct evidence.
+        let short_gates = [0.15, 0.35, 0.1, 0.25, 0.3, 0.1, 0.1, 0.2, 0.2];
+        assert_eq!(
+            pulsed_release_before_rest(&timeline, 156, 72, &connected, &short_gates),
+            None
+        );
+        measured[6] = 0.83;
+        connected[3] = local(48);
+        assert_eq!(
+            pulsed_release_before_rest(&timeline, 156, 72, &connected, &measured),
+            None
+        );
+        connected[3] = local(24);
+        let mut interrupted = timeline;
+        interrupted.insert(168, vec![8]);
+        assert_eq!(
+            pulsed_release_before_rest(&interrupted, 156, 72, &connected, &measured),
+            None
+        );
     }
 }

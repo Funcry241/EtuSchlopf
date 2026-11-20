@@ -1,10 +1,13 @@
 # Mathematik in EtuSchlopf
 
-**Quellstand r1961 / 0.10.1839.** Die [Gegenprobe zur Stimmzuordnung](#stimmfortsetzungen-im-vollkorpus-r1961) untersucht, welche Noten in einer mehrstimmigen Passage denselben Ausgabekanal erhalten können. Der Windows-Vollkorpuslauf umfasst 14 Stücke mit vollständiger PDF-Ausgabe. [Prüfbeleg r1961](evidence/r1961/README.md) · [Notenbilder](examples/README.md#notenbilder)
+**Wie lange soll eine gespielte Note im Notenbild stehen?** EtuSchlopf leitet die Dauer einer frei gespielten Klaviernote aus den Einsätzen, der Artikulation und den gleichzeitig laufenden Stimmen ab. Im Windows-Einzellauf r1964 zu Mozarts KV 331 stimmen alle 474 regulären Einsätze samt Tonhöhe und 460 ihrer geschriebenen Dauern mit der annotierten Einspielung überein. Die nachstehenden Formeln zeigen, wie die Entscheidung entsteht und welche Eigenschaft die MusicXML-Ausgabe tatsächlich belegt. [Notenbild r1964](examples/mozart-k331-p01-r1964.pdf)
 
-EtuSchlopf verwendet Mathematik für musikalische Entscheidungen, Darstellungsentscheidungen, Messungen und technische Beweise. Diese Aufgaben sind verschieden: Eine Erhaltungsbilanz beweist keine Lesbarkeit; ein lesbarer Registerkurs beweist keine menschliche Spielbarkeit; eine bestandene Prüfung erlaubt nur den Übergang, dessen Bedingungen sie tatsächlich abdeckt.
-
-Diese Bestandsaufnahme verknüpft die Verfahren mit ihrem Einsatz im Code und den dazugehörigen Prüfbelegen. Die im abgenommenen Quellpaket enthaltene Fassung dokumentiert die mathematischen Beispiele bei Erstellung des Takes. [Mathematik im Quellpaket r1961](MATHEMATIK.md)
+| Frage | Wo die Antwort steht |
+| --- | --- |
+| Wie gelangt eine frei gespielte Note in den gedruckten Takt? | [Vom Anschlag zur geschriebenen Dauer](#vom-anschlag-zur-geschriebenen-dauer) |
+| Welche Zusammenhänge beschreibt das Modell für Stimmen, Register und Seiten? | [Verfahrensfamilien](#verfahrensfamilien-im-aktuellen-quellstand) und [Formeln](#zentrale-formeln-und-ihre-beweisgrenzen) |
+| Was wurde mit welchen Stücken geprüft? | [Stimmfortsetzungen im Vollkorpus r1961](#stimmfortsetzungen-im-vollkorpus-r1961) und [Prüfstände](#prüfstände-und-verbleibende-grenzen) |
+| Woran ließe sich als Nächstes arbeiten? | [Nächste mathematische Vorhaben](#nächste-mathematische-vorhaben) |
 
 ## Wie die Aussagen zu lesen sind
 
@@ -26,13 +29,15 @@ Diese Bestandsaufnahme verknüpft die Verfahren mit ihrem Einsatz im Code und de
 
 ## Die drei Projektbegriffe
 
-### SchlopfFormel: Herkunft, Zuständigkeit und Übergangsnachweis
+### SchlopfFormel für belegte Übergänge
 
 Unter diesem Namen fasst diese Seite die Bedingungen für einen erlaubten, belegten Übergang zusammen. Es gibt im Code keine einzelne kanonische Gesamtfunktion namens SchlopfFormel.
 
 Ein ausführbarer Teilkern ist die Entscheidung über die Einstufung **eines** Änderungsbelegs:
 
-$$A(e)=[p(e)=1]\land[m(e)+d(e)+i(e)=0].$$
+```math
+A(e)=[p(e)=1]\land[m(e)+d(e)+i(e)=0].
+```
 
 $p$ zählt erlaubende Einstufungen, $m,d,i$ zählen fehlende, doppelte und ungültige Belege. Die Zähler sind keine Wahrscheinlichkeiten. Der Kern steht in `adoption_decision` in [ssc_evidence_proof.rs](../src/ssc_evidence_proof.rs). Er ist allein noch keine vollständige Freigabeformel.
 
@@ -40,27 +45,84 @@ Die Zusammenstellung verlangt außerdem die zuständige Authority, die Herkunft 
 
 **Grenze:** Eine zulässige Transformation ist damit nicht automatisch musikalisch gut. Ein Fingerprint ersetzt keine Ereignisidentität und kein musikalisches Qualitätsurteil.
 
-### Schlöpfchen-Formel: die angestrebte Seitenfüllung
+### Schlöpfchen-Formel für die Seitenfüllung
 
-Der bisher vereinbarte Entwurf lautet:
+Der Entwurf ordnet zulässige Seitenpläne nach drei Kriterien.
 
-$$\min_{x\in\mathcal F}(\text{Seitenzahl}(x),\text{übermäßige Dehnung}(x),\text{Unausgewogenheit}(x)).$$
+```math
+x^\star\in\underset{x\in\mathcal F}{\operatorname{argmin}_{\mathrm{lex}}}
+ \bigl(N_{\mathrm{Seiten}}(x),D(x),U(x)\bigr).
+```
+
+$D$ bezeichnet übermäßige Dehnung, $U$ die Unausgewogenheit der Seitenfüllung. Der lexikografische Vergleich entscheidet zuerst über die Seitenzahl und bei Gleichstand über Dehnung, dann Ausgewogenheit.
 
 $\mathcal F$ müsste die tatsächlich lesbaren und materialisierbaren Kandidaten enthalten. Lesbarkeit ist darin Voraussetzung. Horizontale Taktprofile, vertikale Systemhüllen und Seitenbelegung sind getrennte Größen; die Systemreihenfolge bleibt erhalten.
 
 **Status:** Diese Gesamtformel ist nicht als vollständiger Seitenoptimierer implementiert. Die horizontale Systemplanung und der begrenzte gemeinsame Seiten- und Systemplan sind bereits implementiert. Für eine allgemeine Seitenverdichtung fehlen belegte sichtbare Mindestabstände und eine durchgängige Vergleichsgrundlage. Aus einer großen beobachteten Lücke folgt weder ein Mindestabstand noch automatisch die Erlaubnis zum Zusammenrücken.
 
-Quelle: [Fehlerklasse zur unnötig beibehaltenen Seite](selector_derivation_contract_redundant_page_retention.md), [Projektstatus und Arbeitsrahmen](assistant_memory/050_aktueller_stand.md).
+[Fehlerklasse zur unnötig beibehaltenen Seite](selector_derivation_contract_redundant_page_retention.md) · [Implementierter Seiten- und Systemplan](../src/pipeline_shards/horizontal_layout_global_page_system.rs)
 
-### Symbolische Spielformel: Anforderungen und Fähigkeiten
+### Symbolische Spielformel für Hand und Finger
 
-$$\exists a:\ S(a)\land K(a)\land U(a)\land W(a).$$
+```math
+\exists a:\ S(a)\land K(a)\land U(a)\land W(a).
+```
 
 $a$ belegt physische Verpflichtungen mit Hand-/Finger-Plätzen. $S$ steht für Strukturbedingungen, $K$ für statische Konfigurationen, $U$ für Übergänge und $W$ für Wiederanschläge gleicher Tasten. Anforderungen der Musik und Fähigkeiten eines Pianistenmodells bleiben getrennt.
 
 **Status:** Audit. Die Formel und ein struktureller Beleg können vollständig sein, während die Fähigkeiten eines konkreten Menschen weiterhin nicht modelliert sind. Ein `MODEL_RELATIVE_ONLY`-Urteil beweist weder ein bestimmtes Spieltempo noch menschliche Spielbarkeit. Eine fehlende Fähigkeitseinstufung rechtfertigt keine Notenlöschung.
 
 Quelle: [pianistic_symbolic_capability_reachability.rs](../src/audit_only/pianistic_symbolic_capability_reachability.rs) und die dort konsumierten Fähigkeitsmodelle.
+
+## Vom Anschlag zur geschriebenen Dauer
+
+### Das Zeitraster einer freien Einspielung
+
+Die WAV-Aufnahme stützt die zeitliche Zuordnung zur MIDI-Einspielung. Wenn der direkte MIDI-Import kein geeignetes Raster liefert, sucht EtuSchlopf einen von den Anschlüssen, Wiederholungen und dem örtlichen Puls getragenen Taktverlauf. Mehrdeutige Taktarten oder eine unzureichende Übereinstimmung mit dem Audio können die Übernahme verhindern. Im Notenplan entsprechen 96 Einheiten einer Viertelnote. [Automatische Zeitplanung](../src/free_performance_timing.rs) · [Einbindung in den Projektlauf](../src/pipeline_shards/pipeline_orchestrator_project_setup_stages.rs)
+
+Angenommen, zwei benachbarte Gruppen setzen in der Aufnahme bei den Zeiten $t_a,t_b$ ein. Ihre bereits gewählten Positionen im Notenraster seien $q_a,q_b$. Lässt der Pianist eine Taste zum Zeitpunkt $r$ dazwischen los, ergibt die örtliche lineare Zeitabbildung
+
+```math
+q(r)=q_a+(q_b-q_a)\frac{r-t_a}{t_b-t_a},\qquad t_a\le r\le t_b.
+```
+
+Der Abstand zum Notenanfang liefert einen Hinweis auf die geschriebene Länge. Ein staccato gespieltes Viertel kann dieselbe Tastendauer haben wie ein gebundenes Achtel. Deshalb fließen auch die folgenden Einsätze und andere Töne desselben Akkords ein. Nach dem letzten Anschlag setzt das Modell das örtliche Tempo für die Auswertung der letzten Loslasszeiten fort. [Dauerherleitung](../src/free_performance_timing.rs)
+
+### Folgeeinsatz oder Akkordende
+
+Für jeden regulären Anschlag $i$ vergleicht das Modell mögliche Folgeeinsätze $j$. Die Kosten $c_{ij}$ bewerten unter anderem das Verhältnis von beobachteter Dauer zum Abstand der Einsätze, den Tonhöhenabstand und die Notierbarkeit. Zusätzliche freie Spalten erlauben ein eigenes Ende. Jeder reale Folgeeinsatz steht höchstens einmal zur Verfügung. Für die gewählten Zuordnungen $x_{ij}$ gilt
+
+```math
+\min_x \sum_{i,j}c_{ij}x_{ij},\qquad
+x_{ij}\in\{0,1\},\quad \sum_jx_{ij}=1,\quad \sum_ix_{ij}\le1.
+```
+
+Ein Akkordton kann auch dann enden, wenn eine andere Stimme weiterläuft. Für einen Ton ohne eigenen Folgeeinsatz prüft EtuSchlopf die Loslasszeiten der Akkordpartner auf derselben Spur und demselben Kanal. Mit der Streuung $w$ der **Anschlagszeiten** und den **Loslasszeiten** $r_i,r_j$ gilt für einen möglichen Zeugen
+
+```math
+w=\max_k t_k-\min_k t_k,\qquad
+r_i,r_j>\max_k t_k,\qquad |r_i-r_j|\le w.
+```
+
+Die passenden Partner mit eigenem Folgeeinsatz müssen sich über das geschriebene Ende einig sein. Ein erneuter Anschlag derselben Taste vor diesem Ende schließt die Übernahme aus. Ein weiterer Fall betrifft die Pause im gleichmäßigen Akkordpuls. Dort müssen an zwei vorherigen Pulsen alle Akkordtöne unabhängig dieselbe Unterteilung bestätigen, die nächste Attacke muss eine Lücke lassen und die gemessene Artikulation muss im zuvor beobachteten Bereich liegen. Offen gebliebene Dauern werden nach der Zuordnung zum Notensystem im Kontext der benachbarten Einsätze entschieden. [Akkordenden und Puls](../src/free_performance_timing.rs) · [Offene Dauern im Notensystem](../src/midi_seed.rs)
+
+### Ein Quellton über mehrere geschriebene Fragmente
+
+Ein regulärer Ton soll das halboffene Intervall von $a$ bis $b$ belegen. Die aus demselben Anschlag erzeugten Fragmente müssen eine lückenlose Partition bilden. Für ihre Anfänge $s_k$ und Enden $e_k$ gilt
+
+```math
+s_1=a,\qquad e_m=b,\qquad s_k<e_k,\qquad e_k=s_{k+1}\quad(1\le k<m).
+```
+
+Dadurch hat ein bei 72 beginnender Ton mit Dauer 96 auch dann sein Ende bei 168, wenn auf demselben System bei 120 eine andere Note beginnt. EtuSchlopf kann dafür einen weiteren MusicXML-Stimmkanal verwenden. Bei einer Teilung behält jedes Fragment die Quellidentität und Tonhöhe. Nur das erste trägt den Anschlag, die folgenden schließen mit Haltebögen an. Ein Vorschlag hat eigene Regeln für Nullzeit und Hauptnote. Der Schreibpfad prüft die Zeiten gegen die tatsächlich ausgegebenen Noten und Cursorbewegungen. [Fragmentplanung und Ausgabekontrolle](../src/midi_seed/bound_duration.rs)
+
+| Mozart KV 331, Andante grazioso, Einspielung p01 | r1963 | r1964 |
+| --- | ---: | ---: |
+| Reguläre Noten mit passendem Einsatz und passender Tonhöhe | 474 von 474 | 474 von 474 |
+| Passende geschriebene Dauer einschließlich Haltefortsetzungen | 438 von 474 | 460 von 474 |
+| Abweichende geschriebene Dauer | 36 | 14 |
+
+Der Vergleich verwendet MIDI und WAV als Programmeingaben. Die annotierte Zuordnung aus dem Vienna-4×22-Korpus dient erst zum Prüfen von Master- und Render-MusicXML. Die 14 Differenzen begrenzen die Aussage über die Dauererkennung an dieser Aufnahme. Der Erhalt der gewählten Intervalle und die Übereinstimmung dieser Wahl mit der musikalischen Referenz sind zwei getrennt messbare Eigenschaften. [Annotierte Einspielung](https://github.com/wergo/vienna4x22/blob/53872cd670182b039ff118d27abcba30de1e0785/match/Mozart_K331_1st-mov_p01.match) · [Windows-Notenbild](examples/mozart-k331-p01-r1964.pdf)
 
 ## Verfahrensfamilien im aktuellen Quellstand
 
@@ -116,14 +178,16 @@ Die Quellstellen nennen die jeweiligen Implementierungsstellen, nicht automatisc
 | Notenhals am Stimmeinsatz | Stimme, gleichzeitige Nachbarstimmen und bereits gebundene Balkengruppen | Die Richtung folgt den sichtbaren Beziehungen am Einsatz und innerhalb der gebundenen Gruppe. [Notenhälse](../src/notation_final_stems.rs) · [Vertrag](selector_derivation_contract_final_stem_direction.md) |
 | Registerkontinuität | Benachbarte Abschnitte, gebundene Stimmzuordnung und Lesbarkeit des Schlüsselverlaufs | Die Entscheidung berücksichtigt den Anschluss zwischen Abschnitten. Der Nachweis bindet die Darstellung an die musikalischen Ereignisse. [Register und Stimmeinsatz](selector_derivation_contract_voice_entry_and_register_continuity.md) |
 
-Den 6/8-Import und das resultierende Notenbild dokumentiert die Mozart-Referenz. [Mozart KV 331, erste Seite](examples/mozart-k331-p01-r1933.pdf)
+Den automatisch ermittelten 6/8-Takt, die regulären Anschläge und die geschriebene Dauer dokumentiert der Einzellauf zu Mozart. [Mozart KV 331, r1964](examples/mozart-k331-p01-r1964.pdf)
 
 ## Zentrale Formeln und ihre Beweisgrenzen
 
 ### Bilanz, Identität und Sichtbarkeit
 
-$$N_{\mathrm{Quelle}}=N_{\mathrm{aktiv}}+N_{\mathrm{inaktiv}},\qquad
-N_{\mathrm{aktiv}}=N_{\mathrm{sichtbar}}+N_{\mathrm{verborgen}}.$$
+```math
+N_{\mathrm{Quelle}}=N_{\mathrm{aktiv}}+N_{\mathrm{inaktiv}},\qquad
+N_{\mathrm{aktiv}}=N_{\mathrm{sichtbar}}+N_{\mathrm{verborgen}}.
+```
 
 Diese Gleichheiten gelten nur für die im jeweiligen Bericht sauber abgegrenzte Grundgesamtheit. Quellanschläge, geschriebene Fragmente und sichtbare Köpfe sind nicht austauschbare Nenner.
 
@@ -137,7 +201,9 @@ Für ein geschriebenes Ereignis gilt das halboffene Intervall $[t,t+d)$. Bei ein
 
 Für den dadurch erzeugten Intervallgraphen gilt:
 
-$$\chi(G)=\omega(G).$$
+```math
+\chi(G)=\omega(G).
+```
 
 Die maximale Überlappung ist damit die minimale Farbzahl **dieses Graphen**. Musikalische Linien, ursprüngliche Balkengruppen, Pausenpflichten, Akkordbindungen und technische Importkanäle besitzen zusätzliche Bedingungen. Aus der Graphzahl allein folgt keine erlaubte Zusammenlegung solcher Rollen. Der aktuelle `VoiceModel`-Bericht nennt diese Grenze ausdrücklich.
 
@@ -165,7 +231,9 @@ B und C benötigen zusammen Y und Z. Deshalb ist A → X erzwungen. B → Y ist 
 
 Sei $P$ die Menge aller im lokalen Modell zulässigen Stimmpläne und $E(p)$ die Menge der darin realisierten Anschlüsse. Für eine Beziehung $e$ gilt
 
-$$e\text{ ist im Modell erzwungen}\quad\Longleftrightarrow\quad P\ne\varnothing\ \land\ \forall p\in P:\ e\in E(p).$$
+```math
+e\text{ ist im Modell erzwungen}\quad\Longleftrightarrow\quad P\ne\varnothing\ \land\ \forall p\in P:\ e\in E(p).
+```
 
 r1961 prüft konkret, ob zwei gebundene Noten denselben Ausgabekanal belegen. Die Suche hält die Umgebung fest und berücksichtigt notierte und klingende Zeit, Rollen, Pausen, vorhandene Verbindungen und gebundene Randnachbarn. Zwei gegensätzliche Zeugen belegen Mehrdeutigkeit. Für einen Zwangsnachweis braucht es einen positiven Zeugen und eine abgeschlossene Suche nach Gegenplänen. Eine leere Lösungsmenge oder ein ausgeschöpftes Suchbudget lässt die Frage nach dem Zwang offen. [Suchkern und synthetische Gegenprobe](../src/structural_write_authority/exact_voice_passages.rs) · [Modellgrenzen](selector_derivation_contract_exact_voice_passages.md)
 
@@ -173,24 +241,61 @@ r1961 prüft konkret, ob zwei gebundene Noten denselben Ausgabekanal belegen. Di
 
 Bei einem gebundenen Anschlag mit Einsatz $t$, Ende $e$ in der Notationszeit und einer Taktgrenze $b$ mit $t<b<e$ kann der MIDI-Seed das Zeitintervall in zwei Fragmente teilen:
 
-$$[t,e)=[t,b)\cup[b,e),\qquad e-t=(b-t)+(e-b).$$
+```math
+[t,e)=[t,b)\cup[b,e),\qquad e-t=(b-t)+(e-b).
+```
 
 Der Haltebogen verbindet beide Fragmente mit demselben Anschlag. Der Pfad prüft unter anderem exakte Notenwerte, die belegte Taktgrenze und konkurrierende Anschläge derselben Tonhöhe. In Schuberts Auftakt ergibt die gebundene Dauer $240=96+144$ Ticks, also eine Viertel am Auftakt und eine punktierte Viertel am Beginn des Folgetakts. [MIDI-Seed](../src/midi_seed.rs) · [Windows-Notenbild](examples/schubert-d783-no15-p18-r1872.pdf).
 
 Für einen durch die bisherige Handgrenze geteilten Akkord vergleicht r1872 die Menge der MIDI-Tasten mit zeitlich direkt angrenzenden Akkordgruppen. Ein Zeuge muss vor der Korrektur vollständig derselben Hand zugeordnet sein. Widersprechen sich die Zeugen, bleibt die Einteilung bestehen. Für jede Hand $h$ und jede geprüfte Anschlagsgrenze $u$ verlangt der Code für die klingende Tastenmenge $K_h(u)$:
 
-$$|K_h(u)|\le 5,\qquad \max K_h(u)-\min K_h(u)\le 12\quad\text{für }K_h(u)\ne\varnothing.$$
+```math
+|K_h(u)|\le 5,\qquad \max K_h(u)-\min K_h(u)\le 12\quad\text{für }K_h(u)\ne\varnothing.
+```
 
 Sind beide Hände belegt, muss die höchste linke Taste unter der tiefsten rechten liegen. Konkurrierende Anschläge derselben Akkordtaste schließen den Wechsel aus. Die Grenzwerte gehören zum Modell der Handzuordnung. Sie liefern weder einen Fingersatz noch einen Nachweis individueller Spielbarkeit. [Regel für Wiederholungsakkorde](selector_derivation_contract_repeated_accompaniment_hand_implementation.md) · [Quellcode](../src/midi_seed.rs).
 
 Die Sprungwarnung prüft zusätzlich, ob sich beide Tonhöhengrenzen aufeinanderfolgender Anschläge in dieselbe Richtung bewegen und jeweils mindestens 19 Halbtöne zurücklegen. Der bestehende Test der Zeitkante bleibt Teil der Warnung. Ein Akkord kann sich aufspreizen oder zusammenziehen, ohne dass beide Grenzen einen solchen Sprung ausführen. [Prüfregel](../src/rules.rs).
 
+### Kandidatenauswahl und Pareto-Front
+
+Für zwei zulässige Lösungen entscheidet beim lexikografischen Vergleich der erste abweichende Eintrag. Der Auswahlschlüssel für die allgemeine Kandidatenbewertung ordnet die Größen so
+
+```math
+K=(B,C,H,W,I,\operatorname{rev}(R),M).
+```
+
+$B$ zählt Blocker, $C$ kritische Fälle, $H$ ist die größte kritische Härte, $W$ und $I$ zählen Warnungen und Hinweise. Es folgen der absteigend geordnete Notenerhalt $R$ und die Anzahl $M$ verschobener Noten. Wenn ein Kandidat einen zusätzlichen Blocker hat, können ihm weniger Warnungen bei diesem Vergleich keinen Vorrang verschaffen. [Kandidatenauswahl](../src/pipeline_shards/staff_voice_move_restify_atomic_patch_tail.rs)
+
+Die lokale Harmonikbewertung untersucht auch die Pareto-Front. Im neundimensionalen Kostenvektor $z$ gehen die beiden Nutzenbeiträge mit negativem Vorzeichen ein. Kandidat $a$ dominiert $b$ genau dann, wenn er in jedem Kriterium mindestens so gut und in wenigstens einem besser ist
+
+```math
+a\prec b\;\Longleftrightarrow\;
+\left(\forall k\colon z_k(a)\le z_k(b)\right)
+\land\left(\exists k\colon z_k(a)<z_k(b)\right).
+```
+
+Die erste Front besteht aus allen Kandidaten ohne dominierenden Konkurrenten. Bei konkurrierenden Vorteilen können mehrere Kandidaten auf dieser Front liegen. [Harmonikvergleich](../src/pipeline_shards/sheaf_noether_projection_core.rs)
+
+### Wiederholung bei anderer Tonhöhe und anderem Tempo
+
+Die Phrasenanalyse beschreibt eine Passage anhand der Abstände aufeinanderfolgender Einsätze, der klingenden Dauern und der Unterschiede zwischen den Tonhöhenschwerpunkten. Für den positiven ganzzahligen Zeitvektor $v$ des Abschnitts verwendet sie
+
+```math
+g=\gcd(v_1,\ldots,v_n),\qquad \rho(v)=v/g,\qquad
+\Delta p_i=p_{i+1}-p_i.
+```
+
+Verdoppeln sich alle Zeitwerte, bleibt $\rho$ gleich. Eine gemeinsame Transposition verändert die Schwerpunktdifferenzen $\Delta p_i$ ebenfalls nicht. Der Deskriptor erfasst zusätzlich die Akkordbesetzung und setzt ein gültiges Zeitmodell voraus. Ein Treffer beschreibt eine strukturelle Wiederholung. Ob der Pianist beide Stellen gleich artikuliert oder eine Stimme über die Stelle hinaus hält, braucht eigene Evidenz. [Phrasenanalyse](../src/audit_only/phrase_boundary_evidence.rs)
+
 ### Quadratische Verteilungskosten
 
 Die implementierte lokale Bewertung enthält:
 
-$$E(t,s)=3\Delta t^2+24\Delta p^2+42^2[\text{System verschieden}]
-+12^2[\text{Stimme verschieden}]+2(\Delta t-24k)^2+12000[\text{Platz bereits verwendet}].$$
+```math
+E(t,s)=3\Delta t^2+24\Delta p^2+42^2[\text{System verschieden}]
++12^2[\text{Stimme verschieden}]+2(\Delta t-24k)^2+12000[\text{Platz bereits verwendet}].
+```
 
 Zeit wird hier in der vorhandenen 96-Ticks-pro-Viertel-Projektion gemessen, Tonhöhe in Halbtönen. Der Code begrenzt zusätzlich den Kandidatenraum und prüft je nach Aufruf die Zielbelegung. Die Formel allein ist weder vollständige Zulässigkeit noch Erhaltungsbeweis. Der Name „Gauss“ bezeichnet hier quadratische Kosten; er behauptet keine Gauß-Verteilung der Musikdaten, kein statistisches Maximum-Likelihood-Modell und keine globale optimale Zuordnung aller Töne.
 
@@ -200,7 +305,13 @@ Gewichte, Kandidatengrenzen und Strafen sind Projekteinstellungen. Ein Kandidate
 
 Die aktuelle Profilbewertung summiert Beiträge pro Ton. Vereinfacht mit dem vom Owner bestimmten Gewicht $w_n$, Tonklasse $c_n$ und Profil $P$ lautet der im Code sichtbare Kern:
 
-$$T(P)=\sum_n w_n\big(3[c_n\in\mathrm{Skala}(P)]-4[c_n\notin\mathrm{Skala}(P)]+2[c_n=\mathrm{Tonika}(P)]+[c_n=\mathrm{Dominante}(P)]+[P\text{ ist Moll}\land c_n=\mathrm{erhöhte\ Leittonklasse}(P)]\big).$$
+```math
+\begin{aligned}
+T(P)&=\sum_n w_n\bigl(3S_n-4(1-S_n)+2T_n+D_n+L_n\bigr).
+\end{aligned}
+```
+
+Die Indikatoren stehen für Skalenmitgliedschaft $S_n$, Tonika $T_n$, Dominante $D_n$ und den erhöhten Leitton in Moll $L_n$. Sie nehmen die Werte 0 oder 1 an.
 
 Dies ist eine Projekteinstellung und kein statistisch kalibrierter Tonartbeweis. Die tatsächliche Schreibweisenentscheidung verlangt zusätzliche Bedingungen zu Geltungsbereich, Stabilität, konkurrierenden Lesarten und Vorzeichenkosten. Enharmonische Umbenennung darf die klingende Tonhöhe nicht verändern. Ein Profilwert allein erteilt weder eine neue Tonhöhe noch eine neue Abschnittsgrenze.
 
@@ -208,17 +319,23 @@ Dies ist eine Projekteinstellung und kein statistisch kalibrierter Tonartbeweis.
 
 Der separate Lesbarkeitskurs verwendet den graduellen Druck
 
-$$p(l)=l^2+8\max(l-3,0)$$
+```math
+p(l)=l^2+8\max(l-3,0)
+```
 
 und Kosten für Schlüsselwechsel, Redundanzen und kurze Ausflüge. Seine bekannten 24 Einheiten je Wechsel beziehungsweise kurzem Ausflug sind Setzungen dieses Modells. Daraus folgt keine universelle Grenze von drei Hilfslinien.
 
 Die historische C3-Policy verwendete die eingefrorene **lexikografische** Reihenfolge
 
-$$ (h_8,h_7,h_6,h_5,h_4,k_o,u_k,k_s,g_b,h_3,c_h,h_2,h_1). $$
+```math
+(h_8,h_7,h_6,h_5,h_4,k_o,u_k,k_s,g_b,h_3,c_h,h_2,h_1).
+```
 
 Die versionierte [C4-Policy](joint_register_dp_policy_c4_v1.md) vertauscht ausschließlich die benachbarten Prioritäten $h_3$ und $c_h$:
 
-$$ (h_8,h_7,h_6,h_5,h_4,k_o,u_k,k_s,g_b,c_h,h_3,h_2,h_1). $$
+```math
+(h_8,h_7,h_6,h_5,h_4,k_o,u_k,k_s,g_b,c_h,h_3,h_2,h_1).
+```
 
 Damit kann ein Kurs mit weniger Registerzeichen trotz zusätzlicher Drei-Hilfslinien-Köpfe gewinnen. Schwerere Hilfslinienklassen, die Kopf-Schutzregel, Gruppengrenzen und alle tatsächlichen Schreibbedingungen behalten ihren Vorrang. Es gibt keine neue Gewichts- oder Schwellenkalibrierung. Der Dateiname des bestehenden Suchkerns und die C3-Präfixe einiger Transporttypen bleiben aus Kompatibilitätsgründen erhalten.
 
@@ -237,7 +354,9 @@ Nominale Zustände sind noch keine Schreibbefugnis. Im aktuellen Adapter unterst
 
 Die Schutzregel lautet für jeden sichtbaren Kopf $n$:
 
-$$\neg\big(L_z(n)\ge4\ \land\ L_z(n)>L_0(n)\big).$$
+```math
+\neg\big(L_z(n)\ge4\ \land\ L_z(n)>L_0(n)\big).
+```
 
 Ein Kandidat darf also keine neue oder verschärfte Belastung ab vier Hilfslinien erzeugen. Ein bereits belasteter Ausgangszustand wird nicht durch Behauptung unsichtbar. Unter den zulässigen vollständigen Kursen zählt die erste abweichende Kostenkomponente; Gleichstand erhält den Ausgang.
 
@@ -245,9 +364,23 @@ Ein Kandidat darf also keine neue oder verschärfte Belastung ab vier Hilfslinie
 
 Der Suchkern trägt zusätzlich zum Registerzustand das genaue, bei einer Taktlänge gesättigte Abschnittsalter. Rationale Taktkoordinaten behandeln Takt- und Divisionswechsel. Ein Ressourcenabbruch oder eine unbekannte Abhängigkeit beweist kein Optimum. Die [C3-Policy](joint_register_dp_policy_v1.md) bleibt als unveränderte historische Spezifikation erhalten; im aktuellen Suchkern gilt die [C4-Policy](joint_register_dp_policy_c4_v1.md).
 
+Ein dynamischer Planer kann mehrere zulässige Schlüsselverläufe vergleichen, ohne alle vollständigen Verläufe aufzubewahren. Bezeichnet $D_i(z)$ die beste bis Abschnitt $i$ erreichbare Bewertung mit Endzustand $z$, folgt das Verfahren dem Bellman-Prinzip
+
+```math
+D_i(z)=\min_{y\to z}\bigl(D_{i-1}(y)+c_i(y,z)\bigr).
+```
+
+Der Zustand muss alle Informationen enthalten, von denen künftige Anschlüsse abhängen. Beim Registerkurs können dazu bereits begonnene Abschnitte oder Gruppenpflichten gehören. Die konkrete Kostenordnung und die zulässigen Übergänge legt der jeweilige Planer fest. [Schlüsselplanung](../src/structural_write_authority/rustig_clef_planning.rs) · [Gemeinsamer Registerkurs](../src/pipeline_shards/joint_reading_c3_course.rs)
+
 ### Graphzeugen der Spielformel
 
 Die symbolische Struktur enthält Ungleichungen zwischen Belegungsvariablen. Der Code bildet einen Graphen, erzeugt eine Smallest-last-/Degenerationsordnung und prüft die daraus gewonnene Zuordnung gegen die tatsächlichen Kanten. Eine passende Clique kann umgekehrt einen strukturellen Konflikt belegen.
+
+Seien $V$ die im Modell zu belegenden Ereignisse, $E$ die gleichzeitig unverträglichen Paare und $F$ die verfügbaren Plätze. Ein Beleg für diese Teilaufgabe ist eine geprüfte Zuordnung
+
+```math
+a\colon V\to F,\qquad (u,v)\in E\ \Longrightarrow\ a(u)\ne a(v).
+```
 
 Ein struktureller Zeuge schließt nur diese Ungleichungen. Handkonfiguration, Übergang, Wiederanschlag, Fähigkeiten und Zeitmodell bleiben zusätzliche Verpflichtungen. Weder die maximale Gleichzeitigkeit noch ein gefärbter Graph allein beweist einen ausführbaren Fingersatz.
 
@@ -257,13 +390,27 @@ Die WAV-Pulsanalyse erzeugt Hypothesen aus Energie- und Transientenanstiegen, lo
 
 Für ausgewählte Frequenzen verwendet die harmonische Evidenzprobe tatsächlich eine Goertzel-Rekurrenz:
 
-$$s_j=x_j+2\cos(\omega)s_{j-1}-s_{j-2},\qquad \omega=2\pi f/f_s.$$
+```math
+s_j=x_j+2\cos(\omega)s_{j-1}-s_{j-2},\qquad \omega=2\pi f/f_s.
+```
+
+Für ein Fenster von $N$ Mono-Samples und die letzten beiden Zustände liefert der Code die normierte Energie
+
+```math
+P(f)=\max\left(0,\frac{s_{N-1}^2+s_{N-2}^2-2\cos(\omega)s_{N-1}s_{N-2}}{N^2}\right).
+```
 
 Die Frequenzzuordnung der Probe verwendet $f(m)=440\cdot2^{(m-69)/12}$: gleichstufige Stimmung mit A4 = 440 Hz ist hier eine Modellannahme. Der Code normiert die berechnete Energie durch das Quadrat der Fensterlänge. Dies ist gezielte Frequenzanalyse, keine Behauptung, dass im Projekt eine allgemeine FFT-Pipeline implementiert sei. Ein hoher Wert kann auch von Obertönen oder überlagerten Klängen stammen. Basic Pitch ist zusätzlich ein fremder neuronaler Sensor; beide Beobachtungen erhalten keine automatische musikalische Schreibbefugnis.
 
 ### Horizontaler Umbruch und begrenzte gemeinsame Planung
 
 Der horizontale Reflow vergleicht endliche Systempartitionen unter seinen Kapazitätsbedingungen. Sein Vergleichsschlüssel betrachtet zuerst Systemzahl, Ein-Takt-Systeme, erzwungene Überkapazitäts-Einzelplätze und quadratische Restkapazität. Ein deterministischer Partitionsvergleich löst Gleichstände. [Horizontaler Reflow](../src/pipeline_shards/horizontal_layout_global_reflow.rs).
+
+Sei $L_j$ der aufsummierte Bedarf des Systems $j$ und $C$ seine Kapazität in den Einheiten des Layoutplaners. Für eine zulässige Partition mit $S$ Systemen, $E$ Ein-Takt-Systemen, $U$ erzwungenen Ein-Takt-Systemen über Kapazität und dem Vektor $n$ der Taktzahlen je System minimiert der horizontale Pfad
+
+```math
+\left(S,E,U,\sum_{j=1}^{S}\max(0,C-L_j)^2,\ n\right)_{\mathrm{lex}}.
+```
 
 Bleiben über zwei Systeme vier Kapazitätseinheiten frei, kostet die Verteilung 0 und 4 insgesamt $0^2+4^2=16$. Die Verteilung 2 und 2 kostet $2^2+2^2=8$ und gewinnt bei gleichen vorrangigen Kriterien. Für die 31 Takte der Bach-Fuge reproduzierte eine unabhängige Gegenrechnung mit Kapazität 429 und höchstens vier Takten je System alle zwölf Umbruchstellen. Das Optimum für diese Eingaben umfasst 13 Systeme, null Ein-Takt-Systeme und eine quadratische Restsumme von 154 635. Die sichtbaren Abstände im PDF erfordern eine eigene Messung.
 
@@ -275,7 +422,9 @@ Die geometrischen Readbacks untersuchen tatsächliche Hüllen und Abstände, sow
 
 Für additive Passagenkosten können Präfixsummen dieselbe Summe liefern:
 
-$$\sum_{i=a}^{b-1}c_i=P_b-P_a.$$
+```math
+\sum_{i=a}^{b-1}c_i=P_b-P_a.
+```
 
 Die Indizes entstehen aus der exakten halboffenen Zeitbedingung, nicht aus einer geratenen Notennähe. Die Umordnung muss Kosten, Kandidaten und Gleichstandsregeln erhalten.
 
@@ -285,12 +434,12 @@ Die Bogenprüfung verwendet einen anderen Index: Für jede Nummer beantworten er
 
 Im Automatikmodus schätzt EtuSchlopf die Zahl paralleler Projekte und Solver-Worker. Für $p$ Projekte und den ermittelten verfügbaren Speicher $M$ in MiB lautet die speicherbezogene Worker-Grenze pro Projekt:
 
-$$
+```math
 w_{\mathrm{Speicher}}(p)=
 \left\lfloor
 \frac{\max\!\left(\left\lfloor\max(M-512,0)/p\right\rfloor-1536,0\right)}{256}
 \right\rfloor.
-$$
+```
 
 Die Planung probiert die Projektzahl absteigend innerhalb der CPU-Grenze und begrenzt die Worker zusätzlich durch das CPU-Budget. Bei unbekanntem verfügbarem Speicher oder fehlender passender Aufteilung startet sie mit einem Projekt und einem Solver-Worker. Die drei Speichergrößen sind Schätzwerte für Reserve, Projektprozess und zusätzlichen Solver-Worker. Der Kandidatenumfang besitzt ein getrenntes Budget. [Speichermodell](../src/pipeline_shards/corpus_memory_capacity.rs) · [Korpusplanung](../src/pipeline_shards/rest_glyph_retention_batch_corpus_tail.rs).
 
@@ -298,9 +447,19 @@ Die Planung probiert die Projektzahl absteigend innerhalb der CPU-Grenze und beg
 
 Eine Aufbewahrungsprojektion $\pi$ ist nur dann ausreichend, wenn spätere Beobachtungen tatsächlich durch sie faktorisieren. Präziser als ein bloßer Größenvergleich ist die Bedingung
 
-$$\pi(D_1)=\pi(D_2)\Rightarrow O_L(D_1)=O_L(D_2)$$
+```math
+\pi(D_1)=\pi(D_2)\Rightarrow O_L(D_1)=O_L(D_2)
+```
 
 für die betroffenen erreichbaren Leser $L$ und ihre Beobachtung $O_L$, einschließlich der relevanten Fortsetzungen. Eine identische aktuelle Ausgabe allein genügt nicht für künftige Mutationen. Die ausführbare Aufbewahrungspolitik bleibt der konkrete Nachweis.
+
+Für die Quelltext-Prüfsummen verarbeitet FNV-1a die Bytes $b_i$ nacheinander. Die 64-Bit-Variante kombiniert den vorigen Zustand und das Byte mit bitweisem XOR und multipliziert anschließend mit der FNV-Primzahl
+
+```math
+h_{i+1}=((h_i\mathbin{\mathrm{XOR}}b_i)\cdot1099511628211)\bmod 2^{64}.
+```
+
+Die Take-Prüfung vergleicht die so deklarierten Dateiänderungen mit dem tatsächlichen Paket. Kryptografische Bindungen des Pakets und seiner Herkunft verwenden gesondert SHA-256. [Prüfung des Paketdiffs](../src/take_change_control.rs)
 
 Hashes sind davon getrennt: Sie binden Bytes unter ihren jeweiligen Kollisionsannahmen. FNV-1a ist kein kryptografischer Beweis; auch SHA-256 ist mathematisch nicht injektiv über beliebig lange Eingaben. Provenienz, tatsächlich mitgeführte Ereignisidentität und bytebezogene Integritätsprüfung erfüllen verschiedene Aufgaben.
 
@@ -310,7 +469,9 @@ Ein Ton belegt das halboffene Quellzeitintervall $[s,e)$. Der MIDI-Seed hält de
 
 Für das metrische Einsatzfenster $M$ einer geschriebenen Stimme sammelt EtuSchlopf deren klingende Intervalle $I_j$ systemübergreifend. Bereits sichtbare Belegung im Zielsystem sei $V$. Kandidaten für sichtbare Pausen sind die zusammenhängenden Teilintervalle von
 
-$$M \setminus \left(V \cup \bigcup_j I_j\right).$$
+```math
+M \setminus \left(V \cup \bigcup_j I_j\right).
+```
 
 Der zuständige Planer übernimmt nur Teilintervalle, deren Anfang und Ende sich exakt im metrischen Raster schreiben lassen. Gleichzeitige Töne zählen bei der Intervallvereinigung einmal. [Planer für sichtbare Pausen](../src/pipeline_shards/composer_beat_scoped_rest_completion_planning_core.rs) · [Vertrag der exakten Pausenprojektion](written_voice_entry_rest_exact_projection.md)
 
@@ -343,7 +504,7 @@ Die 493 offenen Zielpaare verteilen sich auf 244 Fälle mit Akkordträger oder f
 | Bach, Fuge c-Moll BWV 847 | r1749, Exitcode 0, 3.041 bestandene und vier ignorierte Tests. Der frühere Abgleich von r1745 erfasste 754 Notenansätze, geschriebene Notenwerte und Haltebögen. [Abnahme r1749](evidence/r1749/README.md). |
 | Chopin, Etüde op. 10 Nr. 3, p01 | r1792, Exitcode 0, 0 Warnungen, 100 % im Notenerhaltsmaß und ein gerendertes Notenbild. Die MIDI-WAV-Zeitzuordnung blieb wegen geringer gemeinsamer Anschlagsdeckung offen. [Abnahme r1792](evidence/r1792/README.md). |
 | Schubert, Deutscher Tanz D. 783 Nr. 15, p18 | r1872, Exitcode 0, 0 Blocker, 0 Warnungen und 100 % im Notenerhaltsmaß. 3.097 Tests bestanden, vier waren ignoriert. Der Windows-Renderer gab das zweiseitige Notenbild frei. [Abnahme r1872](evidence/r1872/README.md). |
-| Mozart, KV 331, Andante grazioso, p01 | r1933, 6/8-Takt, direkter PDF-Export aus der Master-MusicXML. [Notenbild](examples/mozart-k331-p01-r1933.pdf). |
+| Mozart, KV 331, Andante grazioso, p01 | r1964, Windows-Einzellauf mit MIDI und WAV, 6/8 und zwei PDF-Seiten. 460 der 474 regulären Noten haben die Dauer der Korpusreferenz. [Notenbild](examples/mozart-k331-p01-r1964.pdf). |
 
 Die Windows-Vollkorpusläufe [r1938](evidence/r1938/README.md) und [r1961](evidence/r1961/README.md) umfassen jeweils 14 Stücke. Die vorbereitete [Ballade op. 38](examples/chopin-op38-p01.md) gehört zu keinem der beiden Prüfläufe. Das Notenerhaltsmaß folgt der im Lauf definierten Grundgesamtheit. Es bewertet weder den Abgleich aller Notenwerte mit der Druckvorlage noch das Notenbild als Ganzes.
 
@@ -365,15 +526,14 @@ Historische Zahlen aus r1556 oder r1559 werden nicht als heutige Kennzahlen fort
 
 Auch die frühere Weglass-Untergrenze gilt nur unter ihrem vereinfachten Modell aus monotoner Handaufteilung, gewählter Spannweite und begrenzter Fingerzahl. Sie ist keine allgemeine Untergrenze für notwendige Notenlöschungen beim menschlichen Klavierspiel.
 
-## Was noch offen ist
+## Nächste mathematische Vorhaben
 
-- Systemübergreifende Registerabhängigkeiten vollständig binden und vergleichen, bevor eine neue gekoppelte Optimierung behauptet wird.
-- Bewertungspräferenzen und Zulässigkeit getrennt begründen; symbolische Kosten nicht als empirisch kalibrierte Lesezeit ausgeben.
-- Menschliche Fähigkeiten und Tempo belastbar kalibrieren, bevor aus Anforderungsprofilen ein personenbezogenes Spielbarkeitsurteil folgt.
-- Seitenverdichtung erst nach dem zurückgestellten Mindestabstands- und Lesbarkeitsvergleich angehen.
-- Unterschiedliche Platzierungsfamilien und ihre Erhaltungs-/Belegungsbedingungen einzeln verfolgen; ein Audit-Zähler ist keine gemeinsame Schreibregel.
-- Eine künftige globale Bogen-Zuordnung von der heutigen indizierten Existenzprüfung unterscheiden.
-- Die Bestandsaufnahme bei neuen Ownern, Suchkernen oder Messverfahren aktualisieren. Neue Behauptungen erhalten einen Quellbezug und eine ausdrücklich begrenzte Beweisaussage.
+| Vorhaben | Mathematische Frage | Woran sich ein Fortschritt messen lässt |
+| --- | --- | --- |
+| Notendauern freier Einspielungen | Welche Stimmfortsetzungen bleiben bei plausibler Änderung von Artikulation und örtlichem Tempo zulässig? | Für unabhängige, synthetische Stimmen kurze gehaltene, kurz gespielte lange und überlappende Noten unterscheiden. Auf zurückgehaltenen Einspielungen Dauern, neu gewonnene und verlorene Treffer getrennt ausweisen. |
+| Stimme und Hand über eine Passage | Welche Kanten eines zeitlichen Belegungsgraphen sind in jeder zulässigen Stimmenführung enthalten? | Für eine erzwungene Beziehung einen vollständigen Plan und den Ausschluss der Gegenbelegung zeigen. Bei Mehrdeutigkeit zwei zulässige Gegenpläne nachweisen. |
+| Lesbare Seitenfüllung | Welche geordneten Seiten- und Systempartitionen halten gemessene Mindestabstände für Noten, Text und Bögen ein? | An tatsächlich gerenderten Seiten engste sichtbare Abstände und ungenutzte Höhe pro Seite ausweisen. Erst unter den zulässigen Plänen die Seitenfüllung vergleichen. |
+| Rechenzeit im gemeinsamen Registerplan | Welche Zustände lassen sich zusammenfassen, wenn sie für alle noch erreichbaren Anschlussentscheidungen dieselben Kosten und Bedingungen haben? | Gegen die vollständige Suche denselben Kurs und dieselbe Gleichstandsentscheidung nachweisen. Laufzeit und aufgesuchte Zustände mit identischen Eingaben vergleichen. |
 
 ## Herkunft und Eigenanteil
 
@@ -385,7 +545,7 @@ Die Literaturbezüge stehen im folgenden eigenen Quellenabschnitt. Die Implement
 
 ## Quellen
 
-Die Quellen der früheren Fassung sind hier wieder einzeln aufgeführt. Hinzu kommt der Literaturbezug zur nun ausdrücklich beschriebenen Goertzel-Rekurrenz. Die Zuordnung unterscheidet mathematische Grundlagen, konzeptionelle Verwandtschaft, tatsächlich verwendete Fremdmodelle und empirischen Kontext. Keiner dieser Bezüge validiert pauschal die gesamte Pipeline.
+Die Grundlagenwerke erklären die Verfahren. Die verlinkten Implementierungen und Prüfläufe belegen den jeweiligen Einsatz in EtuSchlopf.
 
 ### Mathematische und algorithmische Grundlagen
 

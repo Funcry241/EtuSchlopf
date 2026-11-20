@@ -1,6 +1,6 @@
 # Technische Referenz und Quellenarbeit
 
-Der öffentliche Quellstand ist **r1961 / 0.10.1839**. Die [Windows-Abnahme r1961](evidence/r1961/README.md) umfasst 14 Stücke. Die [Windows-Abnahme r1792](evidence/r1792/README.md) dokumentiert den Chopin-Einzellauf. Der historische [Korpuslauf r1684](evidence/r1684/README.md) umfasst zehn Etüden.
+Der öffentliche Quellstand ist **r1964 / 0.10.1839**. Die native Windows-Prüfung von r1964 umfasst Mozarts KV 331. Der frühere Vollkorpus r1961 umfasst 14 Stücke. [Mozart-Einzellauf r1964](evidence/r1964/README.md) · [Windows-Vollkorpus r1961](evidence/r1961/README.md)
 
 Seit r1659 enthält der Quellstand weitere Zuständigkeitsbereinigungen, indizierte Endpunktabfragen und Verbesserungen an Fokus, Verbindungsstatus und PDF-Sitzungsbindung der Watch-Webansicht. r1683 führt ursprüngliche Pausenanker als eigene Evidenz in die C3-Entscheidung; nicht geschlossene systemübergreifende Gruppenabhängigkeiten bleiben offen. Die [Mathematik-Seite](MATHEMATIK-VOLLKORPUS.md) ordnet 34 Verfahrensfamilien ihren Quellen, Wirkungen und Beweisgrenzen zu. Die native Abnahme bestätigt den geprüften Korpus; sie belegt weder allgemeine Fehlerfreiheit noch die Spielbarkeit beliebiger Eingaben.
 
@@ -20,10 +20,10 @@ Programme und bleiben Gegenstand von Gegenbeispielen und Prüfung.
 
 **Zum Verständnis des Projekts:**
 
-- [Aktueller fachlicher Überblick und Mathematik](MATHEMATIK.md)
+- [Fachlicher Überblick und Mathematik](MATHEMATIK-VOLLKORPUS.md)
 - [Historischer Architektur-Wegweiser auf Basis r1526](IMPLEMENTED_FOUNDATIONS.md)
 - [Forschungsbezüge und ihre genaue Rolle](../docs/RESEARCH_CONTEXT.md)
-- [Aktuelle native Abnahme r1684](evidence/r1684/README.md)
+- [Historischer Windows-Korpus r1684](evidence/r1684/README.md)
 - [Native Abnahme r1602](evidence/r1602/README.md)
 - [Windows-Testversion und native Abnahme r1577](evidence/r1577/README.md)
 - [Historische Abnahme r1533](evidence/r1533/README.md)
