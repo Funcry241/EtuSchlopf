@@ -87,7 +87,7 @@ den Akkord der linken Hand. Die Ausschnitte führen zum jeweiligen vollständige
 
 ### Chopin · Ballade Nr. 2 F-Dur op. 38, Andantino, Aufführung p01
 
-Die nächste Referenz umfasst Takt 1 bis 45. Original-MIDI und Original-WAV derselben Aufführung stehen unter CC BY 4.0. Als Vergleich dient die deutsche Erstausgabe von 1840. In der Galerie erscheinen die 14 abgenommenen Stücke aus r1938. [Dateien, Namensnennung, Prüfsummen und Druckvorlage](chopin-op38-p01.md).
+Der zurückgestellte Stresstest umfasst das Andantino bis zum Schlussakkord. Die Ballade liegt außerhalb der Vollkorpus-Abnahme. Original-MIDI und Original-WAV derselben Aufführung stehen unter CC BY 4.0. Als Vergleich dient die deutsche Erstausgabe von 1840. [Dateien, Namensnennung, Prüfsummen und Druckvorlage](chopin-op38-p01.md).
 
 ## Weitergabe
 

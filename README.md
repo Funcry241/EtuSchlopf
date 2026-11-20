@@ -28,7 +28,7 @@ Der Windows-Download enthält r1933. Die Notengalerie und der Quellstand auf Git
 
 **r1938 / 0.10.1839** hat den Windows-Vollkorpus mit 14 vollständigen Ausgaben bestanden. Der Stand berechnet sichtbare Einsatzpausen aus der Belegung derselben geschriebenen Stimme und prüft gehaltene Oberstimmen anhand der Anschlag- und Loslasszeiten aus der MIDI. [Windows-Abnahme und Prüfsummen](docs/evidence/r1938/README.md) · [Mathematik und Notationsentscheidungen](docs/MATHEMATIK.md)
 
-EtuSchlopf ist experimentell. Prüfe das Notenbild am eigenen Stück. Zum abgenommenen Korpus gehört das Andante-grazioso-Thema aus Mozarts KV 331 im 6/8-Takt. Als nächste Referenz ist Chopins Ballade op. 38 mit Original-MIDI, Original-WAV und historischer Druckvorlage dokumentiert. Ihr Import steht noch aus. [Chopin-Referenz und Lizenz](docs/examples/chopin-op38-p01.md)
+EtuSchlopf ist experimentell. Prüfe das Notenbild am eigenen Stück. Zum abgenommenen Korpus gehört das Andante-grazioso-Thema aus Mozarts KV 331 im 6/8-Takt. Chopins Ballade op. 38 ist als Stresstest zurückgestellt und liegt außerhalb der Vollkorpus-Abnahme. [Stresstest und Lizenz](docs/examples/chopin-op38-p01.md)
 
 ## Dokumentation und Beiträge
 

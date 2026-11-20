@@ -1,6 +1,8 @@
 # Chopin · Ballade Nr. 2 F-Dur op. 38
 
-**Andantino, Takt 1 bis 45, Einspielung p01.** Diese Referenz ist vorbereitet. Der Versuch mit r1938 endete vor dem Notensatz, weil die Zuordnung der MIDI-Anschläge zur WAV-Aufnahme uneindeutig blieb. [Datensatzbeschreibung](https://datasets.mdw.ac.at/datasets/dataset/98ea25fa-2468-43ff-929b-3c926e163583?view=full).
+**Zurückgestellter Stresstest.** Das Andantino bis zum Schlussakkord bleibt als Vergleich dokumentiert. Der Windows-Versuch mit r1951 bestätigte den 6/8-Takt und den Auftakt von vier Achteln. Beim langsam arpeggierten Schlussakkord blieb der gemeinsame notierte Einsatz mehrdeutig. Der Vollkorpuslauf brach ab und der Take wurde zurückgerollt.
+
+Die Ballade liegt außerhalb der Vollkorpus-Abnahme. Für einen separaten Versuch können MIDI und WAV gemeinsam in einem eigenen Arbeitsordner liegen. [Datensatzbeschreibung](https://datasets.mdw.ac.at/datasets/dataset/98ea25fa-2468-43ff-929b-3c926e163583?view=full).
 
 ## Aufnahme und Performance-MIDI
 
