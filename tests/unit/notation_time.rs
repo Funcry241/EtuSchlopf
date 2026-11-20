@@ -524,3 +524,57 @@ fn companion_binds_compound_meter_to_original_midi_and_exact_attacks() {
     assert_eq!((plan.events[0].pos, plan.events[0].len), (0, 72));
     assert_eq!(source.opening_key_signature.unwrap().fifths, 3);
 }
+
+#[test]
+fn free_performance_projects_a_supported_pickup_into_the_metric_timeline() {
+    // The melody begins alone. Chords at the beginning and end of
+    // each full bar provide evidence for the bar phase.
+    let pickup = 4;
+    let cycle = 12;
+    let mut notes = vec![(0, 3 * 96, 76, 77), (0, 5 * 96, 76, 77)];
+    for bar in 0..12 {
+        let bass = [43, 45, 48, 50, 47, 41][bar % 6];
+        let start = 3 + pickup + bar as u64 * cycle;
+        for (offset, pitches) in [
+            (0, vec![bass, bass + 12, bass + 19]),
+            (2, vec![bass + 17]),
+            (5, vec![bass + 22]),
+            (6, vec![bass + 15]),
+            (8, vec![bass + 20]),
+            (11, vec![bass, bass + 12, bass + 16]),
+        ] {
+            notes.extend(
+                pitches.into_iter().map(|pitch| (0, (start + offset) * 96, 76, pitch)),
+            );
+        }
+    }
+
+    let mut source = decoded(&notes, 384, &[]);
+    source.tempo_changes = vec![(0, 760_000)];
+    let sample_rate = 12_000;
+    let frames_per_sixteenth = 2_280;
+    let mut samples = vec![0.0_f32; (pickup + cycle * 13) as usize * frames_per_sixteenth];
+    for &(_, tick, _, pitch) in &notes {
+        let phase = std::f64::consts::TAU * 440.0 * 2.0_f64.powf((f64::from(pitch) - 69.0) / 12.0);
+        let start = (tick / 96) as usize * frames_per_sixteenth;
+        for (frame, sample) in samples[start..start + sample_rate as usize / 8].iter_mut().enumerate() {
+            let t = frame as f64 / f64::from(sample_rate);
+            let envelope = (t / 0.004).min(1.0) * (-t / 0.065).exp();
+            *sample += (0.16 * envelope * ((phase * t).sin() + 0.5 * (2.0 * phase * t).sin())) as f32;
+        }
+    }
+
+    let path = std::path::Path::new("synthetic-compound-pickup.mid");
+    let originals = source.notes.clone();
+    let prepared = PreparedPerformanceTiming::prepare_performance(path, source, &samples, sample_rate).unwrap();
+    let (source, plan) = prepared.source_and_plan();
+    let opening = plan.measure(0).unwrap();
+    let full = plan.measure(1).unwrap();
+    assert_eq!((opening.beats, opening.beat_type), (6, 8));
+    assert_eq!((opening.start, opening.end), (0, 96));
+    assert_eq!((full.start, full.end), (96, 384));
+    assert_eq!(plan.event(2).unwrap().pos, full.start);
+    assert_eq!(source.notes, originals);
+    assert_eq!(plan.events.len(), originals.len());
+    assert!(originals.iter().all(|note| plan.source_event(note.source_ordinal).unwrap() == *note));
+}

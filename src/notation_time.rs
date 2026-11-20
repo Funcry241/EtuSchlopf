@@ -225,11 +225,12 @@ impl PreparedPerformanceTiming {
         if decoded.opening_key_signature.is_none() {
             decoded.opening_key_signature = inferred.key;
         }
+        validate_performance_meter(inferred.beats, inferred.beat_type, inferred.pickup)?;
         let originals = ordered_source_events(&decoded)?;
         let extent = inferred.events.iter().map(|note| note.pos + note.len).max().unwrap_or(0);
         let plan = NotationTimePlan {
             source_domain: decoded.time_domain,
-            metric: MetricTimeline::from_written_meter(inferred.beats, inferred.beat_type, 0, extent)?,
+            metric: MetricTimeline::from_written_meter(inferred.beats, inferred.beat_type, inferred.pickup, extent)?,
             events: inferred.events,
             source_events: originals,
             timing_authority: TimingAuthority::InferredPerformance,

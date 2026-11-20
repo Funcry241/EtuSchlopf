@@ -11,6 +11,10 @@ pub(super) struct OriginalCourseBindings {
 }
 
 impl OriginalCourseBindings {
+    pub(super) fn input_occurrences(&self) -> impl Iterator<Item = &FinalChordCanonicalInputBindingRow> {
+        self.rows.iter().map(|(binding, _, _)| binding)
+    }
+
     pub(super) fn respelling_sources(&self) -> Vec<(std::ops::Range<usize>, usize)> {
         self.rows.iter().map(|(binding, _, _)|
             (binding.source_note_start..binding.source_note_end, binding.source_event_id)).collect()

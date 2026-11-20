@@ -2,6 +2,17 @@
 mod cross_bar_source_sustain;
 #[path = "ordered_received_beam_readback.rs"]
 mod ordered_received_beam_readback;
+#[path = "primary_beam_pair_readback.rs"]
+mod primary_beam_pair_readback;
+#[path = "greedy_primary_beam_readback.rs"]
+mod greedy_primary_beam_readback;
+#[path = "primary_beam_tie_trials.rs"]
+mod primary_beam_tie_trials;
+#[path = "exact_voice_passages.rs"]
+mod exact_voice_passages;
+#[path = "original_beam_member_channel.rs"]
+mod original_beam_member_channel;
+use primary_beam_tie_trials::PrimaryBeamTieTrials;
 #[path = "written_assignment_graph.rs"]
 mod written_assignment_graph;
 #[path = "written_assignment_graph_probe.rs"]
@@ -1426,6 +1437,7 @@ struct FinalChordWrittenProjectionEvidence {
 
 #[derive(Debug, Clone)]
 pub(crate) struct CanonicalFinalChordStructuralPlan {
+    primary_beam_tie_trials: std::sync::Arc<PrimaryBeamTieTrials>,
     rest_bridge_main_state: Option<(usize, String)>,
     rest_bridge_extension_course: Option<RestBridgeExtensionCourse>,
     rest_bridge_withdrawal: Option<BoundRestBridgeWithdrawal>,
@@ -1451,6 +1463,7 @@ pub(crate) struct CanonicalFinalChordStructuralPlan {
 impl Default for CanonicalFinalChordStructuralPlan {
     fn default() -> Self {
         Self {
+            primary_beam_tie_trials: Default::default(),
             bridge_voice_guard: None,
             cursor_exchange: None,
             rest_bridge_main_state: None,
@@ -1727,6 +1740,9 @@ impl FrozenSerializationVoiceChannelPlan {
         let _timing = crate::audit_only::voice_allocation_timing::Timer::span("OriginalComponents");
         let projection_reuse = cross_role_channel_sharing::ProjectionReuse::new(canonical, original_beams)
             .with_source_voice_gaps(production);
+        let mut role_readback = original_beam_member_channel::RoleReadback::new(
+            canonical, original_beams, production,
+        );
         let mut accepted_sources = std::collections::BTreeSet::new();
         let mut accepted: Option<(Self, FrozenSerializedVoicePlan)> = None;
         for group in &canonical.original_beam_voice_groups {
@@ -1751,6 +1767,7 @@ impl FrozenSerializationVoiceChannelPlan {
             })();
             match attempt {
                 Ok(pair) => {
+                    role_readback.observe(&pair.1, "original_component");
                     accepted_sources = proposed_sources;
                     accepted = Some(pair);
                     let _ = writeln!(out, "OriginalNotationBeamAllocation: admitted; scope=sealed_source_component; authority=original_owner_and_pre_lane_relation");
@@ -1758,9 +1775,11 @@ impl FrozenSerializationVoiceChannelPlan {
                 Err(error) => {
                     let (current, current_voices) = accepted.as_ref()
                         .map_or((self, production), |(channels, voices)| (channels, voices));
+                    let _ = writeln!(out, "OriginalBeamRoleComponent: stage=original_component; sources={sources:?}; result=refused; reason={error}; authority=none");
                     if let Some(pair) = current.checked_split_original_component(
-                        canonical, attacks, original_beams, current_voices, &sources, &projection_reuse,
+                        canonical, attacks, original_beams, current_voices, &sources, (&projection_reuse, out),
                     ) {
+                        role_readback.observe(&pair.1, "entry_rest_member_channel");
                         accepted_sources = proposed_sources;
                         accepted = Some(pair);
                         let _ = writeln!(out, "OriginalNotationBeamAllocation: admitted via a compatible member channel");
@@ -1863,6 +1882,7 @@ impl FrozenSerializationVoiceChannelPlan {
                 || candidates.get(1).is_some_and(|(rank, _)| *rank == candidates[0].0)
             { continue; }
             let (_, pair) = candidates.remove(0);
+            role_readback.observe(&pair.1, "concurrent_components");
             accepted_sources.extend(sources);
             accepted = Some(pair);
             let _ = writeln!(out, "OriginalNotationBeamAllocation: admitted concurrent original components together");
@@ -1887,6 +1907,7 @@ impl FrozenSerializationVoiceChannelPlan {
                     let _ = writeln!(out, "OriginalNotationWrittenRefinement: admitted; sources={sources:?}; moved_sources={}; channels_before={}; channels_after={}; authority=original_notation_and_complete_written_preservation",
                         sources.len(), channels.channel_count(), next_channels.channel_count());
                     channels = next_channels;
+                    role_readback.observe(&next_voices, "written_channel_reuse");
                     voices = next_voices;
                 }
             }
@@ -1925,10 +1946,12 @@ impl FrozenSerializationVoiceChannelPlan {
             if let Some(pair) = compatible.next()
                 && compatible.next().is_none()
             {
+                role_readback.observe(&pair.1, "source_gap_component");
                 accepted = Some(pair);
                 let _ = writeln!(out, "OriginalNotationBeamAllocation: restored a qualified source gap with the entire original component");
             }
         }
+        role_readback.append(out);
         projection_reuse.append_diagnostics(out);
         crate::audit_only::voice_allocation_timing::summary();
         accepted
@@ -1943,10 +1966,18 @@ impl FrozenSerializationVoiceChannelPlan {
         original_beams: &ActualSourceBeamBindingObservation,
         before: &FrozenSerializedVoicePlan,
         sources: &std::collections::BTreeSet<usize>,
-        reuse: &cross_role_channel_sharing::ProjectionReuse<'_>,
+        (reuse, out): (&cross_role_channel_sharing::ProjectionReuse<'_>, &mut String),
     ) -> Option<(Self, FrozenSerializedVoicePlan)> {
-        if !reuse.component_overlaps_replaced_entry_rest(before, sources).ok()? {
-            return None;
+        match reuse.component_overlaps_replaced_entry_rest(before, sources) {
+            Ok(true) => {},
+            Ok(false) => {
+                let _ = writeln!(out, "OriginalBeamRoleComponent: stage=entry_rest_member_channel; sources={sources:?}; result=skipped; reason=no_replaced_entry_rest; authority=none");
+                return None;
+            }
+            Err(error) => {
+                let _ = writeln!(out, "OriginalBeamRoleComponent: stage=entry_rest_member_channel; sources={sources:?}; result=unavailable; reason={error}; authority=none");
+                return None;
+            }
         }
         let trace = canonical.source_locators.iter().any(|row|
             sources.contains(&row.source_event_id)
@@ -1955,6 +1986,7 @@ impl FrozenSerializationVoiceChannelPlan {
             .collect::<Option<std::collections::BTreeSet<_>>>()?;
         if targets.len() < 2 { return None; }
         let mut result = None;
+        let mut admitted = 0;
         for target in targets {
             let allocation = sources.iter().map(|&source| (source, target)).collect();
             let attempt = self.checked_original_component_channel_assignment(
@@ -1964,12 +1996,19 @@ impl FrozenSerializationVoiceChannelPlan {
                 eprintln!("OriginalBeamAndEntryRest: sources={sources:?}; target={target}; outcome={:?}",
                     attempt.as_ref().map(|_| ()).map_err(|error| error.to_string()));
             }
-            if let Ok(pair) = attempt {
-                if result.is_some() { return None; }
-                result = Some(pair);
+            match attempt {
+                Ok(pair) => {
+                    admitted += 1;
+                    result = Some(pair);
+                    let _ = writeln!(out, "OriginalBeamRoleComponent: stage=entry_rest_member_channel; sources={sources:?}; channel={target}; result=admitted; authority=none");
+                }
+                Err(error) => {
+                    let _ = writeln!(out, "OriginalBeamRoleComponent: stage=entry_rest_member_channel; sources={sources:?}; channel={target}; result=refused; reason={error}; authority=none");
+                }
             }
         }
-        result
+        let _ = writeln!(out, "OriginalBeamRoleComponent: stage=entry_rest_member_channel; sources={sources:?}; admitted_targets={admitted}; authority=none");
+        result.filter(|_| admitted == 1)
     }
 
     fn checked_original_component_channel_assignment(
@@ -1981,21 +2020,49 @@ impl FrozenSerializationVoiceChannelPlan {
         allocation: std::collections::BTreeMap<usize, usize>,
         reuse: &cross_role_channel_sharing::ProjectionReuse<'_>,
     ) -> io::Result<(Self, FrozenSerializedVoicePlan)> {
+        self.checked_original_component_allocation(
+            canonical, attacks, original_beams, before, (allocation, Default::default()), reuse,
+        )
+    }
+
+    fn checked_original_component_allocation(
+        &self,
+        canonical: &CanonicalFinalChordStructuralPlan,
+        attacks: &[FrozenVoiceAttackEvidenceRow],
+        original_beams: &ActualSourceBeamBindingObservation,
+        before: &FrozenSerializedVoicePlan,
+        (allocation, countervoices): (
+            std::collections::BTreeMap<usize, usize>,
+            std::collections::BTreeSet<usize>,
+        ),
+        reuse: &cross_role_channel_sharing::ProjectionReuse<'_>,
+    ) -> io::Result<(Self, FrozenSerializedVoicePlan)> {
         let written = canonical.written_projection.as_ref().ok_or_else(|| {
             io::Error::new(io::ErrorKind::InvalidData, "original_component_missing_written_projection")
         })?;
         let target = |source: usize| allocation.get(&source).or_else(|| self.source_to_channel.get(&source));
         let moves = |source: usize| target(source) != self.source_to_channel.get(&source);
         let collision = |left: usize, right: usize| left != right && target(left) == target(right);
-        if written.occurrences.iter().filter(|row| moves(row.source_event_id)).any(|left|
-            written.occurrences.iter().any(|right| collision(left.source_event_id, right.source_event_id)
-                && left.written_interval().overlaps(right.written_interval())))
-            || attacks.iter().filter(|row| moves(row.source_event_id)).any(|left|
-                attacks.iter().any(|right| collision(left.source_event_id, right.source_event_id)
-                    && left.absolute_start < right.absolute_end
-                    && right.absolute_start < left.absolute_end))
-        {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "original_component_channel_collision"));
+        let written_collision = written.occurrences.iter().filter(|row| moves(row.source_event_id)).find_map(|left| {
+            written.occurrences.iter().find(|right| collision(left.source_event_id, right.source_event_id)
+                && left.written_interval().overlaps(right.written_interval())).map(|right| (left, right))
+        });
+        if let Some((left, right)) = written_collision {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, format!(
+                "original_component_channel_collision written sources_attacks_fragments={:?} intervals={:?}",
+                [(left.source_event_id, left.attack_id, left.fragment_id), (right.source_event_id, right.attack_id, right.fragment_id)],
+                [(left.onset, left.end), (right.onset, right.end)])));
+        }
+        let sounding_collision = attacks.iter().filter(|row| moves(row.source_event_id)).find_map(|left| {
+            attacks.iter().find(|right| collision(left.source_event_id, right.source_event_id)
+                && left.absolute_start < right.absolute_end
+                && right.absolute_start < left.absolute_end).map(|right| (left, right))
+        });
+        if let Some((left, right)) = sounding_collision {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, format!(
+                "original_component_channel_collision sounding sources_attacks={:?} intervals={:?}",
+                [(left.source_event_id, left.attack_id), (right.source_event_id, right.attack_id)],
+                [(left.absolute_start, left.absolute_end), (right.absolute_start, right.absolute_end)])));
         }
         let sources = allocation.keys().copied().collect::<std::collections::BTreeSet<_>>();
         let mut proposed = self.clone();
@@ -2013,15 +2080,11 @@ impl FrozenSerializationVoiceChannelPlan {
         proposed.consumer_allocation = ChannelConsumerAllocation::AdmittedAfterOriginalWrittenReuse;
         let voices = proposed.bind_original_component_labels(canonical, before, &sources)?;
         proposed.require_consumer_admission(canonical, &voices)?;
-        if reuse.component_overlaps_replaced_entry_rest(before, &sources)? {
-            cross_role_channel_sharing::check_original_component_and_rest_projection(
-                canonical, before, &voices, original_beams, &sources, reuse,
-            )?;
-        } else {
-            cross_role_channel_sharing::check_original_notation_component_projection(
-                canonical, before, &voices, original_beams, &sources, reuse,
-            )?;
-        }
+        let restore_entry_rest = reuse.component_overlaps_replaced_entry_rest(before, &sources)?;
+        cross_role_channel_sharing::verify_original_component_projection(
+            canonical, before, &voices, original_beams, &sources, reuse,
+            (restore_entry_rest, &countervoices),
+        )?;
         Ok((proposed, voices))
     }
 
@@ -4584,6 +4647,7 @@ pub(crate) fn plan_canonical_final_chord_structure_once(
     let semantic_signature = final_chord_semantic_equivalence_signature(&context)?;
     let semantic_fingerprint_fnv64 = fingerprint(&semantic_signature);
     let mut plan = CanonicalFinalChordStructuralPlan {
+        primary_beam_tie_trials: Default::default(),
         rest_bridge_main_state: None,
         rest_bridge_extension_course: None,
         rest_bridge_withdrawal: None,
@@ -5093,7 +5157,7 @@ pub(crate) fn build_frozen_serialization_voice_channels_for_canonical(
     canonical: &CanonicalFinalChordStructuralPlan,
     attacks: &[FrozenVoiceAttackEvidenceRow],
 ) -> io::Result<FrozenSerializationVoiceChannelPlan> {
-    build_frozen_serialization_voice_channels_with_original_beams(canonical, attacks, None, &[])
+    build_frozen_serialization_voice_channels_with_original_beams(canonical, attacks, None, &[], None, None)
 }
 
 pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
@@ -5101,9 +5165,12 @@ pub(crate) fn build_frozen_serialization_voice_channels_with_original_beams(
     attacks: &[FrozenVoiceAttackEvidenceRow],
     original_beams: Option<&ActualSourceBeamBindingObservation>,
     legacy_preferences: &[LegacyVoiceLabelPreferenceRow],
+    first_allocation_report: Option<&mut String>,
+    ties: Option<&mut Vec<(usize, usize)>>,
 ) -> io::Result<FrozenSerializationVoiceChannelPlan> {
-    build_frozen_serialization_voice_channels(
+    build_frozen_serialization_voice_channels_inner(
         canonical, attacks, original_beams, legacy_preferences, true,
+        &std::collections::BTreeSet::new(), (None, first_allocation_report.map_or(AllocationObservation::None, |out| AllocationObservation::Report(out, ties))),
     )
 }
 
@@ -5115,7 +5182,7 @@ fn build_frozen_serialization_voice_channels(
     use_sounding_conflicts: bool,
 ) -> io::Result<FrozenSerializationVoiceChannelPlan> {
     build_frozen_serialization_voice_channels_inner(canonical, attacks, original_beams,
-        legacy_preferences, use_sounding_conflicts, &std::collections::BTreeSet::new(), None)
+        legacy_preferences, use_sounding_conflicts, &std::collections::BTreeSet::new(), (None, AllocationObservation::None))
 }
 
 fn build_frozen_serialization_voice_channels_with_notation_components<'owner>(
@@ -5127,7 +5194,13 @@ fn build_frozen_serialization_voice_channels_with_notation_components<'owner>(
     projection_reuse: Option<&cross_role_channel_sharing::ProjectionReuse<'owner>>,
 ) -> io::Result<FrozenSerializationVoiceChannelPlan> {
     build_frozen_serialization_voice_channels_inner(canonical, attacks, original_beams,
-        legacy_preferences, true, notation_components, projection_reuse)
+        legacy_preferences, true, notation_components, (projection_reuse, AllocationObservation::None))
+}
+
+enum AllocationObservation<'a> {
+    None,
+    Report(&'a mut String, Option<&'a mut Vec<(usize, usize)>>),
+    JointTies(&'a mut String),
 }
 
 fn build_frozen_serialization_voice_channels_inner<'owner>(
@@ -5137,7 +5210,10 @@ fn build_frozen_serialization_voice_channels_inner<'owner>(
     legacy_preferences: &[LegacyVoiceLabelPreferenceRow],
     use_sounding_conflicts: bool,
     notation_components: &std::collections::BTreeSet<usize>,
-    projection_reuse: Option<&cross_role_channel_sharing::ProjectionReuse<'owner>>,
+    (projection_reuse, observation): (
+        Option<&cross_role_channel_sharing::ProjectionReuse<'owner>>,
+        AllocationObservation<'_>,
+    ),
 ) -> io::Result<FrozenSerializationVoiceChannelPlan> {
     let _timing = crate::audit_only::voice_allocation_timing::Timer::span("Allocation");
     let preparation_timing = crate::audit_only::voice_allocation_timing::Timer::probe("InputAndGraph");
@@ -5572,6 +5648,28 @@ fn build_frozen_serialization_voice_channels_inner<'owner>(
         &no_sounding_conflicts
     };
 
+    let (mut primary_beam_readback, mut joint_report) = match observation {
+        AllocationObservation::None => (None, None),
+        AllocationObservation::Report(out, ties) => (
+            Some(greedy_primary_beam_readback::Readback::new(
+                (out, ties), original_beams, canonical, &class_by_source, &class_order,
+            )),
+            None,
+        ),
+        AllocationObservation::JointTies(out) => (None, Some(out)),
+    };
+    let partner_classes = joint_report.as_ref().map(|_| {
+        primary_beam_tie_trials::partner_classes(canonical, original_beams, &class_by_source)
+    }).transpose()?;
+    let joint_trial = joint_report.is_some();
+    let beam_conflicts = primary_beam_readback.as_ref().map(|_| {
+        greedy_primary_beam_readback::Conflicts::new(
+            (&allocation_sounding.pairs, &written_different.pairs, &channel_incompatible),
+            &attack_by_source, &members_by_class, &class_role,
+            written, &class_by_source,
+        )
+    });
+
     drop(preparation_timing);
     let greedy_timing = crate::audit_only::voice_allocation_timing::Timer::probe("Greedy");
     let mut channel_by_class = std::collections::BTreeMap::<usize, usize>::new();
@@ -5615,6 +5713,15 @@ fn build_frozen_serialization_voice_channels_inner<'owner>(
             channel_role.insert(channel, role);
             channel
         });
+        let channel = match (&partner_classes, &mut joint_report) {
+            (Some(partners), Some(out)) => primary_beam_tie_trials::choose_joint_channel(
+                class, channel, &reusable, &channel_by_class, partners, out,
+            ),
+            _ => channel,
+        };
+        if let (Some(readback), Some(conflicts)) = (&mut primary_beam_readback, &beam_conflicts) {
+            readback.observe_assignment(class, channel, &channel_by_class, &reusable, conflicts);
+        }
         channel_by_class.insert(class, channel);
     }
 
@@ -5623,6 +5730,9 @@ fn build_frozen_serialization_voice_channels_inner<'owner>(
     // does the search continue, under exactly the same edges and roles.
     drop(greedy_timing);
     let consumer_model = channel_consumer_model(written, &class_by_source);
+    if joint_trial && consumer_model.is_none() {
+        return Err(io::Error::other("consumer input is unavailable for the joint candidate"));
+    }
     let (mut channel_by_class, mut channel_role, mut consumer_allocation) =
         match consumer_model.as_ref() {
             None => (
@@ -5642,6 +5752,9 @@ fn build_frozen_serialization_voice_channels_inner<'owner>(
                 };
                 match input.check_partition(&channel_by_class, &channel_role, None) {
                     Ok(()) => (channel_by_class, channel_role, ChannelConsumerAllocation::AdmittedFirstCandidate),
+                    Err(ChannelPartitionRefusal::Capacity(staves)) if joint_trial => {
+                        return Err(io::Error::other(format!("first candidate exceeds consumer capacity on {staves:?}")));
+                    }
                     Err(ChannelPartitionRefusal::Capacity(failing_staves)) => {
                         let candidate = channel_search_after_consumer_overflow(
                             &input, &failing_staves, channel_by_class.clone(), channel_role.clone(),
@@ -5674,7 +5787,8 @@ fn build_frozen_serialization_voice_channels_inner<'owner>(
             },
         };
     let mut label_continuation = None;
-    if let (Some(observation), Some(model)) = (original_beams, consumer_model.as_ref())
+    if !joint_trial
+        && let (Some(observation), Some(model)) = (original_beams, consumer_model.as_ref())
         && channel_consumer_overflow(model, &channel_by_class, &channel_role).is_err()
     {
         let input = ChannelSearchInput { model, class_order: &class_order_for_search,
@@ -5697,6 +5811,9 @@ fn build_frozen_serialization_voice_channels_inner<'owner>(
                 eligible_classes: eligible.len(), classes: class_by_source.values().copied().collect::<std::collections::BTreeSet<_>>().len(),
             },
         }
+    }
+    if let Some(readback) = primary_beam_readback {
+        readback.finish(&channel_by_class, &consumer_allocation);
     }
     let channel_count = channel_role.len();
 
@@ -11187,6 +11304,7 @@ mod tests {
             }
         }).collect();
         (CanonicalFinalChordStructuralPlan {
+            primary_beam_tie_trials: Default::default(),
             bridge_voice_guard: None,
             cursor_exchange: None,
             rest_bridge_main_state: None,
@@ -12169,6 +12287,7 @@ mod tests {
             },
         ];
         let base = CanonicalFinalChordStructuralPlan {
+            primary_beam_tie_trials: Default::default(),
             bridge_voice_guard: None,
             cursor_exchange: None,
             rest_bridge_main_state: None,
@@ -12413,6 +12532,7 @@ mod tests {
             ..baseline_final_chord_canonical_source_locator()
         };
         let canonical = CanonicalFinalChordStructuralPlan {
+            primary_beam_tie_trials: Default::default(),
             bridge_voice_guard: None,
             cursor_exchange: None,
             rest_bridge_main_state: None,
@@ -12629,6 +12749,7 @@ mod tests {
             ..baseline_final_chord_canonical_source_locator()
         };
         let canonical = CanonicalFinalChordStructuralPlan {
+            primary_beam_tie_trials: Default::default(),
             bridge_voice_guard: None,
             cursor_exchange: None,
             rest_bridge_main_state: None,
@@ -12739,6 +12860,7 @@ mod tests {
             ..baseline_final_chord_canonical_source_locator()
         };
         let canonical = CanonicalFinalChordStructuralPlan {
+            primary_beam_tie_trials: Default::default(),
             bridge_voice_guard: None,
             cursor_exchange: None,
             rest_bridge_main_state: None,
@@ -12846,6 +12968,7 @@ mod tests {
             ..baseline_final_chord_canonical_source_locator()
         };
         let canonical = CanonicalFinalChordStructuralPlan {
+            primary_beam_tie_trials: Default::default(),
             bridge_voice_guard: None,
             cursor_exchange: None,
             rest_bridge_main_state: None,
@@ -13150,6 +13273,7 @@ mod tests {
             },
         ];
         let canonical = CanonicalFinalChordStructuralPlan {
+            primary_beam_tie_trials: Default::default(),
             bridge_voice_guard: None,
             cursor_exchange: None,
             rest_bridge_main_state: None,
@@ -13756,6 +13880,7 @@ mod tests {
             },
         ];
         let canonical = CanonicalFinalChordStructuralPlan {
+            primary_beam_tie_trials: Default::default(),
             bridge_voice_guard: None,
             cursor_exchange: None,
             rest_bridge_main_state: None,

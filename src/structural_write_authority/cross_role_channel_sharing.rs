@@ -1634,28 +1634,19 @@ pub(super) fn check_original_notation_component_projection(
     sources: &BTreeSet<usize>,
     reuse: &ProjectionReuse<'_>,
 ) -> io::Result<()> {
-    verify_original_component_projection(canonical, production, proposed, original, sources, reuse, false)
+    verify_original_component_projection(
+        canonical, production, proposed, original, sources, reuse, (false, &BTreeSet::new()),
+    )
 }
 
-pub(super) fn check_original_component_and_rest_projection(
+pub(super) fn verify_original_component_projection(
     canonical: &CanonicalFinalChordStructuralPlan,
     production: &FrozenSerializedVoicePlan,
     proposed: &FrozenSerializedVoicePlan,
     original: &ActualSourceBeamBindingObservation,
     sources: &BTreeSet<usize>,
     reuse: &ProjectionReuse<'_>,
-) -> io::Result<()> {
-    verify_original_component_projection(canonical, production, proposed, original, sources, reuse, true)
-}
-
-fn verify_original_component_projection(
-    canonical: &CanonicalFinalChordStructuralPlan,
-    production: &FrozenSerializedVoicePlan,
-    proposed: &FrozenSerializedVoicePlan,
-    original: &ActualSourceBeamBindingObservation,
-    sources: &BTreeSet<usize>,
-    reuse: &ProjectionReuse<'_>,
-    restore_entry_rest: bool,
+    (restore_entry_rest, countervoices): (bool, &BTreeSet<usize>),
 ) -> io::Result<()> {
     let mut attested = BTreeSet::new();
     for group in &canonical.original_beam_voice_groups {
@@ -1668,7 +1659,9 @@ fn verify_original_component_projection(
         }
         attested.extend(members);
     }
-    if &attested != sources {
+    if !attested.is_disjoint(countervoices)
+        || attested.union(countervoices).copied().ne(sources.iter().copied())
+    {
         return Err(sharing_error("original_component_has_no_complete_sealed_notation_origin"));
     }
     let edges = ordered_received_beam_readback::owner_edges(canonical, original)
@@ -1782,7 +1775,7 @@ fn verify_original_component_projection(
         (state.as_ref() == occurrence.states.get(&level)).then_some((*group)?)
     };
     let in_component = |key: &OccurrenceKey| {
-        original_head(key).is_some_and(|head| sources.contains(&before.notes[&head].source))
+        original_head(key).is_some_and(|head| attested.contains(&before.notes[&head].source))
     };
     check_beam_transition_with_loss_proof(&before, &after,
         |(level, left, right)| {
@@ -3072,9 +3065,12 @@ mod tests {
                 absolute_end: if row.onset == start { end } else { row.onset + row.duration },
                 staff: row.staff.parse().unwrap(), technical_lane: 1,
             }).collect::<Vec<_>>();
+            let mut greedy_readback = String::new();
             let baseline = build_frozen_serialization_voice_channels_with_original_beams(
-                &canonical, &attacks, Some(&observation), &[],
+                &canonical, &attacks, Some(&observation), &[], Some(&mut greedy_readback), None,
             ).unwrap();
+            assert!(greedy_readback.contains("reason=SoundingOverlap"));
+            assert!(greedy_readback.contains("first_observed=first_assignment"));
             let voices = bind_musicxml_voice_labels(&baseline, &[]).unwrap();
             assert_eq!(baseline.channel_count(), 2);
             let mut report = String::new();
@@ -3108,7 +3104,7 @@ mod tests {
                 }
             }).collect::<Vec<_>>();
             let baseline = build_frozen_serialization_voice_channels_with_original_beams(
-                &canonical, &attacks, Some(&original), &[],
+                &canonical, &attacks, Some(&original), &[], None, None,
             ).unwrap();
             let voices = bind_musicxml_voice_labels(&baseline, &[]).unwrap();
             assert_eq!(baseline.channel_count(), 2);

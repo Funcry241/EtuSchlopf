@@ -449,6 +449,15 @@ fn run_metric_beam_and_final_notation_stage(
         final_chord_obligation_evidence.push_str(&format!(
             "FinalChordNotationObligations: Unknown; {error}; canonical_role_authority=none\n"));
     }
+    let frozen_lane = &initial_render.frozen_sounding_temporal_lane_plan;
+    final_chord_encoding_plan.append_primary_beam_pair_readback(
+        &mut final_chord_obligation_evidence,
+        &frozen_lane.final_chord_structural_plan,
+        &frozen_lane.actual_source_beam_binding,
+        &frozen_lane.frozen_serialized_voice_plan,
+        (&initial_render.final_export_xml, &final_chord_encoding_candidate,
+            final_chord_encoding_receipt.as_ref()),
+    );
     let countervoice_stems = notation::project_master_countervoice_stems(&final_chord_encoding_candidate)
         .context("Master-Gegenstimmenhaelse konnten nicht an den FinalChord-Plan gebunden werden")?;
     let master_export_candidate = countervoice_stems.as_ref()
