@@ -14,6 +14,8 @@
 
 Der Ergebnisordner liegt neben der MIDI. EtuSchlopf arbeitet dort mit Kopien der Eingaben. Bei einem Fehler zeigt die Konsole die Meldung. Wenn der Lauf einen Bericht geschrieben hat, findest du ihn im Laufordner als `.result.txt`. [Version und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1964-windows-preview)
 
+**Zum Ausprobieren gibt es die Windows-Vorschau r1965.** Der Windows-Prüflauf auf GitHub hat die EXE getestet und das mitgelieferte Beispiel gerendert. Die native Windows-Abnahme liegt für r1964 vor. [Windows-EXE r1965 herunterladen](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1965-ci-preview/EtuSchlopf-Windows-x64.exe) · [Release und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1965-ci-preview)
+
 > **In English:** EtuSchlopf uses a matching MIDI and WAV pair to produce piano sheet music as PDF and MusicXML. The Windows x64 preview uses MuseScore for PDF export. Issues in English are welcome.
 
 ## Notenbilder
@@ -25,6 +27,8 @@ Der Ergebnisordner liegt neben der MIDI. EtuSchlopf arbeitet dort mit Kopien der
 | [![Chopin, Etüde E-Dur, r1961](docs/images/chopin-op10-no3-p01-r1961-ausschnitt.png)](docs/examples/chopin-op10-no3-p01-r1961.pdf) | [![Schubert, Deutscher Tanz, r1961](docs/images/schubert-d783-no15-p18-r1961-ausschnitt.png)](docs/examples/schubert-d783-no15-p18-r1961.pdf) |
 
 Ein Klick auf den Ausschnitt öffnet das vollständige PDF. [Alle 14 Stücke mit Notenbildern, Druckvorlagen und Quellen](docs/examples/README.md)
+
+Zwei zusätzliche Einzelläufe mit r1964 unter Linux zeigen die vollständigen Noten aus den jeweiligen MIDI/WAV-Paaren. [Chopin op. 10 Nr. 3 als PDF](docs/examples/zusatzrunden/chopin-op10-no3-p01-r1964-linux.pdf) · [Schubert D. 783 Nr. 15 als PDF](docs/examples/zusatzrunden/schubert-d783-no15-p18-r1964-linux.pdf)
 
 ## Stand auf main
 

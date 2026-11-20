@@ -430,6 +430,16 @@ Die Indizes entstehen aus der exakten halboffenen Zeitbedingung, nicht aus einer
 
 Die Bogenprüfung verwendet einen anderen Index: Für jede Nummer beantworten erster sichtbarer Anfang und letzter sichtbarer Schluss dieselben Existenzfragen wie die frühere Vollsuche. Das ist kein allgemeines globales Matching aller möglichen Bögen. Eine solche Erweiterung wäre eine eigene musikalische Entscheidung.
 
+Im Kandidaten r1965 vergleicht EtuSchlopf wiederkehrende Phrasen mit dynamischer Programmierung. Für $n$ Einsatzgruppen hat die Tabelle einschließlich ihres Randes die Breite $m=n+1$. r1964 hielt jede Bewertung als 8-Byte-Zahl und jede Rückrichtung als 4-Byte-Zahl fest. In r1965 genügen die vorherige und die aktuelle Bewertungszeile. Für den späteren Rückweg bleiben alle Richtungen gespeichert, mit einem Byte je Zelle. Für die Nutzdaten dieser beiden Tabellen ergibt sich
+
+```math
+B_{1964}(m)=12m^2,\qquad B_{1965}(m)=16m+m^2\quad\text{Byte}.
+```
+
+Bei **1024 Einsatzgruppen** ($m=1025$) sinkt der Bedarf von **12.607.500 auf 1.067.025 Byte**. Bei der Suche nach dem Metrum berechnet EtuSchlopf außerdem die festen Sprungkosten einmal pro Phasenmodell. Die Reihenfolge gleichwertiger Kandidaten bleibt erhalten.
+
+Im isolierten MIDI/WAV-Lauf für die Aufführungsanalyse von Mozarts KV 331 sank die mediane **Prozess-CPU-Zeit von 0,399568 auf 0,266895 Sekunden** (acht Läufe pro Version, abwechselnd auf demselben Linux-Rechner). Die Messung umfasst das Einlesen im Prüfprogramm und die Inferenz bis zum Zeitplan. Der anschließende Notensatz und PDF-Export liegen außerhalb dieser Messung. [Quellstand r1965 und Äquivalenznachweis](https://github.com/Funcry241/EtuSchlopf/blob/629ce771343fe2eca0fb47535d7c3b323fb35708/docs/selector_derivation_contract_performance_trace_equivalence.md)
+
 ### Speicherplanung für den Korpus
 
 Im Automatikmodus schätzt EtuSchlopf die Zahl paralleler Projekte und Solver-Worker. Für $p$ Projekte und den ermittelten verfügbaren Speicher $M$ in MiB lautet die speicherbezogene Worker-Grenze pro Projekt:
