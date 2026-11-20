@@ -1,0 +1,48 @@
+name: Linux-Build für den Rendervergleich r1965
+on:
+  push:
+    branches: [verify/r1965-linux]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-r1965-linux
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'Funcry241/EtuSchlopf' && github.ref == 'refs/heads/verify/r1965-linux'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      SOURCE_COMMIT: 629ce771343fe2eca0fb47535d7c3b323fb35708
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Originalquelle mit festem Lockfile und Strict-Profil kompilieren
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-list --parents -n 1 HEAD)" = "$GITHUB_SHA $SOURCE_COMMIT"
+          test "$(git diff --name-only "$SOURCE_COMMIT" "$GITHUB_SHA")" = ".github/workflows/verify-r1965-linux.yml"
+          git checkout --detach "$SOURCE_COMMIT"
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test -z "$(git status --porcelain --untracked-files=no)"
+          rustup toolchain install 1.98.0 --profile minimal
+          cargo +1.98.0 build --locked --profile strict --jobs 1 --bin etuschlopf
+          mkdir -p dist
+          install -m 755 target/strict/etuschlopf dist/etuschlopf
+          strip --strip-unneeded dist/etuschlopf
+          printf '%s\n' "$SOURCE_COMMIT" > dist/SOURCE_COMMIT.txt
+          (cd dist && sha256sum etuschlopf SOURCE_COMMIT.txt > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: EtuSchlopf-r1965-linux-x64-rendervergleich
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
