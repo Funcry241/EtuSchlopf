@@ -1,6 +1,6 @@
 # Mathematik in EtuSchlopf
 
-**Wie lange soll eine gespielte Note im Notenbild stehen?** EtuSchlopf leitet die Dauer einer frei gespielten Klaviernote aus den Einsätzen, der Artikulation und den gleichzeitig laufenden Stimmen ab. Im Windows-Vollkorpuslauf r1965 stimmen bei Mozarts KV 331 alle 474 regulären Einsätze samt Tonhöhe und 460 ihrer geschriebenen Dauern mit der annotierten Einspielung überein. Die nachstehenden Formeln zeigen, wie die Entscheidung entsteht und welche Eigenschaft die MusicXML-Ausgabe tatsächlich belegt. [Mozart-Notenbild r1965](examples/mozart-k331-p01-r1965.pdf) · [Windows-Vollkorpus r1965](evidence/r1965/README.md)
+**Wie lange soll eine gespielte Note im Notenbild stehen?** EtuSchlopf leitet die Dauer einer frei gespielten Klaviernote aus den Einsätzen, der Artikulation und den gleichzeitig laufenden Stimmen ab. Beim Vergleich mit einer Druckvorlage lassen sich Einsatz, Tonhöhe und geschriebene Dauer einzeln prüfen. Die folgenden Formeln beschreiben diese Entscheidungen und die Grenzen der Auswertung. [Aktuelle Referenzen](examples/README.md#aktuelle-referenzen) · [Messwerte des Windows-Laufs r1965](evidence/r1965/vergleich.md)
 
 | Frage | Wo die Antwort steht |
 | --- | --- |
@@ -116,7 +116,7 @@ s_1=a,\qquad e_m=b,\qquad s_k\lt e_k,\qquad e_k=s_{k+1}\quad(1\le k\lt m).
 
 Dadurch hat ein bei 72 beginnender Ton mit Dauer 96 auch dann sein Ende bei 168, wenn auf demselben System bei 120 eine andere Note beginnt. EtuSchlopf kann dafür einen weiteren MusicXML-Stimmkanal verwenden. Bei einer Teilung behält jedes Fragment die Quellidentität und Tonhöhe. Nur das erste trägt den Anschlag, die folgenden schließen mit Haltebögen an. Ein Vorschlag hat eigene Regeln für Nullzeit und Hauptnote. Der Schreibpfad prüft die Zeiten gegen die tatsächlich ausgegebenen Noten und Cursorbewegungen. [Fragmentplanung und Ausgabekontrolle](../src/midi_seed/bound_duration.rs)
 
-| Mozart KV 331, Andante grazioso, Einspielung p01 | r1963 | r1964 | r1965 |
+| Historischer Vergleich mit Mozart KV 331, Einspielung p01 | r1963 | r1964 | r1965 |
 | --- | ---: | ---: | ---: |
 | Reguläre Noten mit passendem Einsatz und passender Tonhöhe | 474 von 474 | 474 von 474 | 474 von 474 |
 | Passende geschriebene Dauer einschließlich Haltefortsetzungen | 438 von 474 | 460 von 474 | 460 von 474 |
@@ -509,7 +509,7 @@ Die 493 offenen Zielpaare verteilen sich auf 244 Fälle mit Akkordträger oder f
 
 ## Prüfstände und verbleibende Grenzen
 
-| Referenz | Veröffentlichter Windows-Prüfbeleg |
+| Werk im jeweiligen Prüflauf | Veröffentlichter Windows-Prüfbeleg |
 |---|---|
 | Bach, Fuge c-Moll BWV 847 | r1749, Exitcode 0, 3.041 bestandene und vier ignorierte Tests. Der frühere Abgleich von r1745 erfasste 754 Notenansätze, geschriebene Notenwerte und Haltebögen. [Abnahme r1749](evidence/r1749/README.md). |
 | Chopin, Etüde op. 10 Nr. 3, p01 | r1792, Exitcode 0, 0 Warnungen, 100 % im Notenerhaltsmaß und ein gerendertes Notenbild. Die MIDI-WAV-Zeitzuordnung blieb wegen geringer gemeinsamer Anschlagsdeckung offen. [Abnahme r1792](evidence/r1792/README.md). |

@@ -2,6 +2,17 @@
 
 Hier stehen die Quellen und Rechte der Musikreferenzen von EtuSchlopf. Die [Fremdlizenzhinweise zum Programm](../THIRD_PARTY_NOTICES.md) führen zu dieser Seite. Für die Referenzdateien gelten die unten genannten Rechte und Lizenzen.
 
+## Aktuelle Referenzen
+
+| Komponist | Werk | Vergleichsmaterial |
+| --- | --- | --- |
+| Bach | Fuge c-Moll BWV 847 | [Aufnahme, MIDI und Druck](#bach--fuge-c-moll-bwv-847) |
+| Chopin | Etüde E-Dur op. 10 Nr. 3 | [Einspielung p01 und Druck](#chopin--etüde-e-dur-op-10-nr-3-aufführung-p01) |
+| Schubert | Deutscher Tanz As-Dur D. 783 Nr. 15 | [Einspielung p18, Import und Druck](#schubert--deutscher-tanz-as-dur-d-783-nr-15-aufführung-p18) |
+| Beethoven | Werk und Ausschnitt offen | Auswahl der Einspielung und Druckvorlage offen. [Beethoven-Aufnahmen mit synchroner MIDI und WAV](https://www.audiolabs-erlangen.de/resources/MIR/SMD/midi) |
+
+Mozarts KV 331 gehörte zu den früheren Prüfläufen bis r1965. Die Galerie dokumentiert deren Ergebnisse. Chopins Ballade op. 38 ist ein [separater Stresstest](chopin-op38-p01.md).
+
 ## Notenbilder
 
 Klicke auf eine Vorschau, um das vollständige PDF zu öffnen.
