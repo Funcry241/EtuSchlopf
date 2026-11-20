@@ -50,7 +50,7 @@ Die Zusammenstellung verlangt außerdem die zuständige Authority, die Herkunft 
 Der Entwurf ordnet zulässige Seitenpläne nach drei Kriterien.
 
 ```math
-x^\star\in\underset{x\in\mathcal F}{\operatorname{argmin}_{\mathrm{lex}}}
+x^\star\in\underset{x\in\mathcal F}{\mathrm{argmin}_{\mathrm{lex}}}
  \bigl(N_{\mathrm{Seiten}}(x),D(x),U(x)\bigr).
 ```
 
@@ -239,7 +239,7 @@ r1961 prüft konkret, ob zwei gebundene Noten denselben Ausgabekanal belegen. Di
 
 ### Notationszeit, Haltebögen und Handzuordnung
 
-Bei einem gebundenen Anschlag mit Einsatz $t$, Ende $e$ in der Notationszeit und einer Taktgrenze $b$ mit $t<b<e$ kann der MIDI-Seed das Zeitintervall in zwei Fragmente teilen:
+Bei einem gebundenen Anschlag mit Einsatz $t$, Ende $e$ in der Notationszeit und einer Taktgrenze $b$ mit $`t \lt b \lt e`$ kann der MIDI-Seed das Zeitintervall in zwei Fragmente teilen:
 
 ```math
 [t,e)=[t,b)\cup[b,e),\qquad e-t=(b-t)+(e-b).
@@ -262,7 +262,7 @@ Die Sprungwarnung prüft zusätzlich, ob sich beide Tonhöhengrenzen aufeinander
 Für zwei zulässige Lösungen entscheidet beim lexikografischen Vergleich der erste abweichende Eintrag. Der Auswahlschlüssel für die allgemeine Kandidatenbewertung ordnet die Größen so
 
 ```math
-K=(B,C,H,W,I,\operatorname{rev}(R),M).
+K=(B,C,H,W,I,\mathrm{rev}(R),M).
 ```
 
 $B$ zählt Blocker, $C$ kritische Fälle, $H$ ist die größte kritische Härte, $W$ und $I$ zählen Warnungen und Hinweise. Es folgen der absteigend geordnete Notenerhalt $R$ und die Anzahl $M$ verschobener Noten. Wenn ein Kandidat einen zusätzlichen Blocker hat, können ihm weniger Warnungen bei diesem Vergleich keinen Vorrang verschaffen. [Kandidatenauswahl](../src/pipeline_shards/staff_voice_move_restify_atomic_patch_tail.rs)
@@ -348,7 +348,7 @@ Damit kann ein Kurs mit weniger Registerzeichen trotz zusätzlicher Drei-Hilfsli
 | $g_b$ | Grenzen innerhalb der positiv gebundenen Gruppen. Musikalische und materielle Verbote gelten daneben unverändert. |
 | $c_h$ | Echte Registerzeichen-Operationen. Reine Erinnerungszeichen werden getrennt behandelt. |
 
-Die nominalen Zustände sind G2 oder F4 kombiniert mit loco, 8va, 8vb, 15ma oder 15mb. Mit Oktavanzahl $q\in\{0,1,-1,2,-2\}$ und diatonischer Tonposition $d$ gilt für die geschriebene Position $d_{\mathrm{geschrieben}}=d-7q$. Deshalb ist die Schreibweise relevant; MIDI-Tasten allein bestimmen die Hilfslinien nicht.
+Die nominalen Zustände sind G2 oder F4 kombiniert mit loco, 8va, 8vb, 15ma oder 15mb. Mit Oktavanzahl $`q\in\lbrace 0,1,-1,2,-2\rbrace`$ und diatonischer Tonposition $d$ gilt für die geschriebene Position $d_{\mathrm{geschrieben}}=d-7q$. Deshalb ist die Schreibweise relevant; MIDI-Tasten allein bestimmen die Hilfslinien nicht.
 
 Nominale Zustände sind noch keine Schreibbefugnis. Im aktuellen Adapter unterstützt der obere Owner nur seine tatsächlich angebotenen Zustände; zusätzliche F-Schlüsselalternativen im oberen System folgen nicht aus der nominalen Zehnermenge. Anfang, Ende, Zustandsalter, Zeitachse, Gruppen und Anschluss müssen gebunden sein. Für gekoppelte Systeme darf ein unabhängiger Einzelsystemkurs nicht als gemeinsames Optimum ausgegeben werden.
 
