@@ -31,8 +31,13 @@ Die folgenden PDFs stammen aus zusätzlichen Einzelläufen mit MuseScore 4.7.5. 
 
 | Stück | Eingabe und Ausgabe | Ausschnitt und PDF |
 | --- | --- | --- |
-| Chopin · Etüde E-Dur op. 10 Nr. 3 | Original-MIDI und WAV der Aufführung p01 aus dem Vienna 4×22 Piano Corpus. Master- und Render-MusicXML stimmen bytegenau mit der jeweiligen Windows-Ausgabe r1961 überein. r1964 · 2/4 · 22 Takte · 1 Seite. | [![Chopin · Etüde E-Dur op. 10 Nr. 3, erstes System](../images/zusatzrunden/chopin-op10-no3-p01-r1964-linux-ausschnitt.png)](zusatzrunden/chopin-op10-no3-p01-r1964-linux.pdf) |
-| Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15 | Die Import-MIDI enthält die Notationszeiten, die WAV ist zeitlich ausgerichtet. Bei allen 315 regulären gespielten Referenznoten stimmen Einsatz, Tonhöhe und Dauer. In r1961 stimmten 303 dieser Dauern. r1964 · 3/4 · 33 Takte · 2 Seiten. | [![Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15, erstes System](../images/zusatzrunden/schubert-d783-no15-p18-r1964-linux-ausschnitt.png)](zusatzrunden/schubert-d783-no15-p18-r1964-linux.pdf) |
+| Chopin · Etüde E-Dur op. 10 Nr. 3 | Original-MIDI und WAV der Aufführung p01 aus dem Vienna 4×22 Piano Corpus. Von 448 regulären Noten stimmen alle Einsätze und Tonhöhen und 380 Dauern. Die vier Vorschlagsnoten sind separat gezählt. Master- und Render-MusicXML sind bytegleich zum Windows-Lauf r1961. r1964 und r1965 · 2/4 · 22 Takte · 1 Seite. | [![Chopin · Etüde E-Dur op. 10 Nr. 3, erstes System](../images/zusatzrunden/chopin-op10-no3-p01-r1964-linux-ausschnitt.png)](zusatzrunden/chopin-op10-no3-p01-r1964-linux.pdf) |
+| Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15 | Die Import-MIDI enthält die Notationszeiten, die WAV ist zeitlich ausgerichtet. Bei allen 315 regulären gespielten Referenznoten stimmen Einsatz, Tonhöhe und Dauer. In r1961 stimmten 303 dieser Dauern. r1964 und r1965 · 3/4 · 33 Takte · 2 Seiten. | [![Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15, erstes System](../images/zusatzrunden/schubert-d783-no15-p18-r1964-linux-ausschnitt.png)](zusatzrunden/schubert-d783-no15-p18-r1964-linux.pdf) |
+| Mozart · Klaviersonate A-Dur KV 331, Andante grazioso | Original-MIDI und WAV der Aufführung p01 aus dem Vienna 4×22 Piano Corpus. r1965 · 6/8 · 36 Takte · 2 Seiten. | [![Mozart · Klaviersonate A-Dur KV 331, Andante grazioso, erstes System](../images/zusatzrunden/mozart-k331-p01-r1965-linux-ausschnitt.png)](zusatzrunden/mozart-k331-p01-r1965-linux.pdf) |
+
+Bei allen drei Stücken stimmen die unter Linux erzeugten Master- und Render-MusicXML zwischen r1964 und r1965 bytegenau überein. Alle fünf PDF-Seiten sind bei 144 dpi pixelgleich. Für Chopin und Schubert führen die Vorschauen zu den PDFs aus r1964, für Mozart zur Ausgabe aus r1965. [Mozarts Notenbild r1965](zusatzrunden/mozart-k331-p01-r1965-linux.pdf)
+
+[Windows-Testversion r1965 herunterladen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1965-ci-preview)
 
 [Mozart in der früheren Ausgabe r1961](mozart-k331-p01-r1961.pdf) · [Notenbilder r1938](../evidence/r1938/score_sha256.tsv) · [Notenbilder r1921](../evidence/r1921/score_sha256.tsv) · [Notenbilder r1886](../evidence/r1886/score_sha256.tsv)
 
