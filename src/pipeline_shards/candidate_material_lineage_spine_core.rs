@@ -3143,12 +3143,16 @@ fn freeze_final_sounding_material(
         pre_final_chord_xml, candidate.master_state.actual_beam_capture(), &original_notation_voices,
     );
     let final_chord_structural_plan = &allocator_canonical;
+    let mut first_allocation_report = String::new();
+    let mut primary_beam_ties = vec![];
     let frozen_channels =
         crate::structural_write_authority::build_frozen_serialization_voice_channels_with_original_beams(
             final_chord_structural_plan,
             &frozen_voice_attacks,
             Some(&lane_plan.actual_source_beam_binding),
             &legacy_label_preferences,
+            Some(&mut first_allocation_report),
+            Some(&mut primary_beam_ties),
         )?;
     let mut frozen_serialized_voice_plan =
         crate::structural_write_authority::bind_musicxml_voice_labels(
@@ -3172,7 +3176,11 @@ fn freeze_final_sounding_material(
 
     frozen_serialized_voice_plan.bind_source_voice_gaps(source_voice_gaps.clone());
     let mut written_only_probe = String::new();
-    let replacement = frozen_channels.checked_written_only_replacement(
+    let primary_beam_selection = final_chord_structural_plan.observe_primary_beam_voice_selection(
+        &lane_plan.actual_source_beam_binding,
+        &frozen_serialized_voice_plan,
+    );
+    let mut replacement = frozen_channels.checked_written_only_replacement(
         &mut written_only_probe,
         final_chord_structural_plan,
         &frozen_voice_attacks,
@@ -3180,9 +3188,42 @@ fn freeze_final_sounding_material(
         &legacy_label_preferences,
         &frozen_serialized_voice_plan,
     );
+    let (reference_channels, reference_voices) = replacement.as_ref()
+        .map_or((&frozen_channels, &frozen_serialized_voice_plan), |(channels, voices)| (channels, voices));
+    if let Some(candidate) = reference_channels.checked_open_original_member_channels(
+        final_chord_structural_plan,
+        &frozen_voice_attacks,
+        &lane_plan.actual_source_beam_binding,
+        reference_voices,
+        &source_voice_gaps,
+        &mut written_only_probe,
+    ) {
+        replacement = Some(candidate);
+    }
+    primary_beam_selection.append(
+        &mut written_only_probe,
+        replacement.as_ref().map(|(_, plan)| plan),
+    );
     let (frozen_channels, mut frozen_serialized_voice_plan) =
         replacement.unwrap_or((frozen_channels, frozen_serialized_voice_plan));
+    let mut observed_canonical = final_chord_structural_plan.clone();
+    observed_canonical.observe_primary_beam_tie_trials(
+        &frozen_voice_attacks,
+        &lane_plan.actual_source_beam_binding,
+        &legacy_label_preferences,
+        &source_voice_gaps,
+        primary_beam_ties,
+    );
     frozen_serialized_voice_plan.bind_source_voice_gaps(source_voice_gaps);
+    let passage_report_start = written_only_probe.len();
+    frozen_channels.append_exact_voice_passages(
+        &mut written_only_probe,
+        final_chord_structural_plan,
+        &frozen_voice_attacks,
+        &lane_plan.actual_source_beam_binding,
+        &frozen_serialized_voice_plan,
+    );
+    eprint!("{}", &written_only_probe[passage_report_start..]);
     // Report the channel plan selected by the existing canonical serialization authority.
     eprintln!(
         "FrozenChannelConsumerAllocation: {} channels={} evidence={:?}",
@@ -3213,10 +3254,11 @@ fn freeze_final_sounding_material(
             &pre_serialization_source_rows,
             &frozen_channels,
         );
+    pre_serialization_constraint_audit.append_counterfactual_body(&first_allocation_report);
     pre_serialization_constraint_audit.append_counterfactual_body(&written_only_probe);
     lane_plan.notation_voice_pre_serialization_constraint_audit =
         pre_serialization_constraint_audit;
-    lane_plan.final_chord_structural_plan = final_chord_structural_plan.clone();
+    lane_plan.final_chord_structural_plan = observed_canonical;
 
     lane_plan.final_chord_structural_plan.bind_original_respelling_input(
         original_course_input,

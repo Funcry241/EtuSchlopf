@@ -27,15 +27,15 @@ fn endpoint_readback(left: Option<&str>, right: Option<&str>) -> EdgeReadback {
     if outgoing && incoming { EdgeReadback::Present } else { EdgeReadback::Missing }
 }
 
-struct Projection<'a> {
+pub(super) struct Projection<'a> {
     written: &'a FinalChordWrittenProjectionEvidence,
     emissions: BTreeMap<usize, Vec<&'a FinalChordWrittenOccurrence>>,
     locations: BTreeMap<usize, (usize, usize)>,
-    measures: Vec<FinalChordBindingMeasure>,
+    pub(super) measures: Vec<FinalChordBindingMeasure>,
 }
 
 impl<'a> Projection<'a> {
-    fn bind(written: &'a FinalChordWrittenProjectionEvidence) -> Option<Self> {
+    pub(super) fn bind(written: &'a FinalChordWrittenProjectionEvidence) -> Option<Self> {
         let measures = final_chord_parse_binding_measures(&written.xml).ok()?;
         let mut locations = BTreeMap::new();
         for (measure_index, measure) in measures.iter().enumerate() {
@@ -52,7 +52,7 @@ impl<'a> Projection<'a> {
         Some(Self { written, emissions, locations, measures })
     }
 
-    fn locate(&self, original: &BoundOccurrence) -> Option<(usize, usize)> {
+    pub(super) fn locate(&self, original: &BoundOccurrence) -> Option<(usize, usize)> {
         let [row] = self.emissions.get(&original.fragment)?.as_slice() else { return None; };
         if row.is_grace || row.source_event_id != original.source || row.attack_id != original.attack
             || !row.has_pitched_chord_anchor || row.chord_anchor_start != row.projected_note_start
@@ -114,7 +114,7 @@ pub(super) struct OwnerEdge<'a> {
 
 type OwnerGroups<'a> = BTreeMap<(u8, (usize, usize)), Vec<(&'a BoundOccurrence, Option<&'a str>)>>;
 
-fn owner_groups(rows: &[BoundOccurrence]) -> OwnerGroups<'_> {
+pub(super) fn owner_groups(rows: &[BoundOccurrence]) -> OwnerGroups<'_> {
     let mut groups = BTreeMap::<_, Vec<_>>::new();
     for row in rows {
         for (level, group, marker) in &row.levels {
@@ -126,7 +126,7 @@ fn owner_groups(rows: &[BoundOccurrence]) -> OwnerGroups<'_> {
     groups
 }
 
-fn closed_group(members: &[(&BoundOccurrence, Option<&str>)]) -> bool {
+pub(super) fn closed_group(members: &[(&BoundOccurrence, Option<&str>)]) -> bool {
     members.len() >= 2 && members.first().and_then(|row| row.1) == Some("begin")
         && members.last().and_then(|row| row.1) == Some("end")
         && members[1..members.len() - 1].iter().all(|row| row.1 == Some("continue"))
@@ -196,7 +196,7 @@ pub(super) fn read_projected_owner_edges(
     }).collect()
 }
 
-fn read_projected_edge<'a>(
+pub(super) fn read_projected_edge<'a>(
     notes: &[FinalChordEncodingNote], left: usize, right: usize, level: u8,
     levels: &impl Fn(&FinalChordEncodingNote) -> Option<Cow<'a, BTreeMap<u8, String>>>,
 ) -> OwnerEdgeReadback {

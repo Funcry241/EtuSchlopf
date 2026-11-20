@@ -1,8 +1,8 @@
 # Technische Referenz und Quellenarbeit
 
-Der öffentliche Quellstand ist **r1792 / 0.10.1839**. Die [Windows-Abnahme r1792](evidence/r1792/README.md) dokumentiert den Chopin-Einzellauf. Der historische [Korpuslauf r1684](evidence/r1684/README.md) umfasst zehn Etüden.
+Der öffentliche Quellstand ist **r1961 / 0.10.1839**. Die [Windows-Abnahme r1961](evidence/r1961/README.md) umfasst 14 Stücke. Die [Windows-Abnahme r1792](evidence/r1792/README.md) dokumentiert den Chopin-Einzellauf. Der historische [Korpuslauf r1684](evidence/r1684/README.md) umfasst zehn Etüden.
 
-Seit r1659 enthält der Quellstand weitere Zuständigkeitsbereinigungen, indizierte Endpunktabfragen und Verbesserungen an Fokus, Verbindungsstatus und PDF-Sitzungsbindung der Watch-Webansicht. r1683 führt ursprüngliche Pausenanker als eigene Evidenz in die C3-Entscheidung; nicht geschlossene systemübergreifende Gruppenabhängigkeiten bleiben offen. Die [Mathematik-Seite](MATHEMATIK.md) ordnet 34 Verfahrensfamilien ihren Quellen, Wirkungen und Beweisgrenzen zu. Die native Abnahme bestätigt den geprüften Korpus; sie belegt weder allgemeine Fehlerfreiheit noch die Spielbarkeit beliebiger Eingaben.
+Seit r1659 enthält der Quellstand weitere Zuständigkeitsbereinigungen, indizierte Endpunktabfragen und Verbesserungen an Fokus, Verbindungsstatus und PDF-Sitzungsbindung der Watch-Webansicht. r1683 führt ursprüngliche Pausenanker als eigene Evidenz in die C3-Entscheidung; nicht geschlossene systemübergreifende Gruppenabhängigkeiten bleiben offen. Die [Mathematik-Seite](MATHEMATIK-VOLLKORPUS.md) ordnet 34 Verfahrensfamilien ihren Quellen, Wirkungen und Beweisgrenzen zu. Die native Abnahme bestätigt den geprüften Korpus; sie belegt weder allgemeine Fehlerfreiheit noch die Spielbarkeit beliebiger Eingaben.
 
 Das Projekt hat zwei eng verbundene Gegenstände:
 

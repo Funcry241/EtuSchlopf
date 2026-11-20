@@ -3,8 +3,7 @@ $ErrorActionPreference = 'Stop'
 $root = Join-Path $env:RUNNER_TEMP 'etuschlopf-start-example'
 New-Item -ItemType Directory -Path $root | Out-Null
 $previous = Join-Path $root 'EtuSchlopf-Beispiel-r1537.zip'
-gh release download v0.10.1839-r1537-windows-preview --repo $env:GITHUB_REPOSITORY --pattern 'EtuSchlopf-Beispiel-r1537.zip' --output $previous
-if ($LASTEXITCODE -ne 0) { throw 'Could not retrieve the public example inputs' }
+Invoke-WebRequest 'https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1537-windows-preview/EtuSchlopf-Beispiel-r1537.zip' -OutFile $previous
 Expand-Archive $previous (Join-Path $root 'original')
 $midi = @(Get-ChildItem (Join-Path $root 'original') -Recurse -File | Where-Object { $_.Extension -in '.mid', '.midi' })
 if ($midi.Count -ne 1) { throw 'Expected one example MIDI' }

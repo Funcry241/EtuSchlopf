@@ -351,6 +351,58 @@ fn primary_beam_structure_counts(events: &[BeamOwnershipEvent]) -> [usize; 4] {
     counts
 }
 
+/// A rewind can make XML encounter order differ from written onset order.
+/// Report the two readings of an individual voice without inferring beam
+/// membership across voices or choosing an order for simultaneous heads.
+fn append_primary_beam_onset_readback(out: &mut String, label: &str, events: &[BeamOwnershipEvent]) {
+    let mut lanes = BTreeMap::<(&str, &str, &str), Vec<_>>::default();
+    for event in events.iter().filter(|event| {
+        !event.is_chord && event.visible && event.duration > 0
+            && matches!(event.beam1.as_deref(), Some("begin" | "continue" | "end"))
+    }) {
+        lanes.entry((&event.part, &event.measure, &event.voice)).or_default().push(event);
+    }
+
+    let mut reversed = 0;
+    let mut ambiguous = 0;
+    let mut faults = 0;
+    for ((part, measure, voice), mut marked) in lanes {
+        let serialized_onsets = marked.iter().map(|event| event.onset).collect::<Vec<_>>();
+        let order_reversed = serialized_onsets.windows(2).any(|pair| pair[0] > pair[1]);
+        reversed += usize::from(order_reversed);
+        marked.sort_by_key(|event| event.onset);
+        if marked.windows(2).any(|pair| pair[0].onset == pair[1].onset) {
+            ambiguous += 1;
+            let _ = writeln!(out, "PrimaryBeamOnsetReadbackRow: Source {label}; Part {part}; Measure {measure}; Voice {voice}; Status simultaneous_marked_heads; SerializedOnsets {serialized_onsets:?}.");
+            continue;
+        }
+
+        let mut open = None;
+        let mut anomalies = vec![];
+        for event in marked {
+            let onset = event.onset;
+            match event.beam1.as_deref() {
+                Some("begin") => {
+                    if let Some(prior) = open.replace(onset) {
+                        anomalies.push(("nested_begin", prior, onset));
+                    }
+                }
+                Some("continue") if open.is_none() => anomalies.push(("continue_without_begin", onset, onset)),
+                Some("end") if open.take().is_none() => anomalies.push(("end_without_begin", onset, onset)),
+                _ => {}
+            }
+        }
+        if let Some(onset) = open {
+            anomalies.push(("unclosed_begin", onset, onset));
+        }
+        faults += anomalies.len();
+        if order_reversed || !anomalies.is_empty() {
+            let _ = writeln!(out, "PrimaryBeamOnsetReadbackRow: Source {label}; Part {part}; Measure {measure}; Voice {voice}; OrderReversed {order_reversed}; SerializedOnsets {serialized_onsets:?}; OnsetIssues {anomalies:?}.");
+        }
+    }
+    let _ = writeln!(out, "PrimaryBeamOnsetReadback: Source {label}; Scope part_measure_voice; OrderReversedLanes {reversed}; AmbiguousLanes {ambiguous}; OnsetIssues {faults}; Authority none; ReleaseVeto nein.");
+}
+
 fn build_audit(xml: &str) -> VoiceBeamOwnershipAudit {
     let Some(events) = collect_events(xml) else {
         return VoiceBeamOwnershipAudit::default();
@@ -677,6 +729,7 @@ pub(crate) fn append_final_notation_voice_beam_ownership_audit_section(
     for (label, xml) in [("Master", master_xml), ("Render", render_xml)] {
         if let Some(events) = collect_events(xml) {
             let [nested, continuation, end, unclosed] = primary_beam_structure_counts(&events);
+            append_primary_beam_onset_readback(out, label, &events);
             let _ = writeln!(out, "PrimaryBeamStructureReadback: Source {label}; Scope part_measure_voice; NestedBegins {nested}; ContinueWithoutBegin {continuation}; EndWithoutBegin {end}; UnclosedBegins {unclosed}; ReleaseVeto nein; MusicalClassification none.");
         } else {
             let _ = writeln!(out, "PrimaryBeamStructureReadback: Source {label}; Status unavailable_parse_failure; ReleaseVeto nein.");
@@ -774,6 +827,25 @@ mod tests {
         let xml = score(&(head + "<note><rest/><duration>24</duration><voice>shared</voice><type>16th</type><staff>1</staff></note>" + &tail));
         assert_eq!(primary_beam_structure_counts(&collect_events(&xml).unwrap()), [0; 4]);
         assert_eq!(primary_beam_structure_counts(&collect_events(&score(&note(0, "one", "continue"))).unwrap()), [0, 1, 0, 0]);
+    }
+
+    #[test]
+    fn primary_beam_readback_distinguishes_xml_order_from_onset_order() {
+        let valid_other_lane = note(0, "other", "begin") + &note(0, "other", "end");
+        let rewind = "<backup><duration>96</duration></backup>";
+        let xml = score(&format!(
+            "{}{rewind}{}{valid_other_lane}",
+            note(72, "shared", "begin"),
+            note(0, "shared", "end"),
+        ));
+        let events = collect_events(&xml).unwrap();
+        assert_eq!(primary_beam_structure_counts(&events), [0; 4]);
+        let mut output = String::default();
+        append_primary_beam_onset_readback(&mut output, "Render", &events);
+        assert!(output.contains("Voice shared; OrderReversed true; SerializedOnsets [72, 0]"));
+        assert!(output.contains("end_without_begin"));
+        assert!(output.contains("unclosed_begin"));
+        assert!(!output.contains("Voice other;"));
     }
 
     #[test]

@@ -289,7 +289,8 @@ fn run_all_batch_orchestrator(corpus_out: &Path, jobs: &str, writer_trace: Optio
     let mut output_paths = vec![corpus_out.to_path_buf(), PathBuf::from(CORPUS_RUN_MANIFEST_FILE)];
     for pair in &pairs {
         let source = observed_corpus_try!(crate::source::resolve_source_plan(Some(Path::new(&pair.project)), None, None, None));
-        observed_corpus_try!(validate_project_input_files(&source, None));
+        observed_corpus_try!(validate_project_input_files(&source, None)
+            .with_context(|| format!("Korpus-Vorpruefung fuer Projekt '{}'", pair.project)));
         input_paths.extend([pair.midi_path.clone(), pair.wav_path.clone()]);
         output_paths.extend(source.output_paths());
     }
@@ -1468,6 +1469,30 @@ mod batch_input_admission_tests {
             assert!(scan_wav_midi_pairs(&fixture.0).is_err());
             assert_eq!(std::fs::read(output).unwrap(), b"previous good result");
         }
+    }
+
+    #[test]
+    fn batch_input_discovery_leaves_pairs_in_subdirectories_inactive() {
+        let fixture = Fixture::new();
+        let archive = fixture.0.join("references");
+        std::fs::create_dir(&archive).unwrap();
+        for name in ["Active.mid", "Active.wav"] {
+            std::fs::write(fixture.0.join(name), b"synthetic active input").unwrap();
+        }
+        for name in ["Deferred.midi", "Deferred.wav"] {
+            std::fs::write(archive.join(name), b"synthetic archived input").unwrap();
+        }
+
+        let pairs = scan_wav_midi_pairs(&fixture.0).unwrap();
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].project, "Active");
+
+        for name in ["Deferred.midi", "Deferred.wav"] {
+            std::fs::rename(archive.join(name), fixture.0.join(name)).unwrap();
+        }
+        let pairs = scan_wav_midi_pairs(&fixture.0).unwrap();
+        assert_eq!(pairs.len(), 2);
+        assert_eq!(pairs[1].project, "Deferred");
     }
 
     #[test]

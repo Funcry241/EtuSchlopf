@@ -4,26 +4,26 @@ Hier stehen die Quellen und Rechte der Musikreferenzen von EtuSchlopf. Die [Frem
 
 ## Notenbilder
 
-Die PDFs und Ausschnitte stammen aus dem [Windows-Korpuslauf r1938](../evidence/r1938/README.md). Klicke auf ein Bild, um das vollständige PDF zu öffnen.
+Die PDFs und Ausschnitte stammen aus dem [Windows-Korpuslauf r1961](../evidence/r1961/README.md). Klicke auf ein Bild, um das vollständige PDF zu öffnen.
 
 | Stück | Seiten | Ausschnitt und PDF |
 | --- | ---: | --- |
-| Bach · Fuge c-Moll BWV 847 | 3 | [![Bach · Fuge c-Moll BWV 847, Ausschnitt](../images/bwv847-fuge-r1938-ausschnitt.png)](bwv847-fuge-r1938.pdf) |
-| Chopin · Etüde E-Dur op. 10 Nr. 3 | 1 | [![Chopin · Etüde E-Dur op. 10 Nr. 3, Ausschnitt](../images/chopin-op10-no3-p01-r1938-ausschnitt.png)](chopin-op10-no3-p01-r1938.pdf) |
-| Mozart · Klaviersonate A-Dur KV 331, Andante grazioso | 2 | [![Mozart · Klaviersonate A-Dur KV 331, Andante grazioso, Ausschnitt](../images/mozart-k331-p01-r1938-ausschnitt.png)](mozart-k331-p01-r1938.pdf) |
-| Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15 | 2 | [![Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15, Ausschnitt](../images/schubert-d783-no15-p18-r1938-ausschnitt.png)](schubert-d783-no15-p18-r1938.pdf) |
-| Etüde Nr. 1 | 3 | [![Etüde Nr. 1, Ausschnitt](../images/etude-1-r1938-ausschnitt.png)](etude-1-r1938.pdf) |
-| Etüde Nr. 2 | 5 | [![Etüde Nr. 2, Ausschnitt](../images/etude-2-r1938-ausschnitt.png)](etude-2-r1938.pdf) |
-| Etüde Nr. 3 | 4 | [![Etüde Nr. 3, Ausschnitt](../images/etude-3-r1938-ausschnitt.png)](etude-3-r1938.pdf) |
-| Etüde Nr. 4 | 3 | [![Etüde Nr. 4, Ausschnitt](../images/etude-4-r1938-ausschnitt.png)](etude-4-r1938.pdf) |
-| Etüde Nr. 5 | 6 | [![Etüde Nr. 5, Ausschnitt](../images/etude-5-r1938-ausschnitt.png)](etude-5-r1938.pdf) |
-| Etüde Nr. 6 | 6 | [![Etüde Nr. 6, Ausschnitt](../images/etude-6-r1938-ausschnitt.png)](etude-6-r1938.pdf) |
-| Etüde Nr. 7 | 6 | [![Etüde Nr. 7, Ausschnitt](../images/etude-7-r1938-ausschnitt.png)](etude-7-r1938.pdf) |
-| Etüde Nr. 8 | 6 | [![Etüde Nr. 8, Ausschnitt](../images/etude-8-r1938-ausschnitt.png)](etude-8-r1938.pdf) |
-| Etüde Nr. 9 | 4 | [![Etüde Nr. 9, Ausschnitt](../images/etude-9-r1938-ausschnitt.png)](etude-9-r1938.pdf) |
-| Etüde Nr. 10 | 6 | [![Etüde Nr. 10, Ausschnitt](../images/etude-10-r1938-ausschnitt.png)](etude-10-r1938.pdf) |
+| Bach · Fuge c-Moll BWV 847 | 3 | [![Bach · Fuge c-Moll BWV 847, Ausschnitt](../images/bwv847-fuge-r1961-ausschnitt.png)](bwv847-fuge-r1961.pdf) |
+| Chopin · Etüde E-Dur op. 10 Nr. 3 | 1 | [![Chopin · Etüde E-Dur op. 10 Nr. 3, Ausschnitt](../images/chopin-op10-no3-p01-r1961-ausschnitt.png)](chopin-op10-no3-p01-r1961.pdf) |
+| Mozart · Klaviersonate A-Dur KV 331, Andante grazioso | 2 | [![Mozart · Klaviersonate A-Dur KV 331, Andante grazioso, Ausschnitt](../images/mozart-k331-p01-r1961-ausschnitt.png)](mozart-k331-p01-r1961.pdf) |
+| Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15 | 2 | [![Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15, Ausschnitt](../images/schubert-d783-no15-p18-r1961-ausschnitt.png)](schubert-d783-no15-p18-r1961.pdf) |
+| Etüde Nr. 1 | 3 | [![Etüde Nr. 1, Ausschnitt](../images/etude-1-r1961-ausschnitt.png)](etude-1-r1961.pdf) |
+| Etüde Nr. 2 | 5 | [![Etüde Nr. 2, Ausschnitt](../images/etude-2-r1961-ausschnitt.png)](etude-2-r1961.pdf) |
+| Etüde Nr. 3 | 4 | [![Etüde Nr. 3, Ausschnitt](../images/etude-3-r1961-ausschnitt.png)](etude-3-r1961.pdf) |
+| Etüde Nr. 4 | 3 | [![Etüde Nr. 4, Ausschnitt](../images/etude-4-r1961-ausschnitt.png)](etude-4-r1961.pdf) |
+| Etüde Nr. 5 | 6 | [![Etüde Nr. 5, Ausschnitt](../images/etude-5-r1961-ausschnitt.png)](etude-5-r1961.pdf) |
+| Etüde Nr. 6 | 6 | [![Etüde Nr. 6, Ausschnitt](../images/etude-6-r1961-ausschnitt.png)](etude-6-r1961.pdf) |
+| Etüde Nr. 7 | 6 | [![Etüde Nr. 7, Ausschnitt](../images/etude-7-r1961-ausschnitt.png)](etude-7-r1961.pdf) |
+| Etüde Nr. 8 | 6 | [![Etüde Nr. 8, Ausschnitt](../images/etude-8-r1961-ausschnitt.png)](etude-8-r1961.pdf) |
+| Etüde Nr. 9 | 4 | [![Etüde Nr. 9, Ausschnitt](../images/etude-9-r1961-ausschnitt.png)](etude-9-r1961.pdf) |
+| Etüde Nr. 10 | 6 | [![Etüde Nr. 10, Ausschnitt](../images/etude-10-r1961-ausschnitt.png)](etude-10-r1961.pdf) |
 
-[Notenbilder r1921](../evidence/r1921/score_sha256.tsv) · [Notenbilder r1886](../evidence/r1886/score_sha256.tsv)
+[Notenbilder r1938](../evidence/r1938/score_sha256.tsv) · [Notenbilder r1921](../evidence/r1921/score_sha256.tsv) · [Notenbilder r1886](../evidence/r1886/score_sha256.tsv)
 
 ## Frühere Notenbilder und Druckvorlagen
 
@@ -76,7 +76,7 @@ den Akkord der linken Hand. Die Ausschnitte führen zum jeweiligen vollständige
 
 ### Mozart · Klaviersonate A-Dur KV 331, Andante grazioso, Einspielung p01
 
-**Mozart, Klaviersonate A-Dur KV 331, Andante grazioso, Einspielung p01.** Quelle der Performance-MIDI und WAV ist Werner Goebl, *The Vienna 4×22 Piano Corpus*, Version 1.0 (2017), mdw – Universität für Musik und darstellende Kunst Wien. [Datensatz](https://doi.org/10.21939/4X22) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). EtuSchlopf hat daraus den Notensatz und dessen Vorschaubild erzeugt. Die Eingaben stammen aus den unveränderten Originaldateien der mdw. [EtuSchlopf-PDF r1938](mozart-k331-p01-r1938.pdf).
+**Mozart, Klaviersonate A-Dur KV 331, Andante grazioso, Einspielung p01.** Quelle der Performance-MIDI und WAV ist Werner Goebl, *The Vienna 4×22 Piano Corpus*, Version 1.0 (2017), mdw – Universität für Musik und darstellende Kunst Wien. [Datensatz](https://doi.org/10.21939/4X22) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). EtuSchlopf hat daraus den Notensatz und dessen Vorschaubild erzeugt. Die Eingaben stammen aus den unveränderten Originaldateien der mdw. [EtuSchlopf-PDF r1961](mozart-k331-p01-r1961.pdf).
 
 ### Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15, Aufführung p18
 
