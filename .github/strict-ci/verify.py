@@ -103,5 +103,24 @@ def evidence():
     print(f'Accepted {SESSION["archive"]} SHA256 {SESSION["sha256"]}. Native Windows Strict and public example passed.')
 
 
+def linux_source():
+    _, child = indexes()
+    blobs = fetch_blobs(set(child.values()))
+    fingerprint = hashlib.sha256()
+    for name, oid in sorted(child.items()):
+        raw = blobs[oid]
+        dest = ROOT / name
+        assert dest.resolve().is_relative_to(ROOT.resolve())
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(raw)
+        fingerprint.update(f"{sha(raw)}\t{name}\n".encode())
+    assert fingerprint.hexdigest() == SESSION['source_tree_sha256']
+    assert f'revision=r{REV}' in (ROOT / 'ZIP_KIND.txt').read_text().splitlines()
+    print(f'Verified {len(child)} candidate files for r{REV}: {fingerprint.hexdigest()}')
+    if os.environ.get("GITHUB_OUTPUT"):
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+            print(f"revision={REV}", file=output)
+
+
 if __name__=='__main__':
-    {'prepare':prepare,'evidence':evidence}[sys.argv[1]]()
+    {'prepare':prepare,'evidence':evidence,'linux':linux_source}[sys.argv[1]]()

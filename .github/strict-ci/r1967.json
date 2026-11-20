@@ -1,0 +1,12 @@
+{
+  "ZIP_KIND.txt": "b49d1c75435b8aaed30c54eec76f667b66bad315",
+  "src/build_gate/take_change_class.txt": "e4cc41ee86ab14c515ae3cc65a9d74a47cfd4d7c",
+  "src/pipeline.rs": "bcc8ca1e5a091535fc2968879a2445a2a8952f3f",
+  "src/pipeline_shards/noether_register_articulation_readback_tail.rs": "790ff189cea57441f656210643d6cf0adac895c2",
+  "src/pipeline_shards/pipeline_foundation_runtime_passorder_tail.rs": "8f6986bc2a014bbd6392f13ecd37f33e63bd36df",
+  "src/pipeline_shards/pipeline_orchestrator_metric_final_notation_stage.rs": "038063965730b94fb392ffe88680b81ae7b79fe7",
+  "src/pipeline_shards/pipeline_orchestrator_rest_articulation_render_stage.rs": "e2b39fcc1436500c483cd0f1169f6bffa210ee6b",
+  "src/pipeline_shards/sheaf_noether_harmonic_micro_tail.rs": "1122acc39f13f485626f5d17c82f498119607f48",
+  "src/wav_truth_articulation.rs": null,
+  "tests/unit/rest_bridge_owner_handoff.rs": "7cb62c5f50e046a05c4ce77c77e5efe7f0570814"
+}
