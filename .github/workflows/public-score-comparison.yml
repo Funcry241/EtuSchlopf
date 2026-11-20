@@ -70,8 +70,9 @@ jobs:
           chmod 0755 MuseScore.AppImage
           ./MuseScore.AppImage --appimage-extract >/dev/null
           sudo apt-get -qq update
-          sudo apt-get -qq install -y xvfb xauth poppler-utils libxcb-xinerama0 libxcb-cursor0 libxkbcommon-x11-0 libopengl0
+          sudo apt-get -qq install -y xvfb xauth poppler-utils libxcb-xinerama0 libxcb-cursor0 libxkbcommon-x11-0 libopengl0 libegl1 libegl-mesa0 libgl1 libgl1-mesa-dri libglx-mesa0 libasound2 libjack-jackd2-0 libpipewire-0.3-0 libxcb-keysyms1 libxcb-icccm4 libxcb-randr0 libxcb-shape0 libxcb-xfixes0 libxcb-sync1
           echo "ETUSCHLOPF_PDF_RENDERER=$PWD/squashfs-root/AppRun" >> "$GITHUB_ENV"
+          LD_LIBRARY_PATH="$PWD/squashfs-root/lib:$PWD/squashfs-root/usr/lib" ldd "$PWD/squashfs-root/bin/mscore4portable" | grep "not found" || true
           xvfb-run -a "$PWD/squashfs-root/AppRun" --version
           pdftoppm -v
 
