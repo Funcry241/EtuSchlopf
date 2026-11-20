@@ -68,7 +68,7 @@ jobs:
             throw 'Native r1965 acceptance does not match the prepared take'
           }
           if ((Get-FileHash docs/evidence/r1965/native_acceptance.txt -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'd02f4d343b6bed36952a052b0d13fae99be4779550d1f3d37877a91638332897') { throw 'Native acceptance record checksum mismatch' }
-          python .github/distribution/verify-accepted-source.py --revision r1965 88b090dc2a0b0a9a9eeaad01a803f0346fb834f5c8e99adfd42bcb20be86a493 4b63947ccdf640af0e3bf4c54f260a96eac7016b04cda65b93fe53812b3c06bc
+          python .github/distribution/verify-accepted-source.py --revision r1965 88b090dc2a0b0a9a9eeaad01a803f0346fb834f5c8e99adfd42bcb20be86a493 0519f1c2fbcfd0eef5e9bc6ef8109c97b94abde0f09562799cefb9089ec5b396
           if ($LASTEXITCODE -ne 0) { throw 'Accepted source or documentation verification failed' }
       - name: Build accepted engine
         run: |

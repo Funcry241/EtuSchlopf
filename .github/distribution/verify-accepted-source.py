@@ -16,17 +16,12 @@ ADDED_R1965 = (
     "docs/MATHEMATIK-VOLLKORPUS.md",
     "docs/selector_derivation_contract_performance_trace_equivalence.md",
 )
-# The canonical 1961 inventory supplies the other original document hashes.
-# These two public documents have different native r1965 source bytes.
-NATIVE_R1965 = {
-    "README.md": "3eec8eff3b7f57251c43553a9629e022d323899639e365591ddffd966f59632a",
-    "docs/MATHEMATIK-VOLLKORPUS.md": "f698cda1fd58481e20fd8ca21be69a3600afec365e89d56e7a15be7f870093fb",
-}
+# Only these four historical documentation files differ from both accepted
+# snapshots. r1964 also projected two reader documents which r1965 binds verbatim.
 PROJECTED_DOCUMENTS = {
-    "README.md", "docs/CONTRIBUTING.md", "docs/README.md",
-    "docs/THIRD_PARTY_NOTICES.md", "docs/community/issue_templates/01_fehler.md",
+    "docs/CONTRIBUTING.md", "docs/README.md", "docs/THIRD_PARTY_NOTICES.md",
+    "docs/community/issue_templates/01_fehler.md",
 }
-
 
 
 def verified_rows(path, checksum, header):
@@ -46,25 +41,24 @@ def verify(root, expected_source, expected_projection, revision="r1964"):
     projection = dict(rows)
     paths = set(base).union(ADDED_R1964)
     if revision == "r1964":
-        permitted = PROJECTED_DOCUMENTS | {"docs/MATHEMATIK.md"}
+        permitted = PROJECTED_DOCUMENTS | {"README.md", "docs/MATHEMATIK.md"}
         expected_count = 2217
     elif revision == "r1965":
         paths.update(ADDED_R1965)
-        permitted = PROJECTED_DOCUMENTS | {"docs/MATHEMATIK-VOLLKORPUS.md"}
+        permitted = PROJECTED_DOCUMENTS
         expected_count = 2219
     else:
         raise ValueError(f"Unknown native revision: {revision}")
     if len(paths) != expected_count or len(rows) != len(projection) or set(projection) != permitted:
         raise ValueError("Unexpected native source path set or document projection")
-    # Use original digests only for the individually checked public projections.
-    native = base | (NATIVE_R1965 if revision == "r1965" else {})
     combined = hashlib.sha256(b"sha256\tpath\n")
     for path in sorted(paths):
         actual = hashlib.sha256((root / path).read_bytes()).hexdigest()
         if path in projection:
             if actual != projection[path]:
                 raise ValueError(f"Public documentation differs from its projection: {path}")
-            actual = native[path]
+            # Each permitted original is unchanged from the trusted r1961 inventory.
+            actual = base[path]
         combined.update(f"{actual}\t{path}\n".encode("utf-8"))
     if combined.hexdigest() != expected_source:
         raise ValueError("The reconstructed source differs from the natively accepted revision")
