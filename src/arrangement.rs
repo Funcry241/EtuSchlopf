@@ -706,15 +706,9 @@
         let mut last = 0_usize;
         for (idx, note) in raw_notes.iter().enumerate() {
             rebuilt.push_str(&text[last..note.start]);
-            let meta = metas.iter().find(|m| m.raw_idx == idx);
+            // collect_note_metas appends once per raw note, in input order.
+            let meta = metas.get(idx);
             let (arranged, changed) = arrange_note(&note.text);
-            // v0.1.111: HumanPotential arbeitet als echtes RestaffExistingOnly/CrossStaff-Voice. Die vorhandene Note
-            // wird an ihrer ursprünglichen Cursor-Position auf das untere System
-            // notiert; sie wird nicht zusätzlich als zweite Stimme eingefügt.
-            // Deshalb dürfen die vorhandenen LH-Pausen hier nicht pauschal als
-            // unsichtbare Timeline-Ereignisse versteckt werden: genau das erzeugte
-            // in v0.1.109 MEASURE_CURSOR_OVERFULL/RHYTHM_LEDGER-Blocker.
-            let replaces_left_rest = false;
             let moved_by_human_potential = human_potential_moves.contains(&idx);
             let moved_for_presentation = lower_presentation.contains(&idx);
             let arranged = if moved_for_presentation || moved_by_human_potential {
@@ -723,11 +717,6 @@
                 // und wird nur auf das untere System geschrieben. Keine Duplikatnote,
                 // kein zusätzlicher backup/voice-Block, keine zusätzliche Dauer.
                 move_note_to_left_system_for_human_potential(&arranged, moved_for_presentation)
-            } else if replaces_left_rest {
-                // Die ursprünglichen Pausen der leeren linken Hand werden durch die
-                // neue HumanPotential-Stimme ersetzt. So erscheinen nicht zugleich
-                // Volltaktpausen und linke Stütztöne.
-                mark_note_hidden(&arranged)
             } else if hidden.contains(&idx) {
                 match meta {
                     Some(meta) if meta.is_rest => arranged,
@@ -747,9 +736,6 @@
             if changed.staff_added { stats.staff_added += 1; }
             if changed.voice_added { stats.voice_added += 1; }
             if changed.stem_added { stats.stems_added += 1; }
-            if replaces_left_rest {
-                stats.rests_hidden += 1;
-            }
             if hidden.contains(&idx)
                 && let Some(meta) = meta {
                     if meta.is_rest {
@@ -923,8 +909,8 @@
                     let raw_idx = note_pos;
                     note_pos += 1;
                     let duration = extract_first_i64(&raw.text, "duration").unwrap_or(0).max(0);
-                    let is_chord = raw.text.contains("<chord") || raw.text.contains("<chord/");
-                    let is_rest = raw.text.contains("<rest") || raw.text.contains("<rest/");
+                    let is_chord = raw.text.contains("<chord");
+                    let is_rest = raw.text.contains("<rest");
                     let start = if is_chord { last_non_chord_start } else { cursor };
                     let staff = extract_first_text(&raw.text, "staff")
                         .and_then(|s| match s.trim() {
@@ -2101,7 +2087,7 @@
         stem_added: bool,
     }
     fn arrange_note(note_text: &str) -> (String, NoteChange) {
-        if note_text.contains("<rest") || note_text.contains("<rest/") {
+        if note_text.contains("<rest") {
             return (note_text.to_string(), NoteChange::default());
         }
         let staff = extract_first_text(note_text, "staff")
@@ -2133,7 +2119,7 @@
         (out, changed)
     }
     fn move_note_to_left_system_for_human_potential(note_text: &str, separate_voice: bool) -> String {
-        if note_text.contains("<rest") || note_text.contains("<rest/") {
+        if note_text.contains("<rest") {
             return note_text.to_string();
         }
         // v0.1.109: Nur das System wechseln, die ursprüngliche Voice aber erhalten.
@@ -2467,23 +2453,14 @@
         if before_metas.len() != before_raw.len() || after_metas.len() != after_raw.len() {
             return false;
         }
-        let before_by_raw = before_metas
-            .iter()
-            .map(|meta| (meta.raw_idx, meta))
-            .collect::<BTreeMap<_, _>>();
-        let after_by_raw = after_metas
-            .iter()
-            .map(|meta| (meta.raw_idx, meta))
-            .collect::<BTreeMap<_, _>>();
-
         survivors.iter().all(|(before_raw_idx, after_raw_idx)| {
-            let Some(before) = before_by_raw.get(before_raw_idx).copied() else {
+            let Some(before) = before_metas.get(*before_raw_idx) else {
                 return false;
             };
             if before.midi.is_none() {
                 return true;
             }
-            let Some(after) = after_by_raw.get(after_raw_idx).copied() else {
+            let Some(after) = after_metas.get(*after_raw_idx) else {
                 return false;
             };
             before.start == after.start
@@ -2516,8 +2493,8 @@
             if idx < cohort_end { continue; }
             out.push_str(&measure_text[last..note.start]);
             let visible = is_note_block_visible(&note.text);
-            let is_chord = note.text.contains("<chord") || note.text.contains("<chord/");
-            let is_rest = note.text.contains("<rest") || note.text.contains("<rest/");
+            let is_chord = note.text.contains("<chord");
+            let is_rest = note.text.contains("<rest");
             let duration = extract_first_i64(&note.text, "duration").unwrap_or(0).max(0);
             let start = meta_by_raw.get(&idx).map_or(0, |m| m.start);
             if visible && !is_chord && duration > 0 {
