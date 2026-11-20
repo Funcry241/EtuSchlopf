@@ -31,6 +31,7 @@ pub(crate) struct NotationTimePlan {
     pub(crate) events: Vec<NotationEvent>,
     source_events: Vec<crate::source_event::CanonicalSourceEvent>,
     timing_authority: TimingAuthority,
+    open_durations: BTreeSet<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +40,7 @@ enum TimingAuthority {
     PerformanceAnchors,
     PerformanceNotes,
     InferredPerformance,
+    AudioAlignedPerformance,
 }
 
 fn grid(value: i64, divisions: i64) -> Option<i64> {
@@ -233,7 +235,8 @@ impl PreparedPerformanceTiming {
             metric: MetricTimeline::from_written_meter(inferred.beats, inferred.beat_type, inferred.pickup, extent)?,
             events: inferred.events,
             source_events: originals,
-            timing_authority: TimingAuthority::InferredPerformance,
+            timing_authority: TimingAuthority::AudioAlignedPerformance,
+            open_durations: inferred.open_durations,
         };
         Ok(Self { path: path.to_path_buf(), decoded, plan: plan.into() })
     }
@@ -267,8 +270,37 @@ impl NotationTimePlan {
         })
     }
 
+    /// The seed represents the final intervals after the open release proposals
+    /// in an audio-aligned performance have received their musical context.
+    pub(crate) fn binds_written_intervals(&self) -> bool {
+        matches!(self.timing_authority, TimingAuthority::PerformanceNotes | TimingAuthority::AudioAlignedPerformance)
+    }
+
+    pub(crate) fn has_open_durations(&self) -> bool {
+        !self.open_durations.is_empty()
+    }
+
+    pub(crate) fn duration_is_open(&self, id: usize) -> bool {
+        self.open_durations.contains(&id)
+    }
+
+    /// Close one provisional release in the worker's plan before allocating
+    /// voices. Invalid decisions leave both the event and its open status intact.
+    pub(crate) fn resolve_duration(&mut self, id: usize, length: i64) -> Result<()> {
+        ensure!(self.duration_is_open(id), "Written duration of source {id} is already bound");
+        let note = self.event(id)?;
+        ensure!(note.kind == NotationEventKind::Regular && length > 0,
+            "Invalid written duration for source {id}");
+        let end = note.pos.checked_add(length).context("Written release overflow")?;
+        ensure!(self.metric.ordinal_at(note.pos).is_some() && self.metric.ordinal_at(end - 1).is_some(),
+            "Written duration of source {id} exceeds the metric timeline");
+        self.events[id].len = length;
+        self.open_durations.remove(&id);
+        Ok(())
+    }
+
     pub(crate) fn preserves_attacks(&self) -> bool {
-        matches!(self.timing_authority, TimingAuthority::InferredPerformance | TimingAuthority::PerformanceNotes)
+        self.binds_written_intervals() || self.timing_authority == TimingAuthority::InferredPerformance
     }
 
     fn from_inferred_performance(source: &DecodedMidiSource) -> Result<Self> {
@@ -281,6 +313,7 @@ impl NotationTimePlan {
             events: inferred.events,
             source_events: originals,
             timing_authority: TimingAuthority::InferredPerformance,
+            open_durations: BTreeSet::new(),
         })
     }
 
@@ -476,7 +509,7 @@ impl NotationTimePlan {
                 .ordinal_at(e.pos)
                 .map_or(0, |b| b + 1);
             bail!(
-                "Notationszeit nicht eindeutig darstellbar: Quellnote {}, Takt {}. Die MIDI-Zeit passt weder exakt zum Notationsraster noch zu einem eindeutigen Vorschlag. Freie Spielzeiten brauchen eine explizite Notationszeitkarte",
+                "Notationszeit nicht eindeutig darstellbar: Quellnote {}, Takt {}. Die MIDI-Zeit passt weder exakt zum Notationsraster noch zu einem eindeutigen Vorschlag",
                 i,
                 bar
             );
@@ -487,6 +520,7 @@ impl NotationTimePlan {
             events: events.into_iter().flatten().collect(),
             source_events: originals,
             timing_authority: TimingAuthority::ExactMidi,
+            open_durations: BTreeSet::new(),
         })
     }
 
@@ -566,6 +600,7 @@ impl NotationTimePlan {
             events,
             source_events: originals,
             timing_authority: TimingAuthority::PerformanceNotes,
+            open_durations: BTreeSet::new(),
         })
     }
 
@@ -609,6 +644,7 @@ impl NotationTimePlan {
             events,
             source_events: originals,
             timing_authority: TimingAuthority::PerformanceAnchors,
+            open_durations: BTreeSet::new(),
         })
     }
 

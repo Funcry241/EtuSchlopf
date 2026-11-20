@@ -298,6 +298,7 @@ fn performed_binary_pulse_is_inferred_without_a_sidecar() {
     let source = decoded(&notes, 384, &[]);
     let plan = NotationTimePlan::from_midi(&source).unwrap();
     assert_eq!(plan.timing_authority, TimingAuthority::InferredPerformance);
+    assert!(!plan.binds_written_intervals());
     assert_eq!(plan.events.len(), notes.len());
     assert_eq!(plan.events[0].len, 48);
     assert_eq!(plan.events[1].pos, 48);
@@ -531,8 +532,9 @@ fn free_performance_projects_a_supported_pickup_into_the_metric_timeline() {
     // each full bar provide evidence for the bar phase.
     let pickup = 4;
     let cycle = 12;
+    let bars = 12;
     let mut notes = vec![(0, 3 * 96, 76, 77), (0, 5 * 96, 76, 77)];
-    for bar in 0..12 {
+    for bar in 0..bars {
         let bass = [43, 45, 48, 50, 47, 41][bar % 6];
         let start = 3 + pickup + bar as u64 * cycle;
         for (offset, pitches) in [
@@ -543,9 +545,22 @@ fn free_performance_projects_a_supported_pickup_into_the_metric_timeline() {
             (8, vec![bass + 20]),
             (11, vec![bass, bass + 12, bass + 16]),
         ] {
-            notes.extend(
-                pitches.into_iter().map(|pitch| (0, (start + offset) * 96, 76, pitch)),
-            );
+            let final_bar = bar + 1 == bars;
+            if final_bar && offset > cycle / 2 { continue; }
+            let final_pulse = final_bar && offset == cycle / 2;
+            let pitches = if final_pulse { vec![bass, bass + 12, bass + 16] } else { pitches };
+            for pitch in pitches {
+                let hold = if final_pulse {
+                    // The final chord shares a short release and is followed by silence.
+                    2 * 96 - 36
+                } else if offset == 0 && pitch == bass {
+                    // Hold the low chord tone while the other pitches move independently.
+                    5 * 96 - 20
+                } else {
+                    76
+                };
+                notes.push((0, (start + offset) * 96, hold, pitch));
+            }
         }
     }
 
@@ -566,7 +581,9 @@ fn free_performance_projects_a_supported_pickup_into_the_metric_timeline() {
 
     let path = std::path::Path::new("synthetic-compound-pickup.mid");
     let originals = source.notes.clone();
-    let prepared = PreparedPerformanceTiming::prepare_performance(path, source, &samples, sample_rate).unwrap();
+    let prepared = std::sync::Arc::new(
+        PreparedPerformanceTiming::prepare_performance(path, source, &samples, sample_rate).unwrap(),
+    );
     let (source, plan) = prepared.source_and_plan();
     let opening = plan.measure(0).unwrap();
     let full = plan.measure(1).unwrap();
@@ -577,4 +594,76 @@ fn free_performance_projects_a_supported_pickup_into_the_metric_timeline() {
     assert_eq!(source.notes, originals);
     assert_eq!(plan.events.len(), originals.len());
     assert!(originals.iter().all(|note| plan.source_event(note.source_ordinal).unwrap() == *note));
+    let original_events = plan.events.clone();
+    let open: BTreeSet<_> = original_events.iter()
+        .filter(|event| plan.duration_is_open(event.source_ordinal))
+        .map(|event| event.source_ordinal)
+        .collect();
+    assert!(plan.has_open_durations() && !open.is_empty());
+    assert!(original_events.iter().any(|event| {
+        event.kind == NotationEventKind::Regular && !open.contains(&event.source_ordinal)
+    }));
+
+    let _scope = PreparedPerformanceTiming::enter(Some(&prepared));
+    let (xml, stats) = crate::midi_seed::midi_to_musicxml_seed_with_profile_and_hotspots(
+        path, "Synthetic performance", crate::midi_seed::midi_seed_solver_profiles()[0].clone(), None,
+    ).unwrap();
+    let settled = &stats.notation_time;
+    assert!(settled.binds_written_intervals() && !settled.has_open_durations());
+    assert_eq!(plan.events, original_events);
+    for &before in &original_events {
+        let id = before.source_ordinal;
+        assert_eq!(plan.duration_is_open(id), open.contains(&id));
+        let after = settled.event(id).unwrap();
+        assert!(!settled.duration_is_open(id));
+        assert_eq!((after.pos, after.kind), (before.pos, before.kind));
+        if !open.contains(&id) {
+            assert_eq!(after.len, before.len);
+        }
+    }
+    assert!(open.iter().any(|&id| {
+        let after = settled.event(id).unwrap();
+        after.len != plan.event(id).unwrap().len
+            && settled.events.iter().any(|next| {
+                next.kind == NotationEventKind::Regular && next.pos == after.pos + after.len
+            })
+    }));
+    assert!(settled.events.iter().any(|long| settled.events.iter().any(|short| {
+        long.pos == short.pos && long.len > short.len && short.len > 0
+    })));
+    let last_pos = original_events.iter().map(|event| event.pos).max().unwrap();
+    let last_bar = settled.measure(settled.metric.len() - 1).unwrap();
+    let final_chord: Vec<_> = settled.events.iter().filter(|event| event.pos == last_pos).collect();
+    assert!(final_chord.len() > 1);
+    assert!(final_chord.iter().any(|event| open.contains(&event.source_ordinal)));
+    for event in final_chord {
+        assert_eq!(event.len, plan.event(event.source_ordinal).unwrap().len);
+        assert!(event.pos + event.len < last_bar.end);
+    }
+    let inventory = stats.rhythmic_courses.arrangement_inventory(&xml).unwrap();
+    let score = crate::musicxml::parse_musicxml(&xml).unwrap();
+    let mut occurrences = inventory.occurrences.iter();
+    let mut ends = BTreeMap::new();
+    for (bar, measure) in score.parts[0].measures.iter().enumerate() {
+        let start = settled.measure(bar).unwrap().start;
+        for note in &measure.events {
+            let fragment = occurrences.next().unwrap();
+            let source = fragment.source;
+            let Some(pitch) = &note.pitch else { assert!(source.is_none()); continue; };
+            let id = source.unwrap();
+            let prior_end = ends.insert(id, start + note.start + note.duration);
+            let event = settled.event(id).unwrap();
+            assert_eq!(pitch.midi, settled.source_event(id).unwrap().midi);
+            assert_eq!(note.tie_stop, prior_end.is_some());
+            assert_eq!(start + note.start, prior_end.unwrap_or(event.pos));
+            let continues = start + note.start + note.duration < event.pos + event.len;
+            assert_eq!(xml[fragment.bytes.clone()].contains("<tie type=\"start\"/>"), continues);
+        }
+    }
+    assert!(occurrences.next().is_none());
+    for event in &settled.events {
+        let expected = (event.kind != NotationEventKind::PlaybackOnly).then_some(event.pos + event.len);
+        assert_eq!(ends.remove(&event.source_ordinal), expected);
+    }
+    assert!(ends.is_empty());
 }

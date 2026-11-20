@@ -1,10 +1,6 @@
-# Mathematik in EtuSchlopf
+# Mathematik in EtuSchlopf bis r1960
 
-**Bestandsaufnahme r1748 / 0.10.1839, ergänzt um die Fallstudie zur Stimmzuordnung aus r1960.** Die Abschnitte zu Balkenpaaren, Stimmfortsetzungen und Systemumbrüchen zeigen, welche musikalische Aussage der jeweilige Vergleich trägt. Der [Projektstatus](assistant_memory/050_aktueller_stand.md) nennt die belegten Windows- und lokalen Prüfstände.
-
-EtuSchlopf verwendet Mathematik für musikalische Entscheidungen, Darstellungsentscheidungen, Messungen und technische Beweise. Diese Aufgaben sind verschieden: Eine Erhaltungsbilanz beweist keine Lesbarkeit; ein lesbarer Registerkurs beweist keine menschliche Spielbarkeit; eine bestandene Prüfung erlaubt nur den Übergang, dessen Bedingungen sie tatsächlich abdeckt.
-
-Diese Seite ist eine **nach Aufgaben gegliederte Bestandsaufnahme** der überprüften Verfahrensfamilien. Sie ersetzt weder die kanonischen Verträge noch ein vollständiges Funktionsinventar. Die frühere Liste von 21 Themen war unvollständig. Insbesondere fehlten eigenständige Beschreibungen der Tonartbewertung, Phrasen- und Wiederholungsanalyse, Belegungsgraphen, WAV-Puls- und Spektralanalyse, vorhandenen Systemumbruchplanung und exakten Suchbeschleunigungen. Auch diese erweiterte Seite behauptet nicht, jede arithmetische Operation jeder Abhängigkeit aufzulisten.
+Dieser Fachartikel hält die mathematischen Modelle der Bestandsaufnahme r1748 und die Fallstudie zur Stimmzuordnung r1960 fest. Historische Messergebnisse sind mit ihrer Revision gekennzeichnet. Die fortgeführte Übersicht beschreibt auch Notendauern aus MIDI und WAV, die Prüfung am Mozart-Notenbild und die nächsten mathematischen Vorhaben. [Aktuelle Mathematik in EtuSchlopf](MATHEMATIK-VOLLKORPUS.md)
 
 ## Wie die Aussagen zu lesen sind
 
@@ -32,7 +28,9 @@ Unter diesem Namen fasst diese Seite die Bedingungen für einen erlaubten, beleg
 
 Ein ausführbarer Teilkern ist die Entscheidung über die Einstufung **eines** Änderungsbelegs:
 
-$$A(e)=[p(e)=1]\land[m(e)+d(e)+i(e)=0].$$
+```math
+A(e)=[p(e)=1]\land[m(e)+d(e)+i(e)=0].
+```
 
 $p$ zählt erlaubende Einstufungen, $m,d,i$ zählen fehlende, doppelte und ungültige Belege. Die Zähler sind keine Wahrscheinlichkeiten. Der Kern steht in `adoption_decision` in [ssc_evidence_proof.rs](../src/ssc_evidence_proof.rs). Er ist allein noch keine vollständige Freigabeformel.
 
@@ -44,17 +42,21 @@ Die Zusammenstellung verlangt außerdem die zuständige Authority, die Herkunft 
 
 Der bisher vereinbarte Entwurf lautet:
 
-$$\min_{x\in\mathcal F}(\text{Seitenzahl}(x),\text{übermäßige Dehnung}(x),\text{Unausgewogenheit}(x)).$$
+```math
+\min_{x\in\mathcal F}(\text{Seitenzahl}(x),\text{übermäßige Dehnung}(x),\text{Unausgewogenheit}(x)).
+```
 
 $\mathcal F$ müsste die tatsächlich lesbaren und materialisierbaren Kandidaten enthalten. Lesbarkeit ist darin Voraussetzung. Horizontale Taktprofile, vertikale Systemhüllen und Seitenbelegung sind getrennte Größen; die Systemreihenfolge bleibt erhalten.
 
-**Status:** Diese Gesamtformel ist nicht als vollständiger Seitenoptimierer implementiert. Die bestehende horizontale Systemplanung ist davon zu unterscheiden. Seitenverdichtung bleibt zurückgestellt, bis sichtbare Mindestabstände und die zugehörige Vergleichsgrundlage festgelegt sind. Aus einer großen beobachteten Lücke folgt weder ein Mindestabstand noch automatisch die Erlaubnis zum Zusammenrücken.
+**Status:** Diese Gesamtformel ist nicht als vollständiger Seitenoptimierer implementiert. Die bestehende horizontale Systemplanung ist davon zu unterscheiden. Für den hier untersuchten Stand fehlten festgelegte sichtbare Mindestabstände und eine gemeinsame Vergleichsgrundlage. Aus einer großen beobachteten Lücke folgt weder ein Mindestabstand noch automatisch die Erlaubnis zum Zusammenrücken.
 
 Quelle: [Fehlerklasse zur unnötig beibehaltenen Seite](selector_derivation_contract_redundant_page_retention.md), [Projektstatus und Arbeitsrahmen](assistant_memory/050_aktueller_stand.md).
 
 ### Symbolische Spielformel: Anforderungen und Fähigkeiten
 
-$$\exists a:\ S(a)\land K(a)\land U(a)\land W(a).$$
+```math
+\exists a:\ S(a)\land K(a)\land U(a)\land W(a).
+```
 
 $a$ belegt physische Verpflichtungen mit Hand-/Finger-Plätzen. $S$ steht für Strukturbedingungen, $K$ für statische Konfigurationen, $U$ für Übergänge und $W$ für Wiederanschläge gleicher Tasten. Anforderungen der Musik und Fähigkeiten eines Pianistenmodells bleiben getrennt.
 
@@ -62,7 +64,7 @@ $a$ belegt physische Verpflichtungen mit Hand-/Finger-Plätzen. $S$ steht für S
 
 Quelle: [pianistic_symbolic_capability_reachability.rs](../src/audit_only/pianistic_symbolic_capability_reachability.rs) und die dort konsumierten Fähigkeitsmodelle.
 
-## Verfahrensfamilien im aktuellen Quellstand
+## Verfahrensfamilien der Bestandsaufnahme
 
 Die Quellstellen nennen die jeweiligen Implementierungsstellen, nicht automatisch einen universellen mathematischen Satz über das gesamte Programm. Wissenschaftliche Grundlagen, Originalarbeiten und ihr jeweiliger Bezug stehen gesondert im Abschnitt [Quellen](#quellen).
 
@@ -107,8 +109,10 @@ Die Quellstellen nennen die jeweiligen Implementierungsstellen, nicht automatisc
 
 ### Bilanz, Identität und Sichtbarkeit
 
-$$N_{\mathrm{Quelle}}=N_{\mathrm{aktiv}}+N_{\mathrm{inaktiv}},\qquad
-N_{\mathrm{aktiv}}=N_{\mathrm{sichtbar}}+N_{\mathrm{verborgen}}.$$
+```math
+N_{\mathrm{Quelle}}=N_{\mathrm{aktiv}}+N_{\mathrm{inaktiv}},\qquad
+N_{\mathrm{aktiv}}=N_{\mathrm{sichtbar}}+N_{\mathrm{verborgen}}.
+```
 
 Diese Gleichheiten gelten nur für die im jeweiligen Bericht sauber abgegrenzte Grundgesamtheit. Quellanschläge, geschriebene Fragmente und sichtbare Köpfe sind nicht austauschbare Nenner.
 
@@ -133,7 +137,9 @@ Für ein geschriebenes Ereignis gilt das halboffene Intervall $[t,t+d)$. Bei ein
 
 Für den dadurch erzeugten Intervallgraphen gilt:
 
-$$\chi(G)=\omega(G).$$
+```math
+\chi(G)=\omega(G).
+```
 
 Die maximale Überlappung ist damit die minimale Farbzahl **dieses Graphen**. Musikalische Linien, ursprüngliche Balkengruppen, Pausenpflichten, Akkordbindungen und technische Importkanäle besitzen zusätzliche Bedingungen. Aus der Graphzahl allein folgt keine erlaubte Zusammenlegung solcher Rollen. Der aktuelle `VoiceModel`-Bericht nennt diese Grenze ausdrücklich.
 
@@ -148,7 +154,9 @@ An einer synthetischen Grenze enden drei Linien auf den Noten A, B und C. Drei n
 
 B und C benötigen zusammen Y und Z. Deshalb ist A → X erzwungen, obwohl es zwei vollständige Pläne gibt. B → Y ist möglich, und Plan 2 belegt die Mehrdeutigkeit. Allgemein bezeichnet $P$ die Menge aller unter den geprüften Bedingungen zulässigen Pläne der Passage und $E(p)$ die Anschlüsse in Plan $p$. Dann gilt
 
-$$e\text{ ist erzwungen}\quad\Longleftrightarrow\quad P\ne\varnothing\ \land\ \forall p\in P:\ e\in E(p).$$
+```math
+e\text{ ist erzwungen}\quad\Longleftrightarrow\quad P\ne\varnothing\ \land\ \forall p\in P:\ e\in E(p).
+```
 
 Erstreckt sich eine klingende Note über mehrere Einsätze, muss ein Plan alle betroffenen Einsätze zusammen erfüllen. Ein Zwangsnachweis braucht einen zulässigen Plan mit dem Anschluss und den vollständigen Ausschluss aller Gegenpläne im angegebenen Suchraum. Bricht die Suche vorher ab, bleibt diese Aussage offen.
 
@@ -156,8 +164,10 @@ Erstreckt sich eine klingende Note über mehrere Einsätze, muss ein Plan alle b
 
 Die implementierte lokale Bewertung enthält:
 
-$$E(t,s)=3\Delta t^2+24\Delta p^2+42^2[\text{System verschieden}]
-+12^2[\text{Stimme verschieden}]+2(\Delta t-24k)^2+12000[\text{Platz bereits verwendet}].$$
+```math
+E(t,s)=3\Delta t^2+24\Delta p^2+42^2[\text{System verschieden}]
++12^2[\text{Stimme verschieden}]+2(\Delta t-24k)^2+12000[\text{Platz bereits verwendet}].
+```
 
 Zeit wird hier in der vorhandenen 96-Ticks-pro-Viertel-Projektion gemessen, Tonhöhe in Halbtönen. Der Code begrenzt zusätzlich den Kandidatenraum und prüft je nach Aufruf die Zielbelegung. Die Formel allein ist weder vollständige Zulässigkeit noch Erhaltungsbeweis. Der Name „Gauss“ bezeichnet hier quadratische Kosten; er behauptet keine Gauß-Verteilung der Musikdaten, kein statistisches Maximum-Likelihood-Modell und keine globale optimale Zuordnung aller Töne.
 
@@ -167,7 +177,9 @@ Gewichte, Kandidatengrenzen und Strafen sind Projekteinstellungen. Ein Kandidate
 
 Die aktuelle Profilbewertung summiert Beiträge pro Ton. Vereinfacht mit dem vom Owner bestimmten Gewicht $w_n$, Tonklasse $c_n$ und Profil $P$ lautet der im Code sichtbare Kern:
 
-$$T(P)=\sum_n w_n\big(3[c_n\in\mathrm{Skala}(P)]-4[c_n\notin\mathrm{Skala}(P)]+2[c_n=\mathrm{Tonika}(P)]+[c_n=\mathrm{Dominante}(P)]+[P\text{ ist Moll}\land c_n=\mathrm{erhöhte\ Leittonklasse}(P)]\big).$$
+```math
+T(P)=\sum_n w_n\big(3[c_n\in\mathrm{Skala}(P)]-4[c_n\notin\mathrm{Skala}(P)]+2[c_n=\mathrm{Tonika}(P)]+[c_n=\mathrm{Dominante}(P)]+[P\text{ ist Moll}\land c_n=\mathrm{erhöhte\ Leittonklasse}(P)]\big).
+```
 
 Dies ist eine Projekteinstellung und kein statistisch kalibrierter Tonartbeweis. Die tatsächliche Schreibweisenentscheidung verlangt zusätzliche Bedingungen zu Geltungsbereich, Stabilität, konkurrierenden Lesarten und Vorzeichenkosten. Enharmonische Umbenennung darf die klingende Tonhöhe nicht verändern. Ein Profilwert allein erteilt weder eine neue Tonhöhe noch eine neue Abschnittsgrenze.
 
@@ -175,17 +187,23 @@ Dies ist eine Projekteinstellung und kein statistisch kalibrierter Tonartbeweis.
 
 Der separate Lesbarkeitskurs verwendet den graduellen Druck
 
-$$p(l)=l^2+8\max(l-3,0)$$
+```math
+p(l)=l^2+8\max(l-3,0)
+```
 
 und Kosten für Schlüsselwechsel, Redundanzen und kurze Ausflüge. Seine bekannten 24 Einheiten je Wechsel beziehungsweise kurzem Ausflug sind Setzungen dieses Modells. Daraus folgt keine universelle Grenze von drei Hilfslinien.
 
 Die historische C3-Policy verwendete die eingefrorene **lexikografische** Reihenfolge
 
-$$ (h_8,h_7,h_6,h_5,h_4,k_o,u_k,k_s,g_b,h_3,c_h,h_2,h_1). $$
+```math
+(h_8,h_7,h_6,h_5,h_4,k_o,u_k,k_s,g_b,h_3,c_h,h_2,h_1).
+```
 
 Die versionierte [C4-Policy](joint_register_dp_policy_c4_v1.md) vertauscht ausschließlich die benachbarten Prioritäten $h_3$ und $c_h$:
 
-$$ (h_8,h_7,h_6,h_5,h_4,k_o,u_k,k_s,g_b,c_h,h_3,h_2,h_1). $$
+```math
+(h_8,h_7,h_6,h_5,h_4,k_o,u_k,k_s,g_b,c_h,h_3,h_2,h_1).
+```
 
 Damit kann ein Kurs mit weniger Registerzeichen trotz zusätzlicher Drei-Hilfslinien-Köpfe gewinnen. Schwerere Hilfslinienklassen, die Kopf-Schutzregel, Gruppengrenzen und alle tatsächlichen Schreibbedingungen behalten ihren Vorrang. Es gibt keine neue Gewichts- oder Schwellenkalibrierung. Der Dateiname des bestehenden Suchkerns und die C3-Präfixe einiger Transporttypen bleiben aus Kompatibilitätsgründen erhalten.
 
@@ -204,7 +222,9 @@ Nominale Zustände sind noch keine Schreibbefugnis. Im aktuellen Adapter unterst
 
 Die Schutzregel lautet für jeden sichtbaren Kopf $n$:
 
-$$\neg\big(L_z(n)\ge4\ \land\ L_z(n)>L_0(n)\big).$$
+```math
+\neg\big(L_z(n)\ge4\ \land\ L_z(n)>L_0(n)\big).
+```
 
 Ein Kandidat darf also keine neue oder verschärfte Belastung ab vier Hilfslinien erzeugen. Ein bereits belasteter Ausgangszustand wird nicht durch Behauptung unsichtbar. Unter den zulässigen vollständigen Kursen zählt die erste abweichende Kostenkomponente; Gleichstand erhält den Ausgang.
 
@@ -224,7 +244,9 @@ Die WAV-Pulsanalyse erzeugt Hypothesen aus Energie- und Transientenanstiegen, lo
 
 Für ausgewählte Frequenzen verwendet die harmonische Evidenzprobe tatsächlich eine Goertzel-Rekurrenz:
 
-$$s_j=x_j+2\cos(\omega)s_{j-1}-s_{j-2},\qquad \omega=2\pi f/f_s.$$
+```math
+s_j=x_j+2\cos(\omega)s_{j-1}-s_{j-2},\qquad \omega=2\pi f/f_s.
+```
 
 Die Frequenzzuordnung der Probe verwendet $f(m)=440\cdot2^{(m-69)/12}$: gleichstufige Stimmung mit A4 = 440 Hz ist hier eine Modellannahme. Der Code normiert die berechnete Energie durch das Quadrat der Fensterlänge. Dies ist gezielte Frequenzanalyse, keine Behauptung, dass im Projekt eine allgemeine FFT-Pipeline implementiert sei. Ein hoher Wert kann auch von Obertönen oder überlagerten Klängen stammen. Basic Pitch ist zusätzlich ein fremder neuronaler Sensor; beide Beobachtungen erhalten keine automatische musikalische Schreibbefugnis.
 
@@ -240,7 +262,9 @@ Die geometrischen Readbacks untersuchen tatsächliche Hüllen und Abstände, sow
 
 Für additive Passagenkosten können Präfixsummen dieselbe Summe liefern:
 
-$$\sum_{i=a}^{b-1}c_i=P_b-P_a.$$
+```math
+\sum_{i=a}^{b-1}c_i=P_b-P_a.
+```
 
 Die Indizes entstehen aus der exakten halboffenen Zeitbedingung, nicht aus einer geratenen Notennähe. Die Umordnung muss Kosten, Kandidaten und Gleichstandsregeln erhalten.
 
@@ -250,13 +274,15 @@ Die Bogenprüfung verwendet einen anderen Index: Für jede Nummer beantworten er
 
 Eine Aufbewahrungsprojektion $\pi$ ist nur dann ausreichend, wenn spätere Beobachtungen tatsächlich durch sie faktorisieren. Präziser als ein bloßer Größenvergleich ist die Bedingung
 
-$$\pi(D_1)=\pi(D_2)\Rightarrow O_L(D_1)=O_L(D_2)$$
+```math
+\pi(D_1)=\pi(D_2)\Rightarrow O_L(D_1)=O_L(D_2)
+```
 
 für die betroffenen erreichbaren Leser $L$ und ihre Beobachtung $O_L$, einschließlich der relevanten Fortsetzungen. Eine identische aktuelle Ausgabe allein genügt nicht für künftige Mutationen. Die ausführbare Aufbewahrungspolitik bleibt der konkrete Nachweis.
 
 Hashes sind davon getrennt: Sie binden Bytes unter ihren jeweiligen Kollisionsannahmen. FNV-1a ist kein kryptografischer Beweis; auch SHA-256 ist mathematisch nicht injektiv über beliebig lange Eingaben. Provenienz, tatsächlich mitgeführte Ereignisidentität und bytebezogene Integritätsprüfung erfüllen verschiedene Aufgaben.
 
-## Prüfstände und verbleibende Grenzen
+## Historische Prüfstände und ihre Grenzen
 
 Für BWV 847 bestätigt der Windows-Export r1747 mit 3.041 bestandenen und vier ignorierten Tests. Der Notenwert-Abgleich wurde in r1745 unter Windows abgenommen. Alle 754 Notenansätze, geschriebenen Notenwerte und Haltebögen stimmen mit der geprüften Referenz überein. Für r1748 ist lokal belegt, dass beide MusicXML-Dateien bytegleich mit r1747 sind und der gerenderte Vergleich auf allen vier Seiten dasselbe Bild ergibt.
 
@@ -277,16 +303,6 @@ Gegenüber r1682 bleiben alle zehn Master-Notenfolgen strukturell gleich. Die Re
 Historische Zahlen aus r1556 oder r1559 werden nicht als heutige Kennzahlen fortgeschrieben. Das alte Speichermodell $M\approx0{,}0054FS+0{,}0061GS$ bleibt eine historische Regressionshypothese: Die abgedruckte Form besitzt zwei Koeffizienten; die frühere Textangabe „drei Parameter“ ist ohne zusätzlichen Modellterm nicht nachvollziehbar. Ohne Rohdaten und erneute Anpassung wird daraus kein aktueller Speicherbeweis abgeleitet.
 
 Auch die frühere Weglass-Untergrenze gilt nur unter ihrem vereinfachten Modell aus monotoner Handaufteilung, gewählter Spannweite und begrenzter Fingerzahl. Sie ist keine allgemeine Untergrenze für notwendige Notenlöschungen beim menschlichen Klavierspiel.
-
-## Was noch offen ist
-
-- Systemübergreifende Registerabhängigkeiten vollständig binden und vergleichen, bevor eine neue gekoppelte Optimierung behauptet wird.
-- Bewertungspräferenzen und Zulässigkeit getrennt begründen; symbolische Kosten nicht als empirisch kalibrierte Lesezeit ausgeben.
-- Menschliche Fähigkeiten und Tempo belastbar kalibrieren, bevor aus Anforderungsprofilen ein personenbezogenes Spielbarkeitsurteil folgt.
-- Seitenverdichtung erst nach dem zurückgestellten Mindestabstands- und Lesbarkeitsvergleich angehen.
-- Unterschiedliche Platzierungsfamilien und ihre Erhaltungs-/Belegungsbedingungen einzeln verfolgen; ein Audit-Zähler ist keine gemeinsame Schreibregel.
-- Eine künftige globale Bogen-Zuordnung von der heutigen indizierten Existenzprüfung unterscheiden.
-- Die Bestandsaufnahme bei neuen Ownern, Suchkernen oder Messverfahren aktualisieren. Neue Behauptungen erhalten einen Quellbezug und eine ausdrücklich begrenzte Beweisaussage.
 
 ## Herkunft und Eigenanteil
 

@@ -1,13 +1,10 @@
 # Wegweiser durch die Dokumentation
 
-EtuSchlopf ist ein experimentelles, privat gepflegtes Projekt. Beginne je nach
-Aufgabe mit einem der folgenden Einstiege:
-
-Der veröffentlichte Quellstand auf `main` ist **r1961**. Die [native Windows-Abnahme](evidence/r1961/README.md) dokumentiert diesen Stand. Der verfügbare [Windows-Download](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1961-windows-preview) gehört zur gleichen Revision.
+EtuSchlopf ist ein experimentelles, privat gepflegtes Projekt. Der Quellstand **r1964** wurde unter Windows an Mozarts KV 331 geprüft. Der letzte veröffentlichte Vollkorpus umfasst 14 Stücke und stammt aus r1961. [Windows-Einzellauf r1964](evidence/r1964/README.md) · [Vollkorpus r1961](evidence/r1961/README.md)
 
 | Aufgabe | Einstieg |
 | --- | --- |
-| Windows-EXE herunterladen und erstes Stück verarbeiten | [Erster Start](../README.md#dein-erstes-stück) und [Download](../README.md) |
+| Windows-EXE herunterladen und erstes Stück verarbeiten | [Erster Start und Download](../README.md#dein-erstes-stück) |
 | Noten ansehen, bevor du etwas installierst | [Alle 14 Notenbilder](examples/README.md#notenbilder) |
 | Eine falsche Note oder ein Startproblem melden | [Kurzer Fehlerbericht](https://github.com/Funcry241/EtuSchlopf/issues/new?template=01_fehler.md) |
 | Alle Aufrufe und Optionen | [Aufrufreferenz](DEVELOPMENT.md#vollständige-aufrufreferenz) |
@@ -16,7 +13,7 @@ Der veröffentlichte Quellstand auf `main` ist **r1961**. Die [native Windows-Ab
 | Umgang miteinander und Moderation | [Verhaltenskodex](CODE_OF_CONDUCT.md) |
 | Bedienhürden und bekannte Grenzen | [Barrierefreiheit](ACCESSIBILITY.md) |
 | Welche Mathematik wo genutzt wird und was das Notenbild ändert | [Mathematik hinter EtuSchlopf](MATHEMATIK-VOLLKORPUS.md) |
-| Entwicklungsstand und native Abnahme prüfen | [Korpus r1961](evidence/r1961/README.md) · [Korpus r1938](evidence/r1938/README.md) · [Bach r1749](evidence/r1749/README.md) · [Chopin r1792](evidence/r1792/README.md) · [Schubert r1872](evidence/r1872/README.md) · [Korpus r1933](evidence/r1933/README.md) · [Korpus r1921](evidence/r1921/README.md) · [Korpus r1886](evidence/r1886/README.md) |
+| Entwicklungsstand und native Abnahme prüfen | [Mozart r1964](evidence/r1964/README.md) · [Korpus r1961](evidence/r1961/README.md) · [Korpus r1938](evidence/r1938/README.md) · [Bach r1749](evidence/r1749/README.md) · [Chopin r1792](evidence/r1792/README.md) · [Schubert r1872](evidence/r1872/README.md) · [Korpus r1933](evidence/r1933/README.md) · [Korpus r1921](evidence/r1921/README.md) · [Korpus r1886](evidence/r1886/README.md) |
 | Windows-Testversion und frühere Laufzeitmessung prüfen | [Prüfbelege r1577](evidence/r1577/README.md) |
 | Architektur und zuständige Verträge finden | [Architektureinstieg](assistant_memory/000_start_here.md) |
 | Separate PDF-/Export-Diagnosen verwenden | [Diagnosewerkzeuge](../tools/assistant_diagnostics/README.md) |
