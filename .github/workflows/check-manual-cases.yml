@@ -1,0 +1,72 @@
+name: Four explicit source tests for r1968
+on:
+  push:
+    branches: [verify/native-r1966-r1968]
+    paths: ['.github/workflows/check-manual-cases.yml']
+permissions:
+  contents: read
+jobs:
+  manual-tests:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    env:
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify the final source tree and the requested take hash
+        run: |
+          set -euo pipefail
+          export ETU_NATIVE_ROOT="$RUNNER_TEMP/etuschlopf-final"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          cfg = json.loads(Path(".github/strict-ci/run.json").read_text())
+          assert cfg["revision"] == 1968
+          assert cfg["sha256"] == "2138a8f2ad1746367c443f5c7ac80dada47b48f04414f2f21a773bf4f7a11880"
+          assert cfg["source_tree_sha256"] == "233a6a86fb77ac85e08004d858654267ea2bd151918e5f53cef28a0fdbbdea0b"
+          PY
+          python3 .github/strict-ci/verify.py linux
+          echo "ETU_NATIVE_ROOT=$ETU_NATIVE_ROOT" >> "$GITHUB_ENV"
+      - name: Install the pinned external renderer for the beam roundtrip
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl --retry 3 --fail --location --silent --show-error -o MuseScore.AppImage 'https://github.com/musescore/MuseScore/releases/download/v4.7.5/MuseScore-Studio-4.7.5.260831071-x86_64.AppImage'
+          echo 'a31b2da2dbcc2191bcc98beb7be5c15f2f517bedb3444def96fe3088b74d3a1e  MuseScore.AppImage' | sha256sum --check
+          chmod +x MuseScore.AppImage
+          ./MuseScore.AppImage --appimage-extract > /dev/null
+          cat > "$RUNNER_TEMP/renderer.py" <<'PY'
+          import os
+          import sys
+          os.execv(os.environ["ETU_TEST_RENDERER"], [os.environ["ETU_TEST_RENDERER"], *sys.argv[1:]])
+          PY
+          echo "ETU_TEST_RENDERER=$RUNNER_TEMP/squashfs-root/AppRun" >> "$GITHUB_ENV"
+          echo "ETUSCHLOPF_BEAM_RENDER_WRAPPER=$RUNNER_TEMP/renderer.py" >> "$GITHUB_ENV"
+          xvfb-run -a "$RUNNER_TEMP/squashfs-root/AppRun" --version
+      - name: Run the three synthetic probes and actual MuseScore beam roundtrip
+        run: |
+          set -euo pipefail
+          cd "$ETU_NATIVE_ROOT"
+          rustup toolchain install 1.98.0 --profile minimal
+          cargo +1.98.0 test --locked --jobs 1 --bin etuschlopf -- --ignored --list | tee "$RUNNER_TEMP/ignored-list.txt"
+          xvfb-run -a cargo +1.98.0 test --locked --jobs 1 --bin etuschlopf -- --ignored --test-threads=1 | tee "$RUNNER_TEMP/ignored-results.txt"
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+          tmp = Path(os.environ["RUNNER_TEMP"])
+          names = {
+              "pipeline::arrangement_variant_representation_transport_tests::arrangement_variant_performance_probe",
+              "pipeline::joint_register_preview_parse_reuse_tests::exact_preview_memo_synthetic_timing",
+              "structural_write_authority::rustig_clef_planning::joint_boundary_reuse_tests::synthetic_boundary_observation_benchmark",
+              "structural_write_authority::serialization_plan::original_beam_voice_alignment::tests::actual_musescore_roundtrip_confirms_the_later_primary_target_becomes_visible",
+          }
+          listed = set(re.findall(r"^(.+): test$", (tmp / "ignored-list.txt").read_text(), re.M))
+          assert names == listed, (names, listed)
+          log = (tmp / "ignored-results.txt").read_text()
+          passed = set(re.findall(r"^test (\S+) \.\.\. ok$", log, re.M))
+          assert names == passed, (names, passed)
+          assert "4 passed; 0 failed; 0 ignored" in log
+          PY
