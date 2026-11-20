@@ -1,44 +1,16 @@
-name: Windows download
+name: Windows r1965 CI preview
 on:
   workflow_dispatch:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'tools/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'ZIP_KIND.txt'
-      - 'docs/evidence/r1964/**'
-      - 'docs/examples/*-r1964.pdf'
-      - 'docs/images/*-r1964-ausschnitt.png'
-      - '.gitattributes'
-      - '.github/distribution/**'
-      - '!.github/distribution/RELEASE.md'
-      - '.github/workflows/windows-download.yml'
   push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'tools/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'ZIP_KIND.txt'
-      - 'docs/evidence/r1964/**'
-      - 'docs/examples/*-r1964.pdf'
-      - 'docs/images/*-r1964-ausschnitt.png'
-      - '.gitattributes'
-      - '.github/distribution/**'
-      - '!.github/distribution/RELEASE.md'
-      - '.github/workflows/windows-download.yml'
+    branches: [take/r1965-performance]
 permissions:
   contents: read
 concurrency:
-  group: windows-download-${{ github.ref }}
+  group: windows-preview-r1965
   cancel-in-progress: false
 jobs:
   build:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.ref == 'refs/heads/take/r1965-performance'
     runs-on: windows-2022
     timeout-minutes: 45
     defaults:
@@ -47,28 +19,51 @@ jobs:
     env:
       RUSTFLAGS: '-C target-feature=+crt-static'
       CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_STRICT_BUILD_OVERRIDE_OPT_LEVEL: '1'
+      CI_BASE_SHA: d34aadbe42fd058e2daf7a35eb8d788018433a06
+      CI_SOURCE_SHA: 629ce771343fe2eca0fb47535d7c3b323fb35708
+      CI_SOURCE_DIFF_SHA256: 1657f0881c03fca3d1e32fcd0729b6712ce5508f34833bc565d6c11a945f870e
+      CI_TAKE_SHA256: 568cd3fca2fd302c5c66daf797f2c1e8b670a713241f1daee45098917b436386
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          fetch-depth: 3
           persist-credentials: false
-      - name: Verify accepted runtime source
+      - name: Verify r1964 baseline and exact r1965 build inputs
         run: |
-          $ErrorActionPreference = 'Stop'
-          $acceptance = Get-Content docs/evidence/r1964/native_acceptance.txt
-          if ('take_revision=1964' -notin $acceptance -or
-              'accepted_zip_sha256=407fed052c5fc33f49f3cab319fa519b62c085668bd69db7cbdb75ac07a02cf9' -notin $acceptance) {
-            throw 'Native r1964 acceptance does not match the prepared take'
-          }
-          if ((Get-FileHash docs/evidence/r1964/native_acceptance.txt -Algorithm SHA256).Hash.ToLowerInvariant() -ne '7d30cb7d598f98d7f151caacc982c29f7db343b4494407a59946dff6d955935e') { throw 'Native acceptance record checksum mismatch' }
-          python .github/distribution/verify-accepted-source.py 467f51863e55d9a2b6cfb11fd98a9cd7c6fe60c897f5adf56d67339522b6f15c bff697d9233856fa337ae7311004a2b861cb56ece5e425e860f4988545c39c5b
-          if ($LASTEXITCODE -ne 0) { throw 'Accepted source or documentation verification failed' }
-      - name: Build accepted engine
+          @'
+          import hashlib, os, pathlib, subprocess
+          def git(*args):
+              return subprocess.check_output(['git', *args])
+          base, source = os.environ['CI_BASE_SHA'], os.environ['CI_SOURCE_SHA']
+          if git('rev-parse', source + '^').decode().strip() != base or git('rev-parse', 'HEAD^').decode().strip() != source:
+              raise SystemExit('Unexpected commit parents')
+          subprocess.run(['git', 'diff', '--exit-code', source, 'HEAD', '--', '.', ':(exclude).github/workflows/windows-download.yml'], check=True)
+          stage = pathlib.Path(os.environ['RUNNER_TEMP']) / 'etuschlopf-accepted-base'
+          git('worktree', 'add', '--detach', str(stage), base)
+          receipt = (stage / 'docs/evidence/r1964/native_acceptance.txt').read_bytes()
+          if hashlib.sha256(receipt).hexdigest() != '7d30cb7d598f98d7f151caacc982c29f7db343b4494407a59946dff6d955935e':
+              raise SystemExit('Unexpected r1964 acceptance record')
+          subprocess.run(['python', '.github/distribution/verify-accepted-source.py', '467f51863e55d9a2b6cfb11fd98a9cd7c6fe60c897f5adf56d67339522b6f15c', 'bff697d9233856fa337ae7311004a2b861cb56ece5e425e860f4988545c39c5b'], cwd=stage, check=True)
+          delta = hashlib.sha256()
+          names = sorted(p.decode('utf-8') for p in git('diff', '--name-only', '-z', base, source).split(b'\0') if p)
+          for name in names:
+              digest = hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest()
+              delta.update(f'{digest}\t{name}\n'.encode('utf-8'))
+          if delta.hexdigest() != os.environ['CI_SOURCE_DIFF_SHA256']:
+              raise SystemExit('Changed files differ from the tested r1965 take')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw 'Source verification failed' }
+      - name: Test engine on Windows with Rust 1.98
         run: |
-          rustup toolchain install 1.98.0 --profile minimal
+          rustup toolchain install 1.98.0 --profile minimal --component clippy
           if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed' }
-          $jobs = [Math]::Max(1, [Environment]::ProcessorCount - 1)
-          cargo +1.98.0 build --locked --profile strict --bin etuschlopf --jobs $jobs --color never
-          if ($LASTEXITCODE -ne 0) { throw 'Accepted engine build failed' }
+          cargo +1.98.0 clippy --locked --profile strict --jobs 2 --color never -- -D clippy::correctness -D clippy::suspicious -D clippy::perf
+          if ($LASTEXITCODE -ne 0) { throw 'Strict Clippy failed' }
+          cargo +1.98.0 test --locked --profile strict --all-targets --jobs 2 --color never
+          if ($LASTEXITCODE -ne 0) { throw 'Native engine tests failed' }
+          cargo +1.98.0 build --locked --profile strict --bin etuschlopf --jobs 2 --color never
+          if ($LASTEXITCODE -ne 0) { throw 'Native engine build failed' }
       - name: Bundle runtime data and licences
         run: |
           $ErrorActionPreference = 'Stop'
@@ -81,7 +76,6 @@ jobs:
           Copy-Item LICENSE "$bundle/"
           Compress-Archive -Path "$bundle/*" -DestinationPath "$env:RUNNER_TEMP/etuschlopf-runtime.zip"
       - name: Build and test single downloadable EXE
-        id: package
         run: |
           $env:ETUSCHLOPF_BUNDLE_ZIP = "$env:RUNNER_TEMP/etuschlopf-runtime.zip"
           cargo +1.98.0 test --locked --manifest-path .github/distribution/Cargo.toml --release
@@ -105,59 +99,19 @@ jobs:
           ./.github/distribution/smoke.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
       - name: Render the start example with the packaged EXE
         run: |
-          ./.github/distribution/start-example.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path -Output dist/EtuSchlopf-Beispiel-r1964.zip
-      - name: Package all 14 verified score PDFs
+          ./.github/distribution/start-example.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path -Output dist/EtuSchlopf-Beispiel-r1965-CI.zip
+      - name: Record CI build provenance and SHA-256
         run: |
-          $ErrorActionPreference = 'Stop'
-          if ((Get-FileHash docs/evidence/r1964/score_sha256.tsv -Algorithm SHA256).Hash.ToLowerInvariant() -ne '2575b2aad9ba6a01d544a7f08b63dda018fc579bdb7e319f9297a6543cd072cb') { throw 'Accepted score inventory checksum mismatch' }
-          $scoreRows = @(Import-Csv -Delimiter "`t" docs/evidence/r1964/score_sha256.tsv)
-          $pdfRows = @($scoreRows | Where-Object { $_.path -like 'docs/examples/*-r*.pdf' })
-          $pngRows = @($scoreRows | Where-Object { $_.path -like 'docs/images/*-r*-ausschnitt.png' })
-          if ($scoreRows.Count -ne 28 -or $pdfRows.Count -ne 14 -or $pngRows.Count -ne 14) { throw 'Expected 14 PDFs and 14 score previews' }
-          foreach ($row in $scoreRows) {
-            if ((Get-FileHash -LiteralPath $row.path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $row.sha256) { throw "Score PDF hash mismatch: $($row.path)" }
-          }
-          $scores = @($scoreRows | ForEach-Object { $_.path })
-          git archive --format=zip --output=dist/EtuSchlopf-Notenbilder-r1964.zip $env:GITHUB_SHA -- @scores docs/evidence/r1964/score_credits.md docs/evidence/r1964/score_sha256.tsv
-          if ($LASTEXITCODE -ne 0) { throw 'Score archive failed' }
-      - name: Hash Windows download
-        run: |
-          git archive --format=zip --output=dist/EtuSchlopf-r1964-source.zip $env:GITHUB_SHA
-          if ($LASTEXITCODE -ne 0) { throw 'Source archive failed' }
-          @("revision=r1964", "commit=$env:GITHUB_SHA", "workflow=$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID", "accepted_take_sha256=407fed052c5fc33f49f3cab319fa519b62c085668bd69db7cbdb75ac07a02cf9") | Set-Content -Encoding ascii dist/runtime-provenance.txt
-          $sums = foreach ($name in @('EtuSchlopf-Windows-x64.exe', 'EtuSchlopf-r1964-source.zip', 'EtuSchlopf-Beispiel-r1964.zip', 'EtuSchlopf-Notenbilder-r1964.zip', 'runtime-provenance.txt')) {
+          @("revision=r1965", "status=ci_preview", "base_commit=$env:CI_BASE_SHA", "source_commit=$env:CI_SOURCE_SHA", "workflow_commit=$env:GITHUB_SHA", "source_diff_sha256=$env:CI_SOURCE_DIFF_SHA256", "input_take_sha256=$env:CI_TAKE_SHA256", "workflow=$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID") | Set-Content -Encoding ascii dist/runtime-provenance.txt
+          $sums = foreach ($name in @('EtuSchlopf-Windows-x64.exe', 'EtuSchlopf-Beispiel-r1965-CI.zip', 'runtime-provenance.txt')) {
             $hash = (Get-FileHash -Algorithm SHA256 "dist/$name").Hash.ToLowerInvariant()
             "$hash  $name"
           }
           $sums | Set-Content -Encoding ascii dist/SHA256SUMS.txt
-      - name: Keep checked Windows package
+      - name: Upload tested Windows CI preview
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: EtuSchlopf-Windows-x64
+          name: EtuSchlopf-r1965-Windows-x64-CI
           path: dist/*
           retention-days: 30
           if-no-files-found: error
-  publish:
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: write
-    steps:
-      - name: Publish checked Windows preview
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          tag=v0.10.1839-r1964-windows-preview
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $tag already exists."
-            exit 0
-          fi
-          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name EtuSchlopf-Windows-x64 --dir dist
-          (cd dist && sha256sum --check SHA256SUMS.txt)
-          notes="Die Windows-x64-EXE enthält EtuSchlopf 0.10.1839 r1964. Die native Abnahme verarbeitete Mozart KV 331 aus Performance-MIDI und WAV. Das Notenarchiv enthält Mozarts neuen Notensatz und 13 Beispiele des Windows-Vollkorpus r1961 mit Quellenangaben. Der Windows-Build prüft den isolierten Start, unveränderte Eingabedateien und ein frisch gerendertes synthetisches Beispiel. Für PDFs ist MuseScore erforderlich. Die EXE ist unsigniert. [Build und Paketprüfungen](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
-          gh release create "$tag" dist/EtuSchlopf-Windows-x64.exe dist/EtuSchlopf-r1964-source.zip dist/EtuSchlopf-Beispiel-r1964.zip dist/EtuSchlopf-Notenbilder-r1964.zip dist/runtime-provenance.txt dist/SHA256SUMS.txt \
-            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-            --title "EtuSchlopf r1964 Windows x64" --notes "$notes"
