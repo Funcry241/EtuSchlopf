@@ -64,6 +64,7 @@ jobs:
           $logs = Join-Path $env:ETU_NATIVE_ROOT 'target/etuschlopf_logs'
           if (Test-Path $logs) { Get-ChildItem $logs -File | Sort-Object LastWriteTime -Descending | Select-Object -First 8 | ForEach-Object { Write-Output $_.Name; Get-Content $_.FullName -Tail 12 } }
   linux-binary:
+    if: "!startsWith(github.event.head_commit.message, '[windows-only]')"
     runs-on: ubuntu-22.04
     timeout-minutes: 90
     env:

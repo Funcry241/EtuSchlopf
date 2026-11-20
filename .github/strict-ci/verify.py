@@ -74,7 +74,10 @@ def source_blobs(parent, child):
             if name in parent:
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_bytes(known[parent[name]])
-        subprocess.run(['git','apply','--whitespace=nowarn',str(patch)],cwd=work,check=True)
+        # Windows may check out the patch itself with CRLF. Consume its committed blob.
+        raw_patch = subprocess.check_output(['git', 'cat-file', 'blob', 'HEAD:.github/strict-ci/' + patch.name])
+        subprocess.run(['git','-c','core.autocrlf=false','apply','--whitespace=nowarn','-'],
+                       input=raw_patch, cwd=work, check=True)
         for name, oid in delta.items():
             dest = work / name
             if oid is None:
