@@ -1,0 +1,85 @@
+name: Compare four engines on public scores
+on:
+  push:
+    branches: [verify/native-r1966-r1968]
+    paths:
+      - .github/workflows/public-score-comparison.yml
+      - .github/public-qa/compare-example.py
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  compare:
+    if: github.repository == 'Funcry241/EtuSchlopf' && github.ref == 'refs/heads/verify/native-r1966-r1968'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Verify the four existing build archives before using their binaries
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          mkdir -p score-comparison
+          cd score-comparison
+          while read -r revision artifact archive_digest elf_digest source_digest; do
+            mkdir "r$revision"
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact/zip" > "r$revision.zip"
+            echo "$archive_digest  r$revision.zip" | sha256sum --check --status
+            unzip -q "r$revision.zip" -d "r$revision"
+            (
+              cd "r$revision"
+              if [[ "$revision" == 1965 ]]; then
+                sha256sum -c SHA256SUMS.txt
+                test "$(cat SOURCE_COMMIT.txt)" = "$source_digest"
+              else
+                sha256sum -c SHA256SUMS
+                echo "$elf_digest  etuschlopf" | sha256sum --check --status
+                test "$(jq -r '.revision' SOURCE.json)" = "$revision"
+                test "$(jq -r '.source_tree_sha256' SOURCE.json)" = "$source_digest"
+              fi
+              file etuschlopf | grep -F 'ELF 64-bit'
+              chmod 0755 etuschlopf
+              echo "r$revision artifact=$artifact archive_sha256=$archive_digest source=$source_digest"
+              sha256sum etuschlopf
+            )
+          done <<'ARTIFACTS'
+          1965 14657602983 cada695770c03d1663a62c48c624653b8c40ca9065022f52dcd92927d5b5f723 internal 629ce771343fe2eca0fb47535d7c3b323fb35708
+          1966 14676956177 eca43826cb6c7e199fa0965598938d1385520ef26cdc2f4a9e35eafb69ca7fd2 2e3e2f8ec23b844e1099e3ec00922ddc0bd037fa0fd31375c02aacd611f04937 7ac68cff98a01f05986d3dac640c1a488494d1d0b56f70e6ff5da2d5e07d5ecf
+          1967 14676740301 073bc2a9029c7e7a25b89c73e28ffe7a251e6adb25e6cec129897c6da5b52677 afffe7a5a3ceddda6edeff1ccfff5ba9de7ed46b6eee98f917dcb3cf96c6b5f8 121307b524a6b6a667b5c8e2135192d25d1dab89a12cb994cc97a4b556f895a1
+          1968 14677342065 5538178d66c48ace67bb60c4dbc0a2954016aa05f58a1d8497a108671bce2d3c a6bc57e7cc427eddfef71cd56cc70a76429fc65a42c3282b9729430fa10e2cf4 233a6a86fb77ac85e08004d858654267ea2bd151918e5f53cef28a0fdbbdea0b
+          ARTIFACTS
+
+      - name: Prepare the pinned MuseScore renderer and published example
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/score-comparison"
+          curl -fsSL --retry 2 --max-time 180 "https://github.com/musescore/MuseScore/releases/download/v4.7.5/MuseScore-Studio-4.7.5.260831071-x86_64.AppImage" -o MuseScore.AppImage
+          curl -fsSL --retry 2 --max-time 90 "https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1965-windows-preview/EtuSchlopf-Beispiel-r1965.zip" -o public-example.zip
+          echo 'a31b2da2dbcc2191bcc98beb7be5c15f2f517bedb3444def96fe3088b74d3a1e  MuseScore.AppImage' | sha256sum --check
+          echo '475914bb54ed57947b37e1c1991713863437c56d5a373758c90262cbe03027bf  public-example.zip' | sha256sum --check
+          chmod 0755 MuseScore.AppImage
+          ./MuseScore.AppImage --appimage-extract >/dev/null
+          sudo apt-get -qq update
+          sudo apt-get -qq install -y xvfb xauth poppler-utils libxcb-xinerama0 libxcb-cursor0 libxkbcommon-x11-0 libopengl0
+          echo "ETUSCHLOPF_PDF_RENDERER=$PWD/squashfs-root/AppRun" >> "$GITHUB_ENV"
+          xvfb-run -a "$PWD/squashfs-root/AppRun" --version
+          pdftoppm -v
+
+      - name: Published example – all four engines
+        shell: bash
+        run: xvfb-run -a python3 .github/public-qa/compare-example.py Beispiel
+
+      - name: Chopin op. 10 no. 3 – original public mdw MIDI and WAV
+        if: success() || (failure() && steps.prepare.outcome == 'success')
+        shell: bash
+        run: xvfb-run -a python3 .github/public-qa/compare-example.py Chopin_op10_no3_p01
