@@ -101,7 +101,7 @@ Ein Akkordton kann auch dann enden, wenn eine andere Stimme weiterläuft. Für e
 
 ```math
 w=\max_k t_k-\min_k t_k,\qquad
-r_i,r_j>\max_k t_k,\qquad |r_i-r_j|\le w.
+r_i,r_j\gt\max_k t_k,\qquad |r_i-r_j|\le w.
 ```
 
 Die passenden Partner mit eigenem Folgeeinsatz müssen sich über das geschriebene Ende einig sein. Ein erneuter Anschlag derselben Taste vor diesem Ende schließt die Übernahme aus. Ein weiterer Fall betrifft die Pause im gleichmäßigen Akkordpuls. Dort müssen an zwei vorherigen Pulsen alle Akkordtöne unabhängig dieselbe Unterteilung bestätigen, die nächste Attacke muss eine Lücke lassen und die gemessene Artikulation muss im zuvor beobachteten Bereich liegen. Offen gebliebene Dauern werden nach der Zuordnung zum Notensystem im Kontext der benachbarten Einsätze entschieden. [Akkordenden und Puls](../src/free_performance_timing.rs) · [Offene Dauern im Notensystem](../src/midi_seed.rs)
@@ -111,7 +111,7 @@ Die passenden Partner mit eigenem Folgeeinsatz müssen sich über das geschriebe
 Ein regulärer Ton soll das halboffene Intervall von $a$ bis $b$ belegen. Die aus demselben Anschlag erzeugten Fragmente müssen eine lückenlose Partition bilden. Für ihre Anfänge $s_k$ und Enden $e_k$ gilt
 
 ```math
-s_1=a,\qquad e_m=b,\qquad s_k<e_k,\qquad e_k=s_{k+1}\quad(1\le k<m).
+s_1=a,\qquad e_m=b,\qquad s_k\lt e_k,\qquad e_k=s_{k+1}\quad(1\le k\lt m).
 ```
 
 Dadurch hat ein bei 72 beginnender Ton mit Dauer 96 auch dann sein Ende bei 168, wenn auf demselben System bei 120 eine andere Note beginnt. EtuSchlopf kann dafür einen weiteren MusicXML-Stimmkanal verwenden. Bei einer Teilung behält jedes Fragment die Quellidentität und Tonhöhe. Nur das erste trägt den Anschlag, die folgenden schließen mit Haltebögen an. Ein Vorschlag hat eigene Regeln für Nullzeit und Hauptnote. Der Schreibpfad prüft die Zeiten gegen die tatsächlich ausgegebenen Noten und Cursorbewegungen. [Fragmentplanung und Ausgabekontrolle](../src/midi_seed/bound_duration.rs)
@@ -272,7 +272,7 @@ Die lokale Harmonikbewertung untersucht auch die Pareto-Front. Im neundimensiona
 ```math
 a\prec b\;\Longleftrightarrow\;
 \left(\forall k\colon z_k(a)\le z_k(b)\right)
-\land\left(\exists k\colon z_k(a)<z_k(b)\right).
+\land\left(\exists k\colon z_k(a)\lt z_k(b)\right).
 ```
 
 Die erste Front besteht aus allen Kandidaten ohne dominierenden Konkurrenten. Bei konkurrierenden Vorteilen können mehrere Kandidaten auf dieser Front liegen. [Harmonikvergleich](../src/pipeline_shards/sheaf_noether_projection_core.rs)
@@ -355,7 +355,7 @@ Nominale Zustände sind noch keine Schreibbefugnis. Im aktuellen Adapter unterst
 Die Schutzregel lautet für jeden sichtbaren Kopf $n$:
 
 ```math
-\neg\big(L_z(n)\ge4\ \land\ L_z(n)>L_0(n)\big).
+\neg\big(L_z(n)\ge4\ \land\ L_z(n)\gt L_0(n)\big).
 ```
 
 Ein Kandidat darf also keine neue oder verschärfte Belastung ab vier Hilfslinien erzeugen. Ein bereits belasteter Ausgangszustand wird nicht durch Behauptung unsichtbar. Unter den zulässigen vollständigen Kursen zählt die erste abweichende Kostenkomponente; Gleichstand erhält den Ausgang.
