@@ -58,9 +58,37 @@ def fetch_blobs(required):
     return objects
 
 
+def source_blobs(parent, child):
+    # r1968 is a reviewable source diff from the exact r1967 tree.
+    patch = HERE / f'r{REV}-source.patch'
+    if not patch.exists():
+        return fetch_blobs(set(parent.values()) | set(child.values()))
+    import tempfile
+    known = fetch_blobs(set(parent.values()))
+    delta = json.loads((HERE / f'r{REV}.json').read_text())
+    with tempfile.TemporaryDirectory() as temp:
+        work = Path(temp)
+        for name in delta:
+            dest = work / name
+            assert dest.resolve().is_relative_to(work.resolve())
+            if name in parent:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(known[parent[name]])
+        subprocess.run(['git','apply','--whitespace=nowarn',str(patch)],cwd=work,check=True)
+        for name, oid in delta.items():
+            dest = work / name
+            if oid is None:
+                assert not dest.exists()
+                continue
+            raw = dest.read_bytes()
+            assert hashlib.sha1(f'blob {len(raw)}\0'.encode()+raw).hexdigest() == oid, name
+            known[oid] = raw
+    return known
+
+
 def prepare():
     parent, child = indexes()
-    objects = fetch_blobs(set(parent.values()) | set(child.values()))
+    objects = source_blobs(parent,child)
     if ROOT.exists():
         raise ValueError(f'Expected fresh runner directory {ROOT}')
     ROOT.mkdir()
@@ -104,8 +132,8 @@ def evidence():
 
 
 def linux_source():
-    _, child = indexes()
-    blobs = fetch_blobs(set(child.values()))
+    parent, child = indexes()
+    blobs = source_blobs(parent,child)
     fingerprint = hashlib.sha256()
     for name, oid in sorted(child.items()):
         raw = blobs[oid]

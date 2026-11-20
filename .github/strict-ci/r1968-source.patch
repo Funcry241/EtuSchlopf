@@ -1,0 +1,1470 @@
+diff --git a/ZIP_KIND.txt b/ZIP_KIND.txt
+index b49d1c7..5d513ba 100644
+--- a/ZIP_KIND.txt
++++ b/ZIP_KIND.txt
+@@ -1,6 +1,6 @@
+ kind=EtuSchlopfTake
+ version=0.10.1839
+-revision=r1967
+-name=WavArticulationAuditRetirement
+-parent_revision=r1966
++revision=r1968
++name=ReadbackAndLayoutCleanup
++parent_revision=r1967
+ change_class=RefactorOnly
+diff --git a/docs/selector_derivation_contract_retained_readback_equivalence.md b/docs/selector_derivation_contract_retained_readback_equivalence.md
+new file mode 100644
+index 0000000..fbc6d5c
+--- /dev/null
++++ b/docs/selector_derivation_contract_retained_readback_equivalence.md
+@@ -0,0 +1,39 @@
++# Erhaltene Beobachtungen beim Staccato- und Cross-Staff-Bericht
++
++SelectorDerivationContract: causal_class_first_v1
++SelectorChange: yes
++SelectorRole: repair_scope
++KnownWitnessUsedForFeatureDerivation: no
++TargetConditionedFeatureNarrowing: no
++ClassDefinitionPrecedesCorpusDistribution: yes
++UniquenessIsOutcomeNotGoal: yes
++RepairSelectorSeparatedFromErrorClass: yes
++CausalFeatureNecessityReview: complete
++CorpusDistributionPurpose: measurement_only
++CorpusDistributionMayRefineClassToKnownWitness: no
++MultiplicityInvarianceContract: candidate_duplication_v1
++IndependentCandidateDuplicationInvariant: yes
++ScorewideMultiplicityAsWriteAuthority: forbidden
++GlobalRankingOfIndependentCandidates: forbidden
++MultiplicityDecisionScope: local_candidate_or_explicit_conflict_group
++CandidateDuplicationProbe: required_before_productive_write
++ParentErrorClassContract: docs/selector_derivation_contract_retained_payload_outside_future_observation.md
++ScopeNarrowingBasis: authority_or_safety_only
++DiscriminativeContextOnlyNarrowing: forbidden
++CausalFeature: A smaller retained observation must reproduce the same candidate count, tie order, persisted mark and status after every reachable continuation.
++CausalFeature: Pre- and post-trial measurements may share a value only when they describe the same unmodified XML bytes and the writer cannot be reached.
++NonCausalContextExcluded: Project identity, performer, piece, corpus frequency, score position as a catalogue identifier, rendering duration and the measured size of the reduction.
++
++## Staccato
++
++Die Hauptstimme des oberen Systems liefert weiterhin die Paare aus einem sichtbaren Einzelton und einer unmittelbar folgenden Pause. Beide Ereignisse liegen innerhalb derselben metrischen Einheit. Dauern, Darstellbarkeit des gemeinsamen Notenwerts, Reihenfolge bei Gleichstand und die bisherige Obergrenze von zwölf bleiben Teil der Beobachtung. Die Obergrenze beschränkt die gemeldete Anzahl. Für den ersten Kandidaten liest die Pipeline die gespeicherte Staccatomarkierung am passenden Einzelton zurück. Ein nachfolgender Akkordton schließt die Bestätigung aus.
++
++Die kleinere Kandidatenstruktur enthält Position, Tonhöhe und Dauer für dieselben Vergleiche. Auf dem üblichen Pfad nutzt die Prüfung das vorhandene XML ohne Kopie und liest die Persistenz der Markierung einmal. Die bisherigen Schutzprüfungen, die bedingte Zuordnung eines Schreibbelegs und die Prüfung des Akkordplans bleiben beim bisherigen Owner. Die Anzahl allein erzeugt keinen Beleg. Das Vervielfachen unabhängiger Kandidaten erteilt keine Schreibberechtigung.
++
++## Cross-Staff
++
++Der Versuch beginnt und endet mit denselben XML-Bytes. Er wertet Tonbestand, Pausen, Klangsignatur, Parsebarkeit und rhythmische Bilanz einmal aus. Der Bericht verwendet die gewonnenen Werte an beiden bisherigen Ausgabestellen, einschließlich fehlerhafter Eingaben. Der gebundene Funktionsname bleibt erhalten und lehnt einen direkten Aufruf ab. Die Auswertung öffnet keinen Ausgabeweg.
++
++## Nachweis
++
++Die synthetischen Staccato-Vergleiche decken positive Rücklesung, Akkordgrenze, fehlende Markierung, mehrdeutige Positionen und die Begrenzung der Anzahl ab. Für Cross-Staff werden vollständige Berichtszeile und Zustandswerte verglichen. Vorhandene Notenbilder und archivierte MusicXML-Dateien dienen dem separaten Ergebnisvergleich. Die ursprünglichen Auswahlbedingungen ergeben sich aus den bereits zugelassenen Quellpfaden.
+diff --git a/src/arrangement.rs b/src/arrangement.rs
+index a3fddd0..397e82a 100644
+--- a/src/arrangement.rs
++++ b/src/arrangement.rs
+@@ -78,7 +78,6 @@
+         pub stems_added: usize,
+         pub measures_simplified: usize,
+         pub notes_hidden: usize,
+-        pub rests_hidden: usize,
+         pub chord_tones_hidden: usize,
+         pub notes_restified_as_rests: usize,
+         pub visible_notes_normalized: usize,
+@@ -400,7 +399,6 @@
+             stats.stems_added += local.stems_added;
+             stats.measures_simplified += local.measures_simplified;
+             stats.notes_hidden += local.notes_hidden;
+-            stats.rests_hidden += local.rests_hidden;
+             stats.chord_tones_hidden += local.chord_tones_hidden;
+             stats.visible_notes_normalized += local.visible_notes_normalized;
+             stats.visible_rhythm_rests_inserted += local.visible_rhythm_rests_inserted;
+@@ -719,7 +717,6 @@
+                 move_note_to_left_system_for_human_potential(&arranged, moved_for_presentation)
+             } else if hidden.contains(&idx) {
+                 match meta {
+-                    Some(meta) if meta.is_rest => arranged,
+                     Some(meta) if meta.is_chord => mark_note_hidden(&arranged),
+                     Some(_) => restify_note_for_rhythm_ledger(&arranged),
+                     None => mark_note_hidden(&arranged),
+@@ -738,15 +735,11 @@
+             if changed.stem_added { stats.stems_added += 1; }
+             if hidden.contains(&idx)
+                 && let Some(meta) = meta {
+-                    if meta.is_rest {
+-                        stats.rests_hidden += 1;
++                    stats.notes_hidden += 1;
++                    if meta.is_chord {
++                        stats.chord_tones_hidden += 1;
+                     } else {
+-                        stats.notes_hidden += 1;
+-                        if meta.is_chord {
+-                            stats.chord_tones_hidden += 1;
+-                        } else {
+-                            stats.notes_restified_as_rests += 1;
+-                        }
++                        stats.notes_restified_as_rests += 1;
+                     }
+                 }
+             if let Some(meta) = meta {
+@@ -809,7 +802,6 @@
+         stats.chord_cohorts_source_bound_split += ledger_stats.chord_cohorts_source_bound_split;
+         stats.visible_rhythm_measures_completed += ledger_stats.measures_completed;
+         if stats.notes_hidden > 0
+-            || stats.rests_hidden > 0
+             || stats.chord_tones_hidden > 0
+             || ledger_stats.rests_inserted > 0
+             || ledger_stats.values_split > 0
+@@ -1057,7 +1049,6 @@
+         hide_dense_chord_tones(metas, compact_chord_members, &mut hidden, profile);
+         hide_parallel_import_notes(metas, compact_chord_members, &mut hidden, profile);
+         hide_secondary_voice_notes(metas, &mut hidden, profile);
+-        hide_import_artifact_rests();
+         let (right_limit, left_limit) = if profile.preserve_reference {
+             // WAV bleibt Primärreferenz. Ab v0.1.29 darf jede Hand bis zu zwei
+             // lesbare Stimmen tragen; dadurch soll der Notenerhalt wieder Richtung
+@@ -2004,11 +1995,6 @@
+             hidden.insert(raw_idx);
+         }
+     }
+-    fn hide_import_artifact_rests() {
+-        // v0.1.65 RhythmLedger: Pausen sind nicht mehr bloß technische Füller.
+-        // Fehlende sichtbare Pausen lassen Takte rhythmisch unvollständig wirken.
+-        // Deshalb werden importierte Pausen nicht mehr pauschal ausgeblendet.
+-    }
+     fn hide_excess_measure_density(
+         metas: &[NoteMeta],
+         outside_density_budget: &BTreeSet<usize>,
+diff --git a/src/build_gate/take_change_class.txt b/src/build_gate/take_change_class.txt
+index e4cc41e..a8d4c5e 100644
+--- a/src/build_gate/take_change_class.txt
++++ b/src/build_gate/take_change_class.txt
+@@ -2,13 +2,22 @@ schema_version=1
+ change_class=RefactorOnly
+ from_version=0.10.1839
+ to_version=0.10.1839
+-reason=WavArticulationAuditRetirement
+-change=modified|ZIP_KIND.txt|fnv64:a1e6952443cbf16e
+-change=modified|src/pipeline.rs|fnv64:7ac4a477a3ef12f7
+-change=modified|src/pipeline_shards/noether_register_articulation_readback_tail.rs|fnv64:205af3d0cf231c34
+-change=modified|src/pipeline_shards/pipeline_foundation_runtime_passorder_tail.rs|fnv64:17a2d79020ed8dde
+-change=modified|src/pipeline_shards/pipeline_orchestrator_metric_final_notation_stage.rs|fnv64:bb9379709e807d9a
+-change=modified|src/pipeline_shards/pipeline_orchestrator_rest_articulation_render_stage.rs|fnv64:2d49119e7007779f
+-change=modified|src/pipeline_shards/sheaf_noether_harmonic_micro_tail.rs|fnv64:f31aea711b314931
+-change=deleted|src/wav_truth_articulation.rs|-
+-change=modified|tests/unit/rest_bridge_owner_handoff.rs|fnv64:ac53d8674891474b
++reason=ReadbackAndLayoutCleanup
++change=modified|ZIP_KIND.txt|fnv64:d38efa3d665d1c8d
++change=added|docs/selector_derivation_contract_retained_readback_equivalence.md|fnv64:387e8d5720f27117
++change=modified|src/arrangement.rs|fnv64:4ad7ed094bd2100c
++change=modified|src/layout.rs|fnv64:4fdfde8244b19f64
++change=modified|src/main.rs|fnv64:f53320fa6c7748e0
++change=modified|src/pipeline_shards/corpus_fastjump_human_potential_repair_tail.rs|fnv64:6e8ed57473add78a
++change=modified|src/pipeline_shards/horizontal_layout_decision_plan.rs|fnv64:28fd444bdeb31977
++change=modified|src/pipeline_shards/noether_register_articulation_readback_tail.rs|fnv64:2b7c557cba2eabf0
++change=modified|src/pipeline_shards/notation_endpoint_layout_core.rs|fnv64:c4527f3b9b0b95e0
++change=modified|src/pipeline_shards/pipeline_foundation_runtime_passorder_tail.rs|fnv64:4b292dd370259ad8
++change=modified|src/pipeline_shards/pipeline_orchestrator_rest_articulation_render_stage.rs|fnv64:9bddb4b6c822d058
++change=modified|src/pipeline_shards/strict_staff_visible_lane_rest_rewrite_tail.rs|fnv64:a32040ce3fd66054
++change=modified|src/report_format.rs|fnv64:dfca6db8d3edb81d
++change=modified|src/structural_write_authority/strict_staff_visible_lane_authority.rs|fnv64:b5332f05ef7765db
++change=modified|tests/console_presentation_contract.rs|fnv64:3b0887825caa1ab5
++change=modified|tests/rust_2024_macro_expr_fragment_contract.rs|fnv64:55a491df967e00d8
++change=modified|tests/support/render_authority/r1230_ra3_real_probe_is_never_a_physical_write.rs|fnv64:019224f5c11ed493
++change=modified|tools/etuschlopf_watch/src/web_watch.rs|fnv64:4e2ab7caca34de47
+diff --git a/src/layout.rs b/src/layout.rs
+index c36db2e..adf98d7 100644
+--- a/src/layout.rs
++++ b/src/layout.rs
+@@ -36,7 +36,6 @@
+         pub measures_seen: usize,
+         pub notes_seen: usize,
+         pub notes_hidden: usize,
+-        pub rests_hidden: usize,
+         pub chord_tones_hidden: usize,
+         pub beam_groups: usize,
+         pub beamed_notes: usize,
+@@ -65,7 +64,7 @@
+         let visible_notes_per_measure = visible_notes as f64 / measures as f64;
+         let beamed_notes_per_measure = input.beamed_notes as f64 / measures as f64;
+         let beam_groups_per_measure = input.beam_groups as f64 / measures as f64;
+-        let hidden_total = input.notes_hidden + input.rests_hidden + input.chord_tones_hidden;
++        let hidden_total = input.notes_hidden + input.chord_tones_hidden;
+     
+         let mut pages = if measures <= 16 {
+             3
+diff --git a/src/main.rs b/src/main.rs
+index 0fcaf0a..2d35b24 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -9,9 +9,9 @@
+ mod report_format;
+ pub use report_format::{
+     push_static_dec_line_v765, push_static_ent_line_v765,
+-    push_static_ledger_header_v804, push_static_ledger_line_v804,
++    push_static_ledger_header_v804,
+     push_static_named_policy_line_v765,
+-    push_static_section_header_v793, push_static_write_policy_line_v765,
++    push_static_section_header_v793,
+     StaticNamedReportLineV766,
+ };
+ 
+diff --git a/src/pipeline_shards/corpus_fastjump_human_potential_repair_tail.rs b/src/pipeline_shards/corpus_fastjump_human_potential_repair_tail.rs
+index 9d5e631..67b692f 100644
+--- a/src/pipeline_shards/corpus_fastjump_human_potential_repair_tail.rs
++++ b/src/pipeline_shards/corpus_fastjump_human_potential_repair_tail.rs
+@@ -86,7 +86,6 @@ fn evaluate_arrangement_variant(
+                 measures_seen: arrangement.stats.measures_seen,
+                 notes_seen: arrangement.stats.notes_seen,
+                 notes_hidden: arrangement.stats.notes_hidden,
+-                rests_hidden: arrangement.stats.rests_hidden,
+                 chord_tones_hidden: arrangement.stats.chord_tones_hidden,
+                 beam_groups: polish.stats.beam_groups,
+                 beamed_notes: polish.stats.beamed_notes,
+diff --git a/src/pipeline_shards/horizontal_layout_decision_plan.rs b/src/pipeline_shards/horizontal_layout_decision_plan.rs
+index f8ea085..72e387f 100644
+--- a/src/pipeline_shards/horizontal_layout_decision_plan.rs
++++ b/src/pipeline_shards/horizontal_layout_decision_plan.rs
+@@ -301,21 +301,6 @@ impl HorizontalLayoutPlanBuilder {
+         }
+     }
+ 
+-    fn plan_new_page(
+-        &mut self,
+-        slot_index: usize,
+-        owner: HorizontalLayoutDecisionOwner,
+-    ) {
+-        let slot = self
+-            .slots
+-            .get_mut(slot_index)
+-            .expect("horizontal-layout slot comes from the same structural scan");
+-        slot.directives.starts_new_page = true;
+-        slot.directives.starts_new_system = false;
+-        slot.page_owner = Some(owner);
+-        slot.system_owner = Some(owner);
+-    }
+-
+     fn plan_system_state(
+         &mut self,
+         slot_index: usize,
+@@ -485,23 +470,34 @@ mod horizontal_layout_decision_plan_tests {
+     }
+ 
+     #[test]
+-    fn page_replacement_owns_system_false_state() {
+-        let xml = r#"<score><part><measure number="x"><print new-system="yes"/></measure></part></score>"#;
+-        let seed = HorizontalLayoutSeedPlan {
+-            manual_page_target: false,
+-            slots: vec![HorizontalLayoutSeedSlot {
+-                starts_new_system: true,
+-                starts_new_page: false,
+-            }],
+-        };
+-        let mut builder =
+-            HorizontalLayoutPlanBuilder::from_seed(&seed, xml).expect("seed parity");
+-        builder.plan_new_page(0, HorizontalLayoutDecisionOwner::VisualLayoutPressure);
+-        let plan = builder.close().expect("plan close");
+-
+-        assert!(plan.slots[0].directives.starts_new_page);
+-        assert!(!plan.slots[0].directives.starts_new_system);
++    fn visual_pressure_keeps_an_existing_page_start() {
++        use crate::structural_write_authority::HorizontalSystemBreakMaterialization;
++
++        for (preceding_measures, label) in [(1, "north"), (4, "west")] {
++            let page_slot = preceding_measures;
++            let mut slots = vec![HorizontalLayoutSeedSlot::default(); preceding_measures + 2];
++            slots[page_slot].starts_new_page = true;
++            let mut xml = String::from("<score><part>");
++            for (ordinal, slot) in slots.iter().enumerate() {
++                let print = if slot.starts_new_page { r#"<print new-page="yes"/>"# } else { "" };
++                xml.push_str(&format!(r#"<measure number="{label}-{ordinal}">{print}</measure>"#));
++            }
++            xml.push_str("</part></score>");
++            let seed = HorizontalLayoutSeedPlan { manual_page_target: false, slots };
++            let mut builder = HorizontalLayoutPlanBuilder::from_seed(&seed, &xml).unwrap();
++            builder.plan_new_system(page_slot, HorizontalLayoutDecisionOwner::VisualLayoutPressure);
++            let plan = builder.close().unwrap();
++
++            assert_eq!(plan.slots[page_slot].page_owner, Some(HorizontalLayoutDecisionOwner::Seed));
++            assert_eq!(plan.slots[page_slot].system_owner, None);
++            let directive = &plan.materialization_directives()[page_slot];
++            assert!(directive.starts_new_page);
++            assert_eq!(directive.system_break, HorizontalSystemBreakMaterialization::None);
++            assert!(plan.matches_materialized(&xml).unwrap());
++            assert!(!plan.matches_materialized(&xml.replace("new-page", "new-system")).unwrap());
++        }
+     }
++
+     #[test]
+     fn planned_system_state_is_structural_and_identity_free() {
+         let xml = r#"<score><part><measure number="alpha"></measure><measure number="beta"><print new-system="yes"/></measure><measure number="gamma"><print new-page="yes"/></measure></part></score>"#;
+diff --git a/src/pipeline_shards/noether_register_articulation_readback_tail.rs b/src/pipeline_shards/noether_register_articulation_readback_tail.rs
+index 790ff18..16a6054 100644
+--- a/src/pipeline_shards/noether_register_articulation_readback_tail.rs
++++ b/src/pipeline_shards/noether_register_articulation_readback_tail.rs
+@@ -5,166 +5,55 @@ fn same_beat_interval_dynamic(start: i32, end: i32, beat_unit: i32) -> bool {
+     start.div_euclid(beat_unit) == end.saturating_sub(1).div_euclid(beat_unit)
+ }
+ 
+-fn build_staccato_proxy_candidate_rows(xml: &str) -> Vec<StaccatoProxyCandidateRow> {
+-    let (events, _backup_forward_ok) = collect_render_xml_note_events(xml);
++struct ClearStaccatoCandidate {
++    scope: usize,
++    onset: i32,
++    midi: i32,
++    note_duration: i32,
++    total_duration: i32,
++}
++
++fn primary_staccato_candidates(xml: &str) -> (usize, Option<ClearStaccatoCandidate>) {
++    let (events, _) = collect_render_xml_note_events(xml);
+     let metric = render_scope_metric_expected_and_beat_map(xml);
+-    let mut by_lane: BTreeMap<(usize, String, String), Vec<RenderXmlNoteEvent>> = BTreeMap::new();
+-    for event in events.into_iter().filter(|event| !event.is_hidden && !event.is_chord) {
+-        if event.midi.is_some() || event.is_rest {
+-            by_lane
+-                .entry((event.scope, event.staff.clone(), event.voice.clone()))
+-                .or_default()
+-                .push(event);
++    let mut lanes = BTreeMap::<usize, Vec<RenderXmlNoteEvent>>::new();
++    for event in events {
++        if event.staff == "1" && event.voice == "1" && !event.is_hidden && !event.is_chord
++            && (event.midi.is_some() || event.is_rest)
++        {
++            lanes.entry(event.scope).or_default().push(event);
+         }
+     }
+-    let mut rows = Vec::new();
+-    for ((scope, staff, voice), mut lane) in by_lane {
++
++    let mut candidates = Vec::new();
++    for (scope, mut lane) in lanes {
++        let beat = metric.get(&scope).map_or(96, |(_, beat)| *beat).max(1);
+         lane.sort_by_key(|event| (event.onset, event.duration, event.is_rest));
+-        let beat_unit = metric.get(&scope).map_or(96, |(_, beat)| *beat).max(1);
+         for pair in lane.windows(2) {
+             let note = &pair[0];
+             let rest = &pair[1];
+             let Some(midi) = note.midi else { continue; };
+-            if rest.midi.is_some() || !rest.is_rest {
+-                continue;
+-            }
+-            if note.onset.saturating_add(note.duration.max(0)) != rest.onset {
+-                continue;
+-            }
+-            if note.duration <= 0 || rest.duration <= 0 {
+-                continue;
+-            }
+             let total = note.duration.saturating_add(rest.duration);
+-            if !same_beat_interval_dynamic(note.onset, note.onset.saturating_add(total), beat_unit) {
+-                continue;
+-            }
+-            if duration_to_rest_type_and_dots(total).is_none() {
+-                continue;
++            if rest.is_rest && rest.midi.is_none() && rest.onset == note.onset.saturating_add(note.duration)
++                && note.duration > 0 && rest.duration > 0 && rest.duration <= note.duration
++                && note.duration <= beat / 4 && rest.duration <= beat / 4 && total <= beat / 2
++                && same_beat_interval_dynamic(note.onset, note.onset.saturating_add(total), beat)
++                && duration_to_rest_type_and_dots(total).is_some()
++            {
++                candidates.push(ClearStaccatoCandidate {
++                    scope, onset: note.onset, midi, note_duration: note.duration, total_duration: total,
++                });
+             }
+-            
+-            rows.push(StaccatoProxyCandidateRow {
+-                scope,
+-                staff: staff.clone(),
+-                voice: voice.clone(),
+-                midi,
+-                note_onset: note.onset,
+-                note_duration: note.duration,
+-                rest_duration: rest.duration,
+-                total_duration: total,
+-                beat_unit,
+-            });
+         }
+     }
+-    rows.sort_by(|a, b| {
+-        b.total_duration.cmp(&a.total_duration)
+-            .then_with(|| a.scope.cmp(&b.scope))
+-            .then_with(|| a.staff.cmp(&b.staff))
+-            .then_with(|| a.voice.cmp(&b.voice))
+-            .then_with(|| a.note_onset.cmp(&b.note_onset))
+-    });
+-    rows
+-}
+-fn build_pianist_helpful_articulation_and_notation_audit_no_mutation(
+-    xml: &str,
+-) -> PianistHelpfulArticulationAndNotationAudit {
+-    let global_non_legato_seen = xml.to_ascii_lowercase().contains("non legato");
+-    let mut rows = Vec::new();
+-
+-    for row in build_staccato_proxy_candidate_rows(xml) {
+-        let beat_unit = row.beat_unit.max(1);
+-        let starts_on_beat = row.note_onset.rem_euclid(beat_unit) == 0;
+-        let short_pair = row.note_duration <= beat_unit / 4
+-            && row.rest_duration <= beat_unit / 4
+-            && row.total_duration <= beat_unit / 2;
+-        let long_weighted_note = row.note_duration >= beat_unit / 2
+-            && row.rest_duration <= beat_unit / 4;
+-        let registral_or_metric_impulse =
+-            starts_on_beat && (row.midi <= 52 || row.midi >= 84);
+-        let phrase_or_tie_like = row.total_duration > beat_unit / 2
+-            || row.rest_duration > row.note_duration.saturating_mul(2);
+-
+-        let (class_name, class_score) = if short_pair {
+-            (
+-                "SAFE_STACCATO_MUSICALLY_PLACEMENT_GATED".to_string(),
+-                1000_i64,
+-            )
+-        } else if registral_or_metric_impulse {
+-            ("BETTER_ACCENT_THAN_STACCATO".to_string(), 760_i64)
+-        } else if long_weighted_note {
+-            ("BETTER_TENUTO_THAN_STACCATO".to_string(), 700_i64)
+-        } else if phrase_or_tie_like {
+-            ("BETTER_SLUR_OR_TIE_OR_NO_MARK".to_string(), 620_i64)
+-        } else if global_non_legato_seen && row.total_duration <= beat_unit / 2 {
+-            ("NO_MARK_NON_LEGATO_ALREADY_CLEAR".to_string(), 520_i64)
+-        } else {
+-            ("REVIEW_STACCATO_MUSICAL_CONTEXT".to_string(), 580_i64)
+-        };
+-
+-        let owner_is_single_upper_voice = row.staff == "1" && row.voice == "1";
+-        let owner_is_lower_or_aux_voice = row.staff == "2" || row.voice != "1";
+-        let rest_geometry_needs_review = row.rest_duration > row.note_duration
+-            || row.rest_duration > beat_unit / 4
+-            || (row.voice != "1" && !short_pair);
+-        let stem_geometry_needs_review = owner_is_lower_or_aux_voice && row.voice != "1";
+-        let notehead_or_chord_mass_anchor_clear = owner_is_single_upper_voice
+-            && !rest_geometry_needs_review
+-            && !stem_geometry_needs_review
+-            && class_name.starts_with("SAFE_STACCATO");
+-
+-        let (placement, placement_risk_label, placement_score_penalty) =
+-            if notehead_or_chord_mass_anchor_clear {
+-                (
+-                    "anchor_geometry_notehead_or_chord_mass_clear".to_string(),
+-                    "clear: upper-staff notehead/chord-mass proxy clear; actual render-write remains separately gated".to_string(),
+-                    0_i64,
+-                )
+-            } else if row.staff == "2" {
+-                (
+-                    "anchor_geometry_lower_staff_strict_review".to_string(),
+-                    "medium: untere Hand bleibt streng; Punkt darf nicht wie Hals-/Leer-Lane-Zeichen wirken".to_string(),
+-                    120_i64,
+-                )
+-            } else {
+-                (
+-                    "anchor_geometry_pdf_readback_required".to_string(),
+-                    "low: Anker-Geometrie noch nur Proxy; echte PDF-Bindung vor Write prüfen".to_string(),
+-                    60_i64,
+-                )
+-            };
+-
+-        rows.push(PianistHelpfulArticulationRow {
+-            scope: row.scope,
+-            staff: row.staff,
+-            voice: row.voice,
+-            onset: row.note_onset,
+-            midi: row.midi,
+-            duration: row.note_duration,
+-            class_name,
+-            placement,
+-            placement_risk: placement_risk_label,
+-            score: class_score.saturating_sub(placement_score_penalty),
+-        });
+-    }
+-
+-    rows.sort_by(|a, b| {
+-        b.score
+-            .cmp(&a.score)
+-            .then_with(|| a.scope.cmp(&b.scope))
+-            .then_with(|| a.staff.cmp(&b.staff))
+-            .then_with(|| a.voice.cmp(&b.voice))
+-            .then_with(|| a.onset.cmp(&b.onset))
++    // All clear pairs share the highest score. Equal attacks historically preferred the longest pair.
++    let count = candidates.len().min(12);
++    let first = candidates.into_iter().min_by_key(|row| {
++        (row.scope, row.onset, std::cmp::Reverse(row.total_duration))
+     });
+-
+-    PianistHelpfulArticulationAndNotationAudit {
+-        rows: rows.into_iter().take(12).collect(),
+-    }
++    (count, first)
+ }
+ 
+-fn articulation_single_clear_candidate_rows(audit: &PianistHelpfulArticulationAndNotationAudit) -> Vec<&PianistHelpfulArticulationRow> {
+-    audit.rows.iter()
+-        .filter(|row| row.class_name.starts_with("SAFE_STACCATO") && row.placement == "anchor_geometry_notehead_or_chord_mass_clear")
+-        .collect()
+-}
+ #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+ struct AccentAttackOwnershipKey {
+     scope: usize,
+@@ -273,10 +162,8 @@ fn count_visible_staccato_marks(xml: &str) -> usize {
+ 
+ fn apply_single_clear_staccato_render_write_with_placement_readback(
+     xml: &str,
+-    source_label: &str,
+-    output_path: &Path,
+ ) -> anyhow::Result<(
+-    String,
++    std::borrow::Cow<'_, str>,
+     SingleClearStaccatoRenderWriteAudit,
+     Option<crate::structural_write_authority::StaccatoPersistenceOccurrenceReceipt>,
+ )> {
+@@ -284,69 +171,23 @@ fn apply_single_clear_staccato_render_write_with_placement_readback(
+     // This function item is never invoked.
+     let _retired_sink_signature = crate::structural_write_authority::write_single_staccato_candidate_authorized;
+ 
+-    let before_articulation = build_pianist_helpful_articulation_and_notation_audit_no_mutation(xml);
+-    let clear_rows = articulation_single_clear_candidate_rows(&before_articulation);
+-    let (before_events, _before_backup_forward_ok) = collect_render_xml_note_events(xml);
+-    let visible_pitched_before = before_events.iter().filter(|event| !event.is_hidden && event.midi.is_some()).count();
+-    let visible_rests_before = before_events.iter().filter(|event| !event.is_hidden && event.is_rest).count();
+-    let hidden_pitched_before = before_events.iter().filter(|event| event.is_hidden && event.midi.is_some()).count();
+-    let hidden_rests_before = before_events.iter().filter(|event| event.is_hidden && event.is_rest).count();
+-    let existing_staccato_before = count_visible_staccato_marks(xml);
+-
++    let (clear_candidate_count, target) = primary_staccato_candidates(xml);
+     let mut audit = SingleClearStaccatoRenderWriteAudit {
+-        output_path: output_path.display().to_string(),
+-        clear_candidate_count: clear_rows.len(),
+-        visible_pitched_before,
+-        visible_rests_before,
+-        hidden_pitched_before,
+-        hidden_rests_before,
+-        existing_staccato_before,
+-        write_allowed: clear_rows.len() == 1,
+-        placement_binding: "none".to_string(),
+-        placement_readback: "not_checked".to_string(),
+-        verdict: "single_clear_staccato_no_clear_candidate_no_write".to_string(),
++        clear_candidate_count,
+         ..SingleClearStaccatoRenderWriteAudit::default()
+     };
+-
+-    let Some(target) = clear_rows.first().copied() else {
+-        audit.done_fragment = "SingleClearStaccatoRenderWriteWithPlacementReadback: ClearCandidateCount 0; NewStaccatoMarks 0; TargetMatched 0; UnexpectedStaccatoMarks 0; WriteAllowed nein; RenderXmlWrite nein; MusicMutation nein".to_string();
+-        audit.pipeline_line = format!(
+-            "SingleClearStaccatoRenderWriteWithPlacementReadback v{}: Quelle {}; ClearCandidateCount 0; kein Ziel; TargetMatched 0; NewStaccatoMarks 0; UnexpectedStaccatoMarks 0; Placement none; StemLikeRiskTarget 0; RestLaneRiskTarget 0; LowerStaffWrites 0; parse/back-forward -/-; WriteAllowed nein; RenderXmlWrite nein; MusicXmlWrite nein; PdfWrite nein; MasterApply nein; P3/P4 nein; MXL nein; MusicMutation nein; Urteil {}.",
+-            env!("CARGO_PKG_VERSION"),
+-            source_label,
+-            audit.verdict
+-        );
+-        return Ok((xml.to_string(), audit, None));
++    let Some(target) = target else {
++        return Ok((std::borrow::Cow::Borrowed(xml), audit, None));
+     };
+-
+     audit.target_scope = target.scope;
+-    audit.target_staff = target.staff.clone();
+-    audit.target_voice = target.voice.clone();
++    audit.target_staff = "1".to_string();
++    audit.target_voice = "1".to_string();
+     audit.target_onset = target.onset;
+     audit.target_midi = target.midi;
+-    audit.target_note_duration = target.duration;
+-    audit.target_total_duration = target.duration;
+-    audit.placement_binding = target.placement.clone();
+-    audit.placement_readback = if target.placement.as_str() == "anchor_geometry_notehead_or_chord_mass_clear" {
+-        "notehead_or_chord_mass_clear".to_string()
+-    } else {
+-        "not_clear".to_string()
+-    };
+-    audit.lower_staff_writes = if target.staff.as_str() == "2" { 1 } else { 0 };
+-    audit.stem_like_risk_target = if target.placement_risk.contains("stem") || target.placement_risk.contains("Hals") || target.voice.as_str() != "1" { 1 } else { 0 };
+-    audit.rest_lane_risk_target = if target.placement_risk.contains("Rest") || target.placement_risk.contains("rest") || target.placement_risk.contains("Leer") { 1 } else { 0 };
+-
+-    if clear_rows.len() != 1 || target.staff.as_str() != "1" || target.voice.as_str() != "1" || target.placement.as_str() != "anchor_geometry_notehead_or_chord_mass_clear" {
+-        audit.verdict = "single_clear_staccato_guard_rejected_no_write".to_string();
+-        audit.done_fragment = format!(
+-            "SingleClearStaccatoRenderWriteWithPlacementReadback: ClearCandidateCount {}; NewStaccatoMarks 0; TargetMatched 0; UnexpectedStaccatoMarks 0; WriteAllowed nein; RenderXmlWrite nein; MusicMutation nein",
+-            clear_rows.len()
+-        );
+-        audit.pipeline_line = format!(
+-            "SingleClearStaccatoRenderWriteWithPlacementReadback v{}: Quelle {}; ClearCandidateCount {}; Ziel scope {} staff {} voice {} onset {} midi {}; Guard rejected; TargetMatched 0; NewStaccatoMarks 0; UnexpectedStaccatoMarks 0; Placement {}; StemLikeRiskTarget {}; RestLaneRiskTarget {}; LowerStaffWrites {}; WriteAllowed nein; RenderXmlWrite nein; MusicXmlWrite nein; PdfWrite nein; MasterApply nein; P3/P4 nein; MXL nein; MusicMutation nein; Urteil {}.",
+-            env!("CARGO_PKG_VERSION"), source_label, clear_rows.len(), target.scope, target.staff, target.voice, target.onset, target.midi, audit.placement_readback, audit.stem_like_risk_target, audit.rest_lane_risk_target, audit.lower_staff_writes, audit.verdict
+-        );
+-        return Ok((xml.to_string(), audit, None));
++    audit.target_note_duration = target.note_duration;
++    audit.target_total_duration = target.note_duration;
++    if clear_candidate_count != 1 {
++        return Ok((std::borrow::Cow::Borrowed(xml), audit, None));
+     }
+ 
+     let mut replacements = Vec::<(usize, usize, String)>::new();
+@@ -368,8 +209,8 @@ fn apply_single_clear_staccato_render_write_with_placement_readback(
+                 !frag.is_hidden
+                     && !frag.is_chord
+                     && (frag.is_visible_pitched || frag.is_visible_rest)
+-                    && frag.staff.as_str() == target.staff.as_str()
+-                    && frag.voice.as_str() == target.voice.as_str()
++                    && frag.staff.as_str() == audit.target_staff.as_str()
++                    && frag.voice.as_str() == audit.target_voice.as_str()
+             })
+             .cloned()
+             .collect::<Vec<_>>();
+@@ -379,7 +220,7 @@ fn apply_single_clear_staccato_render_write_with_placement_readback(
+             let rest = &pair[1];
+             let Some(midi) = midi_from_note_fragment(&note.fragment) else { continue; };
+             if midi != target.midi { continue; }
+-            if note.onset != target.onset || note.duration != target.duration { continue; }
++            if note.onset != target.onset || note.duration != target.note_duration { continue; }
+             if !rest.is_visible_rest || rest.onset != note.onset.saturating_add(note.duration.max(0)) || rest.duration <= 0 { continue; }
+             let total = note.duration.saturating_add(rest.duration);
+             if duration_to_rest_type_and_dots(total).is_none() { continue; }
+@@ -427,32 +268,15 @@ fn apply_single_clear_staccato_render_write_with_placement_readback(
+             replacements.push((note.start, note.end, new_note));
+             replacements.extend(chord_replacements);
+             replacements.push((rest.start, rest.end, String::new()));
+-            audit.target_matched = 1;
+-            audit.target_rest_duration = rest.duration;
+             audit.target_total_duration = total;
+             audit.target_chord_member_midis = chord_member_midis;
+-            audit.actions.push(BehindBarsRuleCheckRestAndTieAction {
+-                action_kind: "single_clear_staccato_render_write".to_string(),
+-                old_rest_count: 1,
+-                new_rest_count: 0,
+-                verdict: "adopted_if_readback_green".to_string(),
+-            });
+             break 'outer;
+         }
+         scan = measure_end;
+     }
+ 
+-    if audit.target_matched != 1 {
+-        audit.verdict = "single_clear_staccato_target_not_matched_no_write".to_string();
+-        audit.done_fragment = format!(
+-            "SingleClearStaccatoRenderWriteWithPlacementReadback: ClearCandidateCount {}; NewStaccatoMarks 0; TargetMatched 0; UnexpectedStaccatoMarks 0; WriteAllowed nein; RenderXmlWrite nein; MusicMutation nein",
+-            clear_rows.len()
+-        );
+-        audit.pipeline_line = format!(
+-            "SingleClearStaccatoRenderWriteWithPlacementReadback v{}: Quelle {}; ClearCandidateCount {}; Ziel scope {} staff {} voice {} onset {} midi {}; TargetMatched 0; NewStaccatoMarks 0; UnexpectedStaccatoMarks 0; Placement {}; StemLikeRiskTarget {}; RestLaneRiskTarget {}; LowerStaffWrites {}; WriteAllowed nein; RenderXmlWrite nein; MusicXmlWrite nein; PdfWrite nein; MasterApply nein; P3/P4 nein; MXL nein; MusicMutation nein; Urteil {}.",
+-            env!("CARGO_PKG_VERSION"), source_label, clear_rows.len(), target.scope, target.staff, target.voice, target.onset, target.midi, audit.placement_readback, audit.stem_like_risk_target, audit.rest_lane_risk_target, audit.lower_staff_writes, audit.verdict
+-        );
+-        return Ok((xml.to_string(), audit, None));
++    if replacements.is_empty() {
++        return Ok((std::borrow::Cow::Borrowed(xml), audit, None));
+     }
+ 
+     let Some((candidate_xml, occurrence_receipt)) =
+@@ -461,113 +285,36 @@ fn apply_single_clear_staccato_render_write_with_placement_readback(
+             replacements,
+         )
+     else {
+-        audit.target_matched = 0;
+-        audit.write_allowed = false;
+-        audit.verdict = "single_clear_staccato_chord_cohort_authority_rejected_no_write".to_string();
+-        for action in &mut audit.actions {
+-            action.verdict = "rejected_by_chord_cohort_authority".to_string();
+-        }
+-        audit.done_fragment =
+-            "SingleClearStaccatoRenderWriteWithPlacementReadback: ChordCohortAuthority rejected; RenderXmlWrite nein; MusicMutation nein"
+-                .to_string();
+-        audit.pipeline_line = format!(
+-            "SingleClearStaccatoRenderWriteWithPlacementReadback v{}: Quelle {}; ChordCohortAuthority rejected fail-closed; RenderXmlWrite nein; MusicXmlWrite nein; PdfWrite nein; MasterApply nein; MusicMutation nein; Urteil {}.",
+-            env!("CARGO_PKG_VERSION"),
+-            source_label,
+-            audit.verdict
+-        );
+-        return Ok((xml.to_string(), audit, None));
++        return Ok((std::borrow::Cow::Borrowed(xml), audit, None));
+     };
+ 
+-    let (after_events, after_backup_forward_ok) = collect_render_xml_note_events(&candidate_xml);
+-    audit.visible_pitched_after = after_events.iter().filter(|event| !event.is_hidden && event.midi.is_some()).count();
+-    audit.visible_rests_after = after_events.iter().filter(|event| !event.is_hidden && event.is_rest).count();
+-    audit.hidden_pitched_after = after_events.iter().filter(|event| event.is_hidden && event.midi.is_some()).count();
+-    audit.hidden_rests_after = after_events.iter().filter(|event| event.is_hidden && event.is_rest).count();
+-    audit.existing_staccato_after = count_visible_staccato_marks(&candidate_xml);
+-    audit.new_staccato_marks = audit.existing_staccato_after.saturating_sub(audit.existing_staccato_before);
+-    audit.unexpected_staccato_marks = audit.new_staccato_marks.saturating_sub(1);
+-    audit.parse_after_ok = parse_musicxml(&candidate_xml).is_ok();
+-    audit.backup_forward_after_ok = after_backup_forward_ok;
+-    audit.chord_cohort_readback =
+-        single_clear_staccato_target_persisted_in_final_xml(&candidate_xml, &audit);
+-    audit.staccato_equivalence_stable = audit.visible_pitched_after == audit.visible_pitched_before
+-        && audit.visible_rests_after.saturating_add(1) == audit.visible_rests_before
+-        && audit.hidden_pitched_after == audit.hidden_pitched_before
+-        && audit.hidden_rests_after == audit.hidden_rests_before
+-        && audit.new_staccato_marks == 1
+-        && audit.unexpected_staccato_marks == 0
+-        && audit.lower_staff_writes == 0
+-        && audit.stem_like_risk_target == 0
+-        && audit.chord_cohort_readback;
+-
+-    let invariant_ok = audit.write_allowed
+-        && audit.target_matched == 1
+-        && audit.parse_after_ok
+-        && audit.backup_forward_after_ok
+-        && audit.staccato_equivalence_stable
+-        && audit.placement_readback == "notehead_or_chord_mass_clear";
+-
+-    if invariant_ok {
+-        // RA3 is a declared no-write stage. An unexpectedly materializable
+-        // legacy candidate must never bypass sovereign transformation proof.
++    // The ordinary no-write path needs no comparative XML scans.
++    let counts = |events: &[RenderXmlNoteEvent], hidden| {
++        let (mut pitched, mut rests) = (0_usize, 0_usize);
++        for event in events.iter().filter(|event| event.is_hidden == hidden) {
++            pitched += usize::from(event.midi.is_some());
++            rests += usize::from(event.is_rest);
++        }
++        (pitched, rests)
++    };
++    let (before, _) = collect_render_xml_note_events(xml);
++    let (after, balanced) = collect_render_xml_note_events(&candidate_xml);
++    let (before_pitched, before_rests) = counts(&before, false);
++    let (after_pitched, after_rests) = counts(&after, false);
++    let new_marks = count_visible_staccato_marks(&candidate_xml).saturating_sub(count_visible_staccato_marks(xml));
++    audit.staccato_equivalence_stable = after_pitched == before_pitched
++        && after_rests.saturating_add(1) == before_rests
++        && counts(&after, true) == counts(&before, true)
++        && new_marks == 1
++        && single_clear_staccato_target_persisted_in_final_xml(&candidate_xml, &audit);
++    if audit.staccato_equivalence_stable && balanced && parse_musicxml(&candidate_xml).is_ok() {
++        // RA3 must never submit a materializable candidate to the physical sink.
+         crate::master_state_identity::count_render_closure_failure(
+             crate::master_state_identity::RenderClosureMetric::CandidateCoverageFailures);
+         anyhow::bail!("RA3 no-write contract: unexpected staccato candidate before physical sink");
+-    } else {
+-        audit.verdict = "single_clear_staccato_rejected_by_readback_guard".to_string();
+-        for action in &mut audit.actions { action.verdict = "rejected_by_single_clear_staccato_readback_guard".to_string(); }
+     }
+-    audit.music_mutation = false;
+-    audit.done_fragment = format!(
+-        "SingleClearStaccatoRenderWriteWithPlacementReadback: ClearCandidateCount {}; NewStaccatoMarks {}; TargetMatched {}; UnexpectedStaccatoMarks {}; ChordMembers {}; ChordCohortReadback {}; Placement {}; StemLikeRiskTarget {}; RestLaneRiskTarget {}; LowerStaffWrites {}; RenderXmlWrite {}; MusicMutation nein",
+-        audit.clear_candidate_count,
+-        audit.new_staccato_marks,
+-        audit.target_matched,
+-        audit.unexpected_staccato_marks,
+-        audit.target_chord_member_midis.len(),
+-        yes_no(audit.chord_cohort_readback),
+-        audit.placement_readback,
+-        audit.stem_like_risk_target,
+-        audit.rest_lane_risk_target,
+-        audit.lower_staff_writes,
+-        yes_no(audit.render_xml_write)
+-    );
+-    audit.pipeline_line = format!(
+-        "SingleClearStaccatoRenderWriteWithPlacementReadback v{}: Quelle {}; Output {}; ClearCandidateCount {}; Ziel scope {} staff {} voice {} onset {} midi {}; NewStaccatoMarks {}; TargetMatched {}; UnexpectedStaccatoMarks {}; ChordMembers {}; ChordCohortReadback {}; Placement {}; StemLikeRiskTarget {}; RestLaneRiskTarget {}; LowerStaffWrites {}; visible_pitched {}→{}; visible_rests {}→{}; staccato_marks {}→{}; parse/back-forward {}/{}; StaccatoEquivalentStable {}; WriteAllowed {}; RenderXmlWrite {}; MusicXmlWrite nein; PdfWrite source-selected; MasterApply nein; P3/P4 nein; MXL nein; MusicMutation nein; Urteil {}.",
+-        env!("CARGO_PKG_VERSION"),
+-        source_label,
+-        output_path.display(),
+-        audit.clear_candidate_count,
+-        audit.target_scope,
+-        audit.target_staff,
+-        audit.target_voice,
+-        audit.target_onset,
+-        audit.target_midi,
+-        audit.new_staccato_marks,
+-        audit.target_matched,
+-        audit.unexpected_staccato_marks,
+-        audit.target_chord_member_midis.len(),
+-        yes_no(audit.chord_cohort_readback),
+-        audit.placement_readback,
+-        audit.stem_like_risk_target,
+-        audit.rest_lane_risk_target,
+-        audit.lower_staff_writes,
+-        audit.visible_pitched_before,
+-        audit.visible_pitched_after,
+-        audit.visible_rests_before,
+-        audit.visible_rests_after,
+-        audit.existing_staccato_before,
+-        audit.existing_staccato_after,
+-        if audit.parse_after_ok { "ok" } else { "fail" },
+-        if audit.backup_forward_after_ok { "ok" } else { "fail" },
+-        yes_no(audit.staccato_equivalence_stable),
+-        yes_no(audit.write_allowed),
+-        yes_no(audit.render_xml_write),
+-        audit.verdict
+-    );
+     let committed_occurrence_receipt = audit.written.then_some(occurrence_receipt);
+-    Ok((candidate_xml, audit, committed_occurrence_receipt))
++    Ok((std::borrow::Cow::Owned(candidate_xml), audit, committed_occurrence_receipt))
+ }
+ 
+ fn single_clear_staccato_target_persisted_in_final_xml(
+@@ -634,97 +381,3 @@ fn single_clear_staccato_target_persisted_in_final_xml(
+     }
+     false
+ }
+-
+-fn refresh_single_clear_staccato_audit_from_primary_boundary_artifact(
+-    audit: &mut SingleClearStaccatoRenderWriteAudit,
+-    final_xml: &str,
+-    final_source_label: &str,
+-) {
+-    let (final_events, final_backup_forward_ok) = collect_render_xml_note_events(final_xml);
+-    audit.visible_pitched_after = final_events.iter().filter(|event| !event.is_hidden && event.midi.is_some()).count();
+-    audit.visible_rests_after = final_events.iter().filter(|event| !event.is_hidden && event.is_rest).count();
+-    audit.hidden_pitched_after = final_events.iter().filter(|event| event.is_hidden && event.midi.is_some()).count();
+-    audit.hidden_rests_after = final_events.iter().filter(|event| event.is_hidden && event.is_rest).count();
+-    audit.existing_staccato_after = count_visible_staccato_marks(final_xml);
+-    audit.new_staccato_marks = audit.existing_staccato_after.saturating_sub(audit.existing_staccato_before);
+-    audit.unexpected_staccato_marks = audit.new_staccato_marks.saturating_sub(1);
+-    audit.parse_after_ok = parse_musicxml(final_xml).is_ok();
+-    audit.backup_forward_after_ok = final_backup_forward_ok;
+-    let persisted = single_clear_staccato_target_persisted_in_final_xml(final_xml, audit);
+-    audit.chord_cohort_readback = persisted;
+-    audit.target_matched = if persisted { 1 } else { 0 };
+-    audit.staccato_equivalence_stable = audit.visible_pitched_after == audit.visible_pitched_before
+-        && audit.visible_rests_after.saturating_add(1) == audit.visible_rests_before
+-        && audit.hidden_pitched_after == audit.hidden_pitched_before
+-        && audit.hidden_rests_after == audit.hidden_rests_before
+-        && audit.new_staccato_marks == 1
+-        && audit.unexpected_staccato_marks == 0
+-        && audit.lower_staff_writes == 0
+-        && audit.stem_like_risk_target == 0
+-        && persisted;
+-    if persisted && audit.staccato_equivalence_stable {
+-        audit.written = true;
+-        audit.render_xml_write = true;
+-        audit.verdict = "single_clear_staccato_primary_boundary_green".to_string();
+-        for action in &mut audit.actions {
+-            action.verdict = "adopted_primary_boundary_persisted".to_string();
+-        }
+-    } else {
+-        audit.written = false;
+-        audit.render_xml_write = false;
+-        audit.verdict = "single_clear_staccato_primary_boundary_mismatch".to_string();
+-        for action in &mut audit.actions {
+-            action.verdict = "rejected_primary_boundary_persistence_mismatch".to_string();
+-        }
+-    }
+-    audit.music_mutation = false;
+-    audit.done_fragment = format!(
+-        "SingleClearStaccatoPrimaryBoundaryReadback: ClearCandidateCount {}; NewStaccatoMarks {}; TargetMatched {}; UnexpectedStaccatoMarks {}; ChordMembers {}; ChordCohortReadback {}; Placement {}; StemLikeRiskTarget {}; RestLaneRiskTarget {}; LowerStaffWrites {}; PrimaryBoundaryPersisted {}; RenderXmlWrite {}; MusicMutation nein",
+-        audit.clear_candidate_count,
+-        audit.new_staccato_marks,
+-        audit.target_matched,
+-        audit.unexpected_staccato_marks,
+-        audit.target_chord_member_midis.len(),
+-        yes_no(audit.chord_cohort_readback),
+-        audit.placement_readback,
+-        audit.stem_like_risk_target,
+-        audit.rest_lane_risk_target,
+-        audit.lower_staff_writes,
+-        yes_no(persisted),
+-        yes_no(audit.render_xml_write)
+-    );
+-    audit.pipeline_line = format!(
+-        "SingleClearStaccatoPrimaryBoundaryReadback v{}: Quelle {}; Output {}; PrimaryBoundaryReadback ja; ClearCandidateCount {}; Ziel scope {} staff {} voice {} onset {} midi {}; NewStaccatoMarks {}; TargetMatched {}; UnexpectedStaccatoMarks {}; ChordMembers {}; ChordCohortReadback {}; Placement {}; StemLikeRiskTarget {}; RestLaneRiskTarget {}; LowerStaffWrites {}; visible_pitched {}→{}; visible_rests {}→{}; staccato_marks {}→{}; parse/back-forward {}/{}; PrimaryBoundaryPersisted {}; StaccatoEquivalentStable {}; WriteAllowed {}; RenderXmlWrite {}; MusicXmlWrite nein; PdfWrite source-selected; MasterApply nein; P3/P4 nein; MXL nein; MusicMutation nein; Urteil {}.",
+-        env!("CARGO_PKG_VERSION"),
+-        final_source_label,
+-        audit.output_path,
+-        audit.clear_candidate_count,
+-        audit.target_scope,
+-        audit.target_staff,
+-        audit.target_voice,
+-        audit.target_onset,
+-        audit.target_midi,
+-        audit.new_staccato_marks,
+-        audit.target_matched,
+-        audit.unexpected_staccato_marks,
+-        audit.target_chord_member_midis.len(),
+-        yes_no(audit.chord_cohort_readback),
+-        audit.placement_readback,
+-        audit.stem_like_risk_target,
+-        audit.rest_lane_risk_target,
+-        audit.lower_staff_writes,
+-        audit.visible_pitched_before,
+-        audit.visible_pitched_after,
+-        audit.visible_rests_before,
+-        audit.visible_rests_after,
+-        audit.existing_staccato_before,
+-        audit.existing_staccato_after,
+-        if audit.parse_after_ok { "ok" } else { "fail" },
+-        if audit.backup_forward_after_ok { "ok" } else { "fail" },
+-        yes_no(persisted),
+-        yes_no(audit.staccato_equivalence_stable),
+-        yes_no(audit.write_allowed),
+-        yes_no(audit.render_xml_write),
+-        audit.verdict
+-    );
+-}
+diff --git a/src/pipeline_shards/notation_endpoint_layout_core.rs b/src/pipeline_shards/notation_endpoint_layout_core.rs
+index 888593d..f09d837 100644
+--- a/src/pipeline_shards/notation_endpoint_layout_core.rs
++++ b/src/pipeline_shards/notation_endpoint_layout_core.rs
+@@ -719,24 +719,6 @@ fn plan_visual_layout_pressure_decisions(
+         }
+     }
+ 
+-    for measure in select_balanced_visual_page_breaks(
+-        &pressure_points,
+-        last_measure,
+-        final_group_start,
+-    ) {
+-        if measure <= 1 {
+-            continue;
+-        }
+-        if let Some(slot_index) =
+-            horizontal_layout_slot_index_for_locator(xml, measure)
+-        {
+-            plan_builder.plan_new_page(
+-                slot_index,
+-                HorizontalLayoutDecisionOwner::VisualLayoutPressure,
+-            );
+-        }
+-    }
+-
+     Ok(pressure_points)
+ }
+ 
+@@ -1285,18 +1267,6 @@ fn select_balanced_visual_system_breaks(
+     selected
+ }
+ 
+-fn select_balanced_visual_page_breaks(
+-    pressure_points: &[(usize, i32, Vec<&'static str>)],
+-    last_measure: usize,
+-    final_group_start: usize,
+-) -> BTreeSet<usize> {
+-    // v0.1.148 / LAY10: Automatische Seitenumbrueche aus VisualPageBalance
+-    // erzeugten zu oft duenne Seiten. Der Pass darf weiterhin lokale Breiten
+-    // Systemumbrueche planen, aber keine eigenen Seitenumbrueche erzwingen.
+-    let _ = (pressure_points, last_measure, final_group_start);
+-    BTreeSet::new()
+-}
+-
+ fn collect_visual_layout_pressure_points(xml: &str) -> Vec<(usize, i32, Vec<&'static str>)> {
+     let mut points = Vec::new();
+     let mut scan = 0_usize;
+diff --git a/src/pipeline_shards/pipeline_foundation_runtime_passorder_tail.rs b/src/pipeline_shards/pipeline_foundation_runtime_passorder_tail.rs
+index 8f6986b..c7d22be 100644
+--- a/src/pipeline_shards/pipeline_foundation_runtime_passorder_tail.rs
++++ b/src/pipeline_shards/pipeline_foundation_runtime_passorder_tail.rs
+@@ -73,12 +73,22 @@ hidden_pitched_before: usize, hidden_pitched_after: usize, hidden_rests_before:
+ parse_before_ok: bool, parse_after_ok: bool, backup_forward_before_ok: bool, backup_forward_after_ok: bool, verdict: String, actions: Vec<BehindBarsRuleCheckRestAndTieAction>, same_pitch_rows: Vec<BehindBarsRuleCheckSamePitchRow>,
+ examples: Vec<String>, } #[derive(Debug, Clone, Default)] struct BehindBarsRuleCheckRestAndTieAction { action_kind: String, old_rest_count: usize, new_rest_count: usize, verdict: String, } #[derive(Debug, Clone, Default)] struct BehindBarsRuleCheckSamePitchRow { scope: usize, staff: String,
+ voice: String, first_onset: i32, has_tie_boundary: bool, classification: String, } #[derive(Debug, Clone, Default)] struct BehindBarsRuleCheckDuplicateStemRow { scope: usize,
+-staff: String, midi: i32, onset: i32, } #[derive(Debug, Clone, Default)] struct CrossStaffHandRoleMaterializationTrial { done_fragment: String,
+-pipeline_line: String, source_label: String, attempted: bool, candidates_seen: usize, candidate_attempted: usize, candidate_adopted: usize, candidate_rejected: usize, written: bool, visible_pitched_before: usize,
+-visible_pitched_after: usize, visible_rests_before: usize, visible_rests_after: usize, hidden_pitched_before: usize, hidden_pitched_after: usize, hidden_rests_before: usize, hidden_rests_after: usize, sounding_signature_before: u64,
+-sounding_signature_after: u64, visible_signature_after: u64, sounding_signature_stable: bool, parse_before_ok: bool, parse_after_ok: bool, backup_forward_before_ok: bool, backup_forward_after_ok: bool, visible_rest_delta: i64,
+-verdict: String, actions: Vec<CrossStaffHandRoleMaterializationAction>, examples: Vec<String>, } #[derive(Debug, Clone, Default)] struct CrossStaffHandRoleMaterializationAction {
+-verdict: String, } #[derive(Debug, Clone, Default)] struct UpperStaffLocalVisualRestLedgerProofTrial { done_fragment: String, pipeline_line: String, source_label: String, attempted: bool, candidates_seen: usize,
++staff: String, midi: i32, onset: i32, }
++
++struct CrossStaffHandRoleMaterializationTrial {
++    pipeline_line: String,
++    written: bool,
++    #[cfg(test)]
++    parse_before_ok: bool,
++    #[cfg(test)]
++    backup_forward_before_ok: bool,
++    #[cfg(test)]
++    candidate_attempted: usize,
++    #[cfg(test)]
++    candidate_adopted: usize,
++}
++
++#[derive(Debug, Clone, Default)] struct UpperStaffLocalVisualRestLedgerProofTrial { done_fragment: String, pipeline_line: String, source_label: String, attempted: bool, candidates_seen: usize,
+ candidate_attempted: usize, candidate_adopted: usize, candidate_rejected: usize, written: bool, selected_scope: usize, selected_source_voice: String, selected_rest_voice: String, lower_staff_notes: usize, staff_switches: usize,
+ rest_segments_written: usize, forward_segments_written: usize, rest_duration_written: i32, forward_duration_written: i32, duplicate_rest_candidates_seen: usize, duplicate_rest_suppressed: usize, duplicate_rest_duration_to_forward: i32,
+ duplicate_rest_scopes: String, duplicate_rest_chosen_evidence: String, visible_rest_lane_anchor_candidates_seen: usize, visible_rest_lane_anchor_suppressed: usize, visible_rest_lane_anchor_duration_to_forward: i32, visible_rest_lane_anchor_scopes: String, visible_rest_lane_anchor_chosen_evidence: String,
+@@ -103,13 +113,20 @@ original_note_capture: Option<std::sync::Arc<JointRestForwardNoteCapture>>,
+ } #[derive(Debug, Clone, Default)] struct RenderXmlPruneStats { removed_safe_hidden_inner_chord_tones: usize, removed_hidden_pitched_events: usize, removed_source_note_ranges: Vec<(usize, usize)>, } #[derive(Debug, Clone, Default)]
+ struct RenderXmlHiddenScopeAudit { scope: usize, staff: String, voice: String, hidden_pitched: usize, hidden_rests: usize, score: i64, } #[derive(Debug, Clone)] struct RenderXmlNoteEvent { scope: usize, staff: String, voice: String,
+ onset: i32, duration: i32, is_hidden: bool, is_rest: bool, is_chord: bool, midi: Option<i32>, anchor: RenderXmlAnchorKind, has_visible_dependency: bool, }
+-#[derive(Debug, Clone, Default)] struct StaccatoProxyCandidateRow { scope: usize, staff: String, voice: String, midi: i32, note_onset: i32, note_duration: i32, rest_duration: i32, total_duration: i32, beat_unit: i32, }
+-#[derive(Debug, Clone, Default)] struct PianistHelpfulArticulationRow { scope: usize, staff: String, voice: String, onset: i32, midi: i32, duration: i32, class_name: String, placement: String, placement_risk: String,
+-score: i64, } #[derive(Debug, Clone, Default)] struct PianistHelpfulArticulationAndNotationAudit { rows: Vec<PianistHelpfulArticulationRow>, } #[derive(Debug, Clone, Default)]
+-struct SingleClearStaccatoRenderWriteAudit { done_fragment: String, pipeline_line: String, output_path: String, written: bool, clear_candidate_count: usize, target_matched: usize,
+-new_staccato_marks: usize, unexpected_staccato_marks: usize, target_scope: usize, target_staff: String, target_voice: String, target_onset: i32, target_midi: i32, target_note_duration: i32, target_rest_duration: i32,
+-target_total_duration: i32, target_chord_member_midis: Vec<i32>, chord_cohort_readback: bool, placement_binding: String, placement_readback: String, stem_like_risk_target: usize, rest_lane_risk_target: usize, lower_staff_writes: usize, visible_pitched_before: usize, visible_pitched_after: usize,
+-visible_rests_before: usize, visible_rests_after: usize, hidden_pitched_before: usize, hidden_pitched_after: usize, hidden_rests_before: usize, hidden_rests_after: usize, existing_staccato_before: usize, existing_staccato_after: usize,
+-parse_after_ok: bool, backup_forward_after_ok: bool, staccato_equivalence_stable: bool, write_allowed: bool, render_xml_write: bool, music_mutation: bool, verdict: String, actions: Vec<BehindBarsRuleCheckRestAndTieAction>, }
++#[derive(Debug, Clone, Default)]
++struct SingleClearStaccatoRenderWriteAudit {
++    clear_candidate_count: usize,
++    target_scope: usize,
++    target_staff: String,
++    target_voice: String,
++    target_onset: i32,
++    target_midi: i32,
++    target_note_duration: i32,
++    target_total_duration: i32,
++    target_chord_member_midis: Vec<i32>,
++    staccato_equivalence_stable: bool,
++    written: bool,
++    render_xml_write: bool,
++}
+ #[derive(Debug, Clone, Default)] struct AssertiveVisibleArticulationRow { scope: usize, staff: String, voice: String, onset: i64, midi: i32, duration: i64, mark: String, }
+ #[derive(Debug, Clone, Default)] struct AssertiveVisibleArticulationRenderWriteAudit { written: bool, }
+diff --git a/src/pipeline_shards/pipeline_orchestrator_rest_articulation_render_stage.rs b/src/pipeline_shards/pipeline_orchestrator_rest_articulation_render_stage.rs
+index e2b39fc..0972b72 100644
+--- a/src/pipeline_shards/pipeline_orchestrator_rest_articulation_render_stage.rs
++++ b/src/pipeline_shards/pipeline_orchestrator_rest_articulation_render_stage.rs
+@@ -112,12 +112,10 @@ fn run_rest_and_articulation_render_stage(
+         }
+     };
+     let single_clear_staccato_render_write_audit = if final_render_source_available {
+-        let single_staccato_source_xml = render_state.require_document("RestArticulation source").to_owned();
++        let single_staccato_source_xml = render_state.require_document("RestArticulation source");
+         let (single_staccato_after_xml, mut audit, occurrence_receipt) =
+             apply_single_clear_staccato_render_write_with_placement_readback(
+-                &single_staccato_source_xml,
+-                "Render-XML nach Rest-/Pausen-Notation-Writes vor SingleClearStaccatoRenderWrite",
+-                render_xml_trial_path,
++                single_staccato_source_xml,
+             )?;
+         repair_loop_invocation_evidence.staccato_primary_candidates = audit.clear_candidate_count;
+         repair_loop_invocation_evidence.staccato_primary_written = audit.written;
+@@ -164,20 +162,11 @@ fn run_rest_and_articulation_render_stage(
+             }
+             None => {}
+         }
+-        refresh_single_clear_staccato_audit_from_primary_boundary_artifact(
+-            &mut audit,
+-            &final_artifact_xml,
+-            "unmittelbarer Primary-Boundary-Readback nach SingleClearStaccatoRenderWrite",
+-        );
++        audit.written = audit.staccato_equivalence_stable && staccato_primary_persisted;
++        audit.render_xml_write = audit.written;
+         audit
+     } else {
+-        SingleClearStaccatoRenderWriteAudit {
+-            output_path: render_xml_trial_path.display().to_string(),
+-            verdict: "single_clear_staccato_skipped_no_render_source".to_string(),
+-            done_fragment: "SingleClearStaccatoRenderWriteWithPlacementReadback: uebersprungen; keine Render-XML-Quelle; RenderXmlWrite nein; MusicMutation nein".to_string(),
+-            pipeline_line: format!("SingleClearStaccatoRenderWriteWithPlacementReadback v{}: uebersprungen; keine finale Render-XML-Quelle; RenderXmlWrite nein; MusicMutation nein.", env!("CARGO_PKG_VERSION")),
+-            ..SingleClearStaccatoRenderWriteAudit::default()
+-        }
++        SingleClearStaccatoRenderWriteAudit::default()
+     };
+     let wav_truth_binding_clear_tiny_accent_render_write_audit = AssertiveVisibleArticulationRenderWriteAudit::default();
+     let external_notation_feedback_beam_variant_a_tiny_render_write_audit =
+diff --git a/src/pipeline_shards/strict_staff_visible_lane_rest_rewrite_tail.rs b/src/pipeline_shards/strict_staff_visible_lane_rest_rewrite_tail.rs
+index f19a148..6040ab7 100644
+--- a/src/pipeline_shards/strict_staff_visible_lane_rest_rewrite_tail.rs
++++ b/src/pipeline_shards/strict_staff_visible_lane_rest_rewrite_tail.rs
+@@ -1121,113 +1121,52 @@ fn empty_voice_rest_suppression_plan(xml: &str, max_actions: usize) -> (
+ fn build_cross_staff_hand_role_materialization_trial(
+     xml: &str,
+     source_label: &str,
+-    output_path: &Path,
++    _output_path: &Path,
+ ) -> anyhow::Result<CrossStaffHandRoleMaterializationTrial> {
+-    // Preserve the frozen sink signature in this retired/no-write boundary.
+-    // This function item is never invoked.
++    // The frozen sink remains a function item until its physical retirement.
+     let _retired_sink_signature = crate::structural_write_authority::write_cross_staff_hand_role_trial_authorized;
+ 
+-    let _ = output_path;
+-    let (before_events, before_backup_forward_ok) = collect_render_xml_note_events(xml);
+-    let mut trial = CrossStaffHandRoleMaterializationTrial {
+-        source_label: source_label.to_string(),
+-        visible_pitched_before: before_events.iter().filter(|event| !event.is_hidden && event.midi.is_some()).count(),
+-        visible_rests_before: before_events.iter().filter(|event| !event.is_hidden && event.is_rest).count(),
+-        hidden_pitched_before: before_events.iter().filter(|event| event.is_hidden && event.midi.is_some()).count(),
+-        hidden_rests_before: before_events.iter().filter(|event| event.is_hidden && event.is_rest).count(),
+-        sounding_signature_before: render_visible_sounding_signature(&before_events),
+-        parse_before_ok: parse_musicxml(xml).is_ok(),
+-        backup_forward_before_ok: before_backup_forward_ok,
+-        ..CrossStaffHandRoleMaterializationTrial::default()
+-    };
+-
+-    let candidate_xml = xml.to_string();
+-    if trial.parse_before_ok && trial.backup_forward_before_ok {
+-        trial.attempted = true;
+-        trial.candidates_seen = 0;
+-        trial.candidate_attempted = 0;
+-    }
+-
+-    let (after_events, after_backup_forward_ok) = collect_render_xml_note_events(&candidate_xml);
+-    trial.visible_pitched_after = after_events.iter().filter(|event| !event.is_hidden && event.midi.is_some()).count();
+-    trial.visible_rests_after = after_events.iter().filter(|event| !event.is_hidden && event.is_rest).count();
+-    trial.hidden_pitched_after = after_events.iter().filter(|event| event.is_hidden && event.midi.is_some()).count();
+-    trial.hidden_rests_after = after_events.iter().filter(|event| event.is_hidden && event.is_rest).count();
+-    trial.sounding_signature_after = render_visible_sounding_signature(&after_events);
+-    trial.visible_signature_after = render_visible_signature(&after_events, false);
+-    trial.sounding_signature_stable = trial.sounding_signature_before == trial.sounding_signature_after;
+-    trial.parse_after_ok = parse_musicxml(&candidate_xml).is_ok();
+-    trial.backup_forward_after_ok = after_backup_forward_ok;
+-    trial.visible_rest_delta = trial.visible_rests_after as i64 - trial.visible_rests_before as i64;
+-
+-    let invariants_ok = trial.candidate_attempted > 0
+-        && trial.sounding_signature_stable
+-        && trial.visible_pitched_before == trial.visible_pitched_after
+-        && trial.hidden_pitched_before == trial.hidden_pitched_after
+-        && trial.hidden_rests_before == trial.hidden_rests_after
+-        && trial.visible_rests_after <= trial.visible_rests_before
+-        && trial.parse_after_ok
+-        && trial.backup_forward_after_ok;
+-
+-    if invariants_ok {
+-        // IR7 is retired/no-write. The current producer is never called above;
+-        // an unexpected future productive candidate must stop before any sink.
+-        crate::master_state_identity::count_render_closure_failure(
+-            crate::master_state_identity::RenderClosureMetric::CandidateCoverageFailures,
+-        );
+-        return Err(anyhow::anyhow!(
+-            "IR7 CrossStaffHandRole is NO-WRITE: unexpected productive candidate"
+-        ));
+-    } else {
+-        trial.candidate_rejected = trial.candidate_attempted;
+-        trial.verdict = if trial.candidate_attempted == 0 {
+-            "cross_staff_hand_role_no_safe_empty_rest_lane_candidate".to_string()
++    // This retired stage observes the unchanged document for the release report.
++    let (events, backup_forward_before_ok) = collect_render_xml_note_events(xml);
++    let parse_before_ok = parse_musicxml(xml).is_ok();
++    let sounding_signature = render_visible_sounding_signature(&events);
++    let mut visible_pitched = 0_usize;
++    let mut visible_rests = 0_usize;
++    let mut hidden_pitched = 0_usize;
++    let mut hidden_rests = 0_usize;
++    for event in &events {
++        if event.is_hidden {
++            hidden_pitched += usize::from(event.midi.is_some());
++            hidden_rests += usize::from(event.is_rest);
+         } else {
+-            "cross_staff_hand_role_trial_rejected_by_invariant_guard".to_string()
+-        };
+-        for action in &mut trial.actions {
+-            action.verdict = "rejected_by_global_invariant_guard".to_string();
++            visible_pitched += usize::from(event.midi.is_some());
++            visible_rests += usize::from(event.is_rest);
+         }
+     }
+ 
+-    trial.examples.push("Handrollen-Materialisierung heißt hier nicht: neue Handstimme schreiben. Es heißt: eine leere technische Rest-Lane nicht als linke-Hand-Ganzpause anzeigen, wenn die Cross-Staff-Voice bereits vollständig gemappt ist.".to_string());
+-    trial.examples.push("Die Aktion ist negativ und eng: sichtbare Rest-Lane -> Forward. Keine klingende Note, kein Pitch, kein Onset, keine Dauer und keine klingende Staff-/Voice-Zuordnung ändern sich.".to_string());
+-    trial.done_fragment = format!(
+-        "CrossStaffHandRoleMaterializationTrial: gesehen {}, versucht {}, übernommen {}, sichtbare Pausen {}→{}, klingend stabil {}, geschrieben {}",
+-        trial.candidates_seen,
+-        trial.candidate_attempted,
+-        trial.candidate_adopted,
+-        trial.visible_rests_before,
+-        trial.visible_rests_after,
+-        if trial.sounding_signature_stable { "ja" } else { "nein" },
+-        if trial.written { "ja" } else { "nein" }
+-    );
+-    trial.pipeline_line = format!(
+-        "CrossStaffHandRoleMaterializationTrial v{}: Render-XML-only auf {}; seen/attempted/adopted/rejected {}/{}/{}/{}; sichtbare Pausen {}→{}; sichtbare klingende Noten {}→{}; hidden klingend {}→{}; hidden Pausen {}→{}; sounding_signature {}/{} stabil {}; visible_rest_delta {}; parse/back-forward nachher {}/{}; geschrieben {}; Urteil {}.",
++    let parse_status = if parse_before_ok { "ok" } else { "fail" };
++    let balance_status = if backup_forward_before_ok { "ok" } else { "fail" };
++    let pipeline_line = format!(
++        "CrossStaffHandRoleMaterializationTrial v{}: Render-XML-only auf {source_label}; \
++         seen/attempted/adopted/rejected 0/0/0/0; sichtbare Pausen {visible_rests}→{visible_rests}; \
++         sichtbare klingende Noten {visible_pitched}→{visible_pitched}; hidden klingend {hidden_pitched}→{hidden_pitched}; \
++         hidden Pausen {hidden_rests}→{hidden_rests}; sounding_signature {sounding_signature}/{sounding_signature} stabil ja; \
++         visible_rest_delta 0; parse/back-forward nachher {parse_status}/{balance_status}; geschrieben nein; \
++         Urteil cross_staff_hand_role_no_safe_empty_rest_lane_candidate.",
+         env!("CARGO_PKG_VERSION"),
+-        trial.source_label,
+-        trial.candidates_seen,
+-        trial.candidate_attempted,
+-        trial.candidate_adopted,
+-        trial.candidate_rejected,
+-        trial.visible_rests_before,
+-        trial.visible_rests_after,
+-        trial.visible_pitched_before,
+-        trial.visible_pitched_after,
+-        trial.hidden_pitched_before,
+-        trial.hidden_pitched_after,
+-        trial.hidden_rests_before,
+-        trial.hidden_rests_after,
+-        trial.sounding_signature_before,
+-        trial.sounding_signature_after,
+-        if trial.sounding_signature_stable { "ja" } else { "nein" },
+-        trial.visible_rest_delta,
+-        if trial.parse_after_ok { "ok" } else { "fail" },
+-        if trial.backup_forward_after_ok { "ok" } else { "fail" },
+-        if trial.written { "ja" } else { "nein" },
+-        trial.verdict
+     );
+-    Ok(trial)
++    Ok(CrossStaffHandRoleMaterializationTrial {
++        pipeline_line,
++        written: false,
++        #[cfg(test)]
++        parse_before_ok,
++        #[cfg(test)]
++        backup_forward_before_ok,
++        #[cfg(test)]
++        candidate_attempted: 0,
++        #[cfg(test)]
++        candidate_adopted: 0,
++    })
+ }
+ 
+ 
+diff --git a/src/report_format.rs b/src/report_format.rs
+index ab0eb2a..cb124fe 100644
+--- a/src/report_format.rs
++++ b/src/report_format.rs
+@@ -10,9 +10,6 @@ pub fn push_static_ent_line_v765(out: &mut String, suffix: &str) {
+ pub fn push_static_dec_line_v765(out: &mut String, suffix: &str) {
+     out.push_static_named_report_line_v766("Decision", suffix);
+ }
+-pub fn push_static_write_policy_line_v765(out: &mut String, suffix: &str) {
+-    out.push_static_named_report_line_v766("WritePolicy", suffix);
+-}
+ pub fn push_static_named_policy_line_v765(out: &mut String, name: &str, suffix: &str) {
+     out.push_str(name);
+     out.push_static_named_report_line_v766("Policy", suffix);
+@@ -23,10 +20,6 @@ pub fn push_static_section_header_v793(out: &mut String, title: &str, underline:
+     out.push_str(underline);
+     out.push('\n');
+ }
+-pub fn push_static_ledger_line_v804(out: &mut String, prefix: &str, suffix: &str) {
+-    out.push_str(prefix);
+-    out.push_static_named_report_line_v766("Ledger", suffix);
+-}
+ pub fn push_static_ledger_header_v804(out: &mut String, title: &str, columns: &str) {
+     out.push_str(title);
+     out.push_str("Ledger: ");
+diff --git a/src/structural_write_authority/strict_staff_visible_lane_authority.rs b/src/structural_write_authority/strict_staff_visible_lane_authority.rs
+index 6629653..df13a85 100644
+--- a/src/structural_write_authority/strict_staff_visible_lane_authority.rs
++++ b/src/structural_write_authority/strict_staff_visible_lane_authority.rs
+@@ -15,8 +15,7 @@ use super::authority_primitives::{
+     child_block,
+     contains_document_boundary,
+ };
+-use anyhow::{bail, Context, Result};
+-use std::path::{Path, PathBuf};
++use std::path::Path;
+ 
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ enum VisibleLaneEffect {
+@@ -463,72 +462,13 @@ pub fn insert_missing_staff_edge_rest_authorized(
+     (output, receipt)
+ }
+ 
+-#[derive(Debug)]
+-struct CrossStaffHandRoleTrialSink {
+-    source_fingerprint: u64,
+-    candidate: String,
+-    candidate_fingerprint: u64,
+-    output_path: PathBuf,
+-}
+-
+-impl CrossStaffHandRoleTrialSink {
+-    fn issue(source: &str, candidate: &str, output_path: &Path) -> Result<Self> {
+-        if candidate.trim().is_empty() || roxmltree::Document::parse(candidate).is_err() {
+-            bail!("cross_staff_hand_role_trial: candidate is not a complete parseable XML document");
+-        }
+-        Ok(Self {
+-            source_fingerprint: fingerprint(source),
+-            candidate: candidate.to_string(),
+-            candidate_fingerprint: fingerprint(candidate),
+-            output_path: output_path.to_path_buf(),
+-        })
+-    }
+-
+-    fn commit(self, source: &str, candidate: &str, output_path: &Path) -> Result<()> {
+-        if self.source_fingerprint != fingerprint(source)
+-            || self.candidate != candidate
+-            || self.candidate_fingerprint != fingerprint(candidate)
+-            || self.output_path.as_path() != output_path
+-        {
+-            bail!("cross_staff_hand_role_trial: source, candidate or output path binding changed");
+-        }
+-        let candidate_xml = self.candidate;
+-        let writer_trace_before = crate::audit_only::writer_trace::capture_before(&self.output_path);
+-        std::fs::write(&self.output_path, candidate_xml.as_bytes()).with_context(|| {
+-            format!(
+-                "cross_staff_hand_role_trial: could not write {}",
+-                self.output_path.display()
+-            )
+-        })?;
+-        let readback = std::fs::read(&self.output_path).with_context(|| {
+-            format!(
+-                "cross_staff_hand_role_trial: could not read back {}",
+-                self.output_path.display()
+-            )
+-        })?;
+-        if readback != candidate_xml.as_bytes()
+-            || fingerprint(std::str::from_utf8(&readback).unwrap_or_default())
+-                != self.candidate_fingerprint
+-        {
+-            bail!("cross_staff_hand_role_trial: exact file readback mismatch");
+-        }
+-        crate::audit_only::writer_trace::record_after(
+-            "cross_staff_hand_role_trial",
+-            &self.output_path,
+-            writer_trace_before.as_deref(),
+-            &candidate_xml,
+-        );
+-        Ok(())
+-    }
+-}
+-
++// The installed writer boundary retains this historical signature.
+ pub fn write_cross_staff_hand_role_trial_authorized(
+-    source: &str,
+-    candidate: &str,
+-    output_path: &Path,
+-) -> Result<()> {
+-    CrossStaffHandRoleTrialSink::issue(source, candidate, output_path)?
+-        .commit(source, candidate, output_path)
++    _source: &str,
++    _candidate: &str,
++    _output_path: &Path,
++) -> anyhow::Result<()> {
++    anyhow::bail!("IR7 CrossStaffHandRole is NO-WRITE")
+ }
+ 
+ pub(crate) struct RenderRow51ExactMint { _private: () }
+diff --git a/tests/console_presentation_contract.rs b/tests/console_presentation_contract.rs
+index c7acec5..41f5cb8 100644
+--- a/tests/console_presentation_contract.rs
++++ b/tests/console_presentation_contract.rs
+@@ -1,8 +1,6 @@
+ use etuschlopf::console_presentation_contract::{
+-    resolve_stream_render_policy, Attention, ColorPreference, ConsolePreferences, Emphasis,
+-    GlyphCapability, GlyphMode, GlyphPreference, LocalStatus, PresentationChannel,
+-    PresentationLine, PresentationRole, ProgressMode, ProgressPreference, StreamCapability,
+-    StreamDestination, StyleMode, Visibility,
++    resolve_stream_render_policy, ColorPreference, ConsolePreferences, GlyphCapability, GlyphMode,
++    GlyphPreference, ProgressMode, ProgressPreference, StreamCapability, StreamDestination, StyleMode,
+ };
+ 
+ fn terminal() -> StreamCapability {
+@@ -19,23 +17,6 @@ fn redirected() -> StreamCapability {
+     }
+ }
+ 
+-#[test]
+-fn role_local_status_and_attention_are_independent_dimensions() {
+-    let line = PresentationLine {
+-        role: PresentationRole::Export,
+-        status: Some(LocalStatus::Blocked),
+-        attention: Attention::Warning,
+-        emphasis: Emphasis::Secondary,
+-        visibility: Visibility::Both,
+-        channel: PresentationChannel::Narrative,
+-        text: "Neuro-Evidence blockiert; EtuSchlopf bleibt fail-independent",
+-    };
+-
+-    assert_eq!(line.role, PresentationRole::Export);
+-    assert_eq!(line.status, Some(LocalStatus::Blocked));
+-    assert_eq!(line.attention, Attention::Warning);
+-}
+-
+ #[test]
+ fn redirected_output_is_plain_and_line_oriented_even_when_color_is_forced() {
+     let policy = resolve_stream_render_policy(
+@@ -119,18 +100,3 @@ fn contract_is_leaf_like_and_does_not_import_domain_or_runtime_authority() {
+         );
+     }
+ }
+-
+-#[test]
+-fn technical_visibility_is_explicit_not_inferred_from_text() {
+-    let line = PresentationLine {
+-        role: PresentationRole::Check,
+-        status: Some(LocalStatus::Ok),
+-        attention: Attention::Neutral,
+-        emphasis: Emphasis::Muted,
+-        visibility: Visibility::TechnicalOnly,
+-        channel: PresentationChannel::Diagnostic,
+-        text: "vollstaendiger technischer Kontext",
+-    };
+-    assert_eq!(line.visibility, Visibility::TechnicalOnly);
+-    assert_eq!(line.channel, PresentationChannel::Diagnostic);
+-}
+diff --git a/tests/rust_2024_macro_expr_fragment_contract.rs b/tests/rust_2024_macro_expr_fragment_contract.rs
+index 3a890d2..c5b7546 100644
+--- a/tests/rust_2024_macro_expr_fragment_contract.rs
++++ b/tests/rust_2024_macro_expr_fragment_contract.rs
+@@ -1,6 +1,3 @@
+-const REPLACEMENT_AUTHORITY: &str = include_str!(
+-    "../src/structural_write_authority/strict_staff_visible_lane_authority.rs",
+-);
+ const PROJECT_TRY: &str = include_str!(
+     "../src/pipeline_shards/pipeline_orchestrator_report_compaction.rs",
+ );
+@@ -21,10 +18,3 @@ fn rust_2024_expr_fragments_are_used_at_the_three_surviving_macro_boundaries() {
+     assert!(VALIDATOR_AUTHORITY.contains("priority_profile: $priority_profile:expr,"));
+     assert!(VALIDATOR_AUTHORITY.contains("repair_hint: $repair_hint:expr $(,)?"));
+ }
+-
+-#[test]
+-fn replacement_authority_uses_a_real_rust_2024_const_expression_probe() {
+-    assert!(REPLACEMENT_AUTHORITY.contains(
+-        "const { VisibleLaneEffect::BackupAnchor }",
+-    ));
+-}
+diff --git a/tests/support/render_authority/r1230_ra3_real_probe_is_never_a_physical_write.rs b/tests/support/render_authority/r1230_ra3_real_probe_is_never_a_physical_write.rs
+index 750cb7d..66504ff 100644
+--- a/tests/support/render_authority/r1230_ra3_real_probe_is_never_a_physical_write.rs
++++ b/tests/support/render_authority/r1230_ra3_real_probe_is_never_a_physical_write.rs
+@@ -1,11 +1,43 @@
+-// Integration test for a grandfathered production entry, kept in its private lexical scope.
+-    #[test]
+-    fn r1230_ra3_real_probe_is_never_a_physical_write() {
+-        let xml=wrap("<note><pitch><step>C</step><octave>4</octave></pitch><duration>24</duration><voice>1</voice><type>16th</type><staff>1</staff></note><note><rest/><duration>24</duration><voice>1</voice><type>16th</type><staff>1</staff></note><forward><duration>336</duration></forward>");
+-        let path=path();
+-        assert_eq!(articulation_single_clear_candidate_rows(&build_pianist_helpful_articulation_and_notation_audit_no_mutation(&xml)).len(),1);
+-        let result=apply_single_clear_staccato_render_write_with_placement_readback(&xml,"RA3 no-write",&path);
+-        if let Ok((_,audit,occurrence))=result { assert!(!audit.written); assert!(occurrence.is_none()); }
+-        assert!(!path.exists());
+-        crate::master_state_identity::reset_render_lineage_measurement();
++// Kept in the pipeline's private scope to exercise the production RA3 observer.
++#[test]
++fn r1230_ra3_real_probe_is_never_a_physical_write() {
++    fn observe_primary_staccato(xml: &str) -> (usize, bool) {
++        let (output, audit, receipt) =
++            apply_single_clear_staccato_render_write_with_placement_readback(xml).unwrap();
++        assert!(matches!(output, std::borrow::Cow::Borrowed(_)));
++        assert_eq!(output.as_ref(), xml);
++        assert!(!audit.written && !audit.render_xml_write && receipt.is_none());
++        (audit.clear_candidate_count, single_clear_staccato_target_persisted_in_final_xml(&output, &audit))
+     }
++
++    fn pair(marked: bool, chord: bool) -> String {
++        let marking = if marked { "<notations><articulations><staccato/></articulations></notations>" } else { "" };
++        let member = if chord {
++            "<note><chord/><pitch><step>E</step><octave>4</octave></pitch><duration>24</duration><voice>1</voice><staff>1</staff></note>"
++        } else { "" };
++        format!("<note><pitch><step>C</step><octave>4</octave></pitch><duration>24</duration><voice>1</voice><staff>1</staff>{marking}</note>{member}<note><rest/><duration>24</duration><voice>1</voice><staff>1</staff></note>")
++    }
++
++    let unmarked = pair(false, false);
++    let marked = pair(true, false);
++    assert_eq!(observe_primary_staccato(&wrap("")), (0, false));
++    assert_eq!(observe_primary_staccato(&wrap(&unmarked)), (1, false));
++    assert_eq!(observe_primary_staccato(&wrap(&marked)), (1, true));
++    assert_eq!(observe_primary_staccato(&wrap(&pair(true, true))), (1, false));
++    assert_eq!(observe_primary_staccato(&wrap(&marked.replace("<staff>1", "<staff>2"))), (0, false));
++    assert_eq!(observe_primary_staccato(&wrap_at(0, &marked)), (1, false));
++
++    // Equally ranked candidates use the earliest attack for the existing-mark check.
++    assert_eq!(observe_primary_staccato(&wrap(&format!("{marked}{unmarked}"))), (2, true));
++    assert_eq!(observe_primary_staccato(&wrap(&format!("{unmarked}{marked}"))), (2, false));
++    // A replayed simultaneous anchor retains its existing positive pitch/attack readback.
++    let next = "<backup><duration>48</duration></backup>";
++    assert_eq!(observe_primary_staccato(&wrap_at(1, &format!("{marked}{next}{unmarked}"))), (1, true));
++    let mut measures = String::new();
++    for ordinal in (1..=15).rev() {
++        let body = if ordinal == 1 { &marked } else { &unmarked };
++        measures.push_str(&format!("<measure number=\"{ordinal}\">{body}</measure>"));
++    }
++    let score = format!("<score-partwise><part id=\"P1\">{measures}</part></score-partwise>");
++    assert_eq!(observe_primary_staccato(&score), (12, true));
++}
+diff --git a/tools/etuschlopf_watch/src/web_watch.rs b/tools/etuschlopf_watch/src/web_watch.rs
+index c1f9abb..d8aa223 100644
+--- a/tools/etuschlopf_watch/src/web_watch.rs
++++ b/tools/etuschlopf_watch/src/web_watch.rs
+@@ -548,7 +548,7 @@ const WATCH_HTML: &str = r#"<!doctype html>
+ <meta name="viewport" content="width=device-width,initial-scale=1">
+ <title>Warte auf Laufdaten · EtuSchlopf Watch</title>
+ <style>
+-:root{color-scheme:dark;--bg:#0b1014;--panel:#111820;--panel2:#151e27;--line:#26323d;--text:#e8eef3;--muted:#8f9da9;--soft:#b9c5cf;--live:#6ce5b1;--cyan:#7cd7ff;--warn:#f5ca72;--bad:#ff7f8a;--radius:18px}*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(circle at 80% -10%,#142432 0,transparent 35%),var(--bg);color:var(--text);font-family:Inter,"Segoe UI",system-ui,-apple-system,sans-serif}body{padding:32px}main{max-width:1120px;margin:0 auto}.top{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:28px}.brand{display:flex;align-items:center;gap:14px}.mark{width:42px;height:42px;border:1px solid var(--line);border-radius:13px;display:grid;place-items:center;background:linear-gradient(145deg,#16212b,#0e151b);font-weight:800;letter-spacing:-1px;color:var(--cyan)}h1{font-size:17px;letter-spacing:.16em;margin:0;font-weight:700}.sub{color:var(--muted);font-size:12px;margin-top:4px}.runstate{display:inline-flex;align-items:center;gap:9px;color:var(--soft);font-size:12px;letter-spacing:.08em;font-weight:700}.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);box-shadow:0 0 0 4px rgba(143,157,169,.08)}.runstate[data-state=running] .dot{background:var(--live);box-shadow:0 0 18px rgba(108,229,177,.55);animation:softPulse 1.8s ease-in-out infinite}.runstate[data-state=completed] .dot{background:var(--cyan)}.runstate[data-state=failed] .dot{background:var(--bad)}.runstate[data-state=cancelled] .dot{background:var(--warn)}.runstate[data-state=dark_green] .dot{background:var(--live);box-shadow:0 0 14px rgba(108,229,177,.35)}.runstate[data-state=light_green] .dot{background:#a8e6c4}.runstate[data-state=yellow] .dot{background:var(--warn)}.runstate[data-state=red] .dot{background:var(--bad)}.shell{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:rgba(17,24,32,.92);box-shadow:0 24px 70px rgba(0,0,0,.28)}.empty{padding:72px 34px;text-align:center;color:var(--muted)}.empty strong{display:block;color:var(--text);font-size:22px;margin-bottom:8px}.session{padding:30px}.session+.session{border-top:1px solid var(--line)}.hero{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-bottom:24px}.herometric{text-align:right;color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase}.herometric b{display:block;color:var(--text);font-size:20px;letter-spacing:0;margin-top:3px;font-weight:600;font-variant-numeric:tabular-nums}.eyebrow{font-size:10px;letter-spacing:.13em;color:#70808d;text-transform:uppercase;margin-bottom:8px}.title{font-size:30px;font-weight:680;letter-spacing:-.025em}.path{margin-top:8px;color:var(--soft);font-size:15px}.activity{color:var(--cyan)}.clock{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;white-space:nowrap}.progress{position:relative;height:7px;background:#0b1116;border-radius:99px;overflow:hidden;margin:0 0 22px}.progress>i{display:block;position:relative;height:100%;background:linear-gradient(90deg,var(--cyan),var(--live));border-radius:99px;transition:width .25s ease}.progress.running>i::after{content:"";position:absolute;inset:0;width:42%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.24),transparent);transform:translateX(-140%);animation:progressSweep 2.8s ease-in-out infinite}.corpusstats{display:flex;flex-wrap:wrap;gap:10px 18px;margin:0 0 20px;color:var(--muted);font-size:12px}.corpusstats b{color:var(--text);font-weight:650}.activecallouts{display:flex;flex-direction:column;gap:8px;margin:-8px 0 22px}.activecallout{display:flex;align-items:center;gap:9px;margin:0;color:var(--soft);font-size:13px}.activecallout .activepulse{width:7px;height:7px;border-radius:50%;background:var(--live);box-shadow:0 0 14px rgba(108,229,177,.45);animation:softPulse 1.8s ease-in-out infinite}.activecallout b{color:var(--text);font-weight:650}.projectlist{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#0f161d}.projectcolumns,.projectrow>summary{display:grid;grid-template-columns:22px minmax(180px,.9fr) minmax(250px,1.2fr) 118px;align-items:center;gap:12px}.projectcolumns{padding:9px 16px;border-bottom:1px solid var(--line);color:#657480;font-size:9px;letter-spacing:.1em;text-transform:uppercase}.projectcolumns span:last-child{text-align:right}.projectwaiting{padding:22px 16px;color:var(--muted);font-size:13px;text-align:center}.projectrow{border:0;border-bottom:1px solid var(--line);background:transparent}.projectrow:last-child{border-bottom:0}.projectrow>summary{list-style:none;padding:13px 16px;cursor:pointer;transition:background .18s ease}.projectrow>summary::-webkit-details-marker{display:none}.projectrow>summary:hover{background:rgba(124,215,255,.035)}.projectrow.failed>summary{background:rgba(255,127,138,.035)}.projectrow.running>summary{background:linear-gradient(90deg,rgba(108,229,177,.045),rgba(108,229,177,.012) 38%,transparent 70%)}.projectdot{font-size:13px;text-align:center;color:var(--muted)}.projectrow.running .projectdot{color:var(--live);animation:softPulse 1.8s ease-in-out infinite}.projectrow.completed .projectdot{color:var(--cyan)}.projectrow.failed .projectdot{color:var(--bad)}.projectrow.cancelled .projectdot{color:var(--warn)}.projectname{font-size:14px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.projectstate{display:block;justify-self:stretch;text-align:left;font-size:13px;color:var(--soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.projectage{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;white-space:nowrap;text-align:right}.projectdetails{display:flex;flex-wrap:wrap;gap:12px 22px;padding:0 16px 14px 50px;color:var(--muted);font-size:11px}.projectdetails b{color:var(--soft);font-weight:600;margin-left:5px}.systemstrip{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:15px;padding:0 2px;color:#64727e;font-size:11px}.systemitem{display:inline-flex;gap:8px;align-items:center}.systemitem strong{color:#84929e;font-weight:600}.systemitem .sysstate{color:#6f7e89}.terminalstate{font-weight:650}.terminalstate.completed{color:var(--cyan)}.terminalstate.failed{color:var(--bad)}.terminalstate.cancelled{color:var(--warn)}.phasebox{margin:4px 0 22px;padding:18px;border:1px solid var(--line);border-radius:14px;background:#0f161d}.phasehead{color:var(--muted);font-size:11px;margin-bottom:15px}.phaserail{display:grid;grid-template-columns:repeat(6,1fr);gap:7px}.phase{min-width:0}.phasebar{height:5px;border-radius:99px;background:#27323b;overflow:hidden;position:relative}.phase.done .phasebar{background:#45687a}.phase.active .phasebar{background:linear-gradient(90deg,var(--cyan),var(--live));box-shadow:0 0 13px rgba(108,229,177,.18)}.phase.active .phasebar::after{content:"";position:absolute;inset:0;width:50%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.25),transparent);animation:progressSweep 2.4s ease-in-out infinite}.phase.problem .phasebar{background:var(--bad)}.phaselabel{display:block;margin-top:7px;color:#61717d;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.phase.done .phaselabel{color:#9caab5}.phase.active .phaselabel{color:var(--text);font-weight:650}.currentline{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:22px;padding:0 2px}.currentmetrics{display:flex;justify-content:flex-end;gap:26px;flex-wrap:wrap}.currentlabel{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#657480;margin-bottom:5px}.currentstate{font-size:15px;color:var(--soft)}.currenttime{text-align:right;color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase}.currenttime b{display:block;color:var(--text);font-size:18px;letter-spacing:0;margin-top:3px;font-weight:600;font-variant-numeric:tabular-nums}.detailsbox{border-top:1px solid var(--line);padding-top:16px}.detailsbox>summary{list-style:none;cursor:pointer;color:#7d8d99;font-size:11px;letter-spacing:.05em}.detailsbox>summary::-webkit-details-marker{display:none}.detailsbox>summary::after{content:"  ›"}.detailsbox[open]>summary::after{content:"  ⌄"}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px;margin-top:14px}.card{border:1px solid var(--line);background:var(--panel2);border-radius:14px;padding:18px}.cardhead{display:flex;justify-content:space-between;gap:14px;align-items:center}.role{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.11em}.name{font-size:16px;font-weight:650;margin-top:4px}.state{font-size:13px;color:var(--soft);margin-top:14px;min-height:20px}.ages{display:flex;gap:20px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}.age{font-size:12px;color:var(--muted)}.age b{display:block;color:var(--text);font-size:13px;margin-top:3px;font-weight:600}.mini{font-size:12px;color:var(--muted);white-space:nowrap}.footer{display:flex;justify-content:flex-end;margin-top:14px;color:#53616d;font-size:10px;letter-spacing:.02em}.transport[data-state=live]{color:#61756f}.transport[data-state=reconnecting]{color:#806f52}.transport[data-state=closed]{color:#53616d}.pdf-link{color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:8px;min-width:0;border-radius:7px}.pdf-link:not([aria-disabled=true]):hover{color:var(--cyan)}.pdf-link:focus-visible,.projectrow>summary:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}.pdf-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pdf-chip{flex:0 0 auto;border:1px solid #33424f;border-radius:999px;padding:2px 6px;color:#71818e;font-size:8px;letter-spacing:.08em;font-weight:700;vertical-align:middle;transition:color .15s ease,border-color .15s ease}.pdf-link:not([aria-disabled=true]):hover .pdf-chip{color:var(--cyan);border-color:#41687a}@keyframes softPulse{0%,100%{opacity:.58;transform:scale(.9)}50%{opacity:1;transform:scale(1.08)}}@keyframes progressSweep{0%,30%{transform:translateX(-140%)}72%,100%{transform:translateX(270%)}}@media(prefers-reduced-motion:reduce){.runstate[data-state=running] .dot,.projectrow.running .projectdot,.activecallout .activepulse,.progress.running>i::after,.phase.active .phasebar::after{animation:none}}@media(max-width:780px){body{padding:18px}.top,.hero,.currentline{flex-direction:column}.session{padding:22px}.title{font-size:25px}.footer{justify-content:flex-start}.projectcolumns{display:none}.projectrow>summary{grid-template-columns:18px minmax(0,1fr) auto}.projectstate{grid-column:2/4;padding-top:2px}.projectage{grid-column:3}.projectdetails{padding-left:46px}.systemstrip{flex-direction:column;gap:6px}.phaserail{grid-template-columns:repeat(3,1fr);row-gap:14px}.currenttime{text-align:left}}
++:root{color-scheme:dark;--bg:#0b1014;--panel:#111820;--panel2:#151e27;--line:#26323d;--text:#e8eef3;--muted:#8f9da9;--soft:#b9c5cf;--live:#6ce5b1;--cyan:#7cd7ff;--warn:#f5ca72;--bad:#ff7f8a;--radius:18px}*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(circle at 80% -10%,#142432 0,transparent 35%),var(--bg);color:var(--text);font-family:Inter,"Segoe UI",system-ui,-apple-system,sans-serif}body{padding:32px}main{max-width:1120px;margin:0 auto}.top{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:28px}.brand{display:flex;align-items:center;gap:14px}.mark{width:42px;height:42px;border:1px solid var(--line);border-radius:13px;display:grid;place-items:center;background:linear-gradient(145deg,#16212b,#0e151b);font-weight:800;letter-spacing:-1px;color:var(--cyan)}h1{font-size:17px;letter-spacing:.16em;margin:0;font-weight:700}.sub{color:var(--muted);font-size:12px;margin-top:4px}.runstate{display:inline-flex;align-items:center;gap:9px;color:var(--soft);font-size:12px;letter-spacing:.08em;font-weight:700}.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);box-shadow:0 0 0 4px rgba(143,157,169,.08)}.runstate[data-state=running] .dot{background:var(--live);box-shadow:0 0 18px rgba(108,229,177,.55);animation:softPulse 1.8s ease-in-out infinite}.runstate[data-state=completed] .dot{background:var(--cyan)}.runstate[data-state=failed] .dot{background:var(--bad)}.runstate[data-state=cancelled] .dot{background:var(--warn)}.runstate[data-state=dark_green] .dot{background:var(--live);box-shadow:0 0 14px rgba(108,229,177,.35)}.runstate[data-state=light_green] .dot{background:#a8e6c4}.runstate[data-state=yellow] .dot{background:var(--warn)}.runstate[data-state=red] .dot{background:var(--bad)}.shell{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:rgba(17,24,32,.92);box-shadow:0 24px 70px rgba(0,0,0,.28)}.empty{padding:72px 34px;text-align:center;color:var(--muted)}.empty strong{display:block;color:var(--text);font-size:22px;margin-bottom:8px}.session{padding:30px}.session+.session{border-top:1px solid var(--line)}.hero{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-bottom:24px}.herometric{text-align:right;color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase}.herometric b{display:block;color:var(--text);font-size:20px;letter-spacing:0;margin-top:3px;font-weight:600;font-variant-numeric:tabular-nums}.eyebrow{font-size:10px;letter-spacing:.13em;color:#70808d;text-transform:uppercase;margin-bottom:8px}.title{font-size:30px;font-weight:680;letter-spacing:-.025em}.path{margin-top:8px;color:var(--soft);font-size:15px}.activity{color:var(--cyan)}.clock{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;white-space:nowrap}.progress{position:relative;height:7px;background:#0b1116;border-radius:99px;overflow:hidden;margin:0 0 22px}.progress>i{display:block;position:relative;height:100%;background:linear-gradient(90deg,var(--cyan),var(--live));border-radius:99px;transition:width .25s ease}.progress.running>i::after{content:"";position:absolute;inset:0;width:42%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.24),transparent);transform:translateX(-140%);animation:progressSweep 2.8s ease-in-out infinite}.corpusstats{display:flex;flex-wrap:wrap;gap:10px 18px;margin:0 0 20px;color:var(--muted);font-size:12px}.corpusstats b{color:var(--text);font-weight:650}.activecallouts{display:flex;flex-direction:column;gap:8px;margin:-8px 0 22px}.activecallout{display:flex;align-items:center;gap:9px;margin:0;color:var(--soft);font-size:13px}.activecallout .activepulse{width:7px;height:7px;border-radius:50%;background:var(--live);box-shadow:0 0 14px rgba(108,229,177,.45);animation:softPulse 1.8s ease-in-out infinite}.activecallout b{color:var(--text);font-weight:650}.projectlist{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#0f161d}.projectcolumns,.projectrow>summary{display:grid;grid-template-columns:22px minmax(180px,.9fr) minmax(250px,1.2fr) 118px;align-items:center;gap:12px}.projectcolumns{padding:9px 16px;border-bottom:1px solid var(--line);color:#657480;font-size:9px;letter-spacing:.1em;text-transform:uppercase}.projectcolumns span:last-child{text-align:right}.projectwaiting{padding:22px 16px;color:var(--muted);font-size:13px;text-align:center}.projectrow{border:0;border-bottom:1px solid var(--line);background:transparent}.projectrow:last-child{border-bottom:0}.projectrow>summary{list-style:none;padding:13px 16px;cursor:pointer;transition:background .18s ease}.projectrow>summary::-webkit-details-marker{display:none}.projectrow>summary:hover{background:rgba(124,215,255,.035)}.projectrow.failed>summary{background:rgba(255,127,138,.035)}.projectrow.running>summary{background:linear-gradient(90deg,rgba(108,229,177,.045),rgba(108,229,177,.012) 38%,transparent 70%)}.projectdot{font-size:13px;text-align:center;color:var(--muted)}.projectrow.running .projectdot{color:var(--live);animation:softPulse 1.8s ease-in-out infinite}.projectrow.completed .projectdot{color:var(--cyan)}.projectrow.failed .projectdot{color:var(--bad)}.projectrow.cancelled .projectdot{color:var(--warn)}.projectname{font-size:14px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.projectstate{display:block;justify-self:stretch;text-align:left;font-size:13px;color:var(--soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.projectage{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;white-space:nowrap;text-align:right}.projectdetails{display:flex;flex-wrap:wrap;gap:12px 22px;padding:0 16px 14px 50px;color:var(--muted);font-size:11px}.projectdetails b{color:var(--soft);font-weight:600;margin-left:5px}.terminalstate{font-weight:650}.terminalstate.completed{color:var(--cyan)}.terminalstate.failed{color:var(--bad)}.terminalstate.cancelled{color:var(--warn)}.phasebox{margin:4px 0 22px;padding:18px;border:1px solid var(--line);border-radius:14px;background:#0f161d}.phasehead{color:var(--muted);font-size:11px;margin-bottom:15px}.phaserail{display:grid;grid-template-columns:repeat(6,1fr);gap:7px}.phase{min-width:0}.phasebar{height:5px;border-radius:99px;background:#27323b;overflow:hidden;position:relative}.phase.done .phasebar{background:#45687a}.phase.active .phasebar{background:linear-gradient(90deg,var(--cyan),var(--live));box-shadow:0 0 13px rgba(108,229,177,.18)}.phase.active .phasebar::after{content:"";position:absolute;inset:0;width:50%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.25),transparent);animation:progressSweep 2.4s ease-in-out infinite}.phase.problem .phasebar{background:var(--bad)}.phaselabel{display:block;margin-top:7px;color:#61717d;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.phase.done .phaselabel{color:#9caab5}.phase.active .phaselabel{color:var(--text);font-weight:650}.currentline{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:22px;padding:0 2px}.currentmetrics{display:flex;justify-content:flex-end;gap:26px;flex-wrap:wrap}.currentlabel{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#657480;margin-bottom:5px}.currentstate{font-size:15px;color:var(--soft)}.currenttime{text-align:right;color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase}.currenttime b{display:block;color:var(--text);font-size:18px;letter-spacing:0;margin-top:3px;font-weight:600;font-variant-numeric:tabular-nums}.detailsbox{border-top:1px solid var(--line);padding-top:16px}.detailsbox>summary{list-style:none;cursor:pointer;color:#7d8d99;font-size:11px;letter-spacing:.05em}.detailsbox>summary::-webkit-details-marker{display:none}.detailsbox>summary::after{content:"  ›"}.detailsbox[open]>summary::after{content:"  ⌄"}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px;margin-top:14px}.card{border:1px solid var(--line);background:var(--panel2);border-radius:14px;padding:18px}.cardhead{display:flex;justify-content:space-between;gap:14px;align-items:center}.role{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.11em}.name{font-size:16px;font-weight:650;margin-top:4px}.state{font-size:13px;color:var(--soft);margin-top:14px;min-height:20px}.ages{display:flex;gap:20px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}.age{font-size:12px;color:var(--muted)}.age b{display:block;color:var(--text);font-size:13px;margin-top:3px;font-weight:600}.mini{font-size:12px;color:var(--muted);white-space:nowrap}.footer{display:flex;justify-content:flex-end;margin-top:14px;color:#53616d;font-size:10px;letter-spacing:.02em}.transport[data-state=live]{color:#61756f}.transport[data-state=reconnecting]{color:#806f52}.transport[data-state=closed]{color:#53616d}.pdf-link{color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:8px;min-width:0;border-radius:7px}.pdf-link:not([aria-disabled=true]):hover{color:var(--cyan)}.pdf-link:focus-visible,.projectrow>summary:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}.pdf-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pdf-chip{flex:0 0 auto;border:1px solid #33424f;border-radius:999px;padding:2px 6px;color:#71818e;font-size:8px;letter-spacing:.08em;font-weight:700;vertical-align:middle;transition:color .15s ease,border-color .15s ease}.pdf-link:not([aria-disabled=true]):hover .pdf-chip{color:var(--cyan);border-color:#41687a}@keyframes softPulse{0%,100%{opacity:.58;transform:scale(.9)}50%{opacity:1;transform:scale(1.08)}}@keyframes progressSweep{0%,30%{transform:translateX(-140%)}72%,100%{transform:translateX(270%)}}@media(prefers-reduced-motion:reduce){.runstate[data-state=running] .dot,.projectrow.running .projectdot,.activecallout .activepulse,.progress.running>i::after,.phase.active .phasebar::after{animation:none}}@media(max-width:780px){body{padding:18px}.top,.hero,.currentline{flex-direction:column}.session{padding:22px}.title{font-size:25px}.footer{justify-content:flex-start}.projectcolumns{display:none}.projectrow>summary{grid-template-columns:18px minmax(0,1fr) auto}.projectstate{grid-column:2/4;padding-top:2px}.projectage{grid-column:3}.projectdetails{padding-left:46px}.phaserail{grid-template-columns:repeat(3,1fr);row-gap:14px}.currenttime{text-align:left}}
+ .pdf-link[data-pdf-state=ready] .pdf-chip{color:var(--cyan);border-color:#41687a}
+ .pdf-link[data-pdf-state=error] .pdf-chip{color:var(--warn);border-color:#816737}
+ .pdf-link[aria-disabled=true]{cursor:default}
+@@ -658,7 +658,6 @@ function displaySource(o,sessionEnded){
+   return {...o,source:{...o.source,status:'unconfirmed'}};
+ }
+ function projectRow(sessionId,o){const s=o.source;const terminal=s.status!=='running';const symbol=s.status==='running'?'●':s.status==='completed'?'✓':s.status==='failed'?'✕':'○';const name=s.project_label||s.source_id;return `<details class="projectrow ${esc(s.status)}" data-source-id="${esc(s.source_id)}" id="${watchId(sessionId,s.source_id,'row')}" data-watch-control><summary><span class="projectdot">${symbol}</span>${s.project_label?pdfLink(sessionId,name,'projectname'):`<span class="projectname">${esc(name)}</span>`}<span class="projectstate">${projectStatusText(s)}</span><span class="projectage">${clock(sessionId,o,'run')}</span></summary><div class="projectdetails"><span>${terminal?'Dauer':'Laufzeit'} <b>${clock(sessionId,o,'run')}</b></span><span>${terminal?terminalAgeLabel(s.status):'Phase seit'} <b>${clock(sessionId,o,'state')}</b></span><span>gesehen <b>${clock(sessionId,o,'seen')}</b></span></div></details>`;}
+-function systemItem(o){if(!o)return'';const s=o.source;const label=s.source_role==='corpus'?'Korpus':'Launcher';const state=s.status==='running'?path(s):esc(sourceStatusLabel[s.status]||s.status);return `<span class="systemitem"><strong>${label}</strong><span class="sysstate">${state}</span></span>`;}
+ function corpusStats(corpus,projects,ended){const p=corpus?.source.progress;const failed=projects.filter(x=>x.source.status==='failed').length;const active=!ended?(p?.active??projects.filter(x=>x.source.status==='running').length):0;const completed=p?.completed??projects.filter(x=>['completed','failed','cancelled'].includes(x.source.status)).length;const pending=p&&Number.isFinite(p.total)?Math.max(0,p.total-completed-active):null;const parts=[`<span><b>${completed}</b> bearbeitet</span>`,`<span><b>${active}</b> aktiv</span>`];if(pending!==null)parts.push(`<span><b>${pending}</b> ${ended?'nicht bearbeitet':'ausstehend'}</span>`);if(failed)parts.push(`<span><b>${failed}</b> davon fehlgeschlagen</span>`);return parts.join('');}
+ function activeProjectCallouts(sessionId,projects){const active=projects.filter(x=>x.source.status==='running');if(!active.length)return'';return `<div class="activecallouts">${active.map(o=>{const name=o.source.project_label||o.source.source_id;return `<div class="activecallout"><span class="activepulse"></span><span><b>${esc(name)}</b> · ${path(o.source)} · Laufzeit ${clock(sessionId,o,'run')} · Phase ${clock(sessionId,o,'state')}</span></div>`;}).join('')}</div>`;}
+ function renderCorpusSession(s){const ended=launcherEnded(lastModel);const projects=s.sources.filter(x=>x.source.source_role==='project').map(o=>displaySource(o,ended)).sort((a,b)=>projectCollator.compare(a.source.project_label||a.source.source_id,b.source.project_label||b.source.source_id));const corpus=s.sources.find(x=>x.source.source_role==='corpus');const launcher=s.sources.find(x=>x.source.source_role==='launcher');const timing=corpus||launcher;const st=summary(s);const p=corpus?.source.progress;const width=p&&p.total?Math.max(0,Math.min(100,100*p.completed/p.total)):null;const headline=corpus?'Korpuslauf':'Projektübersicht';const progressNote=corpus?.source.status==='running'&&!ended&&corpus.source.stage==='corpus_finalizing_corpus_report'?'Alle Projekte bearbeitet · Korpusbericht wird erstellt':'';const rows=projects.length?projects.map(o=>projectRow(s.observation_session_id,o)).join(''):`<div class="projectwaiting">${(st==='failed'||corpus?.source.status==='failed')?'Lauf vor dem ersten Projekt fehlgeschlagen.':(st==='cancelled'||corpus?.source.status==='cancelled')?'Lauf vor dem ersten Projekt abgebrochen.':ended?'Keine Projekte gemeldet.':'Projekte werden vorbereitet …'}</div>`;const columns=projects.length?'<div class="projectcolumns"><span></span><span>Projekt</span><span>Aktueller Stand</span><span>Zeit</span><span></span></div>':'';const metric=timing?`<div class="herometric">${!ended&&timing.source.status==='running'?'Laufzeit':corpus?'Korpusdauer':'Laufdauer'}<b>${clock(s.observation_session_id,displaySource(timing,ended),'run')}</b></div>`:'';return `<section class="session corpus"><div class="hero"><div><div class="eyebrow">${corpus?'Korpus':'Projekte'}</div><div class="title">${esc(headline)}</div></div>${metric}</div>${activeProjectCallouts(s.observation_session_id,projects)}${width===null?'':`<div class="progress ${st==='running'?'running':''}" role="progressbar" aria-label="Bearbeitete Projekte" aria-valuemin="0" aria-valuemax="${p.total}" aria-valuenow="${Math.max(0,Math.min(p.total,p.completed))}"><i style="width:${width}%"></i></div>`}${progressNote?`<div class="progressnote">${progressNote}</div>`:''}<div class="corpusstats">${corpusStats(corpus,projects,ended)}</div><div class="projectlist">${columns}${rows}</div><details class="detailsbox" id="${watchId(s.observation_session_id,'','details')}" data-watch-control><summary>Technische Details</summary><div class="grid">${[launcher,corpus].filter(Boolean).map(o=>sourceCard(s.observation_session_id,displaySource(o,ended))).join('')}</div></details></section>`;}
