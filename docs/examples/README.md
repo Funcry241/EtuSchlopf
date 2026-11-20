@@ -25,6 +25,15 @@ Mozarts *Andante grazioso* stammt aus dem Windows-Einzellauf r1964 mit der Origi
 | Etüde Nr. 9 | Das Stück beginnt im unteren System. Die obere Stimme setzt in der ersten Zeile mit Akkorden ein. | r1961 · 4/4 · 38 Takte · 4 Seiten | [![Etüde Nr. 9, Anfang der ersten Seite](../images/etude-9-r1961-ausschnitt.png)](etude-9-r1961.pdf) |
 | Etüde Nr. 10 | Im ersten System wechseln Akkorde und gebundene Noten. Die untere Stimme führt ihre eigene Linie. | r1961 · 4/4 · 46 Takte · 6 Seiten | [![Etüde Nr. 10, Anfang der ersten Seite](../images/etude-10-r1961-ausschnitt.png)](etude-10-r1961.pdf) |
 
+### Weitere Ausgaben unter Linux
+
+Die folgenden PDFs stammen aus zusätzlichen Einzelläufen mit MuseScore 4.7.5. Die Vorschaubilder zeigen den Anfang der jeweiligen Ausgabe.
+
+| Stück | Eingabe und Ausgabe | Ausschnitt und PDF |
+| --- | --- | --- |
+| Chopin · Etüde E-Dur op. 10 Nr. 3 | Original-MIDI und WAV der Aufführung p01 aus dem Vienna 4×22 Piano Corpus. Master- und Render-MusicXML stimmen bytegenau mit der jeweiligen Windows-Ausgabe r1961 überein. r1964 · 2/4 · 22 Takte · 1 Seite. | [![Chopin · Etüde E-Dur op. 10 Nr. 3, erstes System](../images/zusatzrunden/chopin-op10-no3-p01-r1964-linux-ausschnitt.png)](zusatzrunden/chopin-op10-no3-p01-r1964-linux.pdf) |
+| Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15 | Die Import-MIDI enthält die Notationszeiten, die WAV ist zeitlich ausgerichtet. Bei allen 315 regulären gespielten Referenznoten stimmen Einsatz, Tonhöhe und Dauer. In r1961 stimmten 303 dieser Dauern. r1964 · 3/4 · 33 Takte · 2 Seiten. | [![Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15, erstes System](../images/zusatzrunden/schubert-d783-no15-p18-r1964-linux-ausschnitt.png)](zusatzrunden/schubert-d783-no15-p18-r1964-linux.pdf) |
+
 [Mozart in der früheren Ausgabe r1961](mozart-k331-p01-r1961.pdf) · [Notenbilder r1938](../evidence/r1938/score_sha256.tsv) · [Notenbilder r1921](../evidence/r1921/score_sha256.tsv) · [Notenbilder r1886](../evidence/r1886/score_sha256.tsv)
 
 ## Frühere Notenbilder und Druckvorlagen

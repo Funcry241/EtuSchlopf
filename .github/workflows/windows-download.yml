@@ -60,7 +60,7 @@ jobs:
             throw 'Native r1964 acceptance does not match the prepared take'
           }
           if ((Get-FileHash docs/evidence/r1964/native_acceptance.txt -Algorithm SHA256).Hash.ToLowerInvariant() -ne '7d30cb7d598f98d7f151caacc982c29f7db343b4494407a59946dff6d955935e') { throw 'Native acceptance record checksum mismatch' }
-          python .github/distribution/verify-accepted-source.py 467f51863e55d9a2b6cfb11fd98a9cd7c6fe60c897f5adf56d67339522b6f15c bff697d9233856fa337ae7311004a2b861cb56ece5e425e860f4988545c39c5b
+          python .github/distribution/verify-accepted-source.py 467f51863e55d9a2b6cfb11fd98a9cd7c6fe60c897f5adf56d67339522b6f15c a315e18beaffdf5f16464c5433c6b2ca33123dbf78fdca9992b1806c3c38fd7d
           if ($LASTEXITCODE -ne 0) { throw 'Accepted source or documentation verification failed' }
       - name: Build accepted engine
         run: |
