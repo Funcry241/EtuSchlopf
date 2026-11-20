@@ -1,0 +1,44 @@
+name: Linux QA engine r1966
+on:
+  push:
+    branches: [verify/native-r1966-r1968]
+    paths: ['.github/strict-ci-extra/r1966-run.json', '.github/workflows/native-review-linux-1966.yml']
+permissions:
+  contents: read
+jobs:
+  linux-binary:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Materialize exact candidate source for the local score comparison
+        id: source
+        run: |
+          set -euo pipefail
+          cp .github/strict-ci-extra/r1966-run.json .github/strict-ci/run.json
+          export ETU_NATIVE_ROOT="$RUNNER_TEMP/etuschlopf-src"
+          python3 .github/strict-ci/verify.py linux
+          echo "ETU_NATIVE_ROOT=$ETU_NATIVE_ROOT" >> "$GITHUB_ENV"
+      - name: Build Linux QA engine with the bound lockfile and Strict profile
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.98.0 --profile minimal
+          cd "$ETU_NATIVE_ROOT"
+          cargo +1.98.0 build --locked --profile strict --jobs 1 --bin etuschlopf
+          mkdir -p "$RUNNER_TEMP/qa-bin"
+          install -m755 target/strict/etuschlopf "$RUNNER_TEMP/qa-bin/etuschlopf"
+          strip --strip-unneeded "$RUNNER_TEMP/qa-bin/etuschlopf"
+          cd "$RUNNER_TEMP/qa-bin"
+          cp "$GITHUB_WORKSPACE/.github/strict-ci/run.json" SOURCE.json
+          sha256sum etuschlopf SOURCE.json > SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: QA-EtuSchlopf-r${{ steps.source.outputs.revision }}-linux-x64
+          path: ${{ runner.temp }}/qa-bin/
+          retention-days: 2
+          if-no-files-found: error
