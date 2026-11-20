@@ -68,7 +68,7 @@ jobs:
           listed = set(re.findall(r"^(.+): test$", (tmp / "ignored-list.txt").read_text(), re.M))
           assert names == listed, (names, listed)
           log = (tmp / "ignored-results.txt").read_text()
-          passed = set(re.findall(r"^test (\S+) \.\.\. ok$", log, re.M))
-          assert names == passed, (names, passed)
+          started = re.findall(r"^test (\S+) \.\.\. ", log, re.M)
+          assert sorted(started) == sorted(names), (names, started)
           assert "4 passed; 0 failed; 0 ignored" in log
           PY
