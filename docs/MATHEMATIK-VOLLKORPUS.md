@@ -1,12 +1,12 @@
 # Mathematik in EtuSchlopf
 
-**Wie lange soll eine gespielte Note im Notenbild stehen?** EtuSchlopf leitet die Dauer einer frei gespielten Klaviernote aus den Einsätzen, der Artikulation und den gleichzeitig laufenden Stimmen ab. Im Windows-Einzellauf r1964 zu Mozarts KV 331 stimmen alle 474 regulären Einsätze samt Tonhöhe und 460 ihrer geschriebenen Dauern mit der annotierten Einspielung überein. Die nachstehenden Formeln zeigen, wie die Entscheidung entsteht und welche Eigenschaft die MusicXML-Ausgabe tatsächlich belegt. [Notenbild r1964](examples/mozart-k331-p01-r1964.pdf)
+**Wie lange soll eine gespielte Note im Notenbild stehen?** EtuSchlopf leitet die Dauer einer frei gespielten Klaviernote aus den Einsätzen, der Artikulation und den gleichzeitig laufenden Stimmen ab. Im Windows-Vollkorpuslauf r1965 stimmen bei Mozarts KV 331 alle 474 regulären Einsätze samt Tonhöhe und 460 ihrer geschriebenen Dauern mit der annotierten Einspielung überein. Die nachstehenden Formeln zeigen, wie die Entscheidung entsteht und welche Eigenschaft die MusicXML-Ausgabe tatsächlich belegt. [Mozart-Notenbild r1965](examples/mozart-k331-p01-r1965.pdf) · [Windows-Vollkorpus r1965](evidence/r1965/README.md)
 
 | Frage | Wo die Antwort steht |
 | --- | --- |
 | Wie gelangt eine frei gespielte Note in den gedruckten Takt? | [Vom Anschlag zur geschriebenen Dauer](#vom-anschlag-zur-geschriebenen-dauer) |
 | Welche Zusammenhänge beschreibt das Modell für Stimmen, Register und Seiten? | [Verfahrensfamilien](#verfahrensfamilien-im-aktuellen-quellstand) und [Formeln](#zentrale-formeln-und-ihre-beweisgrenzen) |
-| Was wurde mit welchen Stücken geprüft? | [Stimmfortsetzungen im Vollkorpus r1961](#stimmfortsetzungen-im-vollkorpus-r1961) und [Prüfstände](#prüfstände-und-verbleibende-grenzen) |
+| Was wurde mit welchen Stücken geprüft? | [Windows-Vollkorpus r1965](evidence/r1965/README.md), [Stimmfortsetzungen im Vollkorpus r1961](#stimmfortsetzungen-im-vollkorpus-r1961) und [Prüfstände](#prüfstände-und-verbleibende-grenzen) |
 | Woran ließe sich als Nächstes arbeiten? | [Nächste mathematische Vorhaben](#nächste-mathematische-vorhaben) |
 
 ## Wie die Aussagen zu lesen sind
@@ -116,13 +116,13 @@ s_1=a,\qquad e_m=b,\qquad s_k<e_k,\qquad e_k=s_{k+1}\quad(1\le k<m).
 
 Dadurch hat ein bei 72 beginnender Ton mit Dauer 96 auch dann sein Ende bei 168, wenn auf demselben System bei 120 eine andere Note beginnt. EtuSchlopf kann dafür einen weiteren MusicXML-Stimmkanal verwenden. Bei einer Teilung behält jedes Fragment die Quellidentität und Tonhöhe. Nur das erste trägt den Anschlag, die folgenden schließen mit Haltebögen an. Ein Vorschlag hat eigene Regeln für Nullzeit und Hauptnote. Der Schreibpfad prüft die Zeiten gegen die tatsächlich ausgegebenen Noten und Cursorbewegungen. [Fragmentplanung und Ausgabekontrolle](../src/midi_seed/bound_duration.rs)
 
-| Mozart KV 331, Andante grazioso, Einspielung p01 | r1963 | r1964 |
-| --- | ---: | ---: |
-| Reguläre Noten mit passendem Einsatz und passender Tonhöhe | 474 von 474 | 474 von 474 |
-| Passende geschriebene Dauer einschließlich Haltefortsetzungen | 438 von 474 | 460 von 474 |
-| Abweichende geschriebene Dauer | 36 | 14 |
+| Mozart KV 331, Andante grazioso, Einspielung p01 | r1963 | r1964 | r1965 |
+| --- | ---: | ---: | ---: |
+| Reguläre Noten mit passendem Einsatz und passender Tonhöhe | 474 von 474 | 474 von 474 | 474 von 474 |
+| Passende geschriebene Dauer einschließlich Haltefortsetzungen | 438 von 474 | 460 von 474 | 460 von 474 |
+| Abweichende geschriebene Dauer | 36 | 14 | 14 |
 
-Der Vergleich verwendet MIDI und WAV als Programmeingaben. Die annotierte Zuordnung aus dem Vienna-4×22-Korpus dient erst zum Prüfen von Master- und Render-MusicXML. Die 14 Differenzen begrenzen die Aussage über die Dauererkennung an dieser Aufnahme. Der Erhalt der gewählten Intervalle und die Übereinstimmung dieser Wahl mit der musikalischen Referenz sind zwei getrennt messbare Eigenschaften. [Annotierte Einspielung](https://github.com/wergo/vienna4x22/blob/53872cd670182b039ff118d27abcba30de1e0785/match/Mozart_K331_1st-mov_p01.match) · [Windows-Notenbild](examples/mozart-k331-p01-r1964.pdf)
+Der Vergleich verwendet MIDI und WAV als Programmeingaben. Die annotierte Zuordnung aus dem Vienna-4×22-Korpus dient erst zum Prüfen von Master- und Render-MusicXML. Die 14 Differenzen begrenzen die Aussage über die Dauererkennung an dieser Aufnahme. Der Erhalt der gewählten Intervalle und die Übereinstimmung dieser Wahl mit der musikalischen Referenz sind zwei getrennt messbare Eigenschaften. [Annotierte Einspielung](https://github.com/wergo/vienna4x22/blob/53872cd670182b039ff118d27abcba30de1e0785/match/Mozart_K331_1st-mov_p01.match) · [Windows-Einzellauf r1964](examples/mozart-k331-p01-r1964.pdf) · [Windows-Vollkorpus r1965](examples/mozart-k331-p01-r1965.pdf)
 
 ## Verfahrensfamilien im aktuellen Quellstand
 
@@ -430,7 +430,7 @@ Die Indizes entstehen aus der exakten halboffenen Zeitbedingung, nicht aus einer
 
 Die Bogenprüfung verwendet einen anderen Index: Für jede Nummer beantworten erster sichtbarer Anfang und letzter sichtbarer Schluss dieselben Existenzfragen wie die frühere Vollsuche. Das ist kein allgemeines globales Matching aller möglichen Bögen. Eine solche Erweiterung wäre eine eigene musikalische Entscheidung.
 
-Im Kandidaten r1965 vergleicht EtuSchlopf wiederkehrende Phrasen mit dynamischer Programmierung. Für $n$ Einsatzgruppen hat die Tabelle einschließlich ihres Randes die Breite $m=n+1$. r1964 hielt jede Bewertung als 8-Byte-Zahl und jede Rückrichtung als 4-Byte-Zahl fest. In r1965 genügen die vorherige und die aktuelle Bewertungszeile. Für den späteren Rückweg bleiben alle Richtungen gespeichert, mit einem Byte je Zelle. Für die Nutzdaten dieser beiden Tabellen ergibt sich
+In r1965 vergleicht EtuSchlopf wiederkehrende Phrasen mit dynamischer Programmierung. Für $n$ Einsatzgruppen hat die Tabelle einschließlich ihres Randes die Breite $m=n+1$. r1964 hielt jede Bewertung als 8-Byte-Zahl und jede Rückrichtung als 4-Byte-Zahl fest. In r1965 genügen die vorherige und die aktuelle Bewertungszeile. Für den späteren Rückweg bleiben alle Richtungen gespeichert, mit einem Byte je Zelle. Für die Nutzdaten dieser beiden Tabellen ergibt sich
 
 ```math
 B_{1964}(m)=12m^2,\qquad B_{1965}(m)=16m+m^2\quad\text{Byte}.
@@ -438,7 +438,7 @@ B_{1964}(m)=12m^2,\qquad B_{1965}(m)=16m+m^2\quad\text{Byte}.
 
 Bei **1024 Einsatzgruppen** ($m=1025$) sinkt der Bedarf von **12.607.500 auf 1.067.025 Byte**. Bei der Suche nach dem Metrum berechnet EtuSchlopf außerdem die festen Sprungkosten einmal pro Phasenmodell. Die Reihenfolge gleichwertiger Kandidaten bleibt erhalten.
 
-Im isolierten MIDI/WAV-Lauf für die Aufführungsanalyse von Mozarts KV 331 sank die mediane **Prozess-CPU-Zeit von 0,399568 auf 0,266895 Sekunden** (acht Läufe pro Version, abwechselnd auf demselben Linux-Rechner). Die Messung umfasst das Einlesen im Prüfprogramm und die Inferenz bis zum Zeitplan. Der anschließende Notensatz und PDF-Export liegen außerhalb dieser Messung. [Quellstand r1965 und Äquivalenznachweis](https://github.com/Funcry241/EtuSchlopf/blob/629ce771343fe2eca0fb47535d7c3b323fb35708/docs/selector_derivation_contract_performance_trace_equivalence.md)
+Im isolierten MIDI/WAV-Lauf für die Aufführungsanalyse von Mozarts KV 331 sank die mediane **Prozess-CPU-Zeit von 0,399568 auf 0,266895 Sekunden** (acht Läufe pro Version, abwechselnd auf demselben Linux-Rechner). Die Messung umfasst das Einlesen im Prüfprogramm und die Inferenz bis zum Zeitplan. Der anschließende Notensatz und PDF-Export liegen außerhalb dieser Messung. [Quellstand r1965 und Äquivalenznachweis](selector_derivation_contract_performance_trace_equivalence.md)
 
 ### Speicherplanung für den Korpus
 
@@ -516,7 +516,7 @@ Die 493 offenen Zielpaare verteilen sich auf 244 Fälle mit Akkordträger oder f
 | Schubert, Deutscher Tanz D. 783 Nr. 15, p18 | r1872, Exitcode 0, 0 Blocker, 0 Warnungen und 100 % im Notenerhaltsmaß. 3.097 Tests bestanden, vier waren ignoriert. Der Windows-Renderer gab das zweiseitige Notenbild frei. [Abnahme r1872](evidence/r1872/README.md). |
 | Mozart, KV 331, Andante grazioso, p01 | r1964, Windows-Einzellauf mit MIDI und WAV, 6/8 und zwei PDF-Seiten. 460 der 474 regulären Noten haben die Dauer der Korpusreferenz. [Notenbild](examples/mozart-k331-p01-r1964.pdf). |
 
-Die Windows-Vollkorpusläufe [r1938](evidence/r1938/README.md) und [r1961](evidence/r1961/README.md) umfassen jeweils 14 Stücke. Die vorbereitete [Ballade op. 38](examples/chopin-op38-p01.md) gehört zu keinem der beiden Prüfläufe. Das Notenerhaltsmaß folgt der im Lauf definierten Grundgesamtheit. Es bewertet weder den Abgleich aller Notenwerte mit der Druckvorlage noch das Notenbild als Ganzes.
+Der [Windows-Vollkorpus r1965](evidence/r1965/README.md) umfasst 14 Stücke auf 57 PDF-Seiten. Frühere Prüfstände derselben 14 Stücke sind [r1938](evidence/r1938/README.md) und [r1961](evidence/r1961/README.md). Die vorbereitete [Ballade op. 38](examples/chopin-op38-p01.md) ist ein separater Stresstest. Das Notenerhaltsmaß folgt der im Lauf definierten Grundgesamtheit. Es bewertet weder den Abgleich aller Notenwerte mit der Druckvorlage noch das Notenbild als Ganzes.
 
 ### Historischer Vollkorpuslauf r1683
 

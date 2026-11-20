@@ -7,14 +7,12 @@
 
 ## Dein erstes Stück
 
-1. Lade die **Windows-EXE für x64** herunter. Für die PDF-Ausgabe brauchst du MuseScore. [EtuSchlopf-Windows-x64.exe](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1964-windows-preview/EtuSchlopf-Windows-x64.exe) · [MuseScore](https://musescore.org/de/download)
-2. Lege `Mein Stück.mid` und `Mein Stück.wav` in denselben Ordner. Beide Dateien müssen zur selben Einspielung gehören. Zum Ausprobieren kannst du das fertige MIDI/WAV-Paar entpacken. [Startbeispiel als ZIP](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1964-windows-preview/EtuSchlopf-Beispiel-r1964.zip)
+1. Lade die **Windows-EXE für x64** herunter. Für die PDF-Ausgabe brauchst du MuseScore. [EtuSchlopf-Windows-x64.exe](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1965-windows-preview/EtuSchlopf-Windows-x64.exe) · [MuseScore](https://musescore.org/de/download)
+2. Lege `Mein Stück.mid` und `Mein Stück.wav` in denselben Ordner. Beide Dateien müssen zur selben Einspielung gehören. Zum Ausprobieren kannst du das fertige MIDI/WAV-Paar entpacken. [Startbeispiel als ZIP](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1965-windows-preview/EtuSchlopf-Beispiel-r1965.zip)
 3. Ziehe die MIDI-Datei auf die EXE. Du kannst die EXE auch öffnen und den Pfad zur MIDI eingeben.
 4. Öffne im neuen Laufordner unter `EtuSchlopf-Ergebnisse` das PDF. Für die Weiterbearbeitung in MuseScore öffnest du die `.render.musicxml`. Verwendet der PDF-Export direkt den Master, öffnest du die `.musicxml`.
 
-Der Ergebnisordner liegt neben der MIDI. EtuSchlopf arbeitet dort mit Kopien der Eingaben. Bei einem Fehler zeigt die Konsole die Meldung. Wenn der Lauf einen Bericht geschrieben hat, findest du ihn im Laufordner als `.result.txt`. [Version und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1964-windows-preview)
-
-**Zum Ausprobieren gibt es die Windows-Vorschau r1965.** Der Windows-Prüflauf auf GitHub hat die EXE getestet und das mitgelieferte Beispiel gerendert. Die native Windows-Abnahme liegt für r1964 vor. [Windows-EXE r1965 herunterladen](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1965-ci-preview/EtuSchlopf-Windows-x64.exe) · [Release und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1965-ci-preview)
+Der Ergebnisordner liegt neben der MIDI. EtuSchlopf arbeitet dort mit Kopien der Eingaben. Bei einem Fehler zeigt die Konsole die Meldung. Wenn der Lauf einen Bericht geschrieben hat, findest du ihn im Laufordner als `.result.txt`. [Version und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1965-windows-preview)
 
 > **In English:** EtuSchlopf uses a matching MIDI and WAV pair to produce piano sheet music as PDF and MusicXML. The Windows x64 preview uses MuseScore for PDF export. Issues in English are welcome.
 
@@ -22,19 +20,19 @@ Der Ergebnisordner liegt neben der MIDI. EtuSchlopf arbeitet dort mit Kopien der
 
 | Mozart · Sonate A-Dur KV 331 | Bach · Fuge c-Moll BWV 847 |
 | --- | --- |
-| [![Mozart, Andante grazioso, r1964](docs/images/mozart-k331-p01-r1964-ausschnitt.png)](docs/examples/mozart-k331-p01-r1964.pdf) | [![Bach, Fuge c-Moll, r1961](docs/images/bwv847-fuge-r1961-ausschnitt.png)](docs/examples/bwv847-fuge-r1961.pdf) |
+| [![Mozart, Andante grazioso, r1965](docs/images/mozart-k331-p01-r1965-ausschnitt.png)](docs/examples/mozart-k331-p01-r1965.pdf) | [![Bach, Fuge c-Moll, r1965](docs/images/bwv847-fuge-r1965-ausschnitt.png)](docs/examples/bwv847-fuge-r1965.pdf) |
 | **Chopin · Etüde E-Dur op. 10 Nr. 3** | **Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15** |
-| [![Chopin, Etüde E-Dur, r1961](docs/images/chopin-op10-no3-p01-r1961-ausschnitt.png)](docs/examples/chopin-op10-no3-p01-r1961.pdf) | [![Schubert, Deutscher Tanz, r1961](docs/images/schubert-d783-no15-p18-r1961-ausschnitt.png)](docs/examples/schubert-d783-no15-p18-r1961.pdf) |
+| [![Chopin, Etüde E-Dur, r1965](docs/images/chopin-op10-no3-p01-r1965-ausschnitt.png)](docs/examples/chopin-op10-no3-p01-r1965.pdf) | [![Schubert, Deutscher Tanz, r1965](docs/images/schubert-d783-no15-p18-r1965-ausschnitt.png)](docs/examples/schubert-d783-no15-p18-r1965.pdf) |
 
-Ein Klick auf den Ausschnitt öffnet das vollständige PDF. [Alle 14 Stücke mit Notenbildern, Druckvorlagen und Quellen](docs/examples/README.md)
-
-Zwei zusätzliche Einzelläufe mit r1964 unter Linux zeigen die vollständigen Noten aus den jeweiligen MIDI/WAV-Paaren. [Chopin op. 10 Nr. 3 als PDF](docs/examples/zusatzrunden/chopin-op10-no3-p01-r1964-linux.pdf) · [Schubert D. 783 Nr. 15 als PDF](docs/examples/zusatzrunden/schubert-d783-no15-p18-r1964-linux.pdf)
+Ein Klick auf den Ausschnitt öffnet das vollständige PDF. [Alle 14 Stücke mit Notenbildern, Druckvorlagen und Quellen aus r1965](docs/examples/README.md)
 
 ## Stand auf main
 
-**r1964 / 0.10.1839** wurde unter Windows an Mozarts Andante grazioso aus KV 331 geprüft. Alle 474 verglichenen Noteneinsätze stimmen in Zeitpunkt und Tonhöhe mit der Referenz überein. Bei 460 passen auch die Notendauern. Gegenüber r1963 sank die Zahl der abweichenden Dauern von 36 auf 14. EtuSchlopf erhielt für diesen Lauf MIDI und WAV und erzeugte zwei PDF-Seiten. [Windows-Einzellauf r1964](docs/evidence/r1964/README.md) · [Mathematik hinter den Notationsentscheidungen](docs/MATHEMATIK-VOLLKORPUS.md)
+**r1965 / 0.10.1839** wurde unter Windows angenommen. Der Vollkorpuslauf verarbeitete alle 14 Stücke mit Exitcode 0 und erzeugte 14 Noten-PDFs mit insgesamt 57 Seiten. [Windows-Abnahme und Vollkorpus r1965](docs/evidence/r1965/README.md)
 
-Der letzte veröffentlichte Windows-Vollkorpus stammt aus r1961 und umfasst 14 Stücke auf 57 PDF-Seiten. EtuSchlopf ist experimentell. Bleiben Einsätze oder Taktgrenzen in einer frei gespielten Aufnahme mehrdeutig, kann EtuSchlopf den Lauf abbrechen. Chopins Ballade op. 38 wird separat als Stresstest geführt. [Vollkorpus r1961](docs/evidence/r1961/README.md) · [Ballade op. 38](docs/examples/chopin-op38-p01.md)
+Bei Mozarts Andante grazioso aus KV 331 stimmen alle 474 regulären Noteneinsätze in Zeitpunkt und Tonhöhe mit der annotierten Einspielung überein. Bei 460 stimmen auch die geschriebenen Dauern. Das entspricht dem Einzellauf r1964. [Mozart-PDF r1965](docs/examples/mozart-k331-p01-r1965.pdf) · [Mathematik hinter den Notationsentscheidungen](docs/MATHEMATIK-VOLLKORPUS.md)
+
+EtuSchlopf ist experimentell. Bleiben Einsätze oder Taktgrenzen einer frei gespielten Aufnahme mehrdeutig, kann EtuSchlopf den Lauf abbrechen. Chopins Ballade op. 38 wird separat als Stresstest geführt. [Ballade op. 38](docs/examples/chopin-op38-p01.md)
 
 ## Dokumentation und Beiträge
 

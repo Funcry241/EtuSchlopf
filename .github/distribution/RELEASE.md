@@ -1,13 +1,11 @@
 # EtuSchlopf für Windows
 
-Lade **EtuSchlopf-Windows-x64.exe** herunter. Rust, Cargo, Python und zusätzliche Framework-Downloads sind für diesen Startweg nicht erforderlich. Für PDFs brauchst du MuseScore.
+Die portable EXE für Windows x64 enthält die Engine 0.10.1839 r1965. Lade die EXE und `SHA256SUMS.txt` von der [Release-Seite](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1965-windows-preview). Für die PDF-Ausgabe brauchst du MuseScore. Die EXE läuft ohne Rust, Cargo oder Python.
 
-Ziehe deine MIDI-Datei auf die EXE oder starte die EXE und gib den Dateipfad ein. Neben der MIDI muss eine gleichnamige echte WAV-Datei liegen. Jeder Aufruf verwendet Kopien in einem neuen Unterordner von `EtuSchlopf-Ergebnisse` neben deiner MIDI. Originaldateien und frühere Laufordner werden nicht überschrieben.
+Lege deine Performance-MIDI und die gleichnamige WAV-Aufnahme in denselben Ordner. Ziehe die MIDI-Datei auf die EXE oder starte die EXE und gib den MIDI-Pfad ein. Das Programm arbeitet mit Kopien und legt für jeden Lauf einen neuen Unterordner unter `EtuSchlopf-Ergebnisse` neben der MIDI an. Dort findest du die PDF zum Lesen und die Datei mit der Endung `.render.musicxml` zum Bearbeiten in MuseScore.
 
-Öffne nach erfolgreichem Lauf die PDF. Zum Bearbeiten in MuseScore dient die Datei mit der Endung `.render.musicxml`.
+Der native Windows-Vollkorpus umfasst vier klassische Werke und zehn Etüden. Das Notenarchiv enthält die 14 vollständigen PDFs aus diesem Lauf, einen Ausschnitt pro Werk und die Quellenangaben. [Vollkorpus-Nachweis](../../docs/evidence/r1965/README.md) · [Notenarchiv r1965](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1965-windows-preview/EtuSchlopf-Notenbilder-r1965.zip)
 
-Die EXE enthält die Engine r1964 (0.10.1839). Der [Windows-Nachweis für Mozart](../../docs/evidence/r1964/README.md) dokumentiert den angenommenen Quellstand. GitHub baut daraus die EXE. Er startet die paketierte EXE in einem eigenen Ordner und erzeugt aus dem MIDI/WAV-Startbeispiel mit MuseScore ein PDF.
+GitHub baut die EXE aus dem angenommenen Quellstand und prüft den isolierten Start, die Verarbeitung von MIDI und WAV und die PDF-Ausgabe mit MuseScore. Das separate Startbeispiel enthält MIDI, WAV und die mit dieser EXE erzeugte PDF. [Startbeispiel r1965](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1965-windows-preview/EtuSchlopf-Beispiel-r1965.zip)
 
-Die EXE ist nicht codesigniert. Den SHA-256 findest du in `SHA256SUMS.txt`. Die Fremdlizenzen stehen im eingebetteten Laufzeitpaket. Der zugehörige Git-Commit enthält den Quellcode einschließlich des Windows-Starters.
-
-[Startbeispiel r1964](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1964-windows-preview/EtuSchlopf-Beispiel-r1964.zip) enthält MIDI, WAV und die mit der paketierten EXE erzeugte PDF.
+Die EXE ist unsigniert. Vergleiche bei Bedarf die Ausgabe von `Get-FileHash .\EtuSchlopf-Windows-x64.exe` mit der veröffentlichten SHA-256-Prüfsumme. Die Fremdlizenzen sind im Laufzeitpaket enthalten. Das Quellarchiv enthält auch den Windows-Starter.
