@@ -1,4 +1,4 @@
-"""Verify the accepted r1964 source without distributing a second path inventory."""
+"""Verify accepted native source using the historical inventory and public document hashes."""
 import argparse
 import hashlib
 from pathlib import Path
@@ -6,13 +6,22 @@ from pathlib import Path
 
 BASE = Path("docs/evidence/r1961/accepted_source_sha256.tsv")
 BASE_SHA256 = "cb5f50ffb09285b764f08416d32bf529e283dea83d7a57219d393b13c7c3dc33"
-PROJECTION = Path("docs/evidence/r1964/github_projection_sha256.tsv")
-ADDED = (
+ADDED_R1964 = (
     "docs/selector_derivation_contract_bound_duration_seed.md",
     "docs/selector_derivation_contract_bound_written_duration.md",
     "docs/selector_derivation_contract_inferred_duration_seed.md",
     "src/midi_seed/bound_duration.rs",
 )
+ADDED_R1965 = (
+    "docs/MATHEMATIK-VOLLKORPUS.md",
+    "docs/selector_derivation_contract_performance_trace_equivalence.md",
+)
+# Only these four historical documentation files differ from both accepted
+# snapshots. r1964 also projected two reader documents which r1965 binds verbatim.
+PROJECTED_DOCUMENTS = {
+    "docs/CONTRIBUTING.md", "docs/README.md", "docs/THIRD_PARTY_NOTICES.md",
+    "docs/community/issue_templates/01_fehler.md",
+}
 
 
 def verified_rows(path, checksum, header):
@@ -25,11 +34,22 @@ def verified_rows(path, checksum, header):
     return [line.split("\t") for line in lines]
 
 
-def verify(root, expected_source, expected_projection):
+def verify(root, expected_source, expected_projection, revision="r1964"):
     base = {path: digest for digest, path in verified_rows(root / BASE, BASE_SHA256, "sha256\tpath")}
-    projection = dict(verified_rows(root / PROJECTION, expected_projection, "path\tsha256"))
-    paths = set(base).union(ADDED)
-    if len(paths) != 2217 or not projection.keys() <= base.keys():
+    table = root / "docs" / "evidence" / revision / "github_projection_sha256.tsv"
+    rows = verified_rows(table, expected_projection, "path\tsha256")
+    projection = dict(rows)
+    paths = set(base).union(ADDED_R1964)
+    if revision == "r1964":
+        permitted = PROJECTED_DOCUMENTS | {"README.md", "docs/MATHEMATIK.md"}
+        expected_count = 2217
+    elif revision == "r1965":
+        paths.update(ADDED_R1965)
+        permitted = PROJECTED_DOCUMENTS
+        expected_count = 2219
+    else:
+        raise ValueError(f"Unknown native revision: {revision}")
+    if len(paths) != expected_count or len(rows) != len(projection) or set(projection) != permitted:
         raise ValueError("Unexpected native source path set or document projection")
     combined = hashlib.sha256(b"sha256\tpath\n")
     for path in sorted(paths):
@@ -37,7 +57,7 @@ def verify(root, expected_source, expected_projection):
         if path in projection:
             if actual != projection[path]:
                 raise ValueError(f"Public documentation differs from its projection: {path}")
-            # The six original document contents are unchanged since r1961.
+            # Each permitted original is unchanged from the trusted r1961 inventory.
             actual = base[path]
         combined.update(f"{actual}\t{path}\n".encode("utf-8"))
     if combined.hexdigest() != expected_source:
@@ -48,6 +68,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source_sha256")
     parser.add_argument("projection_sha256")
+    parser.add_argument("--revision", choices=("r1964", "r1965"), default="r1964")
     args = parser.parse_args()
-    verify(Path.cwd(), args.source_sha256, args.projection_sha256)
-    print("Verified the accepted r1964 source and public documentation.")
+    verify(Path.cwd(), args.source_sha256, args.projection_sha256, args.revision)
+    print(f"Verified the accepted {args.revision} source and public documentation.")

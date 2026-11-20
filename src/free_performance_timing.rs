@@ -197,29 +197,33 @@ type Repeat = Vec<(usize, usize)>;
 
 fn repeated_phrases(groups: &[AttackGroup]) -> Vec<Repeat> {
     let width = groups.len() + 1;
-    let mut scores = vec![0.0; width * width];
-    let mut back = vec![0; width * width];
+    // Backtracking needs each direction, but scoring reads only the last row.
+    let mut previous = vec![0.0; width];
+    let mut current = vec![0.0; width];
+    let mut back = vec![0_u8; width * width];
     let mut endings = vec![];
-    for a in 1..width {
+    for a in 1..width.saturating_sub(8) {
+        current[a + 7] = 0.0;
         for b in a + 8..width {
             let (x, y) = (groups[a - 1].pitches, groups[b - 1].pitches);
             let similarity = f64::from((x & y).count_ones()) / f64::from((x | y).count_ones());
             let mut best = (0.0, 0);
             for (direction, value) in [
-                (1, scores[(a - 1) * width + b - 1] + 4.0 * similarity - 2.0),
-                (2, scores[(a - 1) * width + b] - 1.6),
-                (3, scores[a * width + b - 1] - 1.6),
+                (1, previous[b - 1] + 4.0 * similarity - 2.0),
+                (2, previous[b] - 1.6),
+                (3, current[b - 1] - 1.6),
             ] {
                 if value > best.0 {
                     best = (value, direction);
                 }
             }
-            scores[a * width + b] = best.0;
+            current[b] = best.0;
             back[a * width + b] = best.1;
             if best.0 >= 20.0 {
                 endings.push((best.0, a, b));
             }
         }
+        std::mem::swap(&mut previous, &mut current);
     }
     endings.sort_by(|a, b| {
         b.0.total_cmp(&a.0)
@@ -425,8 +429,8 @@ impl<'a> RhythmEvidence<'a> {
         }
         let tempos =
             std::array::from_fn(|i| nominal * 0.55 * (1.8_f64 / 0.55).powf(i as f64 / 60.0));
-        let transition = std::array::from_fn(|a| {
-            std::array::from_fn(|b| 100.0 * (tempos[a] / tempos[b]).ln().powi(2))
+        let transition = std::array::from_fn(|to| {
+            std::array::from_fn(|from| 100.0 * (tempos[from] / tempos[to]).ln().powi(2))
         });
         let prior = std::array::from_fn(|i| 9.0 * (tempos[i] / nominal).ln().powi(2));
         Self {
@@ -475,14 +479,27 @@ impl<'a> RhythmEvidence<'a> {
         let mut smoothed = vec![0.0; states];
         let mut tempo_from = vec![0; states];
         let mut back = vec![0_u16; self.gaps.len() * states];
-        let max_jump = 16.min(cycle * 2);
+        // These alternatives depend on the meter and its phase factors only.
+        let transitions: Vec<Vec<_>> = (0..cycle).map(|phase| {
+            (0..=16.min(cycle * 2)).map(|jump| {
+                let previous = (phase + 2 * cycle - jump) % cycle;
+                let complexity = match jump {
+                    0 => 0.26,
+                    3 => 0.24,
+                    1 | 2 | 4 | 6 | 8 | 12 | 16 => 0.0,
+                    _ => 1.3,
+                } + jump.saturating_sub(4) as f64 * 0.07;
+                let scale = if jump >= 6 { 0.7 } else { 1.0 };
+                (previous * TEMPO_COUNT, jump as f64 * factors[previous], scale, 3.0 * complexity)
+            }).collect()
+        }).collect();
         for (index, &gap) in self.gaps.iter().enumerate() {
             for phase in 0..cycle {
                 let row = phase * TEMPO_COUNT;
                 for tempo in 0..TEMPO_COUNT {
                     let mut best = (f64::INFINITY, 0);
                     for previous in 0..TEMPO_COUNT {
-                        let candidate = costs[row + previous] + self.transition[previous][tempo];
+                        let candidate = costs[row + previous] + self.transition[tempo][previous];
                         if candidate < best.0 {
                             best = (candidate, previous);
                         }
@@ -498,28 +515,22 @@ impl<'a> RhythmEvidence<'a> {
             } else {
                 0.0
             };
+            let required_phase = anchors.get(&(index + 1));
             for state in 0..states {
                 let (phase, tempo) = (state / TEMPO_COUNT, state % TEMPO_COUNT);
-                if anchors.get(&(index + 1)).is_some_and(|&p| p != phase) {
+                if required_phase.is_some_and(|&p| p != phase) {
                     costs[state] = f64::INFINITY;
                     continue;
                 }
                 let mut best = (f64::INFINITY, 0, 0);
-                for jump in usize::from(!allow_zero)..=max_jump {
-                    let previous = (phase + 2 * cycle - jump) % cycle;
-                    let from = previous * TEMPO_COUNT + tempo;
-                    let complexity = match jump {
-                        0 => 0.26,
-                        3 => 0.24,
-                        1 | 2 | 4 | 6 | 8 | 12 | 16 => 0.0,
-                        _ => 1.3,
-                    } + jump.saturating_sub(4) as f64 * 0.07;
-                    let scale = if jump >= 6 { 0.7 } else { 1.0 };
-                    let residual = gap / self.tempos[tempo] - jump as f64 * factors[previous];
+                let performed = gap / self.tempos[tempo];
+                for (jump, &(row, expected, scale, penalty)) in transitions[phase].iter().enumerate().skip(usize::from(!allow_zero)) {
+                    let from = row + tempo;
+                    let residual = performed - expected;
                     let spread_credit = if jump == 0 { shared_release } else { 0.0 };
                     let candidate = smoothed[from] - spread_credit
                         + scale
-                            * (2.5 * residual * residual + self.prior[tempo] + 3.0 * complexity);
+                            * (2.5 * residual * residual + self.prior[tempo] + penalty);
                     if candidate < best.0 {
                         best = (candidate, jump, tempo_from[from]);
                     }
@@ -825,15 +836,13 @@ fn shared_pulse_reading(
         .ok_or_else(|| anyhow::anyhow!("Kein wiederkehrender gemeinsamer Puls belegt"))?;
     let mut accepted: Option<(Meter, RhythmTrace, f64, i64)> = None;
     for scale in [1.0, 0.96, 1.04] {
-        let mut ranked: Vec<_> = METERS.into_iter().map(|meter| {
+        let mut ranked = METERS.map(|meter| {
             let unit = pulse * scale / meter.pulse as f64;
             let timing = RhythmEvidence::from_observations(groups, repetitions, Some(unit));
             (meter, timing.read_meter(meter, repetitions, releases), unit)
-        }).collect();
+        });
         ranked.sort_by(|a, b| a.1.score.total_cmp(&b.1.score));
-        let mut ranked = ranked.into_iter();
-        let (meter, mut trace, unit) = ranked.next().expect("supported candidate meters");
-        let alternative = ranked.next().expect("at least two meters");
+        let [(meter, mut trace, unit), alternative, ..] = ranked;
         ensure!(trace.score.is_finite() && alternative.1.score - trace.score >= 1.0,
             "Gemeinsamer Puls stuetzt keine eindeutige Taktart");
         trace.onsets = corroborated_onsets(meter, &trace, groups, repetitions, releases)
@@ -1262,6 +1271,8 @@ fn unconnected_chord_ends(
     measured: &[f64],
     pulse: i64,
 ) -> Vec<Option<i64>> {
+    use std::ops::Bound::Excluded;
+
     let mut chords = BTreeMap::<_, BTreeMap<i64, Vec<usize>>>::new();
     for (index, attack) in regular.iter().enumerate() {
         chords
@@ -1272,7 +1283,7 @@ fn unconnected_chord_ends(
             .push(index);
     }
     let mut shared = vec![None; regular.len()];
-    for (&(track, channel), timeline) in &chords {
+    for timeline in chords.values() {
         for (&start, members) in timeline {
             if members.len() < 2 {
                 continue;
@@ -1310,13 +1321,9 @@ fn unconnected_chord_ends(
                     continue;
                 };
                 if witnesses.all(|other| other == length)
-                    && !regular.iter().any(|other| {
-                        other.track == track
-                            && other.channel == channel
-                            && other.pitch == attack.pitch
-                            && positions[other.id] > start
-                            && positions[other.id] < start + length
-                    })
+                    && !timeline.range((Excluded(start), Excluded(start + length)))
+                        .flat_map(|(_, chord)| chord)
+                        .any(|&j| regular[j].pitch == attack.pitch)
                 {
                     shared[i] = Some(length);
                 }
@@ -1719,14 +1726,9 @@ pub(super) fn infer_performance(
     );
     let timing = RhythmEvidence::from_observations(&groups, &repetitions, None);
     let releases = release_alignments(&groups);
-    let mut ranked: Vec<_> = METERS
-        .into_iter()
-        .map(|meter| (meter, timing.read_meter(meter, &repetitions, &releases)))
-        .collect();
+    let mut ranked = METERS.map(|meter| (meter, timing.read_meter(meter, &repetitions, &releases)));
     ranked.sort_by(|a, b| a.1.score.total_cmp(&b.1.score));
-    let mut ranked = ranked.into_iter();
-    let (meter, trace) = ranked.next().expect("supported candidate meters");
-    let alternative = ranked.next().expect("at least two meters");
+    let [(meter, trace), alternative, ..] = ranked;
     let (meter, trace, nominal, pickup) = if trace.score.is_finite()
         && alternative.1.score - trace.score >= 1.0
     {

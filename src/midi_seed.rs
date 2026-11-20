@@ -3736,19 +3736,7 @@ fn append_type(xml: &mut String, duration: i64) {
 
 pub fn type_and_dots_for_duration(duration: i64) -> (&'static str, usize) {
     match duration {
-        384 => ("whole", 0),
-        288 => ("half", 1),
-        192 => ("half", 0),
-        144 => ("quarter", 1),
-        96 => ("quarter", 0),
-        72 => ("eighth", 1),
-        48 => ("eighth", 0),
-        36 => ("16th", 1),
-        24 => ("16th", 0),
-        18 => ("32nd", 1),
-        12 => ("32nd", 0),
         9 => ("64th", 1),
-        6 => ("64th", 0),
         d if d >= 384 => ("whole", 0),
         d if d >= 288 => ("half", 1),
         d if d >= 192 => ("half", 0),
