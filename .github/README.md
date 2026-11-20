@@ -18,19 +18,19 @@ Der Ergebnisordner liegt neben der MIDI. EtuSchlopf arbeitet dort mit Kopien der
 
 ## Notenbilder
 
-| Mozart · Sonate A-Dur KV 331 | Bach · Fuge c-Moll BWV 847 |
-| --- | --- |
-| [![Mozart, Andante grazioso, r1965](../docs/images/mozart-k331-p01-r1965-ausschnitt.png)](../docs/examples/mozart-k331-p01-r1965.pdf) | [![Bach, Fuge c-Moll, r1965](../docs/images/bwv847-fuge-r1965-ausschnitt.png)](../docs/examples/bwv847-fuge-r1965.pdf) |
-| **Chopin · Etüde E-Dur op. 10 Nr. 3** | **Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15** |
-| [![Chopin, Etüde E-Dur, r1965](../docs/images/chopin-op10-no3-p01-r1965-ausschnitt.png)](../docs/examples/chopin-op10-no3-p01-r1965.pdf) | [![Schubert, Deutscher Tanz, r1965](../docs/images/schubert-d783-no15-p18-r1965-ausschnitt.png)](../docs/examples/schubert-d783-no15-p18-r1965.pdf) |
+Die aktiven Referenzkomponisten sind Bach, Beethoven, Chopin und Schubert. Für Beethoven steht die Wahl des Stücks noch aus. [Aktuelle Referenzen](../docs/examples/README.md#aktuelle-referenzen)
 
-Ein Klick auf den Ausschnitt öffnet das vollständige PDF. [Alle 14 Stücke mit Notenbildern, Druckvorlagen und Quellen aus r1965](../docs/examples/README.md)
+| Bach · Fuge c-Moll BWV 847 | Chopin · Etüde E-Dur op. 10 Nr. 3 | Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15 |
+| --- | --- | --- |
+| [![Bach, Fuge c-Moll, r1965](../docs/images/bwv847-fuge-r1965-ausschnitt.png)](../docs/examples/bwv847-fuge-r1965.pdf) | [![Chopin, Etüde E-Dur, r1965](../docs/images/chopin-op10-no3-p01-r1965-ausschnitt.png)](../docs/examples/chopin-op10-no3-p01-r1965.pdf) | [![Schubert, Deutscher Tanz, r1965](../docs/images/schubert-d783-no15-p18-r1965-ausschnitt.png)](../docs/examples/schubert-d783-no15-p18-r1965.pdf) |
+
+Ein Klick auf den Ausschnitt öffnet das vollständige PDF. [Alle 14 Notenbilder des Windows-Laufs r1965](../docs/examples/README.md#notenbilder)
 
 ## Stand auf main
 
 **r1965 / 0.10.1839** wurde unter Windows angenommen. Der Vollkorpuslauf verarbeitete alle 14 Stücke mit Exitcode 0 und erzeugte 14 Noten-PDFs mit insgesamt 57 Seiten. [Windows-Abnahme und Vollkorpus r1965](../docs/evidence/r1965/README.md)
 
-Bei Mozarts Andante grazioso aus KV 331 stimmen alle 474 regulären Noteneinsätze in Zeitpunkt und Tonhöhe mit der annotierten Einspielung überein. Bei 460 stimmen auch die geschriebenen Dauern. Das entspricht dem Einzellauf r1964. [Mozart-PDF r1965](../docs/examples/mozart-k331-p01-r1965.pdf) · [Mathematik hinter den Notationsentscheidungen](../docs/MATHEMATIK-AKTUELL.md)
+[Mathematik hinter den Notationsentscheidungen](../docs/MATHEMATIK-AKTUELL.md) · [Messwerte des Windows-Laufs r1965](../docs/evidence/r1965/vergleich.md)
 
 EtuSchlopf ist experimentell. Bleiben Einsätze oder Taktgrenzen einer frei gespielten Aufnahme mehrdeutig, kann EtuSchlopf den Lauf abbrechen. Chopins Ballade op. 38 wird separat als Stresstest geführt. [Ballade op. 38](../docs/examples/chopin-op38-p01.md)
 
