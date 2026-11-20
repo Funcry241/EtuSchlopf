@@ -1,0 +1,65 @@
+name: Native Windows take checks
+on:
+  push:
+    branches: [verify/native-r1966-r1968]
+    paths: ['.github/strict-ci/**', '.github/workflows/native-review-windows.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: windows-2022
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      ETU_NATIVE_ROOT: D:\etu-native
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify parent source and exact take ZIP
+        run: |
+          python .github/strict-ci/verify.py prepare
+          if ($LASTEXITCODE -ne 0) { throw 'Source identity check failed' }
+      - name: Prepare Rust and public render example
+        run: |
+          $ErrorActionPreference = 'Stop'
+          rustup toolchain install 1.98.0 --profile minimal --component clippy
+          if ($LASTEXITCODE -ne 0) { throw 'Rust installation failed' }
+          $public = Join-Path $env:RUNNER_TEMP 'public-example.zip'
+          Invoke-WebRequest 'https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1965-windows-preview/EtuSchlopf-Beispiel-r1965.zip' -OutFile $public
+          $hash = (Get-FileHash $public -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne '475914bb54ed57947b37e1c1991713863437c56d5a373758c90262cbe03027bf') { throw 'Public example identity differs' }
+          $inputs = Join-Path $env:RUNNER_TEMP 'public-example'
+          Expand-Archive $public $inputs
+          foreach ($ext in @('mid','wav')) {
+            $files = @(Get-ChildItem $inputs -Recurse -File -Filter "*.$ext")
+            if ($files.Count -ne 1) { throw "Expected one public $ext input" }
+            Copy-Item -LiteralPath $files[0].FullName -Destination (Join-Path $env:ETU_NATIVE_ROOT "Beispiel.$ext")
+          }
+          $msi = Join-Path $env:RUNNER_TEMP 'musescore.msi'
+          Invoke-WebRequest 'https://github.com/musescore/MuseScore/releases/download/v4.7.5/MuseScore-Studio-4.7.5.260831071-x86_64.msi' -OutFile $msi
+          if ((Get-FileHash $msi -Algorithm SHA256).Hash.ToLowerInvariant() -ne '07b0f3292612e2df4c7e0632deb790add51b218f0ee33f7fecaa6111dd279ec6') { throw 'MuseScore identity differs' }
+          $renderer = Join-Path $env:RUNNER_TEMP 'renderer'
+          $proc = Start-Process msiexec.exe -ArgumentList "/a `"$msi`" /qn TARGETDIR=`"$renderer`"" -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "MSI extraction failed: $($proc.ExitCode)" }
+          $ms = @(Get-ChildItem $renderer -Recurse -File | Where-Object { $_.Name -in 'MuseScore4.exe','MuseScore.exe','MuseScore Studio.exe','MuseScore Studio 4.exe' })
+          if ($ms.Count -ne 1) { throw 'Expected one MuseScore executable' }
+          "ETUSCHLOPF_PDF_RENDERER=$($ms[0].FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Native transactional installation, Strict and public example
+        run: |
+          Push-Location $env:ETU_NATIVE_ROOT
+          try {
+            cmd /d /c "run.cmd --take --strict Beispiel"
+            if ($LASTEXITCODE -ne 0) { throw "Native take rejected: exit $LASTEXITCODE" }
+          } finally { Pop-Location }
+      - name: Check exact installed source, native acceptance and Strict receipts
+        run: |
+          python .github/strict-ci/verify.py evidence
+          if ($LASTEXITCODE -ne 0) { throw 'Native receipt or output verification failed' }
+      - name: Diagnostics for a failed check
+        if: failure()
+        run: |
+          $logs = Join-Path $env:ETU_NATIVE_ROOT 'target/etuschlopf_logs'
+          if (Test-Path $logs) { Get-ChildItem $logs -File | Sort-Object LastWriteTime -Descending | Select-Object -First 8 | ForEach-Object { Write-Output $_.Name; Get-Content $_.FullName -Tail 12 } }
