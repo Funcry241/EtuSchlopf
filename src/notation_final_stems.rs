@@ -32,6 +32,7 @@ struct Attack<'a> {
     voice: &'a str,
     beam: Option<&'a str>,
     flagged: bool,
+    primary_only: bool,
     tie: Option<TieEndpoint>,
     valid: bool,
     isolation_supported: bool,
@@ -307,12 +308,23 @@ impl PrintContext {
     }
 }
 
+struct PositionedSymbol {
+    staff: Option<usize>,
+    onset: i64,
+}
+
+struct PrintedMeasure<'a> {
+    attacks: Vec<Attack<'a>>,
+    other_symbols: Vec<PositionedSymbol>,
+}
+
 fn collect_attacks<'a>(
     xml: &str,
     measure: Node<'a, '_>,
     print: [Option<StaffPrint>; 2],
-) -> Option<Vec<Attack<'a>>> {
+) -> Option<PrintedMeasure<'a>> {
     let mut attacks: Vec<Attack<'a>> = Vec::new();
+    let mut other_symbols = Vec::new();
     let mut cursor = 0_i64;
     let mut attachment: Option<usize> = None;
     for node in measure.children().filter(Node::is_element) {
@@ -324,7 +336,14 @@ fn collect_attacks<'a>(
         if tag != "note" {
             continue;
         }
+        let visible = node.attribute("print-object") != Some("no");
         if child(node, "grace").is_some() {
+            if visible {
+                other_symbols.push(PositionedSymbol {
+                    staff: staff_index(field(node, "staff").unwrap_or("1")),
+                    onset: cursor,
+                });
+            }
             attachment = None;
             continue;
         }
@@ -335,10 +354,15 @@ fn collect_attacks<'a>(
             cursor = cursor.checked_add(duration)?;
             attachment = None;
         }
-        if child(node, "pitch").is_none() || node.attribute("print-object") == Some("no") {
+        if !visible {
             continue;
         }
-        let staff = staff_index(field(node, "staff").unwrap_or("1"))?;
+        let staff = staff_index(field(node, "staff").unwrap_or("1"));
+        if child(node, "pitch").is_none() {
+            other_symbols.push(PositionedSymbol { staff, onset: start });
+            continue;
+        }
+        let staff = staff?;
         let voice = field(node, "voice").unwrap_or("1");
         let start = if is_chord {
             attacks[attachment?].start
@@ -365,6 +389,7 @@ fn collect_attacks<'a>(
         let primary = beams
             .clone()
             .find(|n| n.attribute("number").unwrap_or("1") == "1");
+        let primary_only = primary.is_some() && beams.clone().count() == 1;
         let beam = match primary {
             Some(primary) => Some(primary.text()?.trim()),
             None if beams.next().is_some() => Some("unbound"),
@@ -399,6 +424,7 @@ fn collect_attacks<'a>(
                 staff,
                 voice,
                 beam,
+                primary_only,
                 flagged: beam.is_none() && matches!(field(node, "type"),
                     Some("eighth" | "16th" | "32nd" | "64th" | "128th" | "256th")),
                 tie: tie_endpoint(node),
@@ -408,7 +434,7 @@ fn collect_attacks<'a>(
             });
         }
     }
-    Some(attacks)
+    Some(PrintedMeasure { attacks, other_symbols })
 }
 
 fn beam_groups(attacks: Vec<Attack<'_>>) -> Vec<Group<'_>> {
@@ -727,7 +753,104 @@ fn separate_flag_from_beam(groups: &[Group<'_>], edits: &mut Vec<StemEdit>, requ
     }
 }
 
-fn measure_edits(groups: &[Group<'_>]) -> Vec<StemEdit> {
+// A horizontal primary beam lies on the stem side of its equal-height
+// anchors. Compare other printed heads over the closed onset span, where
+// their physical positions can interact with the beam. Earlier held notes
+// still inform voice roles, but their heads are outside this footprint.
+fn interleaved_beam_side(
+    group_index: usize,
+    groups: &[Group<'_>],
+    other_symbols: &[PositionedSymbol],
+) -> Option<Direction> {
+    let group = &groups[group_index];
+    let [left, .., right] = group.attacks.as_slice() else {
+        return None;
+    };
+    let [anchor] = left.heads.as_slice() else {
+        return None;
+    };
+    // The renderer probe qualifies the five-line staff's ordinary
+    // single-level beam. Ledger-line and stacked-beam offsets vary.
+    if !group.writable()
+        || !(-4..=4).contains(&anchor.distance)
+        || !group.attacks.iter().all(|attack| {
+            attack.isolation_supported && attack.primary_only
+                && matches!(attack.heads.as_slice(), [head] if head.distance == anchor.distance)
+        })
+        || other_symbols.iter().any(|symbol| {
+            symbol.staff.is_none_or(|staff| staff == group.staff())
+                && (left.start..=right.start).contains(&symbol.onset)
+        })
+    {
+        return None;
+    }
+
+    let mut side = None;
+    let mut near_interior_head = false;
+    for (index, other) in groups.iter().enumerate() {
+        if index == group_index || other.staff() != group.staff() {
+            continue;
+        }
+        for attack in other.attacks.iter().filter(|attack| {
+            (left.start..=right.start).contains(&attack.start)
+        }) {
+            if !attack.valid || other.voice() == group.voice() {
+                return None;
+            }
+            for head in &attack.heads {
+                let delta = head.distance.checked_sub(anchor.distance)?;
+                let direction = match delta.cmp(&0) {
+                    std::cmp::Ordering::Greater => Direction::Up,
+                    std::cmp::Ordering::Less => Direction::Down,
+                    std::cmp::Ordering::Equal => return None,
+                };
+                if side.is_some_and(|prior| prior != direction) {
+                    return None;
+                }
+                side = Some(direction);
+                // In staff steps (half-spaces), cover the observed beam height
+                // plus its band and the head contour. This is a risk envelope;
+                // the one-sided clearance after flipping is the invariant.
+                near_interior_head |= left.start < attack.start && attack.start < right.start
+                    && (4..=8).contains(&delta.unsigned_abs());
+            }
+        }
+    }
+    side.filter(|_| near_interior_head)
+}
+
+fn clear_interleaved_horizontal_beams(
+    groups: &[Group<'_>],
+    other_symbols: &[PositionedSymbol],
+    edits: &mut Vec<StemEdit>,
+) {
+    let direction_candidates: Vec<_> = groups.iter().enumerate().filter_map(|(index, group)| {
+        interleaved_beam_side(index, groups, other_symbols).map(|side| (group, side))
+    }).collect();
+    if direction_candidates.is_empty() {
+        return;
+    }
+    let mut planned: BTreeMap<_, _> = edits.drain(..).map(|edit| (edit.0, edit)).collect();
+    for (group, side) in direction_candidates {
+        let affected = group.attacks.iter().filter_map(|attack| attack.heads[0].stem);
+        if !affected.clone().all(|(start, _, old)| {
+            planned.get(&start).map_or(old, |edit| edit.2) == side.xml()
+        }) {
+            continue;
+        }
+        let away = match side { Direction::Up => Direction::Down, Direction::Down => Direction::Up };
+        for (start, end, old) in affected {
+            if old == away.xml() {
+                planned.remove(&start);
+            } else {
+                planned.insert(start, (start, end, away.xml()));
+            }
+        }
+    }
+    edits.extend(planned.into_values());
+}
+
+fn measure_edits(groups: &[Group<'_>], other_symbols: &[PositionedSymbol]) -> Vec<StemEdit> {
     let relations = compare_groups(groups);
     let mut visited = vec![false; groups.len()];
     let mut edits = Vec::new();
@@ -765,12 +888,13 @@ fn measure_edits(groups: &[Group<'_>]) -> Vec<StemEdit> {
             );
         }
     }
+    clear_interleaved_horizontal_beams(groups, other_symbols, &mut edits);
     separate_flag_from_beam(groups, &mut edits, false);
     edits
 }
 
 pub(super) fn plan_countervoice_stem_directions(xml: &str) -> Vec<StemEdit> {
-    plan_stem_directions(xml, |groups| {
+    plan_stem_directions(xml, |groups, _| {
         let mut edits = Vec::new();
         separate_flag_from_beam(groups, &mut edits, true);
         edits
@@ -781,7 +905,7 @@ pub(super) fn plan_final_stem_directions(xml: &str) -> Vec<StemEdit> {
     plan_stem_directions(xml, measure_edits)
 }
 
-fn plan_stem_directions(xml: &str, decide: impl Fn(&[Group<'_>]) -> Vec<StemEdit>) -> Vec<StemEdit> {
+fn plan_stem_directions(xml: &str, decide: impl Fn(&[Group<'_>], &[PositionedSymbol]) -> Vec<StemEdit>) -> Vec<StemEdit> {
     let Ok(document) = Document::parse(xml) else {
         return Vec::new();
     };
@@ -795,9 +919,9 @@ fn plan_stem_directions(xml: &str, decide: impl Fn(&[Group<'_>]) -> Vec<StemEdit
         for measure in part.children().filter(|n| n.has_tag_name("measure")) {
             let print = context.for_measure(measure);
             if print.iter().any(Option::is_some)
-                && let Some(attacks) = collect_attacks(xml, measure, print)
+                && let Some(printed) = collect_attacks(xml, measure, print)
             {
-                edits.extend(decide(&beam_groups(attacks)));
+                edits.extend(decide(&beam_groups(printed.attacks), &printed.other_symbols));
             }
         }
     }
@@ -934,6 +1058,50 @@ mod tests {
             };
             assert_eq!(format!("{}{direction}{}", &input[..start], &input[end..]), expected);
             assert!(plan_countervoice_stem_directions(&expected).is_empty());
+        }
+    }
+
+    #[test]
+    fn flat_beam_uses_the_clear_side_of_interleaved_heads() {
+        for (pitch, counter, held, toward, away) in [
+            (("G", 4), ("F", 5), ("C", 4), "up", "down"),
+            (("E", 5), ("F", 4), ("C", 6), "down", "up"),
+        ] {
+            let at = |(step, octave), duration, voice, stem, notation| {
+                note(step, duration, voice, stem, notation)
+                    .replace("<octave>5</octave>", &format!("<octave>{octave}</octave>"))
+            };
+            let beam = [
+                "<beam number=\"1\">begin</beam>",
+                "<beam number=\"1\">continue</beam>",
+                "<beam number=\"1\">end</beam>",
+            ].map(|mark| at(pitch, 3, 7, toward, mark)).concat();
+            let sustained = at(held, 11, 3, away, "");
+            let nearby = at(counter, 1, 5, toward, "");
+            let prefix = format!(
+                "<forward><duration>2</duration></forward>{beam}<backup><duration>11</duration></backup>{sustained}<backup><duration>7</duration></backup>"
+            );
+            let input = score(&format!("{prefix}{nearby}"));
+            let fixed_beam = beam.replace(
+                &format!("<stem>{toward}</stem>"),
+                &format!("<stem>{away}</stem>"),
+            );
+            let expected = input.replace(&beam, &fixed_beam);
+            assert_eq!(preview(&input), expected);
+            assert_eq!(preview(&expected), expected);
+            let repeated = score(&format!(
+                "{prefix}{nearby}</measure><measure number=\"copy\">{prefix}{nearby}",
+            ));
+            assert_eq!(preview(&repeated), repeated.replace(&beam, &fixed_beam));
+
+            let opposite_head = at(held, 1, 5, away, "");
+            for blocked in [
+                score(&format!("{prefix}{nearby}{opposite_head}")),
+                score(&format!("{prefix}{nearby}<note><rest/><duration>1</duration><voice>5</voice></note>")),
+                input.replace("<duration>7</duration></backup>", "<duration>9</duration></backup>"),
+            ] {
+                assert!(preview(&blocked).contains(&beam));
+            }
         }
     }
 

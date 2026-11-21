@@ -24,6 +24,13 @@ pub(crate) struct NotationEvent {
     pub(crate) kind: NotationEventKind,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct WrittenHoldProposal {
+    pub(crate) early_end: i64,
+    pub(crate) continuation: i64,
+    pub(crate) confirmed: bool,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct NotationTimePlan {
     pub(crate) source_domain: SourceTimeDomain,
@@ -274,6 +281,16 @@ impl NotationTimePlan {
     /// in an audio-aligned performance have received their musical context.
     pub(crate) fn binds_written_intervals(&self) -> bool {
         matches!(self.timing_authority, TimingAuthority::PerformanceNotes | TimingAuthority::AudioAlignedPerformance)
+    }
+
+    pub(crate) fn independent_written_intervals(
+        &self, source: &DecodedMidiSource,
+    ) -> Result<BTreeMap<usize, WrittenHoldProposal>> {
+        if self.timing_authority == TimingAuthority::InferredPerformance {
+            free_performance_timing::independently_sustained_intervals(source, &self.events)
+        } else {
+            Ok(BTreeMap::new())
+        }
     }
 
     pub(crate) fn has_open_durations(&self) -> bool {

@@ -150,6 +150,31 @@ mod solver_pool_retention_tests {
         assert_eq!(substance_guard_choice(pool.iter().enumerate().map(|(i,e)|eval(i,e)),1,0,key(0)),Some((0,2)));
     }
     #[test]
+    fn splitting_a_visible_attack_with_a_tie_adds_no_substance() {
+        let score = |ordinal, notes: &str| format!(
+            "<score-partwise><part id='P1'><measure number='{ordinal}'><attributes><divisions>96</divisions></attributes>{notes}</measure></part></score-partwise>"
+        );
+        let unsplit_note = "<note><pitch><step>G</step><octave>3</octave></pitch><duration>48</duration><voice>1</voice></note>";
+        let split_notes = concat!(
+            "<note><pitch><step>G</step><octave>3</octave></pitch><duration>24</duration><tie type='start'/><voice>1</voice></note>",
+            "<note><pitch><step>G</step><octave>3</octave></pitch><duration>24</duration><tie type='stop'/><voice>1</voice></note>",
+            "<note print-object='no'><pitch><step>D</step><octave>4</octave></pitch><duration>48</duration><voice>1</voice></note>",
+        );
+        for ordinal in 1..=3 {
+            let one = score(ordinal, unsplit_note);
+            let split = score(ordinal, split_notes);
+            assert_eq!(visible_pitched_attack_count(&one), Some(1));
+            assert_eq!(visible_pitched_attack_count(&split), Some(1));
+            assert_eq!(visible_pitched_note_count(&split), 2);
+            let candidate = SubstanceGuardEval {
+                index: 0, compatible: true, visible: visible_pitched_attack_count(&split).unwrap(),
+                hints: 0, decision_key: key(0),
+            };
+            assert_eq!(substance_guard_choice([candidate], 1, 0, key(0)), None);
+        }
+    }
+
+    #[test]
     fn equal_visible_count_does_not_trigger_an_adoption() {
         assert_eq!(substance_guard_choice([eval(0,&entry(TWO_NOTES,facts(0,"row")))],2,0,key(0)),None);
     }

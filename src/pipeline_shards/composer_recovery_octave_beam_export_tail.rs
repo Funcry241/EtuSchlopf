@@ -234,11 +234,12 @@ fn apply_octave_notation_policy(xml: &mut String) -> OctaveNotationPolish {
 struct JointRegisterPreviewInput<'a> {
     source: &'a str,
     document: std::cell::OnceCell<Result<roxmltree::Document<'a>, String>>,
+    intervals: std::cell::OnceCell<PreviewMeasureIndex<'a>>,
     costs: std::cell::RefCell<JointRegisterPreviewMemo>,
 }
 impl<'a> JointRegisterPreviewInput<'a> {
     fn new(source: &'a str) -> Self {
-        Self { source, document: std::cell::OnceCell::new(),
+        Self { source, document: std::cell::OnceCell::new(), intervals: std::cell::OnceCell::new(),
             costs: std::cell::RefCell::new(JointRegisterPreviewMemo::new(4096, 16 * 1024 * 1024)) }
     }
     fn document(&self) -> anyhow::Result<&roxmltree::Document<'a>> {
@@ -261,6 +262,85 @@ impl<'a> JointRegisterPreviewInput<'a> {
         result
     }
 }
+// Each position is relative to one immutable source. The first part of a
+// given ID supplies the intervals, exactly as in the writer's linear search.
+struct PreviewMeasureIndex<'a> {
+    source: &'a str,
+    parts: BTreeMap<String, Vec<PreviewMeasureAnchors>>,
+}
+
+struct PreviewMeasureAnchors {
+    range: std::ops::Range<usize>,
+    anchors: std::cell::OnceCell<Result<Vec<RegisternotationsTonanker>, String>>,
+}
+
+impl PreviewMeasureAnchors {
+    fn anchors(&self, source: &str) -> anyhow::Result<&[RegisternotationsTonanker]> {
+        self.anchors.get_or_init(|| {
+            registernotations_tonanker(&source[self.range.clone()]).map_err(|error| error.to_string())
+        }).as_deref().map_err(|error| anyhow!("{error}"))
+    }
+}
+
+impl<'a> PreviewMeasureIndex<'a> {
+    fn new(source: &'a str, document: &roxmltree::Document<'_>) -> Self {
+        let mut index = Self { source, parts: BTreeMap::new() };
+        for part in document.root_element().children().filter(|node| node.has_tag_name("part")) {
+            if let Some(id) = part.attribute("id") {
+                index.parts.entry(id.to_owned()).or_insert_with(|| {
+                    part.children().filter(|node| node.has_tag_name("measure"))
+                        .map(|node| PreviewMeasureAnchors {
+                            range: node.range(),
+                            anchors: std::cell::OnceCell::new(),
+                        }).collect()
+                });
+            }
+        }
+        index
+    }
+
+    fn interval(
+        &self,
+        plan: &crate::registernotation::RegisternotationsMaterialisierungsPlan,
+    ) -> anyhow::Result<(usize, usize)> {
+        let measures = self.parts.get(&plan.teil).ok_or_else(|| anyhow!(
+            "RegisternotationsSichtmaterialisierung: Teil {} fuer Dokumentordnung fehlt", plan.teil
+        ))?;
+        let start = measures.get(plan.beginn_takt_ordinal.saturating_sub(1)).ok_or_else(|| anyhow!(
+            "RegisternotationsSichtmaterialisierung: Starttaktordinal {} fehlt", plan.beginn_takt_ordinal
+        ))?;
+        let stop = measures.get(plan.ende_takt_ordinal.saturating_sub(1)).ok_or_else(|| anyhow!(
+            "RegisternotationsSichtmaterialisierung: Stoptaktordinal {} fehlt", plan.ende_takt_ordinal
+        ))?;
+
+        // Decode both measures before validating either boundary: a malformed
+        // stop measure precedes a missing start anchor in the original lookup.
+        let starts = start.anchors(self.source)?;
+        let stops = stop.anchors(self.source)?;
+        let start_candidates = starts.iter().filter(|anchor|
+            anchor.system == plan.system && anchor.beginn == plan.beginn_einsatz
+        );
+        if !start_candidates.clone().any(|anchor| anchor.sichtbar) {
+            anyhow::bail!("RegisternotationsSichtmaterialisierung: kein sichtbarer Dokument-Startanker fuer System {} bei {}",
+                plan.system, plan.beginn_einsatz);
+        }
+        let stop_candidates = stops.iter().filter(|anchor|
+            anchor.system == plan.system && anchor.ende == plan.ende_einsatz
+        );
+        if !stop_candidates.clone().any(|anchor| anchor.sichtbar) {
+            anyhow::bail!("RegisternotationsSichtmaterialisierung: kein sichtbarer Dokument-Stopanker fuer System {} bei {}",
+                plan.system, plan.ende_einsatz);
+        }
+        // A visible member qualifies the group. All matching members, even
+        // hidden ones, contribute to its earliest start and latest stop.
+        let first = start.range.start + start_candidates.map(|anchor| anchor.bereich.start).min()
+            .ok_or_else(|| anyhow!("RegisternotationsSichtmaterialisierung: Dokument-Startanker fehlt"))?;
+        let last = stop.range.start + stop_candidates.map(|anchor| anchor.bereich.end).max()
+            .ok_or_else(|| anyhow!("RegisternotationsSichtmaterialisierung: Dokument-Stopanker fehlt"))?;
+        Ok((first.min(last), first.max(last)))
+    }
+}
+
 impl Drop for JointRegisterPreviewInput<'_> {
     fn drop(&mut self) {
         let memo = self.costs.get_mut();
@@ -340,7 +420,9 @@ fn gemeinsame_registerkurs_gegenrechnung(
 ) -> anyhow::Result<BTreeMap<String, crate::registernotation::JointLowerCourseCost>> {
     let source = input.source;
     let document = input.document()?;
-    let directions = registernotationsrichtungen_im_dokument(source, document, &proposal.plaene)?;
+    let directions = registernotationsrichtungen_aus_intervallen(&proposal.plaene, |plan| {
+        input.intervals.get_or_init(|| PreviewMeasureIndex::new(source, document)).interval(plan)
+    })?;
     let mut fragments = Vec::new();
     let mut previous = 0;
     for part in document.root_element().children().filter(|n| n.has_tag_name("part")) {
@@ -392,6 +474,16 @@ fn registernotationsrichtungen_im_dokument(
     dokument: &roxmltree::Document<'_>,
     plaene: &[crate::registernotation::RegisternotationsMaterialisierungsPlan],
 ) -> anyhow::Result<Vec<RegisternotationsRichtung>> {
+    registernotationsrichtungen_aus_intervallen(plaene, |plan| {
+        registernotations_dokumentintervall(xml, dokument, plan)
+    })
+}
+
+fn registernotationsrichtungen_aus_intervallen(
+    plaene: &[crate::registernotation::RegisternotationsMaterialisierungsPlan],
+    intervall: impl Fn(&crate::registernotation::RegisternotationsMaterialisierungsPlan)
+        -> anyhow::Result<(usize, usize)>,
+) -> anyhow::Result<Vec<RegisternotationsRichtung>> {
     let mut nach_teil = BTreeMap::<
         String,
         Vec<(
@@ -401,8 +493,7 @@ fn registernotationsrichtungen_im_dokument(
         )>,
     >::new();
     for plan in plaene {
-        let (erste_grenze, zweite_grenze) =
-            registernotations_dokumentintervall(xml, dokument, plan)?;
+        let (erste_grenze, zweite_grenze) = intervall(plan)?;
         nach_teil
             .entry(plan.teil.clone())
             .or_default()
@@ -5005,7 +5096,7 @@ mod joint_register_preview_parse_reuse_tests {
             let visits = std::cell::RefCell::new(Vec::new());
             crate::registernotation::vergleiche_gebundene_lesekurse(&source, |p| {
                 visits.borrow_mut().push(p.clone());
-                let original = gemeinsame_registerkurs_gegenrechnung(&input, p).ok();
+                let original = parent_preview(&source, p).ok();
                 if memoized {
                     let reused = input.evaluate(p);
                     assert_eq!(original, reused);
@@ -5136,6 +5227,45 @@ fn parent_preview(
             compare(&source, &[plain.clone(), shifted.clone(), continued.clone(), missing.clone()]);
             compare(&source.replace("<duration>96</duration>", "<duration>0</duration>"), &[plain.clone(), shifted.clone()]);
         }}
+    }
+    #[test]
+    fn indexed_intervals_preserve_visible_extrema_errors_and_first_part_binding() {
+        let note = "<note><pitch><step>C</step><octave>6</octave></pitch><duration>96</duration><voice>2</voice><staff>2</staff></note>";
+        let hidden = note.replace("<note>", "<note print-object=\"no\">");
+        let backup = "<backup><duration>96</duration></backup>";
+        let source = format!(r#"<score-partwise><part id="synthetic">
+            <measure number="{}">{hidden}{backup}{note}{backup}{hidden}</measure>
+            <measure number="{}">{note}</measure>
+            </part><part id="synthetic"><measure number="unchosen">{hidden}</measure></part>
+            <part id="other"><measure number="{}">{note}</measure></part></score-partwise>"#,
+            "relocated", "relocated", "repeated");
+        let mut span = plan();
+        span.ende_einsatz = 96;
+        let mut tied = span.clone();
+        tied.ende_takt_ordinal = 1;
+        let mut missing_measure = span.clone();
+        missing_measure.ende_takt_ordinal = 3;
+        let mut other = tied.clone();
+        other.teil = "other".into();
+        let input = JointRegisterPreviewInput::new(&source);
+        let document = input.document().unwrap();
+        let index = PreviewMeasureIndex::new(&source, document);
+        for p in [&span, &tied, &missing_measure, &other, &tied] {
+            assert_eq!(index.interval(p).map_err(|e| e.to_string()),
+                registernotations_dokumentintervall(&source, document, p).map_err(|e| e.to_string()));
+            compare(&source, &[proposal(vec![p.clone()])]);
+        }
+        let (first, last) = index.interval(&tied).unwrap();
+        assert!(source[first..last].starts_with(&hidden) && source[first..last].ends_with(&hidden));
+        let simultaneous = [span.clone(), tied.clone(), other.clone()];
+        let actual = registernotationsrichtungen_aus_intervallen(&simultaneous, |p| index.interval(p)).unwrap();
+        assert_eq!(actual, registernotationsrichtungen_aus_sichtauftrag(&source, &simultaneous).unwrap());
+        // A prefix inherited from the score makes the measure slice invalid
+        // on its own. The stop parse failure must win over a missing start.
+        let broken = source.replacen("<score-partwise>", "<score-partwise xmlns:p=\"urn:test\">", 1)
+            .replacen("</measure>\n            </part>", "<p:mark/></measure>\n            </part>", 1);
+        span.beginn_einsatz = -1;
+        compare(&broken, &[proposal(vec![span])]);
     }
     #[test]
     fn parse_failure_is_lazy_repeatable_and_bound_to_one_original_input() {

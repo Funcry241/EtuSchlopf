@@ -78,7 +78,7 @@ on the final incoming tree and on the extracted ZIP.
 ## Native evaluation
 
 After native r1471 acceptance, compare the new complete export against r1470
-(the musical output of r1471 must be byte-identical). The included read-only
+(the musical output of r1471 must be byte-identical). The historical read-only
 `tools/assistant_diagnostics/compare_beam_take_r1472.py` accepts both export ZIPs.
 It checks ten Master files byte-exactly, maps corresponding Render notes by
 ordinal/timing/lane, enumerates all beam levels and checks non-beam XML content.
@@ -88,6 +88,11 @@ no nearest-pitch association supplies identity. Changed primary sites and PDF
 images still require human review. Optional `--pdf-pixels` compares all pages
 at 108 dpi when PyMuPDF is installed. The comparator reports missing trace data
 as an error; absence of an automatic primary trace row is not proof of no write.
+
+The accepted archive `EtuSchlopf_v0_10_1839_r1973_Balkenverbund_unbuilt_source.zip` preserves the historical comparator
+at `tools/assistant_diagnostics/compare_beam_take_r1472.py` (SHA-256
+`3783d16c1fde0de16799a189eec9b5b32dd0073bed24714c40ca6e8c2b114b27`).
+For exports from r1973 onward, use `tools/assistant_diagnostics/compare_exports.py`.
 
 ## Pre-patch path roles
 

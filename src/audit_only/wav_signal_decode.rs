@@ -3,6 +3,10 @@
 //! This module decodes RIFF/WAVE sample data only. It owns no FLP legacy oracle,
 //! pitch, metric, source-event, hand/staff, phrase or writer authority.
 
+use super::wav_attack_pulse_metric::{
+    AudioOnlyPitchTimingSnapshot, build_audio_only_pitch_timing_snapshot,
+};
+use std::cell::OnceCell;
 use std::fs;
 use std::path::Path;
 
@@ -14,20 +18,54 @@ pub(super) struct DecodedWavSignalAudit {
     pub(super) interleaved_samples: Vec<f32>,
 }
 
-pub(super) fn load_decoded_wav_signal_for_score_title(
-    score_title: Option<&str>,
-) -> Result<DecodedWavSignalAudit, &'static str> {
-    let title = score_title.ok_or("score_title_missing")?.trim();
-    if title.is_empty() {
-        return Err("score_title_empty");
+/// One immutable recording per result report, captured on first use.
+pub(crate) struct ReportWav<'a> {
+    pub(super) title: Option<&'a str>,
+    capture: OnceCell<Result<CapturedWav, &'static str>>,
+    timing: OnceCell<Result<AudioOnlyPitchTimingSnapshot, &'static str>>,
+}
+
+pub(super) struct CapturedWav {
+    pub(super) signal: DecodedWavSignalAudit,
+    #[cfg(any(windows, test))]
+    pub(super) sha256: String,
+}
+
+impl<'a> ReportWav<'a> {
+    pub(crate) fn new(title: Option<&'a str>) -> Self {
+        Self { title, capture: OnceCell::new(), timing: OnceCell::new() }
     }
-    let current = std::env::current_dir().map_err(|_| "current_dir_unavailable")?;
-    let path = current.join(format!("{title}.wav"));
-    load_decoded_wav_signal(&path)
+
+    pub(super) fn captured(&self) -> Result<&CapturedWav, &'static str> {
+        self.capture.get_or_init(|| {
+            let title = self.title.ok_or("score_title_missing")?.trim();
+            if title.is_empty() {
+                return Err("score_title_empty");
+            }
+            let current = std::env::current_dir().map_err(|_| "current_dir_unavailable")?;
+            let bytes = fs::read(current.join(format!("{title}.wav")))
+                .map_err(|_| "wav_file_unreadable")?;
+            Ok(CapturedWav {
+                signal: decode_wav_signal(&bytes)?,
+                #[cfg(any(windows, test))]
+                sha256: crate::sha256::hex(&bytes),
+            })
+        }).as_ref().map_err(|&reason| reason)
+    }
+
+    pub(super) fn pitch_timing(&self) -> Result<&AudioOnlyPitchTimingSnapshot, &'static str> {
+        self.timing.get_or_init(|| {
+            build_audio_only_pitch_timing_snapshot(&self.captured()?.signal)
+        }).as_ref().map_err(|&reason| reason)
+    }
 }
 
 pub(super) fn load_decoded_wav_signal(path: &Path) -> Result<DecodedWavSignalAudit, &'static str> {
     let data = fs::read(path).map_err(|_| "wav_file_unreadable")?;
+    decode_wav_signal(&data)
+}
+
+fn decode_wav_signal(data: &[u8]) -> Result<DecodedWavSignalAudit, &'static str> {
     if data.len() < 12 || &data[0..4] != b"RIFF" || &data[8..12] != b"WAVE" {
         return Err("riff_wave_header_missing");
     }
@@ -86,7 +124,7 @@ pub(super) fn load_decoded_wav_signal(path: &Path) -> Result<DecodedWavSignalAud
     }
 
     let payload = &data[data_range.0..data_range.1];
-    if payload.len() % frame_bytes != 0 {
+    if !payload.len().is_multiple_of(frame_bytes) {
         return Err("wav_data_partial_frame");
     }
     let frame_count = payload.len() / frame_bytes;
@@ -187,6 +225,30 @@ mod tests {
             out.extend_from_slice(&right.to_le_bytes());
         }
         out
+    }
+
+    #[test]
+    fn reports_capture_each_recording_once_even_if_its_path_is_replaced() {
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let base = std::env::temp_dir().join(format!("etuschlopf_report_wave_{nonce}"));
+        let title = base.to_str().unwrap();
+        let path = base.with_extension("wav");
+        let original = pcm16_stereo_wav(&[[2000, -2000]]);
+        let replacement = pcm16_stereo_wav(&[[-7000, 7000], [0, 0]]);
+        fs::write(&path, &original).unwrap();
+        let first = ReportWav::new(Some(title));
+        assert_eq!(first.captured().unwrap().sha256, crate::sha256::hex(&original));
+        fs::write(&path, &replacement).unwrap();
+        let previous = first.captured().unwrap();
+        assert_eq!(previous.signal.original_frame_count, 1);
+        assert!(previous.signal.interleaved_samples[0] > 0.0);
+        assert_eq!(first.pitch_timing().unwrap_err(), "zero_origin_grid_unavailable");
+        let second = ReportWav::new(Some(title));
+        let current = second.captured().unwrap();
+        assert_eq!(current.sha256, crate::sha256::hex(&replacement));
+        assert_eq!(current.signal.original_frame_count, 2);
+        assert!(current.signal.interleaved_samples[0] < 0.0);
+        fs::remove_file(path).unwrap();
     }
 
     #[test]

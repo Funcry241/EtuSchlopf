@@ -1,5 +1,6 @@
 //! Read-only evidence for deriving written time from a MIDI/WAV performance.
-use super::{NotationEvent, NotationEventKind};
+use super::{NotationEvent, NotationEventKind, WrittenHoldProposal};
+use crate::midi::source_time::WRITTEN_NOTE_VALUES;
 use crate::midi::{DecodedMidiSource, MidiKeySignature};
 use anyhow::{Result, ensure};
 use std::collections::{BTreeMap, BTreeSet};
@@ -1061,15 +1062,9 @@ fn assign_continuations(costs: &[Vec<f64>]) -> Vec<usize> {
     columns
 }
 
-fn written_lengths(
-    regular: &[Attack],
-    positions: &[i64],
-    nominal: f64,
-    groups: &[AttackGroup],
-    repetitions: &[Repeat],
-    trace: &RhythmTrace,
-    pulse: i64,
-) -> (Vec<i64>, BTreeSet<usize>) {
+fn measured_durations(
+    regular: &[Attack], positions: &[i64], nominal: f64, pulse: i64,
+) -> Vec<f64> {
     let mut at_position: BTreeMap<i64, Vec<f64>> = BTreeMap::default();
     for attack in regular {
         at_position
@@ -1104,7 +1099,7 @@ fn written_lengths(
             }
         });
     map.push((last + 8 * UNIT, end + 8.0 * tail_tempo));
-    let measured: Vec<_> = regular
+    regular
         .iter()
         .map(|attack| {
             let release = attack.time + attack.hold;
@@ -1117,7 +1112,155 @@ fn written_lengths(
             let bound = low as f64 + (high - low) as f64 * fraction;
             (bound - positions[attack.id] as f64) / UNIT as f64
         })
+        .collect()
+}
+
+fn preferred_continuations(regular: &[Attack], positions: &[i64], expected: &[f64]) -> Vec<usize> {
+    let costs: Vec<Vec<_>> = regular
+        .iter()
+        .zip(expected)
+        .map(|(attack, &observed)| {
+            regular
+                .iter()
+                .map(|next| {
+                    let distance = positions[next.id] - positions[attack.id];
+                    let pitch_gap = attack.pitch.abs_diff(next.pitch);
+                    if !(1..=16 * UNIT).contains(&distance) || pitch_gap > 16 {
+                        return 20.0;
+                    }
+                    let gap = distance as f64 / UNIT as f64;
+                    let penalty = if VALUES.contains(&distance) {
+                        0.0
+                    } else {
+                        0.15
+                    };
+                    let brief = if gap < 1.0 && observed >= 0.8 {
+                        0.25
+                    } else {
+                        0.0
+                    };
+                    1.1 * ((gap.max(0.25) + 0.25) / (observed + 0.25)).log2().abs()
+                        + f64::from(pitch_gap) * 0.065
+                        + (gap - 8.0).max(0.0) * 0.08
+                        + penalty
+                        + brief
+                })
+                .collect()
+        })
         .collect();
+    assign_continuations(&costs)
+}
+
+/// On a separately established grid, certify a held interval only when its
+/// assigned successor and the independent key-release evidence agree.
+pub(super) fn independently_sustained_intervals(
+    source: &DecodedMidiSource, events: &[NotationEvent],
+) -> Result<BTreeMap<usize, WrittenHoldProposal>> {
+    if events.len() > 1024 {
+        return Ok(BTreeMap::new());
+    }
+    let attacks = source_attacks(source)?;
+    Ok(sustained_intervals(&attacks, events))
+}
+
+fn sustained_intervals(attacks: &[Attack], events: &[NotationEvent]) -> BTreeMap<usize, WrittenHoldProposal> {
+    let mut regular: Vec<_> = attacks.iter().copied()
+        .filter(|attack| events[attack.id].kind == NotationEventKind::Regular)
+        .collect();
+    let positions: Vec<_> = events.iter().map(|event| event.pos).collect();
+    regular.sort_by_key(|attack| (positions[attack.id], attack.pitch, attack.id));
+    if regular.is_empty() {
+        return BTreeMap::new();
+    }
+    let measured = measured_durations(&regular, &positions, 0.0, 4 * UNIT);
+    let expected: Vec<_> = measured.iter().map(|length| 1.2 * length.max(0.6)).collect();
+    let successors: Vec<_> = preferred_continuations(&regular, &positions, &expected)
+        .into_iter()
+        .zip(&regular)
+        .map(|(index, attack)| {
+            regular.get(index).filter(|next| {
+                (attack.track, attack.channel) == (next.track, next.channel)
+                    && VALUES.contains(&(positions[next.id] - positions[attack.id]))
+            }).map(|_| index)
+        })
+        .collect();
+    let mut predecessors = vec![None; regular.len()];
+    for (index, &next) in successors.iter().enumerate() {
+        if let Some(next) = next {
+            predecessors[next] = Some(index);
+        }
+    }
+    let mut latest_attacks = BTreeMap::<i64, f64>::new();
+    for attack in &regular {
+        latest_attacks.entry(positions[attack.id])
+            .and_modify(|latest| *latest = latest.max(attack.time))
+            .or_insert(attack.time);
+    }
+    let mut intervals = BTreeMap::new();
+    for (index, &attack) in regular.iter().enumerate() {
+        let Some(successor) = successors[index] else { continue };
+        let start = positions[attack.id];
+        let end = positions[regular[successor].id];
+        let duration = end - start;
+        let between: Vec<_> = regular.iter().enumerate().filter(|(_, other)| {
+            let onset = positions[other.id];
+            start < onset && onset < end && (attack.track, attack.channel) == (other.track, other.channel)
+        }).collect();
+        let Some((_, first)) = between.first() else { continue };
+        let cut = positions[first.id];
+        let release = attack.time + attack.hold;
+        let past_midpoint = |earlier: i64| {
+            latest_time_at(&latest_attacks, earlier + (end - earlier) / 2)
+                .is_some_and(|time| release > time)
+        };
+        // Compare the selected value with the nearest shorter written value,
+        // including dotted values. An established pulse in the same strand
+        // can resolve the ambiguity when the performer released early.
+        let shorter = WRITTEN_NOTE_VALUES.iter().copied()
+            .find(|&value| value < duration)
+            .map_or(cut, |value| cut.max(start + value));
+        let shares_pulse = predecessors[index]
+            .is_some_and(|before| start - positions[regular[before].id] == duration)
+            && successors[successor]
+                .is_some_and(|after| positions[regular[after].id] - end == duration);
+        let crosses_independent_strand = shares_pulse
+            && latest_time_at(&latest_attacks, cut).is_some_and(|time| release > time)
+            && between.iter().any(|(inner, _)| successors[*inner]
+                .is_some_and(|next| positions[regular[next].id] < end));
+        let candidate_has_support = past_midpoint(cut) || crosses_independent_strand;
+        if start + events[attack.id].len > cut
+            && candidate_has_support
+            && between.iter().all(|(_, other)| other.pitch != attack.pitch)
+        {
+            intervals.insert(attack.id, WrittenHoldProposal {
+                early_end: cut, continuation: end,
+                confirmed: past_midpoint(shorter) || shares_pulse,
+            });
+        }
+    }
+    intervals
+}
+
+fn latest_time_at(latest_attacks: &BTreeMap<i64, f64>, position: i64) -> Option<f64> {
+    if let Some(&time) = latest_attacks.get(&position) {
+        return Some(time);
+    }
+    let (&left_pos, &left_time) = latest_attacks.range(..position).next_back()?;
+    let (&right_pos, &right_time) = latest_attacks.range(position..).next()?;
+    let fraction = (position - left_pos) as f64 / (right_pos - left_pos) as f64;
+    Some(left_time + fraction * (right_time - left_time))
+}
+
+fn written_lengths(
+    regular: &[Attack],
+    positions: &[i64],
+    nominal: f64,
+    groups: &[AttackGroup],
+    repetitions: &[Repeat],
+    trace: &RhythmTrace,
+    pulse: i64,
+) -> (Vec<i64>, BTreeSet<usize>) {
+    let measured = measured_durations(regular, positions, nominal, pulse);
     let indices: BTreeMap<_, _> = regular
         .iter()
         .enumerate()
@@ -1160,39 +1303,7 @@ fn written_lengths(
             }
         }
     }
-    let costs: Vec<Vec<_>> = regular
-        .iter()
-        .zip(&expected)
-        .map(|(attack, &observed)| {
-            regular
-                .iter()
-                .map(|next| {
-                    let distance = positions[next.id] - positions[attack.id];
-                    let pitch_gap = attack.pitch.abs_diff(next.pitch);
-                    if !(1..=16 * UNIT).contains(&distance) || pitch_gap > 16 {
-                        return 20.0;
-                    }
-                    let gap = distance as f64 / UNIT as f64;
-                    let penalty = if VALUES.contains(&distance) {
-                        0.0
-                    } else {
-                        0.15
-                    };
-                    let brief = if gap < 1.0 && observed >= 0.8 {
-                        0.25
-                    } else {
-                        0.0
-                    };
-                    1.1 * ((gap.max(0.25) + 0.25) / (observed + 0.25)).log2().abs()
-                        + f64::from(pitch_gap) * 0.065
-                        + (gap - 8.0).max(0.0) * 0.08
-                        + penalty
-                        + brief
-                })
-                .collect()
-        })
-        .collect();
-    let successors = assign_continuations(&costs);
+    let successors = preferred_continuations(regular, positions, &expected);
     let connected: Vec<_> = regular
         .iter()
         .zip(successors)
@@ -2348,5 +2459,103 @@ mod unconnected_chord_end_tests {
             pulsed_release_before_rest(&interrupted, 156, 72, &connected, &measured),
             None
         );
+    }
+}
+
+#[cfg(test)]
+mod independent_hold_tests {
+    use super::*;
+
+    fn confirmed_holds(attacks: &[Attack], events: &[NotationEvent]) -> BTreeMap<usize, (i64, i64)> {
+        sustained_intervals(attacks, events).into_iter()
+            .filter(|(_, proposal)| proposal.confirmed)
+            .map(|(id, proposal)| (id, (proposal.early_end, proposal.continuation)))
+            .collect()
+    }
+
+    #[test]
+    fn midpoint_uses_the_latest_plausible_time_in_a_spread_chord() {
+        let latest = BTreeMap::from([(0, 0.0), (24, 0.28), (48, 0.54), (96, 1.02)]);
+        assert!((latest_time_at(&latest, 36).unwrap() - 0.41).abs() < 1.0e-12);
+        assert_eq!(latest_time_at(&latest, 48), Some(0.54));
+        assert_eq!(latest_time_at(&latest, 120), None);
+    }
+
+    #[test]
+    fn early_release_needs_the_same_written_pulse_on_both_sides() {
+        let events: Vec<_> = (0..=12).map(|id| NotationEvent {
+            source_ordinal: id, pos: id as i64 * UNIT,
+            len: if id % 4 == 0 { 4 * UNIT } else { UNIT },
+            kind: NotationEventKind::Regular,
+        }).collect();
+        let attacks: Vec<_> = events.iter().map(|event| {
+            let id = event.source_ordinal;
+            let in_bass = id % 4 == 0;
+            Attack {
+                id, time: id as f64 * 0.25,
+                hold: if in_bass { 0.82 } else { 0.22 },
+                pitch: if in_bass { 43 } else { 69 }, velocity: 64, track: 0, channel: 0,
+            }
+        }).collect();
+        let result = confirmed_holds(&attacks, &events);
+        assert!(!result.contains_key(&0));
+        assert_eq!(result.get(&4), Some(&(5 * UNIT, 8 * UNIT)));
+        assert!(!result.contains_key(&8));
+    }
+
+    #[test]
+    fn short_articulation_requires_continuation_of_another_strand_inside_the_note() {
+        let mut events: Vec<_> = (0..=12).map(|id| NotationEvent {
+            source_ordinal: id, pos: id as i64 * UNIT,
+            len: if id % 4 == 0 { 4 * UNIT } else { UNIT },
+            kind: NotationEventKind::Regular,
+        }).collect();
+        let attacks: Vec<_> = events.iter().map(|event| {
+            let id = event.source_ordinal;
+            let in_bass = id % 4 == 0;
+            Attack {
+                id, time: id as f64 * 0.25,
+                hold: if id == 4 { 0.52 } else if in_bass { 0.92 } else { 0.22 },
+                pitch: if in_bass { 43 } else { 69 }, velocity: 64, track: 0, channel: 0,
+            }
+        }).collect();
+        assert_eq!(confirmed_holds(&attacks, &events).get(&4), Some(&(5 * UNIT, 8 * UNIT)));
+        events[6].kind = NotationEventKind::PlaybackOnly;
+        events[7].kind = NotationEventKind::PlaybackOnly;
+        assert!(!confirmed_holds(&attacks, &events).contains_key(&4));
+    }
+
+    #[test]
+    fn a_held_line_outlasts_independent_attacks_but_a_short_key_does_not() {
+        for (offset, transpose, scale) in [(0, 0, 1.0), (192, 7, 0.75), (384, 12, 1.5)] {
+            let pitches = [43, 67, 70, 68, 45, 72, 69, 71, 47];
+            let mut events = Vec::new();
+            let mut attacks = Vec::new();
+            for (id, pitch) in pitches.into_iter().enumerate() {
+                events.push(NotationEvent {
+                    source_ordinal: id, pos: offset + id as i64 * UNIT,
+                    len: if id % 4 == 0 { 4 * UNIT } else { UNIT },
+                    kind: NotationEventKind::Regular,
+                });
+                attacks.push(Attack {
+                    id, time: 2.0 + id as f64 * 0.25 * scale,
+                    hold: if id % 4 == 0 { 0.92 * scale } else { 0.22 * scale },
+                    pitch: pitch + transpose, velocity: 64, track: 0, channel: 0,
+                });
+            }
+            let result = confirmed_holds(&attacks, &events);
+            assert_eq!(result.get(&0), Some(&(offset + UNIT, offset + 4 * UNIT)));
+            assert_eq!(result.get(&4), Some(&(offset + 5 * UNIT, offset + 8 * UNIT)));
+
+            attacks[0].hold = 0.23 * scale;
+            let result = confirmed_holds(&attacks, &events);
+            assert!(!result.contains_key(&0));
+            assert_eq!(result.get(&4), Some(&(offset + 5 * UNIT, offset + 8 * UNIT)));
+
+            attacks[0].hold = 0.92 * scale;
+            attacks[3].pitch = attacks[0].pitch;
+            assert_ne!(confirmed_holds(&attacks, &events).get(&0),
+                       Some(&(offset + UNIT, offset + 4 * UNIT)));
+        }
     }
 }

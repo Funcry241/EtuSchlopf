@@ -5,7 +5,6 @@ use super::feedback_structuralization_kodex::{
     expected_feedback_observable_sink_allowlist,
     feedback_compile_time_kodex_owner_paths,
     feedback_path_matches_registered_owner,
-    feedback_public_contract_reference_paths,
     find_effectively_public_item,
     normalize_path_for_feedback_gate,
 };
@@ -13,6 +12,7 @@ use std::{collections::BTreeMap, fs, path::Path};
 
 pub(super) struct KodexBoundaryAdversarialInputs<'a> {
     pub(super) source_root: &'a Path,
+    pub(super) observed_sink_paths: &'a [String],
     pub(super) kodex_gate_core_source_root: &'a Path,
     pub(super) feedback_gate_text: &'a str,
     pub(super) feedback_transport_text: &'a str,
@@ -98,36 +98,41 @@ fn adversarial_parse_yes_no(value: &str) -> Option<bool> {
     }
 }
 
-fn source_tree_contains_marker_outside_compile_time_kodex_policy(
-    source_root: &Path,
-    marker: &str,
-) -> Result<bool, String> {
-    let mut files = Vec::new();
-    collect_rust_files_for_feedback_confinement(source_root, &mut files)?;
-    let compile_time_kodex_owner_paths =
-        feedback_compile_time_kodex_owner_paths(&expected_feedback_observable_sink_allowlist());
-    for path in files {
-        let normalized = normalize_path_for_feedback_gate(&path);
-        if feedback_path_matches_registered_owner(
-            &normalized,
-            &compile_time_kodex_owner_paths,
-        ) {
-            continue;
-        }
-        let text = fs::read_to_string(&path).map_err(|error| error.to_string())?;
-        if text.contains(marker) {
-            return Ok(true);
+fn first_retired_marker(source_root: &Path, kodex_core_root: &Path) -> Result<Option<&'static str>, String> {
+    const MARKERS: [&str; 4] = [
+        "FEEDBACK-STRUCTURALIZATION-AND-RELOCATION-PROOF-GATE",
+        "PositiveVariant | DecisionStable | StructuralFingerprintStable | OriginVisibleToRule",
+        "NegativeControl: Rejected {}/{}",
+        "Admission: BaselineDecision {:?}",
+    ];
+    let owners = feedback_compile_time_kodex_owner_paths(&expected_feedback_observable_sink_allowlist());
+    let mut first = MARKERS.len();
+    for root in [source_root, kodex_core_root] {
+        let mut files = Vec::new();
+        collect_rust_files_for_feedback_confinement(root, &mut files)?;
+        for path in files {
+            if feedback_path_matches_registered_owner(&normalize_path_for_feedback_gate(&path), &owners) {
+                continue;
+            }
+            let text = fs::read_to_string(path).map_err(|error| error.to_string())?;
+            if let Some(rank) = MARKERS[..first].iter().position(|marker| text.contains(*marker)) {
+                // Lower-priority hits must yield to a later read error or higher-priority marker.
+                if rank == 0 {
+                    return Ok(Some(MARKERS[0]));
+                }
+                first = rank;
+            }
         }
     }
-    Ok(false)
+    Ok(MARKERS.get(first).copied())
 }
-
 
 pub(super) fn validate_kodex_boundary_adversarial_completion(
     inputs: KodexBoundaryAdversarialInputs<'_>,
 ) -> Result<usize, String> {
     let KodexBoundaryAdversarialInputs {
         source_root,
+        observed_sink_paths,
         kodex_gate_core_source_root,
         feedback_gate_text,
         feedback_transport_text,
@@ -320,9 +325,7 @@ pub(super) fn validate_kodex_boundary_adversarial_completion(
                 .to_string(),
         );
     }
-    if feedback_public_contract_reference_paths(source_root)?
-        != exact_sinks.keys().cloned().collect::<Vec<_>>()
-    {
+    if observed_sink_paths.iter().ne(exact_sinks.keys()) {
         return Err(
             "ADVERSARIAL ADDITIONAL PUBLIC SINK PROBE FAILED: source references do not equal the exact registered sink set."
                 .to_string(),
@@ -347,22 +350,10 @@ pub(super) fn validate_kodex_boundary_adversarial_completion(
         );
     }
 
-    for retired_marker in [
-        "FEEDBACK-STRUCTURALIZATION-AND-RELOCATION-PROOF-GATE",
-        "PositiveVariant | DecisionStable | StructuralFingerprintStable | OriginVisibleToRule",
-        "NegativeControl: Rejected {}/{}",
-        "Admission: BaselineDecision {:?}",
-    ] {
-        if source_tree_contains_marker_outside_compile_time_kodex_policy(source_root, retired_marker)?
-            || source_tree_contains_marker_outside_compile_time_kodex_policy(
-                kodex_gate_core_source_root,
-                retired_marker,
-            )?
-        {
-            return Err(format!(
-                "ADVERSARIAL RETIRED DETAIL SECTION NOT BLOCKED: managed Rust sources reintroduced {retired_marker:?}."
-            ));
-        }
+    if let Some(retired_marker) = first_retired_marker(source_root, kodex_gate_core_source_root)? {
+        return Err(format!(
+            "ADVERSARIAL RETIRED DETAIL SECTION NOT BLOCKED: managed Rust sources reintroduced {retired_marker:?}."
+        ));
     }
 
     for required_negative_capability in [

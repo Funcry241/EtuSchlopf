@@ -1214,6 +1214,13 @@ struct ArtifactAvailability {
 }
 
 impl ArtifactAvailability {
+    fn probe(requested: CargoBuildProfile, mut verify: impl FnMut(CargoBuildProfile) -> bool) -> Self {
+        Self {
+            release: requested == CargoBuildProfile::Release && verify(CargoBuildProfile::Release),
+            strict: verify(CargoBuildProfile::Strict),
+        }
+    }
+
     fn verified_profile(self, requested: CargoBuildProfile) -> Option<CargoBuildProfile> {
         match requested {
             CargoBuildProfile::Strict => self.strict.then_some(CargoBuildProfile::Strict),
@@ -3114,18 +3121,9 @@ fn plan_build(
         ));
     }
     let current_signature = source_build_signature(project_root)?;
-    let available = ArtifactAvailability {
-        release: profile_build_artifact_is_verified(
-            version,
-            CargoBuildProfile::Release,
-            &current_signature,
-        ),
-        strict: profile_build_artifact_is_verified(
-            version,
-            CargoBuildProfile::Strict,
-            &current_signature,
-        ),
-    };
+    let available = ArtifactAvailability::probe(requested, |profile| {
+        profile_build_artifact_is_verified(version, profile, &current_signature)
+    });
     Ok(build_plan_from_verification(
         requested,
         BuildPreference::ReuseVerified,
@@ -3166,12 +3164,15 @@ mod build_plan_tests {
 
     #[test]
     fn explicit_strict_never_reuses_release_artifact() {
+        let requested = super::parse_args(vec!["--all".into()]).validation().build_profile();
+        let mut probes = Vec::new();
+        let available = ArtifactAvailability::probe(requested, |profile| {
+            probes.push(profile);
+            profile == CargoBuildProfile::Release
+        });
+        assert_eq!(probes, [CargoBuildProfile::Strict]);
         assert_eq!(
-            build_plan_from_verification(
-                CargoBuildProfile::Strict,
-                BuildPreference::ReuseVerified,
-                ArtifactAvailability { release: true, strict: false },
-            ),
+            build_plan_from_verification(requested, BuildPreference::ReuseVerified, available),
             BuildPlan::Compile {
                 profile: CargoBuildProfile::Strict,
                 reason: CompileReason::MissingVerifiedArtifact,
@@ -3208,6 +3209,13 @@ mod build_plan_tests {
 
     #[test]
     fn force_always_requests_a_fresh_build() {
+        let args = super::parse_args(vec!["--all".into(), "--force".into()]);
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let plan = super::plan_launcher(root, super::VERSION, &args).expect("forced launcher plan");
+        assert_eq!(plan.build, BuildPlan::Compile {
+            profile: CargoBuildProfile::Strict,
+            reason: CompileReason::Forced,
+        });
         assert_eq!(
             build_plan_from_verification(
                 CargoBuildProfile::Strict,
@@ -4620,14 +4628,14 @@ enum VersionBoundPostTakeDecision {
 fn version_bound_post_take_decision(
     from_version: &str,
     to_version: &str,
-    assistant_export_exists: bool,
-    predecessor_evidence_valid: bool,
+    assistant_export_exists: impl FnOnce() -> bool,
+    predecessor_evidence_valid: impl FnOnce() -> bool,
 ) -> VersionBoundPostTakeDecision {
     if from_version == CARRY_FORWARD_HANDOVER_FROM_VERSION
         && to_version == CARRY_FORWARD_HANDOVER_TO_VERSION
-        && !assistant_export_exists
+        && !assistant_export_exists()
     {
-        return if predecessor_evidence_valid {
+        return if predecessor_evidence_valid() {
             VersionBoundPostTakeDecision::ReconstructVerifiedPredecessorHandover
         } else {
             VersionBoundPostTakeDecision::ForceStrictAll
@@ -4757,17 +4765,14 @@ fn apply_version_bound_post_take_contract(
         return Ok(());
     };
 
-    let export_exists = project_root.join("assistant_export_latest.zip").is_file();
-    let predecessor_validation =
-        validate_corpus_run_manifest(project_root, CARRY_FORWARD_HANDOVER_FROM_VERSION);
-    let predecessor_evidence_valid =
-        predecessor_validation.valid && predecessor_validation.manifest.full_corpus;
-
     match version_bound_post_take_decision(
         &from_version,
         &to_version,
-        export_exists,
-        predecessor_evidence_valid,
+        || project_root.join("assistant_export_latest.zip").is_file(),
+        || {
+            let validation = validate_corpus_run_manifest(project_root, &from_version);
+            validation.valid && validation.manifest.full_corpus
+        },
     ) {
         VersionBoundPostTakeDecision::NoAction => Ok(()),
         VersionBoundPostTakeDecision::ReconstructVerifiedPredecessorHandover => {
@@ -4835,19 +4840,26 @@ mod fresh_run_gate_tests {
 
     #[test]
     fn carry_forward_handover_is_pinned_to_the_verified_predecessor() {
-        use super::VersionBoundPostTakeDecision;
-        assert_eq!(
-            super::version_bound_post_take_decision("0.10.1265", "0.10.1266", false, true),
-            VersionBoundPostTakeDecision::ReconstructVerifiedPredecessorHandover
-        );
-        assert_eq!(
-            super::version_bound_post_take_decision("0.10.1264", "0.10.1266", false, true),
-            VersionBoundPostTakeDecision::NoAction
-        );
-        assert_eq!(
-            super::version_bound_post_take_decision("0.10.1265", "0.10.1267", false, true),
-            VersionBoundPostTakeDecision::NoAction
-        );
+        use super::VersionBoundPostTakeDecision::{ForceStrictAll, NoAction, ReconstructVerifiedPredecessorHandover};
+        for (from, to, export_exists, predecessor_valid, expected, reads) in [
+            ("0.10.1265", "0.10.1266", false, true, ReconstructVerifiedPredecessorHandover, (1, 1)),
+            ("0.10.1265", "0.10.1266", false, false, ForceStrictAll, (1, 1)),
+            ("0.10.1265", "0.10.1266", true, false, NoAction, (1, 0)),
+            ("0.10.1264", "0.10.1266", false, true, NoAction, (0, 0)),
+            ("0.10.1265", "0.10.1267", false, true, NoAction, (0, 0)),
+            ("0.10.1265", "0.10.1286", true, true, ForceStrictAll, (0, 0)),
+        ] {
+            let mut export_reads = 0;
+            let mut manifest_reads = 0;
+            let decision = super::version_bound_post_take_decision(
+                from,
+                to,
+                || { export_reads += 1; export_exists },
+                || { manifest_reads += 1; predecessor_valid },
+            );
+            assert_eq!(decision, expected, "{from} -> {to}");
+            assert_eq!((export_reads, manifest_reads), reads, "{from} -> {to}");
+        }
     }
 
     #[test]
@@ -4890,25 +4902,14 @@ mod fresh_run_gate_tests {
 
     #[test]
     fn current_same_version_take_is_not_unconditionally_promoted_to_full_corpus() {
-        use super::VersionBoundPostTakeDecision;
-
         assert_eq!(
             super::version_bound_post_take_decision(
                 super::VERSION,
                 super::VERSION,
-                true,
-                true,
+                || panic!("unexpected export lookup"),
+                || panic!("unexpected predecessor manifest lookup"),
             ),
-            VersionBoundPostTakeDecision::NoAction
-        );
-        assert_eq!(
-            super::version_bound_post_take_decision(
-                super::VERSION,
-                super::VERSION,
-                false,
-                false,
-            ),
-            VersionBoundPostTakeDecision::NoAction
+            super::VersionBoundPostTakeDecision::NoAction
         );
     }
 

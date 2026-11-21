@@ -18,9 +18,22 @@ type OriginalBeamAuditLocation = (usize,String,i64,i64,usize,String);
 type OriginalBeamAuditLocations = BTreeMap<(usize,usize),Vec<OriginalBeamAuditLocation>>;
 type OriginalBeamOccurrenceKey = (usize, usize, usize);
 type ClosedBridgeOrigins = Vec<(usize, BTreeSet<OriginalBeamOccurrenceKey>)>;
+type BoundNote<'a> = (&'a FinalChordEncodingNote, &'a FinalChordTransactionOutputOccurrenceWitness);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct OriginalBeamGraceHost {
+    grace: OriginalBeamOccurrenceKey,
+    host: OriginalBeamOccurrenceKey,
+}
+
+fn occurrence_key(row: &FinalChordTransactionOutputOccurrenceWitness) -> OriginalBeamOccurrenceKey {
+    (row.source_event_id, row.attack_id, row.fragment_id)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct OriginalPositiveBeamOrigin {
+    id: String,
+    measure: usize,
     members: BTreeSet<(usize, usize, usize)>,
     states: Vec<String>,
 }
@@ -45,11 +58,15 @@ pub(super) struct OriginalBeamVoiceGroup {
 }
 
 impl CanonicalFinalChordStructuralPlan {
+    pub(super) fn allocation_original_beam_groups(&self) -> impl Iterator<Item = &OriginalBeamVoiceGroup> {
+        self.original_beam_voice_groups.iter().filter(|group| group.is_measure_local())
+    }
+
     // This is inherited producer evidence, never inferred from current XML
     // labels, acoustic lanes, roles or a report. Every current source fragment
     // must retain a binding to the same independently captured notation voice.
     pub(super) fn proves_common_original_notation_voice(&self, sources: &BTreeSet<usize>) -> bool {
-        let Some(group) = self.original_beam_voice_groups.first() else { return false; };
+        let Some(group) = self.allocation_original_beam_groups().next() else { return false; };
         if sources.is_empty() || !std::sync::Arc::ptr_eq(&group.source_resources, &self.source_locators)
             || self.original_beam_voice_groups.iter().any(|other|
                 !std::sync::Arc::ptr_eq(&group.notation_voices, &other.notation_voices)) {
@@ -221,16 +238,19 @@ impl CanonicalFinalChordStructuralPlan {
             {
                 continue;
             }
+            let id = format!(
+                "original-beam-{:016x}-{}-{}",
+                self.semantic_fingerprint_fnv64, identity.0, identity.1
+            );
             self.original_beam_voice_groups
                 .push(OriginalBeamVoiceGroup {
                     positive_origins: vec![OriginalPositiveBeamOrigin {
+                        id: id.clone(),
+                        measure: first.measure,
                         members: members.iter().zip(&fragments).map(|(&(source,attack),&fragment)|(source,attack,fragment)).collect(),
                         states: states.clone(),
                     }],
-                    id: format!(
-                        "original-beam-{:016x}-{}-{}",
-                        self.semantic_fingerprint_fnv64, identity.0, identity.1
-                    ),
+                    id,
                     members,
                     states,
                     fragments,
@@ -250,23 +270,63 @@ impl CanonicalFinalChordStructuralPlan {
         let bound_seeds = self.original_beam_voice_groups.iter().map(|group|group.id.clone()).collect::<BTreeSet<_>>();
         self.original_beam_voice_groups =
             close_shared_sources(std::mem::take(&mut self.original_beam_voice_groups));
-        let retained = self.original_beam_voice_groups.iter().flat_map(|group|group.id.split('+').map(str::to_owned)).collect::<BTreeSet<_>>();
+        let retained = self.original_beam_voice_groups.iter()
+            .flat_map(|group| group.positive_origins.iter().map(|origin| origin.id.as_str()))
+            .collect::<BTreeSet<_>>();
         for ((owner_group,owner_piece),count) in original_counts {
             let id=format!("original-beam-{:016x}-{owner_group}-{owner_piece}",self.semantic_fingerprint_fnv64);
             let locations = original_locations.get(&(owner_group,owner_piece));
             let unusual = beam_diagnostics::record(Observation::Census {
                 bound_seed: bound_seeds.contains(&id),
-                retained_component: retained.contains(&id),
+                retained_component: retained.contains(id.as_str()),
                 source_locations_present: locations.is_some(),
             });
             if unusual || locations.is_some_and(|rows| rows.iter().any(|row| beam_diagnostics::detail_requested_for_measure(row.0))) {
-                eprintln!("OriginalBeamOriginCensus: group={id}; original_members={count}; bound_seed={}; retained_component={}; source_locations={:?}; origin=actual_original_owner; authority=none",bound_seeds.contains(&id),retained.contains(&id),locations);
+                eprintln!("OriginalBeamOriginCensus: group={id}; original_members={count}; bound_seed={}; retained_component={}; source_locations={:?}; origin=actual_original_owner; authority=none",bound_seeds.contains(&id),retained.contains(id.as_str()),locations);
             }
         }
     }
 }
 
 impl OriginalBeamVoiceGroup {
+    pub(super) fn is_measure_local(&self) -> bool {
+        self.positive_origins.iter().all(|origin| origin.measure == self.measure)
+    }
+
+    fn observed_fragments(
+        &self,
+        visible_fragments: &BTreeMap<String, usize>,
+        source: &FinalPdfSourceOccurrenceContinuation,
+        current: &[FinalChordBindingMeasure],
+    ) -> Option<usize> {
+        if self.is_measure_local() {
+            return visible_fragments.get(&self.id).copied();
+        }
+        let rows = exact_members(source, self)?;
+        let mut total = 0usize;
+        for origin in &self.positive_origins {
+            let fragments = *visible_fragments.get(&origin.id)?;
+            if fragments == 0 || fragments > origin.members.len() {
+                return None;
+            }
+            if fragments > 1 {
+                let mut members: Vec<_> = rows.iter()
+                    .filter(|row| origin.members.contains(&occurrence_key(row)))
+                    .collect();
+                // This is the same order sent to renderer cohort geometry.
+                members.sort_unstable_by_key(|row| row.pitched_ordinal);
+                let labels = members.iter().map(|row| {
+                    pitched_note(current, row.measure, row.pitched_ordinal).map(|note| note.voice.trim())
+                }).collect::<Option<Vec<_>>>()?;
+                if !proves_missing_channel_boundary(&labels, fragments) {
+                    return None;
+                }
+            }
+            total = total.checked_add(fragments)?;
+        }
+        Some(total)
+    }
+
     /// Sealed original-owner membership and the independently carried pre-lane
     /// notation relation. Coordinates and current labels mint no new identity.
     pub(super) fn allocation_sources(&self) -> BTreeSet<usize> {
@@ -274,6 +334,9 @@ impl OriginalBeamVoiceGroup {
     }
 
     pub(super) fn closed_bridge_origins(&self, authored: &BTreeSet<OriginalBeamOccurrenceKey>) -> ClosedBridgeOrigins {
+        if !self.is_measure_local() {
+            return Vec::new();
+        }
         self.positive_origins.iter().enumerate().filter(|(_,origin)|
             closed_primary(&origin.states) && origin.members.is_subset(authored))
             .map(|(index,origin)|(index,origin.members.clone())).collect()
@@ -282,7 +345,7 @@ impl OriginalBeamVoiceGroup {
         &self,
         tail: &BTreeMap<OriginalBeamOccurrenceKey, BTreeMap<u8, String>>,
     ) -> bool {
-        self.positive_origins.iter().any(|origin| {
+        self.is_measure_local() && self.positive_origins.iter().any(|origin| {
             origin.members.len() == tail.len() && closed_primary(&origin.states)
                 && origin.members.iter().all(|key| {
                     let Some(observed) = tail.get(key) else { return false; };
@@ -301,6 +364,15 @@ impl OriginalBeamVoiceGroup {
         self.members.iter().zip(&self.fragments).map(|(&(source,attack),&fragment)|(source,attack,fragment)).collect()
     }
 
+}
+
+// The renderer counts one extra fragment for each missing adjacent
+// connection. If all missing edges could be within a single label on each
+// side, the observation has not proved any break at a label boundary.
+fn proves_missing_channel_boundary(labels: &[&str], visible_fragments: usize) -> bool {
+    let same_channel_edges = labels.windows(2).filter(|pair| pair[0] == pair[1]).count();
+    visible_fragments <= labels.len()
+        && visible_fragments.checked_sub(1).is_some_and(|missing| missing > same_channel_edges)
 }
 
 fn close_shared_sources(mut pending: Vec<OriginalBeamVoiceGroup>) -> Vec<OriginalBeamVoiceGroup> {
@@ -328,10 +400,10 @@ fn close_shared_sources(mut pending: Vec<OriginalBeamVoiceGroup>) -> Vec<Origina
             }
         }
         let first = &component[0];
+        // A held source can connect independent local groups across a bar.
+        // Only the shared channel decision spans the bar, never a beam edge.
         if component.iter().any(|group| {
-            group.measure != first.measure
-                || group.staff != first.staff
-                || group.semantic_voice != first.semantic_voice
+            group.staff != first.staff || group.semantic_voice != first.semantic_voice
         }) {
             continue;
         }
@@ -393,6 +465,14 @@ fn exact_members<'a>(
     group: &OriginalBeamVoiceGroup,
 ) -> Option<Vec<&'a FinalChordTransactionOutputOccurrenceWitness>> {
     let mut result = Vec::new();
+    let mut measure_by_member = BTreeMap::new();
+    for origin in &group.positive_origins {
+        for &identity in &origin.members {
+            if measure_by_member.insert(identity, origin.measure).is_some() {
+                return None;
+            }
+        }
+    }
     for (index, &(source_id, attack_id)) in group.members.iter().enumerate() {
         let matches = source
             .receipt
@@ -409,7 +489,7 @@ fn exact_members<'a>(
         let [row] = matches.as_slice() else {
             return None;
         };
-        if row.measure != group.measure || row.fragment_id != group.fragments[index] {
+        if measure_by_member.get(&(source_id, attack_id, row.fragment_id)) != Some(&row.measure) {
             return None;
         }
         result.push(*row);
@@ -435,32 +515,92 @@ fn exact_members<'a>(
     Some(result)
 }
 
+fn renderer_component_cohorts(
+    source: &FinalPdfSourceOccurrenceContinuation,
+    group: &OriginalBeamVoiceGroup,
+) -> Option<Vec<PrimaryBeamVoicePartitionRendererVerificationCohort>> {
+    let rows = exact_members(source, group)?;
+    let bind = |id: &str, measure, expected_count, mut ordinals: Vec<usize>| {
+        ordinals.sort_unstable();
+        if ordinals.len() != expected_count || ordinals.windows(2).any(|pair| pair[0] == pair[1]) {
+            return None;
+        }
+        let unusual = beam_diagnostics::record(Observation::RendererCohort);
+        if unusual || beam_diagnostics::detail_requested_for_measure(measure) {
+            eprintln!("OriginalBeamRendererCohort: group={id}; measure={measure}; staff={}; pitched_ordinals={ordinals:?}; origin=actual_owner_continuation; authority=none", group.staff);
+        }
+        Some(PrimaryBeamVoicePartitionRendererVerificationCohort {
+            metric_line_id: id.to_owned(),
+            measure,
+            staff: group.staff,
+            pitched_ordinals: ordinals,
+        })
+    };
+    if group.is_measure_local() {
+        return Some(vec![bind(&group.id, group.measure, group.members.len(),
+            rows.iter().map(|row| row.pitched_ordinal).collect())?]);
+    }
+    group.positive_origins.iter().map(|origin| {
+        let ordinals = rows.iter().filter(|row| origin.members.contains(&(
+            row.source_event_id, row.attack_id, row.fragment_id,
+        ))).map(|row| row.pitched_ordinal).collect();
+        bind(&origin.id, origin.measure, origin.members.len(), ordinals)
+    }).collect()
+}
+
 pub(super) fn renderer_cohorts(
     source: &FinalPdfSourceOccurrenceContinuation,
 ) -> Vec<PrimaryBeamVoicePartitionRendererVerificationCohort> {
-    source
-        .receipt
-        .original_beam_voice_groups
-        .iter()
-        .filter_map(|group| {
-            let rows = exact_members(source, group)?;
-            let mut ordinals = rows
-                .iter()
-                .map(|row| row.pitched_ordinal)
-                .collect::<Vec<_>>();
-            ordinals.sort_unstable();
-            let unusual = beam_diagnostics::record(Observation::RendererCohort);
-            if unusual || beam_diagnostics::detail_requested_for_measure(group.measure) {
-                eprintln!("OriginalBeamRendererCohort: group={}; measure={}; staff={}; primary_groups={}; pitched_ordinals={ordinals:?}; origin=actual_owner_continuation; authority=none", group.id, group.measure, group.staff, group.primary_group_count);
-            }
-            Some(PrimaryBeamVoicePartitionRendererVerificationCohort {
-                metric_line_id: group.id.clone(),
-                measure: group.measure,
-                staff: group.staff,
-                pitched_ordinals: ordinals,
-            })
-        })
-        .collect()
+    source.receipt.original_beam_voice_groups.iter()
+        .filter_map(|group| renderer_component_cohorts(source, group))
+        .flatten().collect()
+}
+
+#[cfg(test)]
+fn admitted_multi_measure_renderer_cohorts(
+    source: &FinalPdfSourceOccurrenceContinuation,
+    ids: &[String],
+) -> io::Result<Vec<PrimaryBeamVoicePartitionRendererVerificationCohort>> {
+    let mut cohorts = Vec::new();
+    let mut seen = BTreeSet::new();
+    for id in ids {
+        let group = exact_group(source, id)?;
+        if group.is_measure_local() {
+            return Err(invalid_alignment("multi-measure original beam lost its measure relation"));
+        }
+        let local = renderer_component_cohorts(source, group)
+            .ok_or_else(|| invalid_alignment("multi-measure original beam lost exact renderer occurrences"))?;
+        if !local.iter().all(|cohort| seen.insert(cohort.metric_line_id.clone())) {
+            return Err(invalid_alignment("multi-measure original beam repeats a renderer identity"));
+        }
+        cohorts.extend(local);
+    }
+    Ok(cohorts)
+}
+
+fn invalid_alignment(message: &'static str) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, message)
+}
+
+fn exact_group<'a>(
+    source: &'a FinalPdfSourceOccurrenceContinuation,
+    id: &str,
+) -> io::Result<&'a OriginalBeamVoiceGroup> {
+    let mut matches = source.receipt.original_beam_voice_groups.iter().filter(|group| group.id == id);
+    let group = matches.next().ok_or_else(|| invalid_alignment("original beam origin group lost"))?;
+    if matches.next().is_some() {
+        return Err(invalid_alignment("original beam origin group is ambiguous"));
+    }
+    Ok(group)
+}
+
+fn pitched_note(
+    measures: &[FinalChordBindingMeasure],
+    measure: usize,
+    ordinal: usize,
+) -> Option<&FinalChordEncodingNote> {
+    measures.iter().find(|row| row.measure == measure)?.notes.iter()
+        .filter(|note| !note.rest_like && note.pitch_midi.is_some()).nth(ordinal)
 }
 
 pub(super) struct AlignmentInput<'a> {
@@ -475,6 +615,7 @@ pub(super) struct AlignmentInput<'a> {
 
 pub(super) struct AlignmentOutput<'a> {
     pub(super) bridge_proofs: &'a mut Vec<rest_bridge_extension_course::BridgeAlignmentProof>,
+    pub(super) grace_hosts: &'a mut Vec<OriginalBeamGraceHost>,
     pub(super) repaired: &'a mut FrozenSerializedVoicePlan,
     pub(super) edits: &'a mut Vec<PrimaryBeamVoicePartitionBoundEdit>,
     pub(super) selected: &'a mut Vec<PrimaryBeamVoicePartitionSelectedMember>,
@@ -495,6 +636,7 @@ pub(super) fn append_proven_alignment(
     } = input;
     let AlignmentOutput {
         bridge_proofs,
+        grace_hosts,
         repaired,
         edits,
         selected,
@@ -526,13 +668,11 @@ pub(super) fn append_proven_alignment(
         component_labels.insert(member.target_label.clone());
     }
     let mut group_labels = BTreeMap::new();
-    for group in &source.receipt.original_beam_voice_groups {
+    for group in source.receipt.original_beam_voice_groups.iter().filter(|group| group.is_measure_local()) {
         let Some(rows) = exact_members(source, group) else { continue; };
-        let Some(measure) = current.iter().find(|measure| measure.measure == group.measure) else { continue; };
-        let pitched = measure.notes.iter().filter(|note| !note.rest_like && note.pitch_midi.is_some()).collect::<Vec<_>>();
-        let Some(labels) = rows.iter().map(|row| pitched.get(row.pitched_ordinal)
+        let Some(labels) = rows.iter().map(|row| pitched_note(current, row.measure, row.pitched_ordinal)
             .map(|note| note.voice.trim().to_owned())).collect::<Option<BTreeSet<_>>>() else { continue; };
-        if visible_fragments.get(&group.id).is_some_and(|count| *count > group.primary_group_count) {
+        if group.observed_fragments(visible_fragments, source, current).is_some_and(|count| count > group.primary_group_count) {
             component_labels.extend(labels.iter().cloned());
         }
         group_labels.insert(group.id.clone(), labels);
@@ -548,8 +688,9 @@ pub(super) fn append_proven_alignment(
     }
     let mut proposals = Vec::new();
     for group in &source.receipt.original_beam_voice_groups {
+        let measure_local = group.is_measure_local();
         let bridges = source.receipt.rest_bridge_extension_course.as_ref()
-            .filter(|_| voices.has_canonical_role_allocation()).map_or_else(Vec::new,
+            .filter(|_| measure_local && voices.has_canonical_role_allocation()).map_or_else(Vec::new,
             |course| course.alignment_resources(source.xml(), &group.source_resources,
                 &group.bridge_component_occurrences(), &group.notation_voices,
                 &group.semantic_voice, (group.measure, group.staff)));
@@ -557,43 +698,28 @@ pub(super) fn append_proven_alignment(
             voices.role_for_source(id).is_some_and(|role|
                 channel_role_staff(role) == group.staff))).collect::<Vec<_>>();
         let bridge_split = bridges.iter().any(|proof| proof.split_labels());
+        let observed_fragments = group.observed_fragments(visible_fragments, source, current);
         let observe = |reason: &str| {
             let unusual = beam_diagnostics::record(Observation::Decision(reason));
             if unusual || beam_diagnostics::detail_requested_for_measure(group.measure) {
-                eprintln!("OriginalBeamAlignmentDecision: group={}; measure={}; staff={}; primary_groups={}; visible_fragments={:?}; reason={reason}; phase=prepared_not_committed; authority=none", group.id, group.measure, group.staff, group.primary_group_count, visible_fragments.get(&group.id));
+                eprintln!("OriginalBeamAlignmentDecision: group={}; measure={}; staff={}; primary_groups={}; visible_fragments={:?}; reason={reason}; phase=prepared_not_committed; authority=none", group.id, group.measure, group.staff, group.primary_group_count, observed_fragments);
             }
         };
-        let import_component = group_labels.get(&group.id)
+        let import_component = measure_local && group_labels.get(&group.id)
             .is_some_and(|labels| labels.len() > 1 && !labels.is_disjoint(&component_labels));
-        if visible_fragments.get(&group.id).is_none() && !import_component && !bridge_split { observe("geometry_unknown"); continue; }
-        if visible_fragments.get(&group.id).is_some_and(|count| *count <= group.primary_group_count) && !import_component && !bridge_split { observe("original_components_preserved"); continue; }
+        if observed_fragments.is_none() && !import_component && !bridge_split { observe("geometry_unknown"); continue; }
+        if observed_fragments.is_some_and(|count| count <= group.primary_group_count) && !import_component && !bridge_split { observe("original_components_preserved"); continue; }
         if import_component { observe("original_import_resource_component"); }
         if group.members.iter().any(|member| claimed.contains(member)) { observe("existing_partition_claim"); continue; }
         let Some(rows) = exact_members(source, group) else {
             observe("source_closure"); continue;
         };
-        let Some(measure) = current.iter().find(|m| m.measure == group.measure) else {
-            observe("missing_current_measure"); continue;
-        };
-        let Some(classified) = classification.iter().find(|m| m.measure == group.measure) else {
-            observe("missing_classification_measure"); continue;
-        };
-        let pitched = measure
-            .notes
-            .iter()
-            .filter(|n| !n.rest_like && n.pitch_midi.is_some())
-            .collect::<Vec<_>>();
-        let observed = classified
-            .notes
-            .iter()
-            .filter(|n| !n.rest_like && n.pitch_midi.is_some())
-            .collect::<Vec<_>>();
         let mut notes = Vec::new();
         let mut complete = true;
         for (index, row) in rows.iter().enumerate() {
             let (Some(note), Some(classified_note)) = (
-                pitched.get(row.pitched_ordinal),
-                observed.get(row.pitched_ordinal),
+                pitched_note(current, row.measure, row.pitched_ordinal),
+                pitched_note(classification, row.measure, row.pitched_ordinal),
             ) else {
                 complete = false;
                 break;
@@ -616,14 +742,15 @@ pub(super) fn append_proven_alignment(
                 complete = false;
                 break;
             }
-            notes.push(*note);
+            notes.push(note);
         }
         if !complete
             // A rest gap does not rescind the original owner's explicit
             // group. Pitched occupancy may not overlap; the full batch still
             // protects every visible bystander rest and channel resource.
-            || notes.windows(2).any(|pair| pair[0].onset.checked_add(pair[0].duration)
-                .is_none_or(|end| end > pair[1].onset))
+            || notes.windows(2).any(|pair| pair[0].measure == pair[1].measure
+                && pair[0].onset.checked_add(pair[0].duration)
+                    .is_none_or(|end| end > pair[1].onset))
         {
             eprintln!("OriginalBeamComponentRejection: group={}; complete={complete}; members={:?}; authority=none", group.id, notes.iter().map(|n|(n.onset,n.duration,n.voice.as_str())).collect::<Vec<_>>());
             observe("member_levels_timing_roles_or_single_label"); continue;
@@ -692,9 +819,21 @@ pub(super) fn append_proven_alignment(
             eprintln!("OriginalBeamAllocationRejection: group={}; canonical_allocation={}; source_and_channel_roles={:?}; authority=none",group.id,voices.has_canonical_role_allocation(),group.members.iter().zip(&notes).map(|(&(id,_),note)|(voices.role_for_source(id),channel_role(note))).collect::<Vec<_>>());
             observe("no_existing_congruent_staff_anchor"); continue;
         }
-        let Some(resources) = bound_chord_resources(BoundChordResourceContext { source, classification_xml, group, current, classification, voices, claimed: &claimed, bridge_occurrences: bridges.iter().flat_map(|proof| proof.occurrences()).collect() }, &notes, &rows) else {
+        let resource_context = BoundChordResourceContext {
+            source, classification_xml, group, current, classification, voices, claimed: &claimed,
+            bridge_occurrences: bridges.iter().flat_map(|proof| proof.occurrences()).collect(),
+        };
+        let Some(mut resources) = bound_chord_resources(&resource_context, &notes, &rows) else {
             observe("chord_resource_closure"); continue;
         };
+        let mut hosts = Vec::new();
+        if !measure_local {
+            let Some((graces, proved_hosts)) = bound_graces(&resource_context, &resources) else {
+                observe("grace_host_binding"); continue;
+            };
+            resources.extend(graces);
+            hosts = proved_hosts;
+        }
         if resources.iter().map(|(note,_)|note.voice.trim()).collect::<BTreeSet<_>>().len()<=1 {
             observe("complete_resource_image_already_one_label");continue;
         }
@@ -770,7 +909,7 @@ pub(super) fn append_proven_alignment(
             observe("all_existing_channel_targets_violate_occupancy_or_import_profile"); continue;
         };
         observe("proposal");
-        proposals.push((group,target_index,target_channel,target_label,group_edits,resources,bridges));
+        proposals.push((group,target_index,target_channel,target_label,group_edits,resources,bridges,hosts));
     }
     // All proposals are evaluated together. If simultaneous assignments
     // conflict, every proposal whose changed occurrence participates is
@@ -778,13 +917,13 @@ pub(super) fn append_proven_alignment(
     loop {
         // Shared actual resources are a conflict group, never a ranked winner.
         let mut counts = BTreeMap::new();
-        for (_,_,_,_,_,resources,_) in &proposals {
+        for (_,_,_,_,_,resources,_,_) in &proposals {
             for (_,row) in resources { *counts.entry((row.source_event_id,row.attack_id,row.fragment_id)).or_insert(0usize) += 1; }
         }
-        proposals.retain(|(_,_,_,_,_,resources,_)| resources.iter().all(|(_,row)|
+        proposals.retain(|(_,_,_,_,_,resources,_,_)| resources.iter().all(|(_,row)|
             counts[&(row.source_event_id,row.attack_id,row.fragment_id)] == 1));
         let mut batch = edits.clone();
-        for (_, _, _, _, proposed, _, _) in &proposals {
+        for (_, _, _, _, proposed, _, _, _) in &proposals {
             batch.extend(proposed.clone());
         }
         let (conflicts, headless) = new_batch_conflicts(source_xml, current, &baseline, &batch)?;
@@ -792,7 +931,7 @@ pub(super) fn append_proven_alignment(
             break;
         }
         let before = proposals.len();
-        proposals.retain(|(_, _, _, _, proposed, _, _)| {
+        proposals.retain(|(_, _, _, _, proposed, _, _, _)| {
             !proposed.iter().any(|edit| {
                 if headless.contains(&edit.expected_old_label) {
                     return true;
@@ -819,8 +958,9 @@ pub(super) fn append_proven_alignment(
         }
     }
     let mut admitted = Vec::new();
-    for (group, target_index, target_channel, target_label, proposed, resources, proofs) in proposals {
+    for (group, target_index, target_channel, target_label, proposed, resources, proofs, hosts) in proposals {
         bridge_proofs.extend(proofs);
+        grace_hosts.extend(hosts);
         edits.extend(proposed);
         let target = group.members[target_index];
         for (_, resource) in resources {
@@ -1037,47 +1177,14 @@ pub(super) fn validate_late_groups(
     let source_measures = final_chord_parse_binding_measures(source.xml())?;
     let measures = final_chord_parse_binding_measures(xml)?;
     for id in ids {
-        let group = source
-            .receipt
-            .original_beam_voice_groups
-            .iter()
-            .find(|g| &g.id == id)
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "original beam origin group lost",
-                )
-            })?;
-        let rows = exact_members(source, group).ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                "original beam late occurrence ambiguity",
-            )
-        })?;
-        let measure = measures
-            .iter()
-            .find(|m| m.measure == group.measure)
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "original beam late measure missing",
-                )
-            })?;
+        let group = exact_group(source, id)?;
+        let rows = exact_members(source, group)
+            .ok_or_else(|| invalid_alignment("original beam late occurrence ambiguity"))?;
         for (index, row) in rows.iter().enumerate() {
-            let note = measure
-                .notes
-                .iter()
-                .filter(|n| !n.rest_like && n.pitch_midi.is_some())
-                .nth(row.pitched_ordinal)
-                .ok_or_else(|| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "original beam late note missing",
-                    )
-                })?;
-            let original_note = source_measures.iter().find(|m| m.measure == group.measure)
-                .and_then(|m| m.notes.iter().filter(|n| !n.rest_like && n.pitch_midi.is_some()).nth(row.pitched_ordinal))
-                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "original beam course lost its source note"))?;
+            let note = pitched_note(&measures, row.measure, row.pitched_ordinal)
+                .ok_or_else(|| invalid_alignment("original beam late note missing"))?;
+            let original_note = pitched_note(&source_measures, row.measure, row.pitched_ordinal)
+                .ok_or_else(|| invalid_alignment("original beam course lost its source note"))?;
             if !same_owned_primary_level(xml, note, &group.levels[index])
                 || !same_actual_beam_surface(source.xml(), original_note, xml, note) {
                 return Err(io::Error::new(
@@ -1280,11 +1387,11 @@ struct BoundChordResourceContext<'a> {
     bridge_occurrences: BTreeSet<(usize, usize, usize)>,
 }
 fn bound_chord_resources<'a>(
-    context: BoundChordResourceContext<'a>,
+    context: &BoundChordResourceContext<'a>,
     heads: &[&'a FinalChordEncodingNote],
     rows: &[&'a FinalChordTransactionOutputOccurrenceWitness],
-) -> Option<Vec<(&'a FinalChordEncodingNote, &'a FinalChordTransactionOutputOccurrenceWitness)>> {
-    let BoundChordResourceContext { source, classification_xml, group, current, classification, voices, claimed, bridge_occurrences } = context;
+) -> Option<Vec<BoundNote<'a>>> {
+    let BoundChordResourceContext { source, classification_xml, group, current, classification, voices, claimed, ref bridge_occurrences } = *context;
     if bridge_occurrences.iter().any(|identity| source.receipt.occurrences.iter()
         .filter(|row| (row.source_event_id,row.attack_id,row.fragment_id) == *identity).count() != 1) {
         return None;
@@ -1349,6 +1456,121 @@ fn bound_chord_resources<'a>(
         .map(|r|(r.source_event_id,r.attack_id,r.fragment_id)).collect::<BTreeSet<_>>();
     if identities!=expected || actual.len()!=identities.len() || actual.iter().any(|id|!identities.contains(id)) {return None;}
     Some(resources)
+}
+
+// In this narrow form MusicXML has an explicit grace immediately followed by
+// its principal head, with one cursor, staff, onset and old voice for both.
+// A different attachment syntax remains outside the write scope.
+fn directly_attached_graces<'a>(
+    xml: &str,
+    measure: &'a FinalChordBindingMeasure,
+    host: &FinalChordEncodingNote,
+) -> Option<Vec<&'a FinalChordEncodingNote>> {
+    let end = measure.notes.iter().position(|nota| nota.raw_note_index == host.raw_note_index)?;
+    let mut head_start = host.range.start;
+    let mut graces = Vec::new();
+    for note in measure.notes[..end].iter().rev().take_while(|note| note.duration == 0) {
+        if note.staff != host.staff || note.onset != host.onset || note.voice != host.voice
+            || note.rest_like || note.chord_member || note.pitch_midi.is_none()
+            || note.tie_start || note.tie_stop
+            || !xml.get(note.range.end..head_start)?.trim().is_empty()
+        {
+            return None;
+        }
+        let doc = roxmltree::Document::parse(xml.get(note.range.clone())?).ok()?;
+        let glyph = doc.root_element();
+        if glyph.children().filter(|child| child.has_tag_name("grace")).count() != 1
+            || glyph.children().any(|child| child.has_tag_name("duration") || child.has_tag_name("beam"))
+        {
+            return None;
+        }
+        head_start = note.range.start;
+        graces.push(note);
+    }
+    Some(graces)
+}
+
+fn bound_graces<'a>(
+    context: &BoundChordResourceContext<'a>,
+    resources: &[BoundNote<'_>],
+) -> Option<(Vec<BoundNote<'a>>, Vec<OriginalBeamGraceHost>)> {
+    let mut graces = Vec::new();
+    let mut links = Vec::new();
+    let source = context.source;
+    for (host, host_row) in resources.iter().filter(|(note, _)| !note.chord_member) {
+        let measure = context.current.iter().find(|measure| measure.measure == host.measure)?;
+        let classified = context.classification.iter().find(|measure| measure.measure == host.measure)?;
+        let classified_host = pitched_note(context.classification, host.measure, host_row.pitched_ordinal)?;
+        let before = directly_attached_graces(source.xml(), measure, host)?;
+        let shadow = directly_attached_graces(context.classification_xml, classified, classified_host)?;
+        if before.len() != shadow.len() {
+            return None;
+        }
+        for (grace, observed) in before.into_iter().zip(shadow) {
+            if grace.pitch_identity != observed.pitch_identity
+                || grace.staff != observed.staff || grace.onset != observed.onset
+                || source.xml().get(grace.range.clone())? != context.classification_xml.get(observed.range.clone())?
+            {
+                return None;
+            }
+            let ordinal = measure.notes.iter().filter(|note| !note.rest_like && note.pitch_midi.is_some())
+                .position(|note| note.raw_note_index == grace.raw_note_index)?;
+            let mut rows = source.receipt.occurrences.iter()
+                .filter(|row| row.measure == grace.measure && row.pitched_ordinal == ordinal);
+            let row = rows.next()?;
+            if rows.next().is_some() || context.claimed.contains(&(row.source_event_id, row.attack_id))
+                || context.voices.label_for_source(row.source_event_id) != Some(grace.voice.trim())
+                || context.voices.role_for_source(row.source_event_id).map(channel_role_staff) != Some(context.group.staff)
+                || source.receipt.occurrences.iter().filter(|other| other.source_event_id == row.source_event_id).count() != 1
+                || !context.group.source_resources.iter().any(|locator| {
+                    (locator.source_event_id, locator.attack_id, locator.fragment_id) == occurrence_key(row)
+                        && locator.duration == 0
+                })
+            {
+                return None;
+            }
+            graces.push((grace, row));
+            links.push(OriginalBeamGraceHost { grace: occurrence_key(row), host: occurrence_key(host_row) });
+        }
+    }
+    Some((graces, links))
+}
+
+pub(super) fn validate_late_grace_hosts(
+    source: &FinalPdfSourceOccurrenceContinuation,
+    measures: &[FinalChordBindingMeasure],
+    selected: &[PrimaryBeamVoicePartitionSelectedMember],
+    links: &[OriginalBeamGraceHost],
+) -> io::Result<()> {
+    let row = |identity| {
+        let mut found = source.receipt.occurrences.iter().filter(|row| occurrence_key(row) == identity);
+        let member = found.next()?;
+        found.next().is_none().then_some(member)
+    };
+    let target = |identity| {
+        let mut found = selected.iter().filter(|item| {
+            (item.source_event_id, item.attack_id, item.fragment_id) == identity
+        });
+        let member = found.next()?;
+        found.next().is_none().then_some(member.target_label.as_str())
+    };
+    for link in links {
+        let valid = (|| {
+            let host = row(link.host)?;
+            let grace = row(link.grace)?;
+            let measure = measures.iter().find(|measure| measure.measure == host.measure)?;
+            let principal = pitched_note(measures, host.measure, host.pitched_ordinal)?;
+            let approach = pitched_note(measures, grace.measure, grace.pitched_ordinal)?;
+            let label = target(link.host)?;
+            (host.measure == grace.measure && label == target(link.grace)?
+                && directly_attached_graces(source.xml(), measure, principal)?
+                    .iter().any(|note| note.raw_note_index == approach.raw_note_index)).then_some(())
+        })();
+        if valid.is_none() {
+            return Err(invalid_alignment("original beam grace lost its exact principal attachment"));
+        }
+    }
+    Ok(())
 }
 
 
@@ -1562,10 +1784,42 @@ mod tests {
         FrozenSerializedVoicePlan,
         FinalPdfSourceOccurrenceContinuation,
     ) {
+        fixture_with_source_holds(before, &[])
+    }
+
+    fn fixture_with_source_holds(
+        before: &str,
+        held_pairs: &[(usize, usize)],
+    ) -> (
+        CanonicalFinalChordStructuralPlan,
+        FrozenSerializedVoicePlan,
+        FinalPdfSourceOccurrenceContinuation,
+    ) {
         let (original, receipt, capture) =
             crate::pipeline::actual_beam_owner_capture_tests::execute(before);
         capture.binds_original_receipt(&receipt).unwrap();
-        let evidence = final_chord_declassified_evidence_from_xml(&original).unwrap();
+        let mut evidence = final_chord_declassified_evidence_from_xml(&original).unwrap();
+        let measures = final_chord_parse_binding_measures(&original).unwrap();
+        for &(left, right) in held_pairs {
+            // This synthetic fixture declares the two written fragments of one
+            // source attack explicitly. The legacy XML declassifier only
+            // follows ties within one measure and has no cross-measure IDs.
+            let start = evidence.iter().filter(|row| row.measure == left && row.tie_start)
+                .collect::<Vec<_>>();
+            let [start] = start.as_slice() else { panic!("synthetic hold must have one start"); };
+            let (source, attack, pitch, staff, fragment) =
+                (start.source_event_id, start.attack_id, start.pitch, start.staff, start.fragment_id);
+            let left_index = measures.iter().position(|measure| measure.measure == left).unwrap();
+            assert_eq!(measures[left_index + 1].measure, right);
+            assert_eq!(start.onset + start.duration, measures[left_index].expected_duration);
+            let mut stops = evidence.iter_mut().filter(|row| row.measure == right && row.tie_stop);
+            let stop = stops.next().expect("synthetic hold must have one stop");
+            assert!(stops.next().is_none());
+            assert_eq!((stop.pitch, stop.staff, stop.onset), (pitch, staff, 0));
+            assert_ne!(stop.fragment_id, fragment);
+            stop.source_event_id = source;
+            stop.attack_id = attack;
+        }
         let (mut canonical, _) =
             plan_canonical_final_chord_structure_once(&original, &evidence).unwrap();
         let notation = crate::pipeline::actual_beam_owner_capture_tests::notation_voice_bindings(
@@ -2057,6 +2311,131 @@ mod tests {
             Some(&BTreeSet::new()),
         )
         .unwrap();
+    }
+
+    #[test]
+    fn a_held_source_connects_measure_local_beam_evidence_into_one_write() {
+        let component = |left_label: usize, staff: u8| {
+            let right_label = left_label + 1;
+            let note = |step: &str, tie: &str| format!(
+                "<note><pitch><step>{step}</step><octave>4</octave></pitch><duration>48</duration>{tie}<voice>3</voice><type>eighth</type><staff>{staff}</staff></note>"
+            );
+            let rest = format!(
+                "<note><rest/><duration>288</duration><voice>3</voice><type>half</type><dot/><staff>{staff}</staff></note>"
+            );
+            format!(
+                "<measure number=\"{left_label}\"><attributes><divisions>96</divisions><time><beats>4</beats><beat-type>4</beat-type></time><staves>2</staves><clef number=\"1\"><sign>G</sign><line>2</line></clef><clef number=\"2\"><sign>F</sign><line>4</line></clef></attributes>{rest}{}{}</measure>                 <measure number=\"{right_label}\">{}{}{rest}</measure>",
+                note("F", ""), note("G", "<tie type=\"start\"/>"),
+                note("G", "<tie type=\"stop\"/>"), note("A", ""),
+            )
+        };
+        for left_label in [21usize, 87] {
+            let mut original_footprint = None;
+            for copies in [1, 2] {
+                // Separate staffs and source attacks give the repeated figure
+                // independent occupied channels in the same part.
+                let single = component(left_label, 1);
+                let repeated = if copies == 2 { component(left_label + 2, 2) } else { String::new() };
+                let input = format!(
+                    "<score-partwise version=\"4.0\"><part-list><score-part id=\"P\"><part-name>Piano</part-name></score-part></part-list><part id=\"P\">{single}{repeated}</part></score-partwise>",
+                );
+                let held_pairs: Vec<_> = (0..copies).map(|copy| {
+                    let start = left_label + 2 * copy;
+                    (start, start + 1)
+                }).collect();
+                let (canonical, voices, source) = fixture_with_source_holds(&input, &held_pairs);
+                assert_eq!(canonical.allocation_original_beam_groups().count(), 0);
+                let cohorts = renderer_cohorts(&source);
+                assert_eq!(cohorts.len(), copies * 2);
+                assert_eq!(cohorts.iter().map(|cohort| cohort.measure()).collect::<BTreeSet<_>>().len(), copies * 2);
+                assert_eq!(cohorts.iter().map(|cohort| cohort.metric_line_id()).collect::<BTreeSet<_>>().len(), copies * 2);
+                let measures = final_chord_parse_binding_measures(source.xml()).unwrap();
+                let geometry: BTreeMap<_, _> = cohorts.iter().map(|cohort| {
+                    let channels = cohort.pitched_ordinals().iter()
+                        .map(|&ordinal| pitched_note(&measures, cohort.measure(), ordinal).unwrap().voice.clone())
+                        .collect::<BTreeSet<_>>();
+                    (cohort.metric_line_id().to_owned(), channels.len())
+                }).collect();
+                assert!(geometry.values().filter(|&&fragments| fragments > 1).count() >= copies);
+                let bind = |geometry: &BTreeMap<String, usize>| bind_primary_beam_voice_partition_plan(
+                    source.xml(), PrimaryBeamVoicePartitionBindingContext {
+                        source_continuation: &source,
+                        voice_plan: &voices,
+                        candidates: &[],
+                        classification_xml: source.xml(),
+                        renderer_visible_fragments_by_metric_line_id: geometry,
+                        materialization_safety_proven_metric_line_ids: &BTreeSet::new(),
+                    },
+                ).unwrap();
+                for id in geometry.keys() {
+                    let mut incomplete = geometry.clone();
+                    incomplete.remove(id);
+                    assert_eq!(bind(&incomplete).scope_candidates(), copies - 1);
+                }
+                let prepared = bind(&geometry);
+                assert_eq!(prepared.scope_candidates(), copies);
+                let footprint = prepared.edits.iter().filter(|edit| edit.measure <= left_label + 1)
+                    .map(|edit| (edit.measure - left_label, edit.pitched_ordinal)).collect::<Vec<_>>();
+                if let Some(original) = &original_footprint {
+                    assert_eq!(&footprint, original);
+                } else {
+                    original_footprint = Some(footprint);
+                }
+                let sealed = admitted_multi_measure_renderer_cohorts(&source, &prepared.original_group_alignment).unwrap();
+                assert_eq!(sealed.len(), cohorts.len());
+                for cohort in &cohorts {
+                    assert!(sealed.contains(cohort));
+                }
+                let rebound = rebind_primary_beam_voice_partition_plan_to_current_xml(
+                    source.xml(), &source, &prepared,
+                ).unwrap();
+                let edits = rebound.edits().iter().map(|edit|
+                    (edit.voice_text_start, edit.voice_text_end, edit.target_label.clone())).collect();
+                let (after, receipt) =
+                    crate::structural_write_authority::apply_atomic_staff_voice_scalar_batch_authorized(
+                        source.xml(), edits,
+                    );
+                let after = after.unwrap();
+                assert_eq!(receipt.unwrap().realize_post_document(source.xml()).as_deref(), Some(after.as_str()));
+                let carried = transport_final_pdf_source_occurrence_continuation_through_primary_beam_voice_partition(
+                    &source, source.xml(), &after, &canonical, &rebound, Some(&BTreeSet::new()),
+                ).unwrap();
+                assert_eq!(
+                    admitted_multi_measure_renderer_cohorts(&carried, &rebound.original_group_alignment).unwrap(),
+                    sealed,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_visible_split_within_one_channel_does_not_prove_a_channel_boundary() {
+        for (first, second) in [("alpha", "beta"), ("counter", "principal")] {
+            let labels = [first, first, second];
+            assert!(!proves_missing_channel_boundary(&labels, 2));
+            assert!(proves_missing_channel_boundary(&labels, 3));
+            assert!(!proves_missing_channel_boundary(&labels, 0));
+            assert!(!proves_missing_channel_boundary(&labels, 4));
+        }
+    }
+
+    #[test]
+    fn a_grace_host_requires_the_same_physical_cursor_staff_and_voice() {
+        for label in [35usize, 96] {
+            let grace = r#"<note><grace/><pitch><step>C</step><octave>4</octave></pitch><voice>two</voice><staff>1</staff></note>"#;
+            let principal = r#"<note><pitch><step>D</step><octave>4</octave></pitch><duration>24</duration><voice>two</voice><type>16th</type><staff>1</staff></note>"#;
+            let attach = |approach: &str, cursor: &str| {
+                let input = format!(r#"<score-partwise version="4.0"><part id="P"><measure number="{label}"><attributes><divisions>96</divisions></attributes>{approach}{cursor}{principal}</measure></part></score-partwise>"#);
+                let measures = final_chord_parse_binding_measures(&input).unwrap();
+                let measure = &measures[0];
+                directly_attached_graces(&input, measure, &measure.notes[1]).map(|notes| notes.len())
+            };
+            assert_eq!(attach(grace, ""), Some(1));
+            assert_eq!(attach(grace, "<forward><duration>24</duration></forward>"), None);
+            assert_eq!(attach(&grace.replace(">two<", ">one<"), ""), None);
+            assert_eq!(attach(&grace.replace("<staff>1", "<staff>2"), ""), None);
+            assert_eq!(attach(&grace.replace("<grace/>", "<grace/><beam number=\"1\">begin</beam>"), ""), None);
+        }
     }
 
     #[test]

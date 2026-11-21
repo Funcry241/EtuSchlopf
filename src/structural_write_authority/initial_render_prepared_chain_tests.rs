@@ -276,6 +276,37 @@ mod r1230_ir17_ir18_prepared_chain_tests {
     }
 
     #[test]
+    fn unbalanced_cursor_discards_prepared_duplicate_without_writing() {
+        for ordinal in [17, 911] {
+            let duplicate = duplicate_measure_at(ordinal);
+            let next = ordinal + 1;
+            let underflow = format!(
+                r#"<measure number="{next}"><backup><duration>1</duration></backup></measure>"#
+            );
+            let xml = format!(
+                r#"<score-partwise><part id="P1">{duplicate}{underflow}</part></score-partwise>"#
+            );
+            let path = path("declined-duplicate");
+            std::fs::write(&path, "existing sink").unwrap();
+            let (post, audit, candidate, receipts) =
+                build_external_notation_feedback_safe_write_audit_prepared(&xml, "test", &path).unwrap();
+            assert_eq!(post, xml);
+            assert_eq!(audit.duplicate_attempted, 1);
+            assert_eq!(audit.duplicate_rejected, 1);
+            assert_eq!(audit.duplicate_adopted, 0);
+            assert!(!audit.written);
+            assert!(candidate.is_none());
+            assert_eq!(receipts.len(), 1);
+            let master = master(&xml);
+            let state = RenderSovereignState::begin_project_render(&path, &master);
+            let root = state.initial_trial_root(false);
+            state.decline_transition(root, receipts);
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), "existing sink");
+            std::fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
     fn valid_whole_note_noop_has_no_rest_receipts_or_sink_post() {
         for base in [17_usize, 911_usize] {
             let a = whole_note_at(base);

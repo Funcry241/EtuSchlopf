@@ -275,8 +275,15 @@ let alter = tag_text(pitch, "alter").and_then(|v| v.parse::<i32>().ok()).unwrap_
 struct SubstanceGuardEval { index: usize, compatible: bool, visible: usize, hints: usize, decision_key: CandidateDecisionKey, } fn evaluate_substance_guard_candidates( candidates: &SolverCandidatePool, best: &SolverCandidate,
 parallel: &ParallelPlan, phase_started: Instant, ) -> Vec<SubstanceGuardEval> { let total_candidates = candidates.len(); if total_candidates == 0 { return Vec::new(); } let worker_count = parallel.workers.min(total_candidates).max(1);
 report_progress("SubstanzGuard", 0, total_candidates, worker_count, phase_started); let evaluate_one = |index: usize, candidate: &SolverPoolEntry| { let compatible = candidate.projection.frontier.blockers == 0
-&& candidate.projection.frontier.warnings == 0; let hints = candidate.projection.frontier.hints; let visible = if compatible && hints <= best.final_result.summary.hints + 4 { visible_pitched_note_count(candidate.full().layout_xml()) } else { 0 };
-SubstanceGuardEval { index, compatible, visible, hints, decision_key: candidate.projection.decision_key, } }; if worker_count == 1 {
+&& candidate.projection.frontier.warnings == 0; let hints = candidate.projection.frontier.hints; let visible = if compatible && hints <= best.final_result.summary.hints + 4 {
+    visible_pitched_attack_count(candidate.full().layout_xml())
+} else {
+    None
+};
+SubstanceGuardEval {
+    index, compatible: visible.is_some(), visible: visible.unwrap_or_default(), hints,
+    decision_key: candidate.projection.decision_key,
+} }; if worker_count == 1 {
 let mut out = Vec::with_capacity(total_candidates); for (index, candidate) in candidates.iter().enumerate() { let eval = evaluate_one(index, candidate); let done = index + 1; if should_report_progress_tick(done, total_candidates) {
 report_progress("SubstanzGuard", done, total_candidates, worker_count, phase_started); } out.push(eval); } return out; } console_progress(format!( "SubstanzGuard: analysiere {total_candidates} Kandidaten parallel mit {worker_count} Workern" )); let next = AtomicUsize::new(0); let completed = AtomicUsize::new(0); let results: Mutex<Vec<SubstanceGuardEval>> = Mutex::new(Vec::with_capacity(total_candidates)); thread::scope(|scope| { for _ in 0..worker_count {
 let next = &next; let completed = &completed; let results = &results; let evaluate_one = &evaluate_one; scope.spawn(move || { loop { let index = next.fetch_add(1, Ordering::Relaxed); if index >= candidates.len() { break; }
@@ -288,25 +295,27 @@ fn run_substance_guard(
     parallel: &ParallelPlan,
 ) {
     let phase_started = Instant::now();
-    let start_visible_notes = visible_pitched_note_count(best.layout_xml());
     if best.final_result.summary.blockers != 0 || best.final_result.summary.warnings != 0 {
         return;
     }
+    let Some(start_visible_attacks) = visible_pitched_attack_count(best.layout_xml()) else {
+        return;
+    };
     let evaluations = evaluate_substance_guard_candidates(candidates, best, parallel, phase_started);
-    let chosen_index = substance_guard_choice(evaluations, start_visible_notes,
+    let chosen_index = substance_guard_choice(evaluations, start_visible_attacks,
         best.final_result.summary.hints, candidate_decision_key(best));
     if let Some((index, best_visible)) = chosen_index {
         let chosen = candidates.entries[index].full();
         console_progress(format!(
-            "SubstanceGuardCandidateAudit: pool_index={index} iteration={} profile_name={} profile_lineage={:?} source_selection_candidate_id={} source_selection_origin_stage={} best_visible_before={} chosen_visible_after={} visible_gain={}",
+            "SubstanceGuardCandidateAudit: pool_index={index} iteration={} profile_name={} profile_lineage={:?} source_selection_candidate_id={} source_selection_origin_stage={} best_visible_attacks_before={} chosen_visible_attacks_after={} visible_attack_gain={}",
             chosen.iteration,
             chosen.profile_name,
             chosen.profile_lineage,
             chosen.midi_seed_stats.source_selection_candidate_id,
             chosen.midi_seed_stats.source_selection_origin_stage,
-            start_visible_notes,
+            start_visible_attacks,
             best_visible,
-            best_visible.saturating_sub(start_visible_notes)
+            best_visible.saturating_sub(start_visible_attacks)
         ));
         match audit_candidate_material_lineage_gap(
             chosen,
@@ -357,6 +366,14 @@ fn run_substance_guard(
         candidates.push_previous(previous);
     }
 }
+// Staff reassignment may change the number of written fragments per attack.
+fn visible_pitched_attack_count(xml: &str) -> Option<usize> {
+    let fragments = material_fragments_from_xml(xml).ok()?;
+    Some(fragments.iter()
+        .filter(|fragment| fragment.visible && fragment.is_sounding_attack_fragment())
+        .count())
+}
+
 fn visible_pitched_note_count(xml: &str) -> usize { let mut count = 0_usize; let mut pos = 0_usize; while let Some(relative_start) = xml[pos..].find("<note") { let start = pos + relative_start;
 let Some(relative_end) = xml[start..].find("</note>") else { break; }; let end = start + relative_end + "</note>".len(); let block = &xml[start..end]; if block.contains("<pitch>") && !block.contains("print-object=\"no\"")
 && !block.contains("print-object='no'") { count += 1; } pos = end; } count } fn source_selection_candidate_evaluation(

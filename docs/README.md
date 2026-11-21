@@ -1,6 +1,6 @@
 # Wegweiser durch die Dokumentation
 
-EtuSchlopf ist ein experimentelles, privat gepflegtes Projekt. Der Windows-Vollkorpus **r1968** umfasst 14 Stücke und 57 PDF-Seiten. Alle 57 gerenderten Seiten stimmen bei 144 dpi mit den veröffentlichten Notenbildern aus r1965 überein. [Windows-Abnahme r1968](evidence/r1968/README.md) · [Vollkorpus r1965](evidence/r1965/README.md) · [Notengalerie](examples/README.md)
+EtuSchlopf ist ein experimentelles, privat gepflegtes Projekt. Der Windows-Vollkorpus **r1985** umfasst 15 Stücke und 59 PDF-Seiten. [Windows-Abnahme r1985](evidence/r1985/README.md) · [Vollkorpus r1968](evidence/r1968/README.md) · [Notengalerie](examples/README.md)
 
 | Aufgabe | Einstieg |
 | --- | --- |
@@ -13,7 +13,7 @@ EtuSchlopf ist ein experimentelles, privat gepflegtes Projekt. Der Windows-Vollk
 | Umgang miteinander und Moderation | [Verhaltenskodex](CODE_OF_CONDUCT.md) |
 | Bedienhürden und bekannte Grenzen | [Barrierefreiheit](ACCESSIBILITY.md) |
 | Welche Mathematik wo genutzt wird und was das Notenbild ändert | [Mathematik in EtuSchlopf · Kapitelübersicht](MATHEMATIK.md) |
-| Entwicklungsstand und native Abnahme prüfen | [Abnahme r1968](evidence/r1968/README.md) · [Korpus r1965](evidence/r1965/README.md) · [Mozart r1964](evidence/r1964/README.md) · [Korpus r1961](evidence/r1961/README.md) · [Korpus r1938](evidence/r1938/README.md) · [Bach r1749](evidence/r1749/README.md) · [Chopin r1792](evidence/r1792/README.md) · [Schubert r1872](evidence/r1872/README.md) · [Korpus r1933](evidence/r1933/README.md) · [Korpus r1921](evidence/r1921/README.md) · [Korpus r1886](evidence/r1886/README.md) |
+| Entwicklungsstand und native Abnahme prüfen | [Abnahme r1985](evidence/r1985/README.md) · [Abnahme r1968](evidence/r1968/README.md) · [Korpus r1965](evidence/r1965/README.md) · [Mozart r1964](evidence/r1964/README.md) · [Korpus r1961](evidence/r1961/README.md) · [Korpus r1938](evidence/r1938/README.md) · [Bach r1749](evidence/r1749/README.md) · [Chopin r1792](evidence/r1792/README.md) · [Schubert r1872](evidence/r1872/README.md) · [Korpus r1933](evidence/r1933/README.md) · [Korpus r1921](evidence/r1921/README.md) · [Korpus r1886](evidence/r1886/README.md) |
 | Windows-Testversion und frühere Laufzeitmessung prüfen | [Prüfbelege r1577](evidence/r1577/README.md) |
 | Lizenzen und Fremdkomponenten | [Fremdlizenzhinweise](THIRD_PARTY_NOTICES.md) und [Musikquellen](examples/README.md#quellen-und-rechte) |
 

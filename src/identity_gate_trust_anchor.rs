@@ -264,15 +264,15 @@ pub const FORMAL_GREEN_CONTRACT_FNV1A64: u64 =
     fnv1a64(FORMAL_GREEN_CONTRACT_BYTES);
 pub const RUN_CMD_FNV1A64: u64 = fnv1a64(RUN_CMD_BYTES);
 
-const _: () = assert!(IDENTITY_BUILD_POLICY_FNV1A64 == 0x4003202173dec4b7);
+const _: () = assert!(IDENTITY_BUILD_POLICY_FNV1A64 == 0x0f15a11480121e60);
 const _: () = assert!(IDENTITY_SCANNER_FNV1A64 == 0x75f817fb6b15e9fa);
 const _: () = assert!(IDENTITY_ZERO_BASELINE_FNV1A64 == 0xf2abe660ce4dd29c);
 const _: () = assert!(FEEDBACK_STRUCTURALIZATION_GATE_FNV1A64 == 0xe067dd5b72251e99);
 const _: () = assert!(FEEDBACK_PROOF_TRANSPORT_FNV1A64 == 0x7703edfc804ba93e);
 const _: () = assert!(FEEDBACK_RULE_ADMISSION_FNV1A64 == 0x6de07ec0a81e6c0e);
 const _: () = assert!(FEEDBACK_OBSERVABLE_SINK_ALLOWLIST_FNV1A64 == 0x52ecec0ed5ae8226);
-const _: () = assert!(FEEDBACK_COMPILE_TIME_KODEX_FNV1A64 == 0xe09ea2fffdae3c2d);
-const _: () = assert!(KODEX_BOUNDARY_ADVERSARIAL_KODEX_FNV1A64 == 0x32cbb4f7a7a185d3);
+const _: () = assert!(FEEDBACK_COMPILE_TIME_KODEX_FNV1A64 == 0x2ecf52ebf0ec97a0);
+const _: () = assert!(KODEX_BOUNDARY_ADVERSARIAL_KODEX_FNV1A64 == 0xfe0ec3e2e02062f7);
 const _: () = assert!(SOURCE_INTEGRITY_KODEX_FNV1A64 == 0x7d97e8d3fe4c7b85);
 const _: () = assert!(RECOVERY_TRANSACTION_ORDER_KODEX_FNV1A64 == 0x2a4c0068a8abb46b);
 const _: () = assert!(PINNED_POLICY_KODEX_FNV1A64 == 0x78215a6ca52c4a78);
@@ -304,7 +304,7 @@ const _: () = assert!(DESTRUCTIVE_TRANSFORMATION_SURFACE_BASELINE_V1_FNV1A64 == 
 const _: () = assert!(THIRTY_SURFACE_BATCH_SCAN_FNV1A64 == 0xf7cb74bb1ed893ec);
 const _: () = assert!(KODEX_GATE_CORE_OWNERSHIP_FNV1A64 == 0xa928770e3293682a);
 const _: () = assert!(TAKE_BOOTSTRAP_FNV1A64 == 0x27b08e1c9eee388c);
-const _: () = assert!(LAUNCHER_FNV1A64 == 0x6931a66b699f3d8e);
+const _: () = assert!(LAUNCHER_FNV1A64 == 0x7b7172b6d9a53b50);
 const _: () = assert!(LAUNCHER_ASSISTANT_EXPORT_FNV1A64 == 0xab2690e552cd2391);
 const _: () = assert!(LAUNCHER_INVENTORY_EXPORT_FNV1A64 == 0x633282e2d752a97e);
 const _: () = assert!(PUBLIC_ARTIFACT_RECOVERY_FNV1A64 == 0x6e8088e300ca8a66);

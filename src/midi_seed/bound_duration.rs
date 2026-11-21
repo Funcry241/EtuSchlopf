@@ -2,11 +2,10 @@ use super::{
     DIVISIONS, MetricTimeline, MidiSeedNote, NotationEventKind, NotationTimePlan,
     PlannedSeedOccurrence, SeedPrimaryCourse, midi_to_pitch, type_and_dots_for_duration,
 };
+use crate::midi::source_time::WRITTEN_NOTE_VALUES;
 use anyhow::{Context, Result, anyhow, ensure};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
-
-const WRITTEN_VALUES: [i64; 13] = [384, 288, 192, 144, 96, 72, 48, 36, 24, 18, 12, 9, 6];
 
 pub(super) fn plan(
     sources: &[MidiSeedNote],
@@ -194,12 +193,12 @@ fn next_fragment(metric: &MetricTimeline, cursor: i64, end: i64) -> Result<(usiz
         .context("Missing bound fragment measure")?;
     let remaining = end.min(bar.end) - cursor;
     let beat = DIVISIONS * 4 / i64::from(bar.beat_type);
-    let capacity = if WRITTEN_VALUES.contains(&remaining) {
+    let capacity = if WRITTEN_NOTE_VALUES.contains(&remaining) {
         remaining
     } else {
         remaining.min(beat - (cursor - bar.start) % beat)
     };
-    let length = WRITTEN_VALUES
+    let length = WRITTEN_NOTE_VALUES
         .into_iter()
         .find(|length| *length <= capacity)
         .ok_or_else(|| anyhow!("No exact seed value at {cursor} before {end}"))?;
@@ -285,6 +284,7 @@ pub(super) fn verify_written_intervals(
     xml: &str,
     metric: &MetricTimeline,
     planned: &[PlannedSeedOccurrence],
+    bound_sections: &BTreeSet<(usize, u8)>,
 ) -> Result<()> {
     let document = roxmltree::Document::parse(xml)?;
     let mut fragments = planned.iter();
@@ -332,6 +332,11 @@ pub(super) fn verify_written_intervals(
                 head = cursor;
                 cursor += duration;
             }
+            let staff = child_text("staff").and_then(|value| value.parse::<u8>().ok())
+                .context("Missing emitted seed staff")?;
+            if !bound_sections.contains(&(ordinal, staff)) {
+                continue;
+            }
             let tied = |kind| {
                 node.children()
                     .any(|child| child.has_tag_name("tie") && child.attribute("type") == Some(kind))
@@ -358,7 +363,7 @@ pub(super) fn verify_written_intervals(
                     && tied("stop") == fragment.tie_stop
                     && pitch_matches
                     && (duration == 0
-                        || (WRITTEN_VALUES.contains(&duration)
+                        || (WRITTEN_NOTE_VALUES.contains(&duration)
                             && child_text("type") == Some(note_type)
                             && node
                                 .children()

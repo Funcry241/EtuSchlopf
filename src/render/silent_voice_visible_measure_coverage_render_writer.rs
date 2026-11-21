@@ -1965,9 +1965,40 @@ pub(super) fn materialize_silent_voice_visible_measure_coverage_for_pdf_source(
                 atomic_voice_edits,
             );
         receipts.push_exact(render_scalar_batch_receipt);
-        let Some(rebound_xml) = rebound_xml else {
+        let Some(mut rebound_xml) = rebound_xml else {
             return rejected_pdf_preparation(receipts);
         };
+
+        // Rebinding a beamed run can leave its former lane's rest without a
+        // continuing voice. Carry that cursor interval in the same transaction.
+        let prior_rest_roles_are_closed = rebound_plan.changed_voice_elements() > 0
+            && crate::pipeline::final_visible_shadow_bookkeeping_regression_candidates_with_voice_binding(
+                &final_candidate,
+                &effective_voice_plan,
+            ) == Some(0);
+        if prior_rest_roles_are_closed {
+            let Some(replacements) =
+                crate::pipeline::final_visible_shadow_bookkeeping_replacements_with_voice_binding(
+                    &rebound_xml,
+                    rebound_plan.repaired_voice_plan(),
+                )
+            else {
+                return rejected_pdf_preparation(receipts);
+            };
+            if !replacements.is_empty() {
+                let (candidate, rest_role_receipt) =
+                    crate::structural_write_authority::apply_final_visible_rest_role_rewrite_authorized(
+                        &rebound_xml,
+                        replacements,
+                    );
+                let (Some(candidate), Some(rest_role_receipt)) = (candidate, rest_role_receipt) else {
+                    return rejected_pdf_preparation(receipts);
+                };
+                receipts.push_exact(Some(rest_role_receipt));
+                rebound_xml = candidate;
+            }
+        }
+
         let transported = crate::structural_write_authority::
             transport_final_pdf_source_occurrence_continuation_through_primary_beam_voice_partition(
                 base_continuation,

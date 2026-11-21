@@ -7,9 +7,7 @@
 use crate::audit_only::wav_observation_legacy_oracle::{
     load_canonical_legacy_unique_onsets_for_score_title,
 };
-use crate::audit_only::wav_signal_decode::{
-    load_decoded_wav_signal_for_score_title, DecodedWavSignalAudit,
-};
+use crate::audit_only::wav_signal_decode::{DecodedWavSignalAudit, ReportWav};
 use std::collections::{BTreeMap, BTreeSet};
 
 const CANONICAL_DIVISIONS: i64 = 96;
@@ -265,17 +263,17 @@ pub(super) fn build_audio_only_pitch_timing_snapshot(
     })
 }
 
-pub(crate) fn build_for_score_title(score_title: Option<&str>) -> Option<WavAttackPulseMetricAudit> {
-    let signal = match load_decoded_wav_signal_for_score_title(score_title) {
-        Ok(signal) => signal,
+pub(crate) fn build_for_report(wav: &ReportWav<'_>) -> Option<WavAttackPulseMetricAudit> {
+    let signal = match wav.captured() {
+        Ok(captured) => &captured.signal,
         Err(reason) => return Some(not_qualified(reason)),
     };
 
     // Hard anti-leakage boundary: all audio-side hypotheses, including the
     // zero-origin grid refinement and local PerformanceTimeMap, are fully
     // frozen before the source oracle is loaded.
-    let audio = build_audio_hypotheses(&signal);
-    let zero_origin_grid_families = build_zero_origin_grid_families(&audio, &signal);
+    let audio = build_audio_hypotheses(signal);
+    let zero_origin_grid_families = build_zero_origin_grid_families(&audio, signal);
     let audio_identifiability_hypotheses =
         zero_origin_grid_hypotheses(&zero_origin_grid_families);
     let performance_time_map = zero_origin_grid_families
@@ -288,7 +286,7 @@ pub(crate) fn build_for_score_title(score_title: Option<&str>) -> Option<WavAtta
             )
         });
 
-    let legacy_onsets = match load_canonical_legacy_unique_onsets_for_score_title(score_title) {
+    let legacy_onsets = match load_canonical_legacy_unique_onsets_for_score_title(wav.title) {
         Ok(onsets) => onsets,
         Err(reason) => {
             let mut audit = audio.into_audit(

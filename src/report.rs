@@ -1,5 +1,6 @@
 // v0.10.728 real report writer ownership module; no wrapper/include shell.
 // --- mechanical module boundary: former src/report.rs ---
+use crate::audit_only::ReportWav;
 use crate::formal_green_contract::{format_result_line, format_summary_line};
 use crate::model::{CheckReport, Issue, Severity};
 use crate::rule_id::{
@@ -43,12 +44,11 @@ impl Default for ReportOptions {
 
 
 
-fn append_wav_pitch_external_sensor_benchmark(out: &mut String, report: &CheckReport) {
-    let Some(audit) = crate::audit_only::wav_pitch_external_sensor_benchmark::build_for_score_title(
-        report.score_title.as_deref(),
-    ) else {
-        return;
-    };
+fn append_wav_pitch_external_sensor_benchmark(
+    out: &mut String,
+    wav: &ReportWav<'_>,
+) -> Option<String> {
+    let audit = crate::audit_only::wav_pitch_external_sensor_benchmark::build_for_report(wav)?;
     out.push_str("WAV-PITCH-EXTERNAL-SENSOR-BENCHMARK-AUDIT\n");
     out.push_str("=========================================\n");
     out.push_format_args(format_args!(
@@ -112,6 +112,7 @@ fn append_wav_pitch_external_sensor_benchmark(out: &mut String, report: &CheckRe
             "EXTERNAL SENSOR PIECE EVIDENCE NOT OBSERVED"
         },
     ));
+    audit.frozen_projection
 }
 
 fn append_wav_pitch_sensor_qualification_boundary(out: &mut String, report: &CheckReport) {
@@ -222,10 +223,8 @@ fn append_wav_observation_legacy_oracle_qualification(out: &mut String, report: 
 }
 
 
-fn append_wav_attack_pulse_metric_reconstruction(out: &mut String, report: &CheckReport) {
-    let Some(audit) = crate::audit_only::wav_attack_pulse_metric::build_for_score_title(
-        report.score_title.as_deref(),
-    ) else {
+fn append_wav_attack_pulse_metric_reconstruction(out: &mut String, wav: &ReportWav<'_>) {
+    let Some(audit) = crate::audit_only::wav_attack_pulse_metric::build_for_report(wav) else {
         return;
     };
     out.push_str("WAV-ATTACK-PULSE-METRIC-RECONSTRUCTION-AUDIT\n");
@@ -505,9 +504,13 @@ fn append_wav_attack_pulse_metric_reconstruction(out: &mut String, report: &Chec
 }
 
 
-fn append_wav_pitch_harmonic_evidence_probe(out: &mut String, report: &CheckReport) {
-    let Some(audit) = crate::audit_only::wav_pitch_harmonic_evidence::build_for_score_title(
-        report.score_title.as_deref(),
+fn append_wav_pitch_harmonic_evidence_probe(
+    out: &mut String,
+    wav: &ReportWav<'_>,
+    frozen_projection: Option<&str>,
+) {
+    let Some(audit) = crate::audit_only::wav_pitch_harmonic_evidence::build_for_report(
+        wav, frozen_projection,
     ) else {
         return;
     };
@@ -693,14 +696,17 @@ pub fn write_text_report(report: &CheckReport, options: &ReportOptions) -> Strin
     let mut section_clock = std::time::Instant::now();
     append_rule_severity_authority_audit(&mut out, report);
     section_clock = report_section_timing(report.score_title.as_deref(), "rule_severity_authority", section_clock);
-    append_wav_pitch_external_sensor_benchmark(&mut out, report);
+    let wav = ReportWav::new(report.score_title.as_deref());
+    let frozen_projection = append_wav_pitch_external_sensor_benchmark(&mut out, &wav);
     section_clock = report_section_timing(report.score_title.as_deref(), "wav_pitch_external_sensor_benchmark", section_clock);
     append_wav_observation_legacy_oracle_qualification(&mut out, report);
     section_clock = report_section_timing(report.score_title.as_deref(), "wav_observation_legacy_oracle", section_clock);
-    append_wav_attack_pulse_metric_reconstruction(&mut out, report);
+    append_wav_attack_pulse_metric_reconstruction(&mut out, &wav);
     section_clock = report_section_timing(report.score_title.as_deref(), "wav_attack_pulse_metric", section_clock);
-    append_wav_pitch_harmonic_evidence_probe(&mut out, report);
+    append_wav_pitch_harmonic_evidence_probe(&mut out, &wav, frozen_projection.as_deref());
+    drop(frozen_projection);
     section_clock = report_section_timing(report.score_title.as_deref(), "wav_pitch_harmonic_evidence", section_clock);
+    drop(wav);
     append_wav_pitch_sensor_qualification_boundary(&mut out, report);
     section_clock = report_section_timing(report.score_title.as_deref(), "wav_pitch_sensor_boundary", section_clock);
     crate::audit_only::phrase_boundary_evidence::append_report_section(&mut out);

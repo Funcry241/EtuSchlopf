@@ -2805,6 +2805,36 @@ fn renderer_shared_head_compatible(
         && left_occurrence.onset == right_occurrence.onset
     )
 }
+#[derive(Clone, Copy)]
+struct RendererSingletonContact {
+    step: i32,
+    stem_up: bool,
+    displaced: bool,
+}
+struct RendererStemBindingCandidate {
+    stem: usize,
+    heads: Vec<RendererBoundHead>,
+    near_endpoint_contact: Option<RendererSingletonContact>,
+}
+
+fn renderer_displaced_head_supported(
+    displaced: &RendererStemBindingCandidate,
+    other: &RendererStemBindingCandidate,
+    displaced_occurrence: &RenderStemOccurrence,
+    other_occurrence: &RenderStemOccurrence,
+    stems: &[RendererStemGeometry],
+) -> bool {
+    let (Some(left), Some(right)) = (displaced.near_endpoint_contact, other.near_endpoint_contact) else {
+        return false;
+    };
+    left.displaced && !right.displaced
+        && left.stem_up == right.stem_up
+        && left.step.abs_diff(right.step) == 1
+        && displaced_occurrence.onset == other_occurrence.onset
+        && displaced.stem != other.stem
+        && (stems[displaced.stem].x - stems[other.stem].x).abs() < 0.05
+}
+
 fn renderer_head_binding(
     cell: &RendererStaffCell,
     segments: &[PdfStrokeSegment],
@@ -2833,7 +2863,7 @@ fn renderer_head_binding(
     }).collect::<Vec<_>>();
     stems.sort_by(|a,b| a.x.total_cmp(&b.x).then_with(||a.y_min.total_cmp(&b.y_min)).then_with(||a.y_max.total_cmp(&b.y_max)));
     stems.dedup_by(|a,b| same_physical_stem(*a,*b));
-    let mut candidates = Vec::<Vec<(usize, Vec<RendererBoundHead>)>>::new();
+    let mut candidates = Vec::<Vec<RendererStemBindingCandidate>>::new();
     for occurrence in expected {
         if occurrence.head_steps.is_empty() || occurrence.head_steps.iter().any(|step| step.abs() > 128)
             || occurrence.head_steps.len() != occurrence.head_pitches.len() {
@@ -2850,45 +2880,82 @@ fn renderer_head_binding(
                 let extreme = if stem_up { ys.iter().copied().max_by(f64::total_cmp) } else { ys.iter().copied().min_by(f64::total_cmp) }.ok_or("missing_expected_heads")?;
                 let endpoint = if stem_up { stem.y_max } else { stem.y_min };
                 if (endpoint-extreme).abs() > spacing*0.35 { continue; }
-                let mut bound_heads = Vec::new();
-                let mut valid = true;
-                for (&step, pitches) in &pitches_by_step {
-                    let y = bottom - f64::from(step)*spacing/2.0;
-                    let mut matching = heads.iter().filter_map(|head| {
-                        if head.page_index != cell.page_index { return None; }
-                        let bounds = head.head_bounds?;
-                        let head_y = head.page_height-head.y_from_bottom;
-                        let edge = if occurrence.head_steps.len() > 1 {
-                            if (bounds[0]-stem.x).abs() < (bounds[2]-stem.x).abs() { bounds[0] } else { bounds[2] }
-                        } else if stem_up { bounds[2] } else { bounds[0] };
-                        ((head_y-y).abs() <= spacing*0.15 && (edge-stem.x).abs() <= spacing*0.15
-                            && head_y >= stem.y_min-spacing*0.4 && head_y <= stem.y_max+spacing*0.4).then_some(bounds)
-                    }).collect::<Vec<_>>();
-                    matching.sort_by(|a,b| a[0].total_cmp(&b[0]).then_with(|| a[1].total_cmp(&b[1])).then_with(|| a[2].total_cmp(&b[2])).then_with(|| a[3].total_cmp(&b[3])));
-                    matching.dedup();
-                    if matching.len() != pitches.len() || pitches.len() > 2 { valid = false; break; }
-                    if pitches.len() == 2 {
-                        let left = matching.iter().filter(|b| (b[2]-stem.x).abs() <= spacing*0.15 && (b[0]+b[2])/2.0 < stem.x).count();
-                        let right = matching.iter().filter(|b| (b[0]-stem.x).abs() <= spacing*0.15 && (b[0]+b[2])/2.0 > stem.x).count();
-                        if left != 1 || right != 1 { valid = false; break; }
+                // The endpoint bands of adjacent diatonic steps are disjoint.
+                // A displaced singleton needs a conventional mate in these
+                // tighter bands even though ordinary attachments do not.
+                let near_endpoint = (endpoint-extreme).abs() < spacing / 4.0;
+                let single = occurrence.head_steps.len() == 1;
+                for displaced in [false, true] {
+                    if displaced && !(single && near_endpoint) { break; }
+                    let mut bound_heads = Vec::new();
+                    let mut valid = true;
+                    for (&step, pitches) in &pitches_by_step {
+                        let y = bottom - f64::from(step)*spacing/2.0;
+                        let mut matching = heads.iter().filter_map(|head| {
+                            if head.page_index != cell.page_index { return None; }
+                            let bounds = head.head_bounds?;
+                            let head_y = head.page_height-head.y_from_bottom;
+                            let edge = if !single {
+                                if (bounds[0]-stem.x).abs() < (bounds[2]-stem.x).abs() { bounds[0] } else { bounds[2] }
+                            } else if stem_up != displaced { bounds[2] } else { bounds[0] };
+                            ((head_y-y).abs() <= spacing*0.15 && (edge-stem.x).abs() <= spacing*0.15
+                                && head_y >= stem.y_min-spacing*0.4 && head_y <= stem.y_max+spacing*0.4).then_some(bounds)
+                        }).collect::<Vec<_>>();
+                        matching.sort_by(|a,b| a[0].total_cmp(&b[0]).then_with(|| a[1].total_cmp(&b[1])).then_with(|| a[2].total_cmp(&b[2])).then_with(|| a[3].total_cmp(&b[3])));
+                        matching.dedup();
+                        if matching.len() != pitches.len() || pitches.len() > 2 { valid = false; break; }
+                        if pitches.len() == 2 {
+                            let left = matching.iter().filter(|b| (b[2]-stem.x).abs() <= spacing*0.15 && (b[0]+b[2])/2.0 < stem.x).count();
+                            let right = matching.iter().filter(|b| (b[0]-stem.x).abs() <= spacing*0.15 && (b[0]+b[2])/2.0 > stem.x).count();
+                            if left != 1 || right != 1 { valid = false; break; }
+                        }
+                        bound_heads.extend(matching.into_iter().map(|bounds| RendererBoundHead { bounds, pitches: pitches.clone() }));
                     }
-                    bound_heads.extend(matching.into_iter().map(|bounds| RendererBoundHead { bounds, pitches: pitches.clone() }));
+                    if valid {
+                        choices.push(RendererStemBindingCandidate {
+                            stem: index,
+                            heads: bound_heads,
+                            near_endpoint_contact: (single && near_endpoint).then(|| RendererSingletonContact {
+                                step: occurrence.head_steps[0],
+                                stem_up,
+                                displaced,
+                            }),
+                        });
+                    }
                 }
-                if valid { choices.push((index, bound_heads)); break; }
+                if choices.last().is_some_and(|choice| choice.stem == index) { break; }
             }
         }
         if choices.is_empty() { return Err("no_complete_head_stem_candidate"); }
         candidates.push(choices);
     }
-    fn visit(index: usize, choices: &[Vec<(usize, Vec<RendererBoundHead>)>], stems: &[RendererStemGeometry], expected: &[RenderStemOccurrence], path: &mut Vec<usize>, solutions: &mut Vec<Vec<usize>>) {
+    fn visit(
+        index: usize,
+        choices: &[Vec<RendererStemBindingCandidate>],
+        stems: &[RendererStemGeometry],
+        expected: &[RenderStemOccurrence],
+        path: &mut Vec<usize>,
+        solutions: &mut Vec<Vec<usize>>,
+    ) {
         if solutions.len() > 1 { return; }
-        if index == choices.len() { solutions.push(path.clone()); return; }
-        for (choice_index, (stem_index, evidence)) in choices[index].iter().enumerate() {
+        if index == choices.len() {
+            let bound = |index: usize| &choices[index][path[index]];
+            let all_displaced_heads_supported = path.iter().enumerate().all(|(index, _)| {
+                let choice = bound(index);
+                !choice.near_endpoint_contact.is_some_and(|contact| contact.displaced)
+                    || path.iter().enumerate().any(|(other, _)| {
+                        renderer_displaced_head_supported(choice, bound(other), &expected[index], &expected[other], stems)
+                    })
+            });
+            if all_displaced_heads_supported { solutions.push(path.clone()); }
+            return;
+        }
+        for (choice_index, choice) in choices[index].iter().enumerate() {
             if path.iter().enumerate().any(|(prior, &previous_choice)| {
-                let (previous, previous_heads) = &choices[prior][previous_choice];
-                previous == stem_index
-                    || (expected[prior].onset < expected[index].onset && stems[*previous].x >= stems[*stem_index].x-0.05)
-                    || previous_heads.iter().any(|left| evidence.iter().any(|right| !renderer_shared_head_compatible(left, right, &expected[prior], &expected[index])))
+                let previous = &choices[prior][previous_choice];
+                previous.stem == choice.stem
+                    || (expected[prior].onset < expected[index].onset && stems[previous.stem].x >= stems[choice.stem].x-0.05)
+                    || previous.heads.iter().any(|left| choice.heads.iter().any(|right| !renderer_shared_head_compatible(left, right, &expected[prior], &expected[index])))
             }) { continue; }
             path.push(choice_index);
             visit(index+1, choices, stems, expected, path, solutions);
@@ -2900,8 +2967,8 @@ fn renderer_head_binding(
     if solutions.len() > 1 { return Err("multiple_complete_assignments"); }
     let solution = solutions.first().ok_or("no_exclusive_temporal_assignment")?;
     Ok(solution.iter().enumerate().map(|(i,&choice)| {
-        let (index, heads) = &candidates[i][choice];
-        RendererHeadBoundStem { geometry: stems[*index], heads: heads.clone() }
+        let choice = &candidates[i][choice];
+        RendererHeadBoundStem { geometry: stems[choice.stem], heads: choice.heads.clone() }
     }).collect())
 }
 #[cfg(test)]
@@ -2983,6 +3050,47 @@ mod notehead_binding_tests {
         assert!(renderer_head_bound_stems(&cell(),&[a],&heads,&expected).is_some());
         assert!(renderer_head_bound_stems(&cell(),&[a],&heads[..1],&expected).is_none());
     }
+    #[test]
+    fn adjacent_displaced_singletons_require_same_onset_conventional_mate() {
+        let cell = cell();
+        let heads = [head(20.0, 120.0), head(26.0, 117.5)];
+        let lower = occurrence(vec![0]);
+        let upper = occurrence(vec![1]);
+        let expected = [lower, upper];
+        for (up, stems) in [
+            (false, [stroke(26.25, 120.8, 141.0), stroke(26.25, 118.3, 139.0)]),
+            (true, [stroke(26.25, 94.0, 119.2), stroke(26.25, 91.0, 116.7)]),
+        ] {
+            let bound = renderer_head_binding(&cell, &stems, &heads, &expected).unwrap();
+            for (index, row) in bound.iter().enumerate() {
+                assert_eq!(row.geometry.y_min, stems[index].y1_top);
+                assert_eq!(row.geometry.y_max, stems[index].y2_top);
+                assert_eq!(row.heads[0].bounds, heads[index].head_bounds.unwrap());
+            }
+            let reversed = renderer_head_binding(
+                &cell, &[stems[1], stems[0]], &[heads[1].clone(), heads[0].clone()], &expected,
+            ).unwrap();
+            assert!(same_physical_stem(bound[0].geometry, reversed[0].geometry));
+            assert!(same_physical_stem(bound[1].geometry, reversed[1].geometry));
+
+            let displaced = usize::from(up);
+            assert!(renderer_head_binding(
+                &cell, &stems[displaced..=displaced], &heads[displaced..=displaced],
+                &expected[displaced..=displaced],
+            ).is_err());
+            let mut separated = expected.clone();
+            separated[1].onset += 1;
+            assert!(renderer_head_binding(&cell, &stems, &heads, &separated).is_err());
+
+            let mut duplicate_endpoint = stems[displaced];
+            if up { duplicate_endpoint.y1_top -= 4.0; }
+            else { duplicate_endpoint.y2_top += 4.0; }
+            assert_eq!(renderer_head_binding(
+                &cell, &[stems[0], stems[1], duplicate_endpoint], &heads, &expected,
+            ).unwrap_err(), "multiple_complete_assignments");
+        }
+    }
+
     #[test]
     fn equal_counts_and_shared_stroke_without_heads_cannot_bind_two_staffs() {
         let mut content=String::new();
