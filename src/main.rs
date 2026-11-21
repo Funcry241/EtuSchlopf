@@ -9,9 +9,9 @@
 mod report_format;
 pub use report_format::{
     push_static_dec_line_v765, push_static_ent_line_v765,
-    push_static_ledger_header_v804, push_static_ledger_line_v804,
+    push_static_ledger_header_v804,
     push_static_named_policy_line_v765,
-    push_static_section_header_v793, push_static_write_policy_line_v765,
+    push_static_section_header_v793,
     StaticNamedReportLineV766,
 };
 

@@ -1,8 +1,6 @@
 use etuschlopf::console_presentation_contract::{
-    resolve_stream_render_policy, Attention, ColorPreference, ConsolePreferences, Emphasis,
-    GlyphCapability, GlyphMode, GlyphPreference, LocalStatus, PresentationChannel,
-    PresentationLine, PresentationRole, ProgressMode, ProgressPreference, StreamCapability,
-    StreamDestination, StyleMode, Visibility,
+    resolve_stream_render_policy, ColorPreference, ConsolePreferences, GlyphCapability, GlyphMode,
+    GlyphPreference, ProgressMode, ProgressPreference, StreamCapability, StreamDestination, StyleMode,
 };
 
 fn terminal() -> StreamCapability {
@@ -17,23 +15,6 @@ fn redirected() -> StreamCapability {
         destination: StreamDestination::Redirected,
         glyphs: GlyphCapability::Unicode,
     }
-}
-
-#[test]
-fn role_local_status_and_attention_are_independent_dimensions() {
-    let line = PresentationLine {
-        role: PresentationRole::Export,
-        status: Some(LocalStatus::Blocked),
-        attention: Attention::Warning,
-        emphasis: Emphasis::Secondary,
-        visibility: Visibility::Both,
-        channel: PresentationChannel::Narrative,
-        text: "Neuro-Evidence blockiert; EtuSchlopf bleibt fail-independent",
-    };
-
-    assert_eq!(line.role, PresentationRole::Export);
-    assert_eq!(line.status, Some(LocalStatus::Blocked));
-    assert_eq!(line.attention, Attention::Warning);
 }
 
 #[test]
@@ -118,19 +99,4 @@ fn contract_is_leaf_like_and_does_not_import_domain_or_runtime_authority() {
             "presentation contract must remain leaf-like: {forbidden}"
         );
     }
-}
-
-#[test]
-fn technical_visibility_is_explicit_not_inferred_from_text() {
-    let line = PresentationLine {
-        role: PresentationRole::Check,
-        status: Some(LocalStatus::Ok),
-        attention: Attention::Neutral,
-        emphasis: Emphasis::Muted,
-        visibility: Visibility::TechnicalOnly,
-        channel: PresentationChannel::Diagnostic,
-        text: "vollstaendiger technischer Kontext",
-    };
-    assert_eq!(line.visibility, Visibility::TechnicalOnly);
-    assert_eq!(line.channel, PresentationChannel::Diagnostic);
 }

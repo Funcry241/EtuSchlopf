@@ -148,34 +148,6 @@ set "_ETUSCHLOPF_EXIT=!ERRORLEVEL!"
 rmdir /s /q "!ETUSCHLOPF_LAUNCHER_BOOTSTRAP_RUN!" >nul 2>&1
 exit /b !_ETUSCHLOPF_EXIT!
 
-:ensure_owned_cargo_cache_tag_if_missing
-set "_ETUSCHLOPF_CACHE_TAG_ROOT=%~1"
-if /I not "!_ETUSCHLOPF_CACHE_TAG_ROOT!"=="target" if /I not "!_ETUSCHLOPF_CACHE_TAG_ROOT!"=="target\bc" (
-    echo [EtuSchlopf] FEHLER: CACHEDIR.TAG darf nur fuer die beiden fest gebundenen Cargo-Cache-Wurzeln hergestellt werden: !_ETUSCHLOPF_CACHE_TAG_ROOT! 1>&2
-    exit /b 31
-)
-if not exist "!_ETUSCHLOPF_CACHE_TAG_ROOT!\" (
-    echo [EtuSchlopf] FEHLER: Cargo-Cache-Wurzel fehlt vor CACHEDIR.TAG-Pruefung: !_ETUSCHLOPF_CACHE_TAG_ROOT! 1>&2
-    exit /b 31
-)
-set "_ETUSCHLOPF_CACHE_TAG_FILE=!_ETUSCHLOPF_CACHE_TAG_ROOT!\CACHEDIR.TAG"
-set "_ETUSCHLOPF_CACHE_TAG_SIGNATURE=Signature: 8a477f597d28d172789f06886806bc55"
-if exist "!_ETUSCHLOPF_CACHE_TAG_FILE!" exit /b 0
->"!_ETUSCHLOPF_CACHE_TAG_FILE!" echo !_ETUSCHLOPF_CACHE_TAG_SIGNATURE!
-if errorlevel 1 (
-    echo [EtuSchlopf] FEHLER: fehlendes CACHEDIR.TAG konnte nicht fuer Cargo hergestellt werden: !_ETUSCHLOPF_CACHE_TAG_FILE! 1>&2
-    exit /b 31
-)
->>"!_ETUSCHLOPF_CACHE_TAG_FILE!" echo # This file is a cache directory tag created for Cargo compatibility by EtuSchlopf.
-if errorlevel 1 exit /b 31
->>"!_ETUSCHLOPF_CACHE_TAG_FILE!" echo # For information about cache directory tags see https://bford.info/cachedir/
-if errorlevel 1 exit /b 31
-if not exist "!_ETUSCHLOPF_CACHE_TAG_FILE!" (
-    echo [EtuSchlopf] FEHLER: CACHEDIR.TAG fehlt nach Herstellung: !_ETUSCHLOPF_CACHE_TAG_FILE! 1>&2
-    exit /b 31
-)
-exit /b 0
-
 :last_build_hint
 rem K8: advisory "zuletzt" hint for the silent Cargo builds; digits only, otherwise no hint.
 set "_ETUSCHLOPF_LAST_BUILD_TEXT="

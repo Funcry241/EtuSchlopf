@@ -13,9 +13,12 @@ on:
       - 'docs/THIRD_PARTY_NOTICES.md'
       - 'docs/licenses/**'
       - 'docs/normative_sources/musicxml/**'
-      - 'docs/evidence/r1965/**'
-      - 'docs/examples/*-r1965.pdf'
-      - 'docs/images/*-r1965-ausschnitt.png'
+      - 'README.md'
+      - 'docs/README.md'
+      - 'docs/MATHEMATIK*.md'
+      - 'docs/CONTRIBUTING.md'
+      - 'docs/community/issue_templates/01_fehler.md'
+      - 'docs/evidence/r1968/**'
       - '.gitattributes'
       - '.github/distribution/**'
       - '!.github/distribution/RELEASE.md'
@@ -32,9 +35,12 @@ on:
       - 'docs/THIRD_PARTY_NOTICES.md'
       - 'docs/licenses/**'
       - 'docs/normative_sources/musicxml/**'
-      - 'docs/evidence/r1965/**'
-      - 'docs/examples/*-r1965.pdf'
-      - 'docs/images/*-r1965-ausschnitt.png'
+      - 'README.md'
+      - 'docs/README.md'
+      - 'docs/MATHEMATIK*.md'
+      - 'docs/CONTRIBUTING.md'
+      - 'docs/community/issue_templates/01_fehler.md'
+      - 'docs/evidence/r1968/**'
       - '.gitattributes'
       - '.github/distribution/**'
       - '!.github/distribution/RELEASE.md'
@@ -52,25 +58,37 @@ jobs:
     defaults:
       run:
         shell: pwsh
+        working-directory: public
     env:
       RUSTFLAGS: '-C target-feature=+crt-static'
       CARGO_INCREMENTAL: '0'
+      ETU_NATIVE_ROOT: D:\etu-r1968-review-input
+      ETU_BUILD_ROOT: D:\etu-r1968-build
+      TAKE_NAME: EtuSchlopf_v0_10_1839_r1968_Reduktion_unbuilt_source.zip
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          path: public
           persist-credentials: false
-      - name: Verify accepted runtime source
+      - name: Check out the successful native Windows review
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 5cb89ebe0a977d104f92535ed7778624cae07a41
+          path: review
+          persist-credentials: false
+      - name: Reproduce the accepted Take ZIP
+        working-directory: review
         run: |
-          $ErrorActionPreference = 'Stop'
-          $acceptance = Get-Content docs/evidence/r1965/native_acceptance.txt
-          if ('take_revision=r1965' -notin $acceptance -or
-              'accepted_zip_sha256=568cd3fca2fd302c5c66daf797f2c1e8b670a713241f1daee45098917b436386' -notin $acceptance) {
-            throw 'Native r1965 acceptance does not match the prepared take'
-          }
-          if ((Get-FileHash docs/evidence/r1965/native_acceptance.txt -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'd02f4d343b6bed36952a052b0d13fae99be4779550d1f3d37877a91638332897') { throw 'Native acceptance record checksum mismatch' }
-          python .github/distribution/verify-accepted-source.py --revision r1965 88b090dc2a0b0a9a9eeaad01a803f0346fb834f5c8e99adfd42bcb20be86a493 0519f1c2fbcfd0eef5e9bc6ef8109c97b94abde0f09562799cefb9089ec5b396
-          if ($LASTEXITCODE -ne 0) { throw 'Accepted source or documentation verification failed' }
+          python .github/strict-ci/verify.py prepare
+          if ($LASTEXITCODE -ne 0) { throw 'Could not reproduce the accepted r1968 Take' }
+      - name: Verify public sources against the exact native build
+        run: |
+          python .github/distribution/prepare-r1968-source.py $env:ETU_NATIVE_ROOT $env:ETU_BUILD_ROOT "$env:RUNNER_TEMP/etuschlopf-source"
+          if ($LASTEXITCODE -ne 0) { throw 'Native r1968 source preparation failed' }
+          python .github/distribution/verify-accepted-source.py --revision r1968 --accepted-root $env:ETU_BUILD_ROOT 233a6a86fb77ac85e08004d858654267ea2bd151918e5f53cef28a0fdbbdea0b f78592f5ff094d778874fa66cdf6573811e44528f303dace48ab0cbf40ab0a88
+          if ($LASTEXITCODE -ne 0) { throw 'Public or accepted native source verification failed' }
       - name: Build accepted engine
+        working-directory: D:\etu-r1968-build
         run: |
           rustup toolchain install 1.98.0 --profile minimal
           if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed' }
@@ -82,8 +100,9 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $bundle = Join-Path $env:RUNNER_TEMP 'etuschlopf-runtime'
           New-Item -ItemType Directory -Force "$bundle/docs/normative_sources", "$bundle/docs/licenses", 'dist' | Out-Null
-          Copy-Item target/strict/etuschlopf.exe "$bundle/etuschlopf_engine.exe"
-          Copy-Item -Recurse docs/normative_sources/musicxml "$bundle/docs/normative_sources/"
+          Copy-Item "$env:RUNNER_TEMP/etuschlopf-source/*.zip" dist/
+          Copy-Item "$env:ETU_BUILD_ROOT/target/strict/etuschlopf.exe" "$bundle/etuschlopf_engine.exe"
+          Copy-Item -Recurse "$env:ETU_BUILD_ROOT/docs/normative_sources/musicxml" "$bundle/docs/normative_sources/"
           Copy-Item -Recurse docs/licenses/* "$bundle/docs/licenses/"
           Copy-Item docs/THIRD_PARTY_NOTICES.md "$bundle/docs/"
           Copy-Item LICENSE "$bundle/"
@@ -103,8 +122,9 @@ jobs:
           $originalPath = $env:PATH
           try {
             $env:PATH = "$env:windir\System32;$env:windir"
-            & $exe --version
-            if ($LASTEXITCODE -ne 0) { throw 'Standalone version probe failed' }
+            $version = & $exe --version
+            if ($LASTEXITCODE -ne 0 -or "$version" -notmatch '\b0\.10\.1839\b') { throw "Standalone version probe failed: $version" }
+            Write-Output $version
             & $exe --help
             if ($LASTEXITCODE -ne 0) { throw 'Standalone help probe failed' }
           } finally { $env:PATH = $originalPath }
@@ -113,27 +133,11 @@ jobs:
           ./.github/distribution/smoke.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
       - name: Render the start example with the packaged EXE
         run: |
-          ./.github/distribution/start-example.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path -Output dist/EtuSchlopf-Beispiel-r1965.zip
-      - name: Package all 14 verified score PDFs
+          ./.github/distribution/start-example.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path -Output dist/EtuSchlopf-Beispiel-r1968.zip
+      - name: Hash Windows downloads
         run: |
-          $ErrorActionPreference = 'Stop'
-          if ((Get-FileHash docs/evidence/r1965/score_sha256.tsv -Algorithm SHA256).Hash.ToLowerInvariant() -ne '4b1db3076f892fe2e9cc7cc1bc05a244e5f3067ed6ef1a86b33afe59328c5be2') { throw 'Accepted score inventory checksum mismatch' }
-          $scoreRows = @(Import-Csv -Delimiter "`t" docs/evidence/r1965/score_sha256.tsv)
-          $pdfRows = @($scoreRows | Where-Object { $_.path -like 'docs/examples/*-r1965.pdf' })
-          $pngRows = @($scoreRows | Where-Object { $_.path -like 'docs/images/*-r1965-ausschnitt.png' })
-          if ($scoreRows.Count -ne 28 -or $pdfRows.Count -ne 14 -or $pngRows.Count -ne 14) { throw 'Expected 14 PDFs and 14 score previews' }
-          foreach ($row in $scoreRows) {
-            if ((Get-FileHash -LiteralPath $row.path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $row.sha256) { throw "Score file hash mismatch: $($row.path)" }
-          }
-          $scores = @($scoreRows | ForEach-Object { $_.path })
-          git archive --format=zip --output=dist/EtuSchlopf-Notenbilder-r1965.zip $env:GITHUB_SHA -- @scores docs/evidence/r1965/score_credits.md docs/evidence/r1965/score_sha256.tsv
-          if ($LASTEXITCODE -ne 0) { throw 'Score archive failed' }
-      - name: Hash Windows download
-        run: |
-          git archive --format=zip --output=dist/EtuSchlopf-r1965-source.zip $env:GITHUB_SHA
-          if ($LASTEXITCODE -ne 0) { throw 'Source archive failed' }
-          @("revision=r1965", "commit=$env:GITHUB_SHA", "workflow=$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID", "accepted_take_sha256=568cd3fca2fd302c5c66daf797f2c1e8b670a713241f1daee45098917b436386", "source_snapshot_sha256=f26df127c4a4b17e3631e816ef70d4b7a88c207eb2766c465dce650d2b3cb36e") | Set-Content -Encoding ascii dist/runtime-provenance.txt
-          $sums = foreach ($name in @('EtuSchlopf-Windows-x64.exe', 'EtuSchlopf-r1965-source.zip', 'EtuSchlopf-Beispiel-r1965.zip', 'EtuSchlopf-Notenbilder-r1965.zip', 'runtime-provenance.txt')) {
+          @("revision=r1968", "public_commit=$env:GITHUB_SHA", "workflow=$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID", "native_review_commit=5cb89ebe0a977d104f92535ed7778624cae07a41", "native_review_run=44831896224", "accepted_take_sha256=2138a8f2ad1746367c443f5c7ac80dada47b48f04414f2f21a773bf4f7a11880", "native_tree_sha256=233a6a86fb77ac85e08004d858654267ea2bd151918e5f53cef28a0fdbbdea0b") | Set-Content -Encoding ascii dist/runtime-provenance.txt
+          $sums = foreach ($name in @('EtuSchlopf-Windows-x64.exe', 'EtuSchlopf-r1968-source.zip', $env:TAKE_NAME, 'EtuSchlopf-Beispiel-r1968.zip', 'runtime-provenance.txt')) {
             $hash = (Get-FileHash -Algorithm SHA256 "dist/$name").Hash.ToLowerInvariant()
             "$hash  $name"
           }
@@ -142,7 +146,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: EtuSchlopf-Windows-x64
-          path: dist/*
+          path: public/dist/*
           retention-days: 30
           if-no-files-found: error
   publish:
@@ -158,14 +162,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag=v0.10.1839-r1965-windows-preview
+          tag=v0.10.1839-r1968-windows-preview
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $tag already exists."
             exit 0
           fi
           gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name EtuSchlopf-Windows-x64 --dir dist
           (cd dist && sha256sum --check SHA256SUMS.txt)
-          notes="Die portable EXE enthält EtuSchlopf 0.10.1839 r1965. Der native Windows-Vollkorpus umfasst 14 von 14 Werken. Im Notenarchiv findest du alle 14 vollständigen PDFs, je einen Ausschnitt und die Quellenangaben. GitHub prüft die paketierte EXE in einem isolierten Ordner und rendert das mitgelieferte MIDI/WAV-Startbeispiel mit MuseScore. Für die PDF-Ausgabe brauchst du MuseScore. Die EXE ist unsigniert. Die Prüfsummen stehen in SHA256SUMS.txt. [Vollkorpus-Nachweis](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/docs/evidence/r1965/README.md) · [Windows-Build](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
-          gh release create "$tag" dist/EtuSchlopf-Windows-x64.exe dist/EtuSchlopf-r1965-source.zip dist/EtuSchlopf-Beispiel-r1965.zip dist/EtuSchlopf-Notenbilder-r1965.zip dist/runtime-provenance.txt dist/SHA256SUMS.txt \
+          notes="Die portable EXE enthält die nativ unter Windows angenommene Engine 0.10.1839 r1968. Der Windows-Vollkorpus r1968 setzte alle 14 Stücke. Alle 28 MusicXML-Dateien stimmen bytegenau und alle 57 PDF-Seiten bei 144 dpi pixelgenau mit r1965 überein. Das Startbeispiel enthält MIDI, WAV und die mit dieser EXE frisch gerenderte PDF. Zum Bauen enthält EtuSchlopf-r1968-source.zip die geprüfte Cargo.lock. Das zweite Quell-ZIP ist der angenommene Take für das Update von r1967 auf r1968. Für die PDF-Ausgabe brauchst du MuseScore. Die EXE ist unsigniert. [Abnahme r1968]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/evidence/r1968/README.md) · [Veröffentlichte Korpusnoten aus r1965]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/v0.10.1839-r1965-windows-preview) · [Windows-Build]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+          gh release create "$tag" dist/EtuSchlopf-Windows-x64.exe dist/EtuSchlopf-r1968-source.zip dist/EtuSchlopf_v0_10_1839_r1968_Reduktion_unbuilt_source.zip dist/EtuSchlopf-Beispiel-r1968.zip dist/runtime-provenance.txt dist/SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-            --title "EtuSchlopf r1965 Windows x64" --notes "$notes"
+            --title "EtuSchlopf r1968 Windows x64" --notes "$notes"

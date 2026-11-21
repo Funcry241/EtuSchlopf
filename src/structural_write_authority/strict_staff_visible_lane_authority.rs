@@ -15,8 +15,7 @@ use super::authority_primitives::{
     child_block,
     contains_document_boundary,
 };
-use anyhow::{bail, Context, Result};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum VisibleLaneEffect {
@@ -463,72 +462,13 @@ pub fn insert_missing_staff_edge_rest_authorized(
     (output, receipt)
 }
 
-#[derive(Debug)]
-struct CrossStaffHandRoleTrialSink {
-    source_fingerprint: u64,
-    candidate: String,
-    candidate_fingerprint: u64,
-    output_path: PathBuf,
-}
-
-impl CrossStaffHandRoleTrialSink {
-    fn issue(source: &str, candidate: &str, output_path: &Path) -> Result<Self> {
-        if candidate.trim().is_empty() || roxmltree::Document::parse(candidate).is_err() {
-            bail!("cross_staff_hand_role_trial: candidate is not a complete parseable XML document");
-        }
-        Ok(Self {
-            source_fingerprint: fingerprint(source),
-            candidate: candidate.to_string(),
-            candidate_fingerprint: fingerprint(candidate),
-            output_path: output_path.to_path_buf(),
-        })
-    }
-
-    fn commit(self, source: &str, candidate: &str, output_path: &Path) -> Result<()> {
-        if self.source_fingerprint != fingerprint(source)
-            || self.candidate != candidate
-            || self.candidate_fingerprint != fingerprint(candidate)
-            || self.output_path.as_path() != output_path
-        {
-            bail!("cross_staff_hand_role_trial: source, candidate or output path binding changed");
-        }
-        let candidate_xml = self.candidate;
-        let writer_trace_before = crate::audit_only::writer_trace::capture_before(&self.output_path);
-        std::fs::write(&self.output_path, candidate_xml.as_bytes()).with_context(|| {
-            format!(
-                "cross_staff_hand_role_trial: could not write {}",
-                self.output_path.display()
-            )
-        })?;
-        let readback = std::fs::read(&self.output_path).with_context(|| {
-            format!(
-                "cross_staff_hand_role_trial: could not read back {}",
-                self.output_path.display()
-            )
-        })?;
-        if readback != candidate_xml.as_bytes()
-            || fingerprint(std::str::from_utf8(&readback).unwrap_or_default())
-                != self.candidate_fingerprint
-        {
-            bail!("cross_staff_hand_role_trial: exact file readback mismatch");
-        }
-        crate::audit_only::writer_trace::record_after(
-            "cross_staff_hand_role_trial",
-            &self.output_path,
-            writer_trace_before.as_deref(),
-            &candidate_xml,
-        );
-        Ok(())
-    }
-}
-
+// The installed writer boundary retains this historical signature.
 pub fn write_cross_staff_hand_role_trial_authorized(
-    source: &str,
-    candidate: &str,
-    output_path: &Path,
-) -> Result<()> {
-    CrossStaffHandRoleTrialSink::issue(source, candidate, output_path)?
-        .commit(source, candidate, output_path)
+    _source: &str,
+    _candidate: &str,
+    _output_path: &Path,
+) -> anyhow::Result<()> {
+    anyhow::bail!("IR7 CrossStaffHandRole is NO-WRITE")
 }
 
 pub(crate) struct RenderRow51ExactMint { _private: () }

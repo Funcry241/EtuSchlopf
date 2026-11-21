@@ -719,24 +719,6 @@ fn plan_visual_layout_pressure_decisions(
         }
     }
 
-    for measure in select_balanced_visual_page_breaks(
-        &pressure_points,
-        last_measure,
-        final_group_start,
-    ) {
-        if measure <= 1 {
-            continue;
-        }
-        if let Some(slot_index) =
-            horizontal_layout_slot_index_for_locator(xml, measure)
-        {
-            plan_builder.plan_new_page(
-                slot_index,
-                HorizontalLayoutDecisionOwner::VisualLayoutPressure,
-            );
-        }
-    }
-
     Ok(pressure_points)
 }
 
@@ -1283,18 +1265,6 @@ fn select_balanced_visual_system_breaks(
     }
 
     selected
-}
-
-fn select_balanced_visual_page_breaks(
-    pressure_points: &[(usize, i32, Vec<&'static str>)],
-    last_measure: usize,
-    final_group_start: usize,
-) -> BTreeSet<usize> {
-    // v0.1.148 / LAY10: Automatische Seitenumbrueche aus VisualPageBalance
-    // erzeugten zu oft duenne Seiten. Der Pass darf weiterhin lokale Breiten
-    // Systemumbrueche planen, aber keine eigenen Seitenumbrueche erzwingen.
-    let _ = (pressure_points, last_measure, final_group_start);
-    BTreeSet::new()
 }
 
 fn collect_visual_layout_pressure_points(xml: &str) -> Vec<(usize, i32, Vec<&'static str>)> {

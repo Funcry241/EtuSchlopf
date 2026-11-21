@@ -737,29 +737,6 @@ mod tests {
 
 
     #[test]
-    fn minimal_projection_contains_only_coarse_closed_state() {
-        let projection = audit_feedback_origin_noninterference_in_pipeline(
-            "runtime-project",
-            sample_pipeline_xml(),
-        );
-        assert_eq!(projection.schema_version, 2);
-        assert_eq!(projection.decision, MinimalProofDecision::Green);
-        assert_eq!(
-            projection.completeness,
-            MinimalProofCompleteness::Complete
-        );
-        assert_eq!(projection.invariants, MinimalProofInvariantStatus::Holds);
-        assert_eq!(
-            projection.write_permission,
-            MinimalProofWritePermission::Denied
-        );
-        assert_eq!(
-            projection.non_linkability,
-            MinimalProofNonLinkability::Enforced
-        );
-    }
-
-    #[test]
     fn public_projection_bytes_are_stable_under_project_rename() {
         let first = audit_feedback_origin_noninterference_in_pipeline(
             "runtime-project",

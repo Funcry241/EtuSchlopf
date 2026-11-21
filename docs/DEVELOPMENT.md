@@ -1,8 +1,8 @@
 # Technische Referenz und Quellenarbeit
 
-Der öffentliche Quellstand ist **r1964 / 0.10.1839**. Die native Windows-Prüfung von r1964 umfasst Mozarts KV 331. Der frühere Vollkorpus r1961 umfasst 14 Stücke. [Mozart-Einzellauf r1964](evidence/r1964/README.md) · [Windows-Vollkorpus r1961](evidence/r1961/README.md)
+Der öffentliche Quellstand ist **r1968 / 0.10.1839**. Die native Windows-Prüfung umfasst die Installation des Takes, die Strict-Tests und den PDF-Export des Startbeispiels. Der Windows-Vollkorpus r1968 umfasst 14 Stücke. Alle 28 MusicXML-Ausgaben sind bytegleich, alle 57 Seiten bei 144 dpi pixelgleich zum Vollkorpus r1965. [Windows-Vollkorpus r1968](evidence/r1968/README.md) [Windows-Prüflauf r1968](https://github.com/Funcry241/EtuSchlopf/actions/runs/44831896224) · [Windows-Vollkorpus r1965](evidence/r1965/README.md)
 
-Seit r1659 enthält der Quellstand weitere Zuständigkeitsbereinigungen, indizierte Endpunktabfragen und Verbesserungen an Fokus, Verbindungsstatus und PDF-Sitzungsbindung der Watch-Webansicht. r1683 führt ursprüngliche Pausenanker als eigene Evidenz in die C3-Entscheidung; nicht geschlossene systemübergreifende Gruppenabhängigkeiten bleiben offen. Die [Mathematik-Seite](MATHEMATIK-VOLLKORPUS.md) ordnet 34 Verfahrensfamilien ihren Quellen, Wirkungen und Beweisgrenzen zu. Die native Abnahme bestätigt den geprüften Korpus; sie belegt weder allgemeine Fehlerfreiheit noch die Spielbarkeit beliebiger Eingaben.
+Seit r1659 enthält der Quellstand weitere Zuständigkeitsbereinigungen, indizierte Endpunktabfragen und Verbesserungen an Fokus, Verbindungsstatus und PDF-Sitzungsbindung der Watch-Webansicht. r1683 führt ursprüngliche Pausenanker als eigene Evidenz in die C3-Entscheidung; nicht geschlossene systemübergreifende Gruppenabhängigkeiten bleiben offen. Der Korpusstand r1683 umfasste 34 Verfahrensfamilien. [Kapitel 4 der Mathematikseite](MATHEMATIK.md#kapitel-4) ordnet die Verfahren ihren Quellen, Wirkungen und Beweisgrenzen zu. Die native Abnahme bestätigt den geprüften Korpus; sie belegt weder allgemeine Fehlerfreiheit noch die Spielbarkeit beliebiger Eingaben.
 
 Das Projekt hat zwei eng verbundene Gegenstände:
 
@@ -20,7 +20,7 @@ Programme und bleiben Gegenstand von Gegenbeispielen und Prüfung.
 
 **Zum Verständnis des Projekts:**
 
-- [Fachlicher Überblick und Mathematik](MATHEMATIK-VOLLKORPUS.md)
+- [Mathematik in EtuSchlopf · Kapitelübersicht](MATHEMATIK.md)
 - [Historischer Architektur-Wegweiser auf Basis r1526](IMPLEMENTED_FOUNDATIONS.md)
 - [Forschungsbezüge und ihre genaue Rolle](../docs/RESEARCH_CONTEXT.md)
 - [Historischer Windows-Korpus r1684](evidence/r1684/README.md)

@@ -1,41 +1,4 @@
 #[derive(Debug, Clone, Default)]
-struct WavTruthArticulationRow {
-    scope: usize,
-    onset: i64,
-    wav_energy_ratio_milli: i64,
-    wav_attack_ratio_milli: i64,
-    wav_confidence_milli: i64,
-    truth_class: String,
-}
-#[derive(Debug, Clone, Default)]
-struct WavTruthArticulationGateAudit {
-    done_fragment: String,
-    pipeline_line: String,
-    wav_path: String,
-    wav_decoded: bool,
-    wav_windows: usize,
-    candidate_count: usize,
-    wav_checked_candidates: usize,
-    wav_reference_energy_milli: i64,
-    wav_reference_attack_milli: i64,
-    wav_reference_flux_milli: i64,
-    wav_confirmed_accent: usize,
-    wav_confirmed_tenuto: usize,
-    wav_confirmed_staccato: usize,
-    wav_suggested_accent: usize,
-    wav_suggested_tenuto: usize,
-    wav_suggested_staccato: usize,
-    score_wav_match: usize,
-    score_wav_mismatch: usize,
-    wav_truth_strong: usize,
-    wav_truth_medium: usize,
-    wav_truth_blocked: usize,
-    wav_rejected_score_only: usize,
-    wav_review: usize,
-    write_ready: usize,
-    verdict: String,
-    rows: Vec<WavTruthArticulationRow>,}
-#[derive(Debug, Clone, Default)]
 struct TieMergeAccountingAndTrueTransactionalRestCoalesceAudit {
     done_fragment: String,
     pipeline_line: String,

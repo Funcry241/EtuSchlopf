@@ -73,12 +73,22 @@ hidden_pitched_before: usize, hidden_pitched_after: usize, hidden_rests_before: 
 parse_before_ok: bool, parse_after_ok: bool, backup_forward_before_ok: bool, backup_forward_after_ok: bool, verdict: String, actions: Vec<BehindBarsRuleCheckRestAndTieAction>, same_pitch_rows: Vec<BehindBarsRuleCheckSamePitchRow>,
 examples: Vec<String>, } #[derive(Debug, Clone, Default)] struct BehindBarsRuleCheckRestAndTieAction { action_kind: String, old_rest_count: usize, new_rest_count: usize, verdict: String, } #[derive(Debug, Clone, Default)] struct BehindBarsRuleCheckSamePitchRow { scope: usize, staff: String,
 voice: String, first_onset: i32, has_tie_boundary: bool, classification: String, } #[derive(Debug, Clone, Default)] struct BehindBarsRuleCheckDuplicateStemRow { scope: usize,
-staff: String, midi: i32, onset: i32, } #[derive(Debug, Clone, Default)] struct CrossStaffHandRoleMaterializationTrial { done_fragment: String,
-pipeline_line: String, source_label: String, attempted: bool, candidates_seen: usize, candidate_attempted: usize, candidate_adopted: usize, candidate_rejected: usize, written: bool, visible_pitched_before: usize,
-visible_pitched_after: usize, visible_rests_before: usize, visible_rests_after: usize, hidden_pitched_before: usize, hidden_pitched_after: usize, hidden_rests_before: usize, hidden_rests_after: usize, sounding_signature_before: u64,
-sounding_signature_after: u64, visible_signature_after: u64, sounding_signature_stable: bool, parse_before_ok: bool, parse_after_ok: bool, backup_forward_before_ok: bool, backup_forward_after_ok: bool, visible_rest_delta: i64,
-verdict: String, actions: Vec<CrossStaffHandRoleMaterializationAction>, examples: Vec<String>, } #[derive(Debug, Clone, Default)] struct CrossStaffHandRoleMaterializationAction {
-verdict: String, } #[derive(Debug, Clone, Default)] struct UpperStaffLocalVisualRestLedgerProofTrial { done_fragment: String, pipeline_line: String, source_label: String, attempted: bool, candidates_seen: usize,
+staff: String, midi: i32, onset: i32, }
+
+struct CrossStaffHandRoleMaterializationTrial {
+    pipeline_line: String,
+    written: bool,
+    #[cfg(test)]
+    parse_before_ok: bool,
+    #[cfg(test)]
+    backup_forward_before_ok: bool,
+    #[cfg(test)]
+    candidate_attempted: usize,
+    #[cfg(test)]
+    candidate_adopted: usize,
+}
+
+#[derive(Debug, Clone, Default)] struct UpperStaffLocalVisualRestLedgerProofTrial { done_fragment: String, pipeline_line: String, source_label: String, attempted: bool, candidates_seen: usize,
 candidate_attempted: usize, candidate_adopted: usize, candidate_rejected: usize, written: bool, selected_scope: usize, selected_source_voice: String, selected_rest_voice: String, lower_staff_notes: usize, staff_switches: usize,
 rest_segments_written: usize, forward_segments_written: usize, rest_duration_written: i32, forward_duration_written: i32, duplicate_rest_candidates_seen: usize, duplicate_rest_suppressed: usize, duplicate_rest_duration_to_forward: i32,
 duplicate_rest_scopes: String, duplicate_rest_chosen_evidence: String, visible_rest_lane_anchor_candidates_seen: usize, visible_rest_lane_anchor_suppressed: usize, visible_rest_lane_anchor_duration_to_forward: i32, visible_rest_lane_anchor_scopes: String, visible_rest_lane_anchor_chosen_evidence: String,
@@ -103,13 +113,20 @@ original_note_capture: Option<std::sync::Arc<JointRestForwardNoteCapture>>,
 } #[derive(Debug, Clone, Default)] struct RenderXmlPruneStats { removed_safe_hidden_inner_chord_tones: usize, removed_hidden_pitched_events: usize, removed_source_note_ranges: Vec<(usize, usize)>, } #[derive(Debug, Clone, Default)]
 struct RenderXmlHiddenScopeAudit { scope: usize, staff: String, voice: String, hidden_pitched: usize, hidden_rests: usize, score: i64, } #[derive(Debug, Clone)] struct RenderXmlNoteEvent { scope: usize, staff: String, voice: String,
 onset: i32, duration: i32, is_hidden: bool, is_rest: bool, is_chord: bool, midi: Option<i32>, anchor: RenderXmlAnchorKind, has_visible_dependency: bool, }
-#[derive(Debug, Clone, Default)] struct StaccatoProxyCandidateRow { scope: usize, staff: String, voice: String, midi: i32, note_onset: i32, note_duration: i32, rest_duration: i32, total_duration: i32, beat_unit: i32, }
-#[derive(Debug, Clone, Default)] struct PianistHelpfulArticulationRow { scope: usize, staff: String, voice: String, onset: i32, midi: i32, duration: i32, class_name: String, placement: String, placement_risk: String,
-score: i64, } #[derive(Debug, Clone, Default)] struct PianistHelpfulArticulationAndNotationAudit { rows: Vec<PianistHelpfulArticulationRow>, } #[derive(Debug, Clone, Default)]
-struct SingleClearStaccatoRenderWriteAudit { done_fragment: String, pipeline_line: String, output_path: String, written: bool, clear_candidate_count: usize, target_matched: usize,
-new_staccato_marks: usize, unexpected_staccato_marks: usize, target_scope: usize, target_staff: String, target_voice: String, target_onset: i32, target_midi: i32, target_note_duration: i32, target_rest_duration: i32,
-target_total_duration: i32, target_chord_member_midis: Vec<i32>, chord_cohort_readback: bool, placement_binding: String, placement_readback: String, stem_like_risk_target: usize, rest_lane_risk_target: usize, lower_staff_writes: usize, visible_pitched_before: usize, visible_pitched_after: usize,
-visible_rests_before: usize, visible_rests_after: usize, hidden_pitched_before: usize, hidden_pitched_after: usize, hidden_rests_before: usize, hidden_rests_after: usize, existing_staccato_before: usize, existing_staccato_after: usize,
-parse_after_ok: bool, backup_forward_after_ok: bool, staccato_equivalence_stable: bool, write_allowed: bool, render_xml_write: bool, music_mutation: bool, verdict: String, actions: Vec<BehindBarsRuleCheckRestAndTieAction>, }
-#[derive(Debug, Clone, Default)] struct AssertiveVisibleArticulationRow { scope: usize, staff: String, voice: String, onset: i64, midi: i32, duration: i64, mark: String, 
-score: i64, } #[derive(Debug, Clone, Default)] struct AssertiveVisibleArticulationRenderWriteAudit { written: bool, }
+#[derive(Debug, Clone, Default)]
+struct SingleClearStaccatoRenderWriteAudit {
+    clear_candidate_count: usize,
+    target_scope: usize,
+    target_staff: String,
+    target_voice: String,
+    target_onset: i32,
+    target_midi: i32,
+    target_note_duration: i32,
+    target_total_duration: i32,
+    target_chord_member_midis: Vec<i32>,
+    staccato_equivalence_stable: bool,
+    written: bool,
+    render_xml_write: bool,
+}
+#[derive(Debug, Clone, Default)] struct AssertiveVisibleArticulationRow { scope: usize, staff: String, voice: String, onset: i64, midi: i32, duration: i64, mark: String, }
+#[derive(Debug, Clone, Default)] struct AssertiveVisibleArticulationRenderWriteAudit { written: bool, }

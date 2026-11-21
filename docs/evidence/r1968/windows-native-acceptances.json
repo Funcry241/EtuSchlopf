@@ -1,0 +1,65 @@
+[
+  {
+    "revision": 1966,
+    "zip_sha256": "4caabe3937e9f7b19a3c3179b4470e5226e1a49e8e8b002e4c465ee32212cb13",
+    "ref": "5af7db6b8223ac3b34ccc1e060a0fe223c96a3e5",
+    "run_id": 44829339866,
+    "job_id": 136610005679,
+    "job_url": "https://github.com/Funcry241/EtuSchlopf/actions/runs/44829339866/job/136610005679",
+    "status": "success",
+    "scope": "native Windows-2022 source take from immediate parent, Strict build/Clippy/Rust tests with one public MIDI/WAV pair, PDF/report and post-install file identities",
+    "evidence": [
+      "Native parent r1965: 2219 source files. Exact r1966 ZIP: 4caabe3937e9f7b19a3c3179b4470e5226e1a49e8e8b002e4c465ee32212cb13.",
+      "Take: r? akzeptiert → r1966 · KodexOnly",
+      "[EtuSchlopf] Clippy OK 2.9min",
+      "[EtuSchlopf] Tests OK 1.5min · 3145 bestanden · 0 fehlgeschlagen · 4 ignoriert",
+      "[EtuSchlopf] OK | Beispiel | exit 0 | gesamt 23.8min ab Launcherstart",
+      "Technik: strict neu | 3 Jobs | Build OK | Clippy OK | Tests OK | Warnungen 0",
+      "etuschlopf_strict_test_validation.receipt: f32e5d18efc853390d490e069dd8613df637e6dee45fdce7a2a20e2eafd24d31",
+      "etuschlopf_strict_clippy_validation.receipt: ca387ed108d64afc5214d4824970f501ee4287fa71e9e25c848e821be2763cd2",
+      "Accepted EtuSchlopf_v0_10_1839_r1966_Reduktion_unbuilt_source.zip SHA256 4caabe3937e9f7b19a3c3179b4470e5226e1a49e8e8b002e4c465ee32212cb13. Native Windows Strict and public example passed."
+    ]
+  },
+  {
+    "revision": 1967,
+    "zip_sha256": "7aae836c235097222ffda9fdedc3daa0db3d9c093d004189d60738138948a38c",
+    "ref": "3682e805ddc0fe0a319f373926d50ecc8252eed3",
+    "run_id": 44829639317,
+    "job_id": 136611015674,
+    "job_url": "https://github.com/Funcry241/EtuSchlopf/actions/runs/44829639317/job/136611015674",
+    "status": "success",
+    "scope": "native Windows-2022 source take from immediate parent, Strict build/Clippy/Rust tests with one public MIDI/WAV pair, PDF/report and post-install file identities",
+    "evidence": [
+      "Native parent r1966: 2219 source files. Exact r1967 ZIP: 7aae836c235097222ffda9fdedc3daa0db3d9c093d004189d60738138948a38c.",
+      "Take: r? akzeptiert → r1967 · RefactorOnly",
+      "[EtuSchlopf] Clippy OK 2.8min",
+      "[EtuSchlopf] Tests OK 1.5min · 3145 bestanden · 0 fehlgeschlagen · 4 ignoriert",
+      "[EtuSchlopf] OK | Beispiel | exit 0 | gesamt 22.2min ab Launcherstart",
+      "Technik: strict neu | 3 Jobs | Build OK | Clippy OK | Tests OK | Warnungen 0",
+      "etuschlopf_strict_test_validation.receipt: d00e62f7f34332fc496935063fd4fe73f1d1498e5bbc098c99a5a08de7a7e031",
+      "etuschlopf_strict_clippy_validation.receipt: 57fc131289a53401f52a24a2ce582b767081f005348c523ab09bf11eb393f890",
+      "Accepted EtuSchlopf_v0_10_1839_r1967_Reduktion_unbuilt_source.zip SHA256 7aae836c235097222ffda9fdedc3daa0db3d9c093d004189d60738138948a38c. Native Windows Strict and public example passed."
+    ]
+  },
+  {
+    "revision": 1968,
+    "zip_sha256": "2138a8f2ad1746367c443f5c7ac80dada47b48f04414f2f21a773bf4f7a11880",
+    "ref": "5cb89ebe0a977d104f92535ed7778624cae07a41",
+    "run_id": 44831896224,
+    "job_id": 136618623298,
+    "job_url": "https://github.com/Funcry241/EtuSchlopf/actions/runs/44831896224/job/136618623298",
+    "status": "success",
+    "scope": "native Windows-2022 source take from immediate parent, Strict build/Clippy/Rust tests with one public MIDI/WAV pair, PDF/report and post-install file identities",
+    "evidence": [
+      "Native parent r1967: 2218 source files. Exact r1968 ZIP: 2138a8f2ad1746367c443f5c7ac80dada47b48f04414f2f21a773bf4f7a11880.",
+      "Take: r? akzeptiert → r1968 · RefactorOnly",
+      "[EtuSchlopf] Clippy OK 3.0min",
+      "[EtuSchlopf] Tests OK 1.5min · 3142 bestanden · 0 fehlgeschlagen · 4 ignoriert",
+      "[EtuSchlopf] OK | Beispiel | exit 0 | gesamt 24.5min ab Launcherstart",
+      "Technik: strict neu | 3 Jobs | Build OK | Clippy OK | Tests OK | Warnungen 0",
+      "etuschlopf_strict_test_validation.receipt: cef594123522da3288c4cce5ccb986bdb26ecc0652a4e45c9c09f46c6be6ad11",
+      "etuschlopf_strict_clippy_validation.receipt: 2ffe657a49200f82a43daffe98cda5d6d02a0afc40745e8541c1fb261d734fcd",
+      "Accepted EtuSchlopf_v0_10_1839_r1968_Reduktion_unbuilt_source.zip SHA256 2138a8f2ad1746367c443f5c7ac80dada47b48f04414f2f21a773bf4f7a11880. Native Windows Strict and public example passed."
+    ]
+  }
+]

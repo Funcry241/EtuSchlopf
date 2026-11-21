@@ -23,6 +23,26 @@ const THROUGH_TEST_SHA: &str = "927eace0ed6d1b34de135341af025d1e731f212626cb37ea
 fn exact(candidate: &[u8], admitted: &[u8], hash: &str) -> bool {
     candidate == admitted && crate::sha256::hex(admitted) == hash
 }
+// The only new complete file admitted here consists of the r1720 source
+// with its permanently empty page selector and the loop over its result removed.
+fn exact_visual_page_retirement(candidate: &[u8]) -> bool {
+    const SUCCESSOR_SHA: &str = "a84c729863e9503a096d54d6730e743ffdca846b6824d9ec88625eea82abb917";
+    if crate::sha256::hex(candidate) != SUCCESSOR_SHA {
+        return false;
+    }
+    let Ok(mut expected) = String::from_utf8(OPPOSED_UNISON.to_vec()) else {
+        return false;
+    };
+    for (first, next) in [
+        ("    for measure in select_balanced_visual_page_breaks(", "    Ok(pressure_points)"),
+        ("fn select_balanced_visual_page_breaks(", "fn collect_visual_layout_pressure_points("),
+    ] {
+        let Some(start) = expected.find(first) else { return false; };
+        let Some(length) = expected[start..].find(next) else { return false; };
+        expected.replace_range(start..start + length, "");
+    }
+    candidate == expected.as_bytes()
+}
 pub(super) fn accepts_item(path: &str, kind: &str, name: &str, bytes: &[u8]) -> bool {
     match (path, kind, name) {
         ("src/master_state_identity.rs", "struct", "BlockTransformationReceipt") => exact(bytes, ITEM_STRUCT, ITEM_STRUCT_SHA),
@@ -35,7 +55,8 @@ pub(super) fn accepts_file(path: &str, bytes: &[u8]) -> bool {
         "src/pipeline_shards/notation_endpoint_layout_core.rs" => exact(bytes, CLEF, CLEF_SHA)
             || exact(bytes, REST_PRESERVING, REST_PRESERVING_SHA)
             || exact(bytes, UNEQUAL_UNISON, UNEQUAL_UNISON_SHA)
-            || exact(bytes, OPPOSED_UNISON, OPPOSED_UNISON_SHA),
+            || exact(bytes, OPPOSED_UNISON, OPPOSED_UNISON_SHA)
+            || exact_visual_page_retirement(bytes),
         "src/pipeline_shards/human_pdf_pianistic_cross_staff_ledger_tail.rs" => exact(bytes, CLEANUP, CLEANUP_SHA),
         "tests/support/render_authority/row57_local_clef_scope_through_trial.rs" => exact(bytes, THROUGH_TEST, THROUGH_TEST_SHA),
         _ => false,
@@ -54,6 +75,24 @@ mod tests {
         assert!(!accepts_file("src/structural_write_authority/remaining_layout_writer_family.rs", CLEANUP));
         assert!(!accepts_item("src/master_state_identity.rs", "impl", "OtherReceipt", ITEM_IMPL));
     }
+    #[test]
+    fn visual_page_retirement_accepts_only_the_two_deletions_from_r1720() {
+        let path = "src/pipeline_shards/notation_endpoint_layout_core.rs";
+        let predecessor = std::str::from_utf8(OPPOSED_UNISON).unwrap();
+        let successor = predecessor.split_inclusive('\n').enumerate()
+            .filter(|(index, _)| !matches!(index + 1, 722..=739 | 1288..=1299))
+            .map(|(_, line)| line)
+            .collect::<String>();
+        assert!(accepts_file(path, OPPOSED_UNISON));
+        assert!(accepts_file(path, successor.as_bytes()));
+        assert!(!accepts_file("src/arrangement.rs", successor.as_bytes()));
+        let extra = format!("{successor}\n");
+        assert!(!accepts_file(path, extra.as_bytes()));
+        assert!(!accepts_file(path, &successor.as_bytes()[1..]));
+        let altered = successor.replace("fn select_balanced_visual_system_breaks(", "fn removed_system_breaks(");
+        assert!(!accepts_file(path, altered.as_bytes()));
+    }
+
     #[test]
     fn partial_additional_and_changed_successor_bytes_stay_rejected() {
         for mut bad in [ITEM_STRUCT[..ITEM_STRUCT.len()-1].to_vec(), [ITEM_STRUCT, b"\n"].concat(), ITEM_STRUCT.to_vec()] {

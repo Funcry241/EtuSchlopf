@@ -86,7 +86,6 @@ fn evaluate_arrangement_variant(
                 measures_seen: arrangement.stats.measures_seen,
                 notes_seen: arrangement.stats.notes_seen,
                 notes_hidden: arrangement.stats.notes_hidden,
-                rests_hidden: arrangement.stats.rests_hidden,
                 chord_tones_hidden: arrangement.stats.chord_tones_hidden,
                 beam_groups: polish.stats.beam_groups,
                 beamed_notes: polish.stats.beamed_notes,

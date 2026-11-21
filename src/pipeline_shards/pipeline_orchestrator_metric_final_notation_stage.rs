@@ -46,6 +46,9 @@ fn run_metric_beam_and_final_notation_stage(
         horizontal_layout_seed,
         notation_time,
     } = inputs;
+    // The opening-tempo contract fixes the real_main handoff. Release the
+    // owned reference here after its last consumer in initial render.
+    drop(reference);
     let receipt_checkpoint_metric_entry = render_state.document()
         .unwrap_or(&initial_render.pre_preview_render_xml_for_gap).to_owned();
     crate::audit_only::destructive_edit_attribution::observe_lineage_checkpoint(
@@ -64,7 +67,6 @@ fn run_metric_beam_and_final_notation_stage(
         run_rest_and_articulation_render_stage(RestAndArticulationRenderStageInputs {
             render_state: &mut *render_state,
             final_render_source_available: initial_render.final_render_source_available,
-            reference: &reference,
             render_xml_trial_path: &initial_render.render_xml_trial_path,
             pre_preview_render_xml_for_gap: &initial_render.pre_preview_render_xml_for_gap,
             render_final_chord_structural_plan: &mut render_final_chord_structural_plan,

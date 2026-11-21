@@ -1,6 +1,6 @@
 # Wegweiser durch die Dokumentation
 
-EtuSchlopf ist ein experimentelles, privat gepflegtes Projekt. Der unter Windows angenommene Quellstand **r1965** verarbeitete alle 14 Korpusstücke und erzeugte 57 PDF-Seiten. [Windows-Abnahme und Vollkorpus r1965](evidence/r1965/README.md) · [Notengalerie](examples/README.md)
+EtuSchlopf ist ein experimentelles, privat gepflegtes Projekt. Der Windows-Vollkorpus **r1968** umfasst 14 Stücke und 57 PDF-Seiten. Alle 57 gerenderten Seiten stimmen bei 144 dpi mit den veröffentlichten Notenbildern aus r1965 überein. [Windows-Abnahme r1968](evidence/r1968/README.md) · [Vollkorpus r1965](evidence/r1965/README.md) · [Notengalerie](examples/README.md)
 
 | Aufgabe | Einstieg |
 | --- | --- |
@@ -12,9 +12,9 @@ EtuSchlopf ist ein experimentelles, privat gepflegtes Projekt. Der unter Windows
 | Sicherheitslücke melden | [Sicherheitsrichtlinie](SECURITY.md) |
 | Umgang miteinander und Moderation | [Verhaltenskodex](CODE_OF_CONDUCT.md) |
 | Bedienhürden und bekannte Grenzen | [Barrierefreiheit](ACCESSIBILITY.md) |
-| Welche Mathematik wo genutzt wird und was das Notenbild ändert | [Mathematik hinter EtuSchlopf](MATHEMATIK-AKTUELL.md) |
-| Entwicklungsstand und native Abnahme prüfen | [Korpus r1965](evidence/r1965/README.md) · [Mozart r1964](evidence/r1964/README.md) · [Korpus r1961](evidence/r1961/README.md) · [Korpus r1938](evidence/r1938/README.md) · [Bach r1749](evidence/r1749/README.md) · [Chopin r1792](evidence/r1792/README.md) · [Schubert r1872](evidence/r1872/README.md) · [Korpus r1933](evidence/r1933/README.md) · [Korpus r1921](evidence/r1921/README.md) · [Korpus r1886](evidence/r1886/README.md) |
+| Welche Mathematik wo genutzt wird und was das Notenbild ändert | [Mathematik in EtuSchlopf · Kapitelübersicht](MATHEMATIK.md) |
+| Entwicklungsstand und native Abnahme prüfen | [Abnahme r1968](evidence/r1968/README.md) · [Korpus r1965](evidence/r1965/README.md) · [Mozart r1964](evidence/r1964/README.md) · [Korpus r1961](evidence/r1961/README.md) · [Korpus r1938](evidence/r1938/README.md) · [Bach r1749](evidence/r1749/README.md) · [Chopin r1792](evidence/r1792/README.md) · [Schubert r1872](evidence/r1872/README.md) · [Korpus r1933](evidence/r1933/README.md) · [Korpus r1921](evidence/r1921/README.md) · [Korpus r1886](evidence/r1886/README.md) |
 | Windows-Testversion und frühere Laufzeitmessung prüfen | [Prüfbelege r1577](evidence/r1577/README.md) |
 | Lizenzen und Fremdkomponenten | [Fremdlizenzhinweise](THIRD_PARTY_NOTICES.md) und [Musikquellen](examples/README.md#quellen-und-rechte) |
 
-Die Seite zur Windows-Abnahme nennt den Quellstand, die gemessenen Ergebnisse und die Grenzen des aktuellen Vollkorpus. Frühere Notenbilder stehen in der Galerie mit ihrer jeweiligen Revision.
+Die Abnahme zu jeder Revision nennt die geprüften Eingaben, die gemessenen Ergebnisse und die Grenzen des Vergleichs. Frühere Notenbilder stehen in der Galerie mit ihrer jeweiligen Revision.

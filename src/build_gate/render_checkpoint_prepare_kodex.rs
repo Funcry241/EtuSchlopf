@@ -194,11 +194,6 @@ pub(crate) fn validate_transition(parent: &Path, child: &Path, class: &str) -> R
     }
     validate_tree(child)
 }
-pub(crate) fn verified_first_transition(parent: &Path, child: &Path) -> Result<bool,String> {
-    if installed(parent) || !installed(child) { return Ok(false); }
-    validate_transition(parent,child,"RefactorOnly")?;
-    Ok(true)
-}
 pub(crate) fn exact_changed_paths(paths: &std::collections::BTreeSet<String>) -> bool {
     let expected=SUCCESSORS.iter().map(|(path,_)| (*path).to_owned())
         .chain(["ZIP_KIND.txt".to_owned()]).collect();

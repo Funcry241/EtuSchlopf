@@ -1121,113 +1121,52 @@ fn empty_voice_rest_suppression_plan(xml: &str, max_actions: usize) -> (
 fn build_cross_staff_hand_role_materialization_trial(
     xml: &str,
     source_label: &str,
-    output_path: &Path,
+    _output_path: &Path,
 ) -> anyhow::Result<CrossStaffHandRoleMaterializationTrial> {
-    // Preserve the frozen sink signature in this retired/no-write boundary.
-    // This function item is never invoked.
+    // The frozen sink remains a function item until its physical retirement.
     let _retired_sink_signature = crate::structural_write_authority::write_cross_staff_hand_role_trial_authorized;
 
-    let _ = output_path;
-    let (before_events, before_backup_forward_ok) = collect_render_xml_note_events(xml);
-    let mut trial = CrossStaffHandRoleMaterializationTrial {
-        source_label: source_label.to_string(),
-        visible_pitched_before: before_events.iter().filter(|event| !event.is_hidden && event.midi.is_some()).count(),
-        visible_rests_before: before_events.iter().filter(|event| !event.is_hidden && event.is_rest).count(),
-        hidden_pitched_before: before_events.iter().filter(|event| event.is_hidden && event.midi.is_some()).count(),
-        hidden_rests_before: before_events.iter().filter(|event| event.is_hidden && event.is_rest).count(),
-        sounding_signature_before: render_visible_sounding_signature(&before_events),
-        parse_before_ok: parse_musicxml(xml).is_ok(),
-        backup_forward_before_ok: before_backup_forward_ok,
-        ..CrossStaffHandRoleMaterializationTrial::default()
-    };
-
-    let candidate_xml = xml.to_string();
-    if trial.parse_before_ok && trial.backup_forward_before_ok {
-        trial.attempted = true;
-        trial.candidates_seen = 0;
-        trial.candidate_attempted = 0;
-    }
-
-    let (after_events, after_backup_forward_ok) = collect_render_xml_note_events(&candidate_xml);
-    trial.visible_pitched_after = after_events.iter().filter(|event| !event.is_hidden && event.midi.is_some()).count();
-    trial.visible_rests_after = after_events.iter().filter(|event| !event.is_hidden && event.is_rest).count();
-    trial.hidden_pitched_after = after_events.iter().filter(|event| event.is_hidden && event.midi.is_some()).count();
-    trial.hidden_rests_after = after_events.iter().filter(|event| event.is_hidden && event.is_rest).count();
-    trial.sounding_signature_after = render_visible_sounding_signature(&after_events);
-    trial.visible_signature_after = render_visible_signature(&after_events, false);
-    trial.sounding_signature_stable = trial.sounding_signature_before == trial.sounding_signature_after;
-    trial.parse_after_ok = parse_musicxml(&candidate_xml).is_ok();
-    trial.backup_forward_after_ok = after_backup_forward_ok;
-    trial.visible_rest_delta = trial.visible_rests_after as i64 - trial.visible_rests_before as i64;
-
-    let invariants_ok = trial.candidate_attempted > 0
-        && trial.sounding_signature_stable
-        && trial.visible_pitched_before == trial.visible_pitched_after
-        && trial.hidden_pitched_before == trial.hidden_pitched_after
-        && trial.hidden_rests_before == trial.hidden_rests_after
-        && trial.visible_rests_after <= trial.visible_rests_before
-        && trial.parse_after_ok
-        && trial.backup_forward_after_ok;
-
-    if invariants_ok {
-        // IR7 is retired/no-write. The current producer is never called above;
-        // an unexpected future productive candidate must stop before any sink.
-        crate::master_state_identity::count_render_closure_failure(
-            crate::master_state_identity::RenderClosureMetric::CandidateCoverageFailures,
-        );
-        return Err(anyhow::anyhow!(
-            "IR7 CrossStaffHandRole is NO-WRITE: unexpected productive candidate"
-        ));
-    } else {
-        trial.candidate_rejected = trial.candidate_attempted;
-        trial.verdict = if trial.candidate_attempted == 0 {
-            "cross_staff_hand_role_no_safe_empty_rest_lane_candidate".to_string()
+    // This retired stage observes the unchanged document for the release report.
+    let (events, backup_forward_before_ok) = collect_render_xml_note_events(xml);
+    let parse_before_ok = parse_musicxml(xml).is_ok();
+    let sounding_signature = render_visible_sounding_signature(&events);
+    let mut visible_pitched = 0_usize;
+    let mut visible_rests = 0_usize;
+    let mut hidden_pitched = 0_usize;
+    let mut hidden_rests = 0_usize;
+    for event in &events {
+        if event.is_hidden {
+            hidden_pitched += usize::from(event.midi.is_some());
+            hidden_rests += usize::from(event.is_rest);
         } else {
-            "cross_staff_hand_role_trial_rejected_by_invariant_guard".to_string()
-        };
-        for action in &mut trial.actions {
-            action.verdict = "rejected_by_global_invariant_guard".to_string();
+            visible_pitched += usize::from(event.midi.is_some());
+            visible_rests += usize::from(event.is_rest);
         }
     }
 
-    trial.examples.push("Handrollen-Materialisierung heißt hier nicht: neue Handstimme schreiben. Es heißt: eine leere technische Rest-Lane nicht als linke-Hand-Ganzpause anzeigen, wenn die Cross-Staff-Voice bereits vollständig gemappt ist.".to_string());
-    trial.examples.push("Die Aktion ist negativ und eng: sichtbare Rest-Lane -> Forward. Keine klingende Note, kein Pitch, kein Onset, keine Dauer und keine klingende Staff-/Voice-Zuordnung ändern sich.".to_string());
-    trial.done_fragment = format!(
-        "CrossStaffHandRoleMaterializationTrial: gesehen {}, versucht {}, übernommen {}, sichtbare Pausen {}→{}, klingend stabil {}, geschrieben {}",
-        trial.candidates_seen,
-        trial.candidate_attempted,
-        trial.candidate_adopted,
-        trial.visible_rests_before,
-        trial.visible_rests_after,
-        if trial.sounding_signature_stable { "ja" } else { "nein" },
-        if trial.written { "ja" } else { "nein" }
-    );
-    trial.pipeline_line = format!(
-        "CrossStaffHandRoleMaterializationTrial v{}: Render-XML-only auf {}; seen/attempted/adopted/rejected {}/{}/{}/{}; sichtbare Pausen {}→{}; sichtbare klingende Noten {}→{}; hidden klingend {}→{}; hidden Pausen {}→{}; sounding_signature {}/{} stabil {}; visible_rest_delta {}; parse/back-forward nachher {}/{}; geschrieben {}; Urteil {}.",
+    let parse_status = if parse_before_ok { "ok" } else { "fail" };
+    let balance_status = if backup_forward_before_ok { "ok" } else { "fail" };
+    let pipeline_line = format!(
+        "CrossStaffHandRoleMaterializationTrial v{}: Render-XML-only auf {source_label}; \
+         seen/attempted/adopted/rejected 0/0/0/0; sichtbare Pausen {visible_rests}→{visible_rests}; \
+         sichtbare klingende Noten {visible_pitched}→{visible_pitched}; hidden klingend {hidden_pitched}→{hidden_pitched}; \
+         hidden Pausen {hidden_rests}→{hidden_rests}; sounding_signature {sounding_signature}/{sounding_signature} stabil ja; \
+         visible_rest_delta 0; parse/back-forward nachher {parse_status}/{balance_status}; geschrieben nein; \
+         Urteil cross_staff_hand_role_no_safe_empty_rest_lane_candidate.",
         env!("CARGO_PKG_VERSION"),
-        trial.source_label,
-        trial.candidates_seen,
-        trial.candidate_attempted,
-        trial.candidate_adopted,
-        trial.candidate_rejected,
-        trial.visible_rests_before,
-        trial.visible_rests_after,
-        trial.visible_pitched_before,
-        trial.visible_pitched_after,
-        trial.hidden_pitched_before,
-        trial.hidden_pitched_after,
-        trial.hidden_rests_before,
-        trial.hidden_rests_after,
-        trial.sounding_signature_before,
-        trial.sounding_signature_after,
-        if trial.sounding_signature_stable { "ja" } else { "nein" },
-        trial.visible_rest_delta,
-        if trial.parse_after_ok { "ok" } else { "fail" },
-        if trial.backup_forward_after_ok { "ok" } else { "fail" },
-        if trial.written { "ja" } else { "nein" },
-        trial.verdict
     );
-    Ok(trial)
+    Ok(CrossStaffHandRoleMaterializationTrial {
+        pipeline_line,
+        written: false,
+        #[cfg(test)]
+        parse_before_ok,
+        #[cfg(test)]
+        backup_forward_before_ok,
+        #[cfg(test)]
+        candidate_attempted: 0,
+        #[cfg(test)]
+        candidate_adopted: 0,
+    })
 }
 
 
