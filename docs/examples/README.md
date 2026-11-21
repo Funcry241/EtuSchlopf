@@ -101,6 +101,10 @@ den Akkord der linken Hand. Die Ausschnitte führen zum jeweiligen vollständige
 - **Druckvorlage.** Das verwendete Referenz-PDF ist bytegleich mit der PDF-Datei im CPJKU-Repository (Git-Blob `f339e12c4871d6369ab94b97e36d8e60c6b91c31`). Das Änderungsprotokoll dokumentiert gemeinfreie IMSLP-Scans als Quelle. Die konkrete Druckausgabe bleibt offen. [Referenz-PDF im Korpus](https://github.com/CPJKU/vienna4x22/blob/master/pdf/Chopin_op10_no3.pdf) · [Herkunft der Scans](https://github.com/CPJKU/vienna4x22/blob/master/CHANGES.md#04112019).
 - **Erzeugter Notensatz.** Das PDF und sein Vorschaubild zeigen die von EtuSchlopf verarbeitete Aufführung p01. Die Namensnennung und Lizenzlinks für die zugrunde liegende Einspielung stehen oben. [EtuSchlopf-PDF r1792](chopin-op10-no3-p01-r1792.pdf) · [Ausschnitt](../images/chopin-op10-no3-p01-r1792-ausschnitt.png).
 
+### Chopin · Etüde E-Dur op. 10 Nr. 3, Aufführung p02
+
+Die unveränderte Aufnahme und das Performance-MIDI dieser Einspielung stehen unter CC BY 4.0. [Dateinamen, Namensnennung und Originalarchive](../THIRD_PARTY_NOTICES.md#chopin-etüde-e-dur-op-10-nr-3-aufführung-p02)
+
 ### Mozart · Klaviersonate A-Dur KV 331, Andante grazioso, Einspielung p01
 
 **Mozart, Klaviersonate A-Dur KV 331, Andante grazioso, Einspielung p01.** Quelle der Performance-MIDI und WAV ist Werner Goebl, *The Vienna 4×22 Piano Corpus*, Version 1.0 (2017), mdw – Universität für Musik und darstellende Kunst Wien. [Datensatz](https://doi.org/10.21939/4X22) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). EtuSchlopf hat daraus den Notensatz und dessen Vorschaubild erzeugt. Die unveränderte MIDI und WAV der mdw bilden die Eingaben. [EtuSchlopf-PDF r1965](mozart-k331-p01-r1965.pdf) · [Vorschau](../images/mozart-k331-p01-r1965-ausschnitt.png).
