@@ -144,6 +144,26 @@ Für gedruckte oder gescannte Notenausgaben gelten die Rechte der jeweiligen
 Ausgabe. Die als Vergleich verlinkte [Henle-Urtext-Ausgabe HN 656](https://www.henle.de/de/Etuede-E-dur-op.-10-Nr.-3/HN-656)
 wird separat vom Verlag angeboten.
 
+### Chopin, Etüde E-Dur op. 10 Nr. 3, Aufführung p02
+
+`Chopin_op10_no3_p02.mid` (Performance-MIDI) und `Chopin_op10_no3_p02.wav`
+(Aufnahme) stammen aus derselben Einspielung und wurden unverändert aus
+den Originalarchiven der mdw übernommen. Die Zuordnungsdatei bezeichnet
+den Interpreten als „Pianist 02“. [Zuordnungsdatei](https://github.com/wergo/vienna4x22/blob/53872cd670182b039ff118d27abcba30de1e0785/match/Chopin_op10_no3_p02.match#L1-L8)
+
+> Werner Goebl, *The Vienna 4×22 Piano Corpus*, Version 1.0 (2017),
+> mdw – Universität für Musik und darstellende Kunst Wien.
+> Chopin op. 10 Nr. 3, Aufführung p02, WAV und Performance-MIDI.
+> [Datensatz, DOI 10.21939/4X22](https://doi.org/10.21939/4X22) ·
+> [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+[MIDI-Originalarchiv](https://repo.mdw.ac.at/projects/IWK/the_vienna_4x22_piano_corpus/data/midi.zip) ·
+[Audio-Originalarchiv](https://repo.mdw.ac.at/projects/IWK/the_vienna_4x22_piano_corpus/data/audio.zip)
+
+Bei der Weitergabe einer oder beider Dateien die Namensnennung, Quellen- und
+Lizenzlinks sowie vorhandene Rechtehinweise mitführen. Bearbeitungen sind
+kenntlich zu machen. [CC BY 4.0, Abschnitt 3](https://creativecommons.org/licenses/by/4.0/legalcode)
+
 ### Mozart, KV 331, Andante grazioso, Einspielung p01
 
 **Mozart, Klaviersonate A-Dur KV 331, Andante grazioso, Einspielung p01.** Quelle der Performance-MIDI und WAV ist Werner Goebl, *The Vienna 4×22 Piano Corpus*, Version 1.0 (2017), mdw – Universität für Musik und darstellende Kunst Wien. [Datensatz](https://doi.org/10.21939/4X22) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). EtuSchlopf hat daraus den Notensatz und dessen Vorschaubild erzeugt.
