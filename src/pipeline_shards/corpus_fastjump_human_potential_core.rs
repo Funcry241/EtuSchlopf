@@ -918,7 +918,6 @@ fn finish_solver_candidate_from_seed(
             human_detail.enter(1);
             diagnostic_stats.human_potential_global_candidates_checked = global_checked;
             let mut decision_variant = human_variant;
-            let mut repair_logged = false;
             let mut reject_reason = human_potential_variant_reject_reason(&decision_variant, &chosen_variant);
             if reject_reason == Some(HumanPotentialGlobalGuardReject::Hints) {
                 let added_hints = added_hint_issues(&chosen_variant.final_result, &decision_variant.final_result);
@@ -942,7 +941,6 @@ fn finish_solver_candidate_from_seed(
                         &chosen_variant,
                         &repair_result,
                     );
-                    repair_logged = true;
                     decision_variant = repaired_variant;
                     reject_reason = repaired_reject;
                 }
@@ -959,16 +957,6 @@ fn finish_solver_candidate_from_seed(
                     &decision_variant,
                     &chosen_variant,
                 );
-                if decision_variant.pre_hint_repair_result.is_some() && !repair_logged {
-                    record_human_potential_hint_repair_attempt(
-                        &mut diagnostic_stats,
-                        attempt_idx,
-                        target,
-                        &decision_variant,
-                        &chosen_variant,
-                        &format!("rejected_{}", describe_human_potential_reject_reason(reason)),
-                    );
-                }
                 mark_human_potential_global_guard_reject(&mut diagnostic_stats, reason);
                 continue;
             }
@@ -978,16 +966,6 @@ fn finish_solver_candidate_from_seed(
                 target,
                 &decision_variant,
             );
-            if decision_variant.pre_hint_repair_result.is_some() && !repair_logged {
-                record_human_potential_hint_repair_attempt(
-                    &mut diagnostic_stats,
-                    attempt_idx,
-                    target,
-                    &decision_variant,
-                    &chosen_variant,
-                    "accepted",
-                );
-            }
             if accepted_human_variant.is_none() {
                 accepted_human_variant = Some(decision_variant);
             }

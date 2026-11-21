@@ -1,0 +1,16 @@
+{
+  "revision": "r1985",
+  "program_version": "0.10.1839",
+  "snapshot_sha256": "45d702204667afdbdddbe0fef65327db83f504d8877984cc88669d27caff95d2",
+  "accepted_take_sha256": "5bf6cf758532cd99bbe6174e774fa6ee0499bb3e22f96a4b88eab7f28f363651",
+  "windows": {
+    "exit": 0,
+    "build_exit": 0,
+    "clippy_exit": 0,
+    "clippy_warnings": 0,
+    "strict_tests": "ok. 3156 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 46.43s (15 test binaries)",
+    "complete_projects": 15,
+    "observed_sensor_reports": 15,
+    "corpus_wall_seconds": 609
+  }
+}

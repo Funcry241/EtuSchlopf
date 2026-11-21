@@ -92,10 +92,15 @@ reviewed beam-only scope above; the other seven Render XMLs byte-identical;
 unchanged sounding notes, durations, rests, ties,
 slurs and voices; optional trace in all ten reports; zero unexpected unbound-guard
 refusals in those console diagnostics; screenshots of all changed locations; and no new primary lane conflicts.
-The existing read-only `tools/assistant_diagnostics/compare_beam_take_r1472.py`
+The historical read-only `tools/assistant_diagnostics/compare_beam_take_r1472.py`
 accepts two exports and reports all beam/non-beam and optional PDF pixel changes.
 Use r1475 as the native baseline; prepared r1474/r1475 are expected byte-equal to
 r1473 but this must be established by their native acceptance.
+
+The accepted archive `EtuSchlopf_v0_10_1839_r1973_Balkenverbund_unbuilt_source.zip` preserves the historical comparator
+at `tools/assistant_diagnostics/compare_beam_take_r1472.py` (SHA-256
+`3783d16c1fde0de16799a189eec9b5b32dd0073bed24714c40ca6e8c2b114b27`).
+For exports from r1973 onward, use `tools/assistant_diagnostics/compare_exports.py`.
 
 The two-location conflict diagnostic is advisory. Intended residual count is one,
 E6/T32, rather than zero: this take deliberately does not implement its separate

@@ -86,7 +86,7 @@ pub(super) fn feedback_path_matches_registered_owner(path: &str, owners: &[Strin
         .any(|owner| path == owner || path.ends_with(&format!("/{owner}")))
 }
 
-pub(super) fn feedback_public_contract_reference_paths(source_root: &Path) -> Result<Vec<String>, String> {
+fn feedback_public_contract_reference_paths(source_root: &Path) -> Result<Vec<String>, String> {
     let project_root = source_root.parent().ok_or_else(|| {
         "FEEDBACK OBSERVABLE SINK SURFACE REGRESSION: source root has no project parent"
             .to_string()
@@ -147,7 +147,7 @@ pub(super) fn validate_feedback_structuralization_boundary(
     feedback_admission_text: &str,
     feedback_observable_sink_allowlist_path: &Path,
     feedback_observable_sink_allowlist_text: &str,
-) -> Result<(), String> {
+) -> Result<Vec<String>, String> {
     let admission_rows = feedback_admission_text
         .lines()
         .filter(|line| {
@@ -700,5 +700,5 @@ pub(super) fn validate_feedback_structuralization_boundary(
             ));
         }
     }
-    Ok(())
+    Ok(observed_sink_paths)
 }

@@ -26,8 +26,7 @@ impl RoleReadback {
         baseline: &FrozenSerializedVoicePlan,
     ) -> Self {
         let components: Vec<_> = canonical
-            .original_beam_voice_groups
-            .iter()
+            .allocation_original_beam_groups()
             .map(|group| group.allocation_sources())
             .collect();
         let pairs = primary_edges(canonical, original)
@@ -95,7 +94,7 @@ impl FrozenSerializationVoiceChannelPlan {
         target: (usize, usize),
     ) -> Result<(), String> {
         let mut allocation = moved.clone();
-        for group in &canonical.original_beam_voice_groups {
+        for group in canonical.allocation_original_beam_groups() {
             let sources = group.allocation_sources();
             if sources.iter().any(|source| moved.contains_key(source)) {
                 for source in sources {
@@ -138,7 +137,7 @@ impl FrozenSerializationVoiceChannelPlan {
             .with_source_voice_gaps(before);
         let mut proposed = BTreeMap::new();
         let mut incompatible_proposals = false;
-        for group in &canonical.original_beam_voice_groups {
+        for group in canonical.allocation_original_beam_groups() {
             let sources = group.allocation_sources();
             let Some(targets) = sources
                 .iter()
@@ -258,7 +257,7 @@ impl FrozenSerializationVoiceChannelPlan {
         canonical: &CanonicalFinalChordStructuralPlan,
     ) -> Option<(ChannelAllocation, BTreeSet<usize>)> {
         let written = canonical.written_projection.as_ref()?;
-        let groups: Vec<_> = canonical.original_beam_voice_groups.iter()
+        let groups: Vec<_> = canonical.allocation_original_beam_groups()
             .map(|group| group.allocation_sources())
             .collect();
         let mut occurrences_by_staff = BTreeMap::<_, Vec<_>>::new();

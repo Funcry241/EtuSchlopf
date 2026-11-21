@@ -1048,7 +1048,7 @@ fn declared_seed_preserves_intervals_grace_and_independent_copies() {
         &path, "Independent written intervals", midi_seed_solver_profiles()[0].clone(), None,
     ).unwrap();
     let plan = stats.rhythmic_courses;
-    assert!(plan.bound_written_durations);
+    assert!(!plan.bound_written_sections.is_empty());
     let fragments = |source, offset| {
         plan.planned.iter().filter(|part| part.source == Some(source))
             .map(|part| (part.interval.start - offset..part.interval.end - offset, part.tie_stop, part.tie_start))
@@ -1068,5 +1068,7 @@ fn declared_seed_preserves_intervals_grace_and_independent_copies() {
     first.interval = 6..78;
     assert!(bound_duration::validate_partition(&plan.sources, &shifted).is_err());
     let changed = xml.replacen("<duration>72</duration>", "<duration>48</duration>", 1);
-    assert!(bound_duration::verify_written_intervals(&changed, &plan.metric, &plan.planned).is_err());
+    assert!(bound_duration::verify_written_intervals(
+        &changed, &plan.metric, &plan.planned, &plan.bound_written_sections,
+    ).is_err());
 }

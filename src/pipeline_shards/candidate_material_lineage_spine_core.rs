@@ -3159,9 +3159,6 @@ fn freeze_final_sounding_material(
             &frozen_channels,
             &legacy_label_preferences,
         )?;
-    frozen_channels.require_consumer_admission(
-        final_chord_structural_plan, &frozen_serialized_voice_plan,
-    )?;
     if !final_chord_structural_plan.is_bound() || !frozen_serialized_voice_plan.is_bound() {
         return Err(anyhow!(
             "FrozenSerializedVoiceChordConstraintCutover: frozen structure/voice seal did not bind"
@@ -3215,6 +3212,9 @@ fn freeze_final_sounding_material(
         primary_beam_ties,
     );
     frozen_serialized_voice_plan.bind_source_voice_gaps(source_voice_gaps);
+    frozen_channels.require_consumer_admission(
+        final_chord_structural_plan, &frozen_serialized_voice_plan,
+    )?;
     let passage_report_start = written_only_probe.len();
     frozen_channels.append_exact_voice_passages(
         &mut written_only_probe,

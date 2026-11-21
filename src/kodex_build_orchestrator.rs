@@ -405,19 +405,21 @@ fn run() -> Result<(), String> {
         take_summary.semantic_unknown_count
     );
 
-    feedback_structuralization_kodex::validate_feedback_structuralization_boundary(
-        &context.source_root,
-        &context.feedback_gate_path,
-        &context.feedback_gate_text,
-        &context.feedback_admission_path,
-        &context.feedback_admission_text,
-        &context.feedback_observable_sink_allowlist_path,
-        &context.feedback_observable_sink_allowlist_text,
-    )?;
+    let observed_sink_paths =
+        feedback_structuralization_kodex::validate_feedback_structuralization_boundary(
+            &context.source_root,
+            &context.feedback_gate_path,
+            &context.feedback_gate_text,
+            &context.feedback_admission_path,
+            &context.feedback_admission_text,
+            &context.feedback_observable_sink_allowlist_path,
+            &context.feedback_observable_sink_allowlist_text,
+        )?;
 
     let adversarial_blocked =
         kodex_boundary_adversarial_kodex::validate_kodex_boundary_adversarial_completion(
             kodex_boundary_adversarial_kodex::KodexBoundaryAdversarialInputs {
+                observed_sink_paths: &observed_sink_paths,
                 source_root: &context.source_root,
                 kodex_gate_core_source_root: &context.kodex_gate_core_source_root,
                 feedback_gate_text: &context.feedback_gate_text,

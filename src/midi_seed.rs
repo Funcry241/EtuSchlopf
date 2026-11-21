@@ -4,7 +4,7 @@
 
 // --- mechanical module boundary: former src/flp.rs ---
 use crate::midi::MidiKeySignature;
-use crate::midi::notation_time::{NotationEventKind, NotationTimePlan, PreparedPerformanceTiming, read_midi_with_notation};
+use crate::midi::notation_time::{NotationEventKind, NotationTimePlan, PreparedPerformanceTiming, WrittenHoldProposal, read_midi_with_notation};
 use crate::midi::source_time::{MetricMeasure, MetricTimeline, supported_notation_meter};
 use crate::pipeline_profile::{base_solver_profiles, CandidateProfile};
 use crate::source_selection::{
@@ -204,7 +204,7 @@ pub(crate) struct MidiSeedRhythmicCourses {
     metric: MetricTimeline,
     emission_snapshot: Option<String>,
     source_voices: bool,
-    bound_written_durations: bool,
+    bound_written_sections: BTreeSet<(usize, u8)>,
     preserve_attacks: bool,
 }
 
@@ -919,6 +919,75 @@ fn resolve_open_performance_durations(
     Ok(())
 }
 
+/// Resolve only the metric sections whose cursor allocation is affected by a
+/// witnessed continuation. Existing ties carry section membership across bars.
+fn reconcile_inferred_seed_intervals(
+    sources: &mut [MidiSeedNote], metric: &MetricTimeline, courses: &[SeedPrimaryCourse],
+    time: &NotationTimePlan, holds: &BTreeMap<usize, WrittenHoldProposal>,
+    planned: &mut Vec<PlannedSeedOccurrence>,
+) -> anyhow::Result<BTreeSet<(usize, u8)>> {
+    let proposed_ends: BTreeMap<_, _> = planned.iter()
+        .filter_map(|note| note.source.map(|source| (source, note.interval.end)))
+        .collect();
+    let mut bound_sections = BTreeSet::new();
+    let mut written_spans = Vec::new();
+    let mut changed_duration = false;
+    for source in sources.iter().filter(|note| note.len > 0) {
+        let proposed = *proposed_ends.get(&source.source_ordinal)
+            .ok_or_else(|| anyhow!("Missing inferred seed end"))?;
+        let hold = holds.get(&source.source_ordinal).filter(|hold| hold.early_end == proposed);
+        let end = hold.filter(|hold| hold.confirmed).map_or(proposed, |hold| hold.continuation);
+        changed_duration |= end != proposed;
+        let first = metric.ordinal_at(source.pos).ok_or_else(|| anyhow!("Missing onset section"))?;
+        let last = metric.ordinal_at(end - 1).ok_or_else(|| anyhow!("Missing release section"))?;
+        let span = first..=last;
+        if let Some(hold) = hold {
+            let last_possible = metric.ordinal_at(hold.continuation - 1)
+                .ok_or_else(|| anyhow!("Missing candidate release section"))?;
+            bound_sections.extend((first..=last_possible).map(|bar| (bar, source.staff)));
+        }
+        written_spans.push((source.source_ordinal, source.staff, span, end));
+    }
+    if !changed_duration {
+        return Ok(BTreeSet::new());
+    }
+    loop {
+        let before = bound_sections.len();
+        for (_, staff, span, _) in &written_spans {
+            if span.clone().any(|bar| bound_sections.contains(&(bar, *staff))) {
+                bound_sections.extend(span.clone().map(|bar| (bar, *staff)));
+            }
+        }
+        if before == bound_sections.len() {
+            break;
+        }
+    }
+    let mut resolved = time.clone();
+    let mut allocated = sources.to_vec();
+    let ends: BTreeMap<_, _> = written_spans.into_iter().map(|(id, _, _, end)| (id, end)).collect();
+    for (original, note) in sources.iter_mut().zip(&mut allocated) {
+        if let Some(end) = ends.get(&note.source_ordinal) {
+            note.len = end - note.pos;
+            resolved.events[note.source_ordinal].len = note.len;
+            let bar = metric.ordinal_at(note.pos).ok_or_else(|| anyhow!("Missing seed section"))?;
+            if bound_sections.contains(&(bar, note.staff)) {
+                original.len = note.len;
+            }
+        }
+    }
+    let section = |occurrence: &PlannedSeedOccurrence| {
+        let staff = courses.iter().find(|course| course.creation == occurrence.course)
+            .expect("planned course exists").staff;
+        let bar = metric.ordinal_at(occurrence.interval.start).expect("planned section exists");
+        (bar, staff)
+    };
+    let allocated = bound_duration::plan(&allocated, metric, courses, &resolved)?;
+    planned.retain(|occurrence| !bound_sections.contains(&section(occurrence)));
+    planned.extend(allocated.into_iter().filter(|occurrence| bound_sections.contains(&section(occurrence))));
+    planned.sort_by_key(section);
+    Ok(bound_sections)
+}
+
 impl MidiSeedRhythmicCourses {
     pub(crate) fn physical_measure_duration(&self, ordinal: usize) -> Option<i64> {
         self.metric.measure(ordinal).map(|measure| measure.end - measure.start)
@@ -1050,7 +1119,7 @@ impl MidiSeedRhythmicCourses {
         source_voices: Option<&BTreeMap<usize, SourceVoice>>,
         preserve_attacks: bool,
     ) -> anyhow::Result<Self> {
-        Self::plan_metric_presentations(sources, metric, source_voices, preserve_attacks, None)
+        Self::plan_metric_presentations(sources, metric, source_voices, preserve_attacks, None, None)
     }
 
     fn plan_metric_presentations(
@@ -1059,6 +1128,7 @@ impl MidiSeedRhythmicCourses {
         source_voices: Option<&BTreeMap<usize, SourceVoice>>,
         preserve_attacks: bool,
         bound_time: Option<&NotationTimePlan>,
+        inferred_time: Option<(&NotationTimePlan, &crate::midi::DecodedMidiSource)>,
     ) -> anyhow::Result<Self> {
         let measures = metric.len();
         let end = metric.measure(measures.saturating_sub(1))
@@ -1110,15 +1180,17 @@ impl MidiSeedRhythmicCourses {
             let planned = source_voice_fragments(sources, metric, source_voices, &courses)?;
             return Ok(Self {
                 courses, sources: sources.to_vec(), planned, occurrences: Vec::new(),
-                metric: metric.clone(), emission_snapshot: None, source_voices: true, bound_written_durations: false, preserve_attacks,
+                metric: metric.clone(), emission_snapshot: None, source_voices: true, bound_written_sections: BTreeSet::new(), preserve_attacks,
             });
         }
         if let Some(time) = bound_time {
             let planned = bound_duration::plan(sources, metric, &courses, time)?;
+            let bound_written_sections = (0..measures)
+                .flat_map(|measure| [(measure, 1), (measure, 2)]).collect();
             return Ok(Self {
                 courses, sources: sources.to_vec(), planned, occurrences: Vec::new(),
                 metric: metric.clone(), emission_snapshot: None, source_voices: false,
-                bound_written_durations: true, preserve_attacks,
+                bound_written_sections, preserve_attacks,
             });
         }
         let mut grouped = BTreeMap::<(i64, u8), BTreeMap<i64, Vec<MidiSeedNote>>>::new();
@@ -1344,9 +1416,19 @@ impl MidiSeedRhythmicCourses {
                 planned.extend(second_independent);
             }
         }
+        let mut sources = sources.to_vec();
+        let mut bound_written_sections = BTreeSet::new();
+        if let Some((time, decoded)) = inferred_time {
+            let holds = time.independent_written_intervals(decoded)?;
+            if !holds.is_empty() {
+                bound_written_sections = reconcile_inferred_seed_intervals(
+                    &mut sources, metric, &courses, time, &holds, &mut planned,
+                )?;
+            }
+        }
         Ok(Self {
-            courses, sources: sources.to_vec(), planned, occurrences: Vec::new(),
-            metric: metric.clone(), emission_snapshot: None, source_voices: false, bound_written_durations: false, preserve_attacks,
+            courses, sources, planned, occurrences: Vec::new(),
+            metric: metric.clone(), emission_snapshot: None, source_voices: false, bound_written_sections, preserve_attacks,
         })
     }
 
@@ -1397,8 +1479,10 @@ impl MidiSeedRhythmicCourses {
             return Err(anyhow!("Rhythmic seed already emitted"));
         }
         self.validate_occurrences(xml)?;
-        if self.bound_written_durations {
-            bound_duration::verify_written_intervals(xml, &self.metric, &self.planned)?;
+        if !self.bound_written_sections.is_empty() {
+            bound_duration::verify_written_intervals(
+                xml, &self.metric, &self.planned, &self.bound_written_sections,
+            )?;
         }
         self.emission_snapshot = Some(xml.to_owned());
         Ok(())
@@ -1797,7 +1881,15 @@ pub fn midi_to_musicxml_seed_with_profile_and_hotspots(
     let rhythmic_courses = MidiSeedRhythmicCourses::plan_metric_presentations(
         &notes, &notation_time.metric, source_voices.as_ref(), preserve_attacks,
         notation_time.binds_written_intervals().then_some(notation_time.as_ref()),
+        Some((notation_time.as_ref(), decoded)),
     )?;
+    if rhythmic_courses.sources != notes {
+        notes.clone_from(&rhythmic_courses.sources);
+        let resolved = std::sync::Arc::make_mut(&mut notation_time);
+        for note in &notes {
+            resolved.events[note.source_ordinal].len = note.len;
+        }
+    }
     let stats = MidiSeedStats {
         solver_profile: profile.display_name().to_string(),
         source_selection_candidate_id: 0,
@@ -3624,7 +3716,8 @@ fn append_staff_voice(
     }
     let mut independent_cursor = None;
     let mut source_cursor = bar.start;
-    let explicit_cursor = rhythmic_courses.source_voices || rhythmic_courses.bound_written_durations;
+    let bound_intervals = rhythmic_courses.bound_written_sections.contains(&(measure_idx as usize, staff));
+    let explicit_cursor = rhythmic_courses.source_voices || bound_intervals;
     for occurrence in planned {
         if explicit_cursor && !occurrence.chord {
             append_cursor_motion(xml, source_cursor, occurrence.interval.start);
@@ -3659,7 +3752,7 @@ fn append_staff_voice(
             (None, None) => append_rest(xml, duration, staff, voice),
             _ => return Err(anyhow!("Inconsistent planned rhythmic occurrence")),
         }
-        let course_voice = if rhythmic_courses.bound_written_durations { None } else { occurrence.source_voice };
+        let course_voice = if bound_intervals { None } else { occurrence.source_voice };
         rhythmic_courses.capture_emission(staff, course_voice, occurrence.interval,
             occurrence.source, byte_start..xml.len())?;
         *raw_note_index = (*raw_note_index).saturating_add(1);

@@ -15,7 +15,7 @@ Mozarts KV 331 läuft als historisches Vergleichsstück im Korpus mit. Chopins B
 
 ## Notenbilder
 
-Klicke auf eine Vorschau, um das vollständige PDF zu öffnen.
+Klicke auf eine Vorschau, um das vollständige PDF zu öffnen. [Der Windows-Korpuslauf r1985 mit 15 Stücken](../evidence/r1985/README.md) ist separat dokumentiert.
 
 Die Galerie zeigt die veröffentlichten Partituren aus r1965. Unter Windows hat r1968 alle 14 Stücke vollständig neu gesetzt. Sämtliche 57 Seiten stimmen bei 144 dpi mit den hier verlinkten PDF-Seiten überein. [Vollkorpusvergleich r1968](../evidence/r1968/README.md) Der Ausschnitt zeigt jeweils das erste System. [Windows-Abnahme r1965](../evidence/r1965/README.md) · [Prüfsummen der PDFs und Vorschaubilder](../evidence/r1965/score_sha256.tsv)
 

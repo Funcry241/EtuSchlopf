@@ -6,9 +6,9 @@
 
 #[cfg(any(windows, test))]
 use std::collections::BTreeMap;
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 use std::fs;
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 use std::path::Path;
 #[cfg(windows)]
 use std::process::Command;
@@ -18,7 +18,7 @@ use std::time::Instant;
 const CONTRACT_SCHEMA: &str = "wav_pitch_sensor_qualification_v1";
 const SENSOR_IDENTITY: &str = "SpotifyBasicPitchOnnxRust";
 const SENSOR_VERSION: &str = "ICASSP2022-ONNX";
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 const TOOL_SOURCE_RELATIVE: &str = "tools/wav_pitch_external_sensor_audit";
 #[cfg(windows)]
 const TOOL_TARGET_SOURCE_RELATIVE: &str =
@@ -32,17 +32,18 @@ const LATEST_KV_RELATIVE: &str = "target/wav_pitch_external_sensor_audit/latest_
 #[cfg(windows)]
 const SENSOR_EXE_RELATIVE: &str =
     "target/wav_pitch_external_sensor_audit/cargo_target/release/etuschlopf_wav_pitch_external_sensor_audit.exe";
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 const MODEL_RELATIVE: &str =
     "target/wav_pitch_external_sensor_audit/runtime/model/basic_pitch_icassp2022_nmp.onnx";
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 const PIECE_CACHE_IDENTITY_FILE: &str = "EVIDENCE_REUSE_IDENTITY_V1.txt";
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 const PIECE_CACHE_SCHEMA: &str = "wav_pitch_external_sensor_evidence_reuse_v1";
 
 #[derive(Debug, Clone)]
 pub(crate) struct WavPitchExternalSensorBenchmarkAudit {
     pub(crate) observed: bool,
+    pub(crate) frozen_projection: Option<String>,
     pub(crate) reason: String,
     pub(crate) contract_schema: String,
     pub(crate) authority: String,
@@ -73,10 +74,10 @@ pub(crate) struct WavPitchExternalSensorBenchmarkAudit {
     pub(crate) canonical_source_event_promotion: String,
 }
 
-pub(crate) fn build_for_score_title(
-    score_title: Option<&str>,
+pub(crate) fn build_for_report(
+    wav: &super::ReportWav<'_>,
 ) -> Option<WavPitchExternalSensorBenchmarkAudit> {
-    let title = score_title?.trim();
+    let title = wav.title?.trim();
     if title.is_empty() {
         return None;
     }
@@ -96,23 +97,15 @@ pub(crate) fn build_for_score_title(
         // The benchmark is rendered while the current result report is still being built.
         // Therefore it must not depend on <title>.result.txt. Reuse the already-qualified
         // WAV-only timing owner in memory. No FLP bytes are opened in this owner.
-        let signal = match crate::audit_only::wav_signal_decode::load_decoded_wav_signal_for_score_title(
-            Some(title),
-        ) {
-            Ok(signal) => signal,
+        let captured = match wav.captured() {
+            Ok(captured) => captured,
             Err(reason) => return Some(not_observed(reason)),
         };
-        let timing = match crate::audit_only::wav_attack_pulse_metric::build_audio_only_pitch_timing_snapshot(
-            &signal,
-        ) {
+        let timing = match wav.pitch_timing() {
             Ok(timing) => timing,
             Err(reason) => return Some(not_observed(reason)),
         };
-        let wav_bytes = match fs::read(current.join(format!("{title}.wav"))) {
-            Ok(bytes) => bytes,
-            Err(_) => return Some(not_observed("wav_file_unreadable")),
-        };
-        let expected_wav_sha256 = crate::sha256::hex(&wav_bytes);
+        let expected_wav_sha256 = captured.sha256.as_str();
 
         let tool_source = current.join(TOOL_SOURCE_RELATIVE);
         if !tool_source.join("Cargo.toml").is_file()
@@ -192,20 +185,20 @@ pub(crate) fn build_for_score_title(
         let _ = fs::remove_file(&latest);
         let evidence_started = Instant::now();
 
-        if try_reuse_piece_evidence(
+        if let Some(audit) = try_reuse_piece_evidence(
             &current,
             title,
             &piece_output,
             &latest,
             timing.quarter_frames,
-            &expected_wav_sha256,
+            expected_wav_sha256,
         ) {
             eprintln!(
                 "ETUSCHLOPF: EvidenceRuntimeReuse: sensor=BasicPitch cache=hit cache_phase_ms={} total_benchmark_ms={}",
                 evidence_started.elapsed().as_millis(),
                 benchmark_started.elapsed().as_millis()
             );
-            return Some(read_kv_audit(&latest));
+            return Some(audit);
         }
 
         let _ = fs::remove_dir_all(&piece_output);
@@ -224,7 +217,7 @@ pub(crate) fn build_for_score_title(
             .arg("--quarter-frames")
             .arg(timing.quarter_frames.to_string())
             .arg("--expected-wav-sha256")
-            .arg(&expected_wav_sha256)
+            .arg(expected_wav_sha256)
             .arg("--cargo-bootstrap-mode")
             .arg(cargo_bootstrap_mode)
             .status();
@@ -234,17 +227,9 @@ pub(crate) fn build_for_score_title(
         if !status.success() {
             return Some(not_observed("rust_onnx_sensor_benchmark_process_failed"));
         }
-        let audit = read_kv_audit(&latest);
-        if audit.observed {
-            let _ = write_piece_cache_identity(
-                &current,
-                title,
-                &piece_output,
-                timing.quarter_frames,
-                &expected_wav_sha256,
-                &audit,
-            );
-        }
+        let audit = read_fresh_piece_evidence(
+            &current, title, &piece_output, timing.quarter_frames, expected_wav_sha256,
+        );
         eprintln!(
             "ETUSCHLOPF: EvidenceRuntimeReuse: sensor=BasicPitch cache=miss cache_phase_ms={} total_benchmark_ms={}",
             evidence_started.elapsed().as_millis(),
@@ -268,7 +253,7 @@ pub(crate) fn runtime_present_for_current_project() -> bool {
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 fn current_sensor_package_fingerprint(root: &Path) -> Result<String, &'static str> {
     let package_root = root.join(TOOL_SOURCE_RELATIVE);
     let mut bytes = Vec::<u8>::new();
@@ -293,14 +278,46 @@ fn current_sensor_package_fingerprint(root: &Path) -> Result<String, &'static st
     Ok(crate::sha256::hex(&bytes))
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 fn file_sha256(path: &Path) -> Result<String, &'static str> {
     fs::read(path)
         .map(|bytes| crate::sha256::hex(&bytes))
         .map_err(|_| "cache_identity_input_unreadable")
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, test))]
+fn read_fresh_piece_evidence(
+    root: &Path,
+    title: &str,
+    piece_output: &Path,
+    quarter_frames: u64,
+    expected_wav_sha256: &str,
+) -> WavPitchExternalSensorBenchmarkAudit {
+    let Ok(text) = fs::read_to_string(piece_output.join("audit_kv.txt")) else {
+        return not_observed("benchmark_readback_missing");
+    };
+    let values = parse_kv(&text);
+    let mut audit = audit_from_values(&values);
+    if !audit.observed {
+        return audit;
+    }
+    if !matches_report(&values, title, quarter_frames, expected_wav_sha256) {
+        return not_observed("benchmark_provenance_mismatch");
+    }
+    if let Ok(identity) = piece_cache_identity(
+        root, title, quarter_frames, expected_wav_sha256, &audit,
+    ) {
+        audit.frozen_projection = read_bound_projection(
+            piece_output, &values,
+        );
+        if audit.frozen_projection.is_some() {
+            let _ = write_piece_cache_identity(piece_output, &identity);
+        }
+    }
+    audit
+}
+
+#[cfg(any(windows, test))]
 fn try_reuse_piece_evidence(
     root: &Path,
     title: &str,
@@ -308,56 +325,43 @@ fn try_reuse_piece_evidence(
     latest: &Path,
     quarter_frames: u64,
     expected_wav_sha256: &str,
-) -> bool {
+) -> Option<WavPitchExternalSensorBenchmarkAudit> {
     let identity_path = piece_output.join(PIECE_CACHE_IDENTITY_FILE);
     let audit_path = piece_output.join("audit_kv.txt");
-    let freeze_manifest_path = piece_output.join("sensor_freeze_manifest.txt");
-    let freeze_sha_path = piece_output.join("SENSOR_OUTPUT_FROZEN.sha256");
-    let projection_path = piece_output.join("sensor_events.frozen.txt");
-    let Ok(identity_text) = fs::read_to_string(&identity_path) else {
-        return false;
-    };
+    let identity_text = fs::read_to_string(&identity_path).ok()?;
     let identity = parse_kv(&identity_text);
     if identity.get("schema").map(String::as_str) != Some(PIECE_CACHE_SCHEMA)
         || identity.get("project").map(String::as_str) != Some(title)
         || identity.get("source_wav_sha256").map(String::as_str) != Some(expected_wav_sha256)
         || get_u64(&identity, "quarter_frames") != quarter_frames
     {
-        return false;
+        return None;
     }
 
     let midi_path = root.join(format!("{title}.mid"));
-    let Ok(current_midi_sha256) = file_sha256(&midi_path) else {
-        return false;
-    };
+    let current_midi_sha256 = file_sha256(&midi_path).ok()?;
     if identity.get("source_midi_sha256").map(String::as_str)
         != Some(current_midi_sha256.as_str())
     {
-        return false;
+        return None;
     }
-    let Ok(current_package_sha256) = current_sensor_package_fingerprint(root) else {
-        return false;
-    };
+    let current_package_sha256 = current_sensor_package_fingerprint(root).ok()?;
     if identity
         .get("package_fingerprint_sha256")
         .map(String::as_str)
         != Some(current_package_sha256.as_str())
     {
-        return false;
+        return None;
     }
     let model_path = root.join(MODEL_RELATIVE);
-    let Ok(current_model_sha256) = file_sha256(&model_path) else {
-        return false;
-    };
+    let current_model_sha256 = file_sha256(&model_path).ok()?;
     if identity.get("model_fingerprint_sha256").map(String::as_str)
         != Some(current_model_sha256.as_str())
     {
-        return false;
+        return None;
     }
 
-    let Ok(audit_text) = fs::read_to_string(&audit_path) else {
-        return false;
-    };
+    let audit_text = fs::read_to_string(&audit_path).ok()?;
     let audit = parse_kv(&audit_text);
     for key in [
         "package_fingerprint_sha256",
@@ -368,66 +372,67 @@ fn try_reuse_piece_evidence(
         "sensor_version",
     ] {
         if identity.get(key) != audit.get(key) {
-            return false;
+            return None;
         }
     }
-    if audit.get("status").map(String::as_str) != Some("observed")
-        || audit.get("contract_schema").map(String::as_str) != Some(CONTRACT_SCHEMA)
-        || audit.get("sensor_identity").map(String::as_str) != Some(SENSOR_IDENTITY)
-        || audit.get("sensor_version").map(String::as_str) != Some(SENSOR_VERSION)
-    {
-        return false;
+    let mut result = audit_from_values(&audit);
+    if !result.observed || !matches_report(&audit, title, quarter_frames, expected_wav_sha256) {
+        return None;
     }
-
-    let Ok(freeze_manifest) = fs::read(&freeze_manifest_path) else {
-        return false;
-    };
-    let freeze_sha256 = crate::sha256::hex(&freeze_manifest);
-    if identity.get("freeze_sha256").map(String::as_str) != Some(freeze_sha256.as_str()) {
-        return false;
-    }
-    let Ok(freeze_sha_text) = fs::read_to_string(&freeze_sha_path) else {
-        return false;
-    };
-    if freeze_sha_text.trim() != freeze_sha256 {
-        return false;
-    }
-    let freeze_values = parse_kv(&String::from_utf8_lossy(&freeze_manifest));
-    for key in [
-        "package_fingerprint_sha256",
-        "model_fingerprint_sha256",
-        "feature_schema",
-        "source_wav_sha256",
-        "sensor_version",
-    ] {
-        if identity.get(key) != freeze_values.get(key) {
-            return false;
-        }
-    }
-    let Ok(projection) = fs::read(&projection_path) else {
-        return false;
-    };
-    let projection_sha256 = crate::sha256::hex(&projection);
-    if freeze_values
-        .get("frozen_event_projection_sha256")
-        .map(String::as_str)
-        != Some(projection_sha256.as_str())
-    {
-        return false;
-    }
-
-    fs::write(latest, audit_text.as_bytes()).is_ok()
+    result.frozen_projection = Some(read_bound_projection(
+        piece_output, &audit,
+    )?);
+    fs::write(latest, audit_text.as_bytes()).ok()?;
+    Some(result)
 }
 
-#[cfg(windows)]
-fn write_piece_cache_identity(
+#[cfg(any(windows, test))]
+fn matches_report(
+    audit: &BTreeMap<String, String>,
+    title: &str,
+    quarter_frames: u64,
+    expected_wav_sha256: &str,
+) -> bool {
+    audit.get("project").is_some_and(|project| project == title)
+        && audit.get("audio_pulse_quarter_frames").and_then(|frames| frames.parse().ok())
+            == Some(quarter_frames)
+        && audit.get("source_wav_sha256").is_some_and(|sha| sha == expected_wav_sha256)
+}
+
+#[cfg(any(windows, test))]
+fn read_bound_projection(
+    piece_output: &Path,
+    audit: &BTreeMap<String, String>,
+) -> Option<String> {
+    let manifest = fs::read_to_string(piece_output.join("sensor_freeze_manifest.txt")).ok()?;
+    let fingerprint = crate::sha256::hex(manifest.as_bytes());
+    let marker = fs::read_to_string(piece_output.join("SENSOR_OUTPUT_FROZEN.sha256")).ok()?;
+    if audit.get("freeze_sha256")? != &fingerprint || marker.trim() != fingerprint {
+        return None;
+    }
+    let freeze = parse_kv(&manifest);
+    for key in [
+        "contract_schema", "sensor_identity", "sensor_version", "package_fingerprint_sha256",
+        "model_fingerprint_sha256", "feature_schema", "source_wav_sha256",
+    ] {
+        if audit.get(key)? != freeze.get(key)? {
+            return None;
+        }
+    }
+    // Hash and return the same bytes; the report never reopens this path.
+    let projection = fs::read_to_string(piece_output.join("sensor_events.frozen.txt")).ok()?;
+    (freeze.get("frozen_event_projection_sha256")? == &crate::sha256::hex(projection.as_bytes()))
+        .then_some(projection)
+}
+
+#[cfg(any(windows, test))]
+fn piece_cache_identity(
     root: &Path,
     title: &str,
-    piece_output: &Path,
     quarter_frames: u64,
     expected_wav_sha256: &str,
     audit: &WavPitchExternalSensorBenchmarkAudit,
-) -> Result<(), &'static str> {
+) -> Result<String, &'static str> {
     let source_midi_sha256 = file_sha256(&root.join(format!("{title}.mid")))?;
     let current_package_sha256 = current_sensor_package_fingerprint(root)?;
     if current_package_sha256 != audit.package_fingerprint_sha256 {
@@ -461,6 +466,11 @@ fn write_piece_cache_identity(
         audit.sensor_version,
         audit.freeze_sha256,
     );
+    Ok(text)
+}
+
+#[cfg(any(windows, test))]
+fn write_piece_cache_identity(piece_output: &Path, text: &str) -> Result<(), &'static str> {
     let destination = piece_output.join(PIECE_CACHE_IDENTITY_FILE);
     let partial = piece_output.join(format!("{PIECE_CACHE_IDENTITY_FILE}.partial"));
     fs::write(&partial, text.as_bytes()).map_err(|_| "cache_identity_write_failed")?;
@@ -503,6 +513,7 @@ fn build_rust_audit_tool(target_source: &Path, cargo_target: &Path) -> bool {
 fn not_observed(reason: &str) -> WavPitchExternalSensorBenchmarkAudit {
     WavPitchExternalSensorBenchmarkAudit {
         observed: false,
+        frozen_projection: None,
         reason: reason.to_string(),
         contract_schema: CONTRACT_SCHEMA.to_string(),
         authority: "evidence_only".to_string(),
@@ -534,12 +545,8 @@ fn not_observed(reason: &str) -> WavPitchExternalSensorBenchmarkAudit {
     }
 }
 
-#[cfg(windows)]
-fn read_kv_audit(path: &Path) -> WavPitchExternalSensorBenchmarkAudit {
-    let Ok(text) = fs::read_to_string(path) else {
-        return not_observed("benchmark_readback_missing");
-    };
-    let values = parse_kv(&text);
+#[cfg(any(windows, test))]
+fn audit_from_values(values: &BTreeMap<String, String>) -> WavPitchExternalSensorBenchmarkAudit {
     if values.get("status").map(String::as_str) != Some("observed") {
         return not_observed("benchmark_readback_status_not_observed");
     }
@@ -552,34 +559,35 @@ fn read_kv_audit(path: &Path) -> WavPitchExternalSensorBenchmarkAudit {
 
     WavPitchExternalSensorBenchmarkAudit {
         observed: true,
+        frozen_projection: None,
         reason: "external_sensor_piece_evidence_observed".to_string(),
-        contract_schema: get(&values, "contract_schema"),
-        authority: get(&values, "authority"),
-        sensor_identity: get(&values, "sensor_identity"),
-        sensor_version: get(&values, "sensor_version"),
-        package_fingerprint_sha256: get(&values, "package_fingerprint_sha256"),
-        model_fingerprint_sha256: get(&values, "model_fingerprint_sha256"),
-        feature_schema: get(&values, "feature_schema"),
-        source_wav_sha256: get(&values, "source_wav_sha256"),
-        freeze_sha256: get(&values, "freeze_sha256"),
-        sensor_events: get_usize(&values, "sensor_events"),
-        oracle_events: get_usize(&values, "oracle_events"),
-        precision_80_permille: get_u64(&values, "precision_80_permille"),
-        recall_80_permille: get_u64(&values, "recall_80_permille"),
-        f1_80_permille: get_u64(&values, "f1_80_permille"),
-        chord_tone_recall_80_permille: get_u64(&values, "chord_tone_recall_80_permille"),
-        rearticulation_both_80_permille: get_u64(&values, "rearticulation_both_80_permille"),
-        multiplicity_recall_80_permille: get_u64(&values, "multiplicity_recall_80_permille"),
-        bass_recall_80_permille: get_u64(&values, "bass_recall_80_permille"),
-        high_recall_80_permille: get_u64(&values, "high_recall_80_permille"),
-        false_sensor_events_80: get_usize(&values, "false_sensor_events_80"),
-        harmonic_explainable_false_80: get_usize(&values, "harmonic_explainable_false_80"),
-        deterministic_repeat: get(&values, "deterministic_repeat"),
-        windows_offline_runtime: get(&values, "windows_offline_runtime"),
-        setup_network_used: get(&values, "setup_network_used"),
-        original_frame_mapping: get(&values, "original_frame_mapping"),
-        midi_authority: get(&values, "midi_authority"),
-        canonical_source_event_promotion: get(&values, "canonical_source_event_promotion"),
+        contract_schema: get(values, "contract_schema"),
+        authority: get(values, "authority"),
+        sensor_identity: get(values, "sensor_identity"),
+        sensor_version: get(values, "sensor_version"),
+        package_fingerprint_sha256: get(values, "package_fingerprint_sha256"),
+        model_fingerprint_sha256: get(values, "model_fingerprint_sha256"),
+        feature_schema: get(values, "feature_schema"),
+        source_wav_sha256: get(values, "source_wav_sha256"),
+        freeze_sha256: get(values, "freeze_sha256"),
+        sensor_events: get_usize(values, "sensor_events"),
+        oracle_events: get_usize(values, "oracle_events"),
+        precision_80_permille: get_u64(values, "precision_80_permille"),
+        recall_80_permille: get_u64(values, "recall_80_permille"),
+        f1_80_permille: get_u64(values, "f1_80_permille"),
+        chord_tone_recall_80_permille: get_u64(values, "chord_tone_recall_80_permille"),
+        rearticulation_both_80_permille: get_u64(values, "rearticulation_both_80_permille"),
+        multiplicity_recall_80_permille: get_u64(values, "multiplicity_recall_80_permille"),
+        bass_recall_80_permille: get_u64(values, "bass_recall_80_permille"),
+        high_recall_80_permille: get_u64(values, "high_recall_80_permille"),
+        false_sensor_events_80: get_usize(values, "false_sensor_events_80"),
+        harmonic_explainable_false_80: get_usize(values, "harmonic_explainable_false_80"),
+        deterministic_repeat: get(values, "deterministic_repeat"),
+        windows_offline_runtime: get(values, "windows_offline_runtime"),
+        setup_network_used: get(values, "setup_network_used"),
+        original_frame_mapping: get(values, "original_frame_mapping"),
+        midi_authority: get(values, "midi_authority"),
+        canonical_source_event_promotion: get(values, "canonical_source_event_promotion"),
     }
 }
 
@@ -591,7 +599,7 @@ fn parse_kv(text: &str) -> BTreeMap<String, String> {
         .collect()
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 fn get(values: &BTreeMap<String, String>, key: &str) -> String {
     values
         .get(key)
@@ -607,7 +615,7 @@ fn get_u64(values: &BTreeMap<String, String>, key: &str) -> u64 {
         .unwrap_or(0)
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 fn get_usize(values: &BTreeMap<String, String>, key: &str) -> usize {
     values
         .get(key)
@@ -618,6 +626,71 @@ fn get_usize(values: &BTreeMap<String, String>, key: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fresh_and_reused_sensor_projections_belong_to_one_recording() {
+        let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+            .unwrap().as_nanos();
+        let root = std::env::temp_dir().join(format!("report_sensor_evidence_{nonce}"));
+        let piece = root.join("piece");
+        fs::create_dir_all(&piece).unwrap();
+        for name in ["Cargo.toml", "BASIC_PITCH_NOTICE.md", "src/main.rs"] {
+            let path = root.join(TOOL_SOURCE_RELATIVE).join(name);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, name).unwrap();
+        }
+        for name in [
+            "src/midi.rs", "src/source_event.rs", "src/source_time.rs", "src/notation_time.rs",
+            "src/inferred_performance_timing.rs", MODEL_RELATIVE, "synthetic.mid",
+        ] {
+            let path = root.join(name);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, name).unwrap();
+        }
+        let recording = crate::sha256::hex(b"one synthetic recording");
+        let package = current_sensor_package_fingerprint(&root).unwrap();
+        let model = file_sha256(&root.join(MODEL_RELATIVE)).unwrap();
+        let projection = "schema=basic_pitch_rust_event_projection_v1\n0|60|1|2|0|1|2\n";
+        let projection_hash = crate::sha256::hex(projection.as_bytes());
+        let provenance = format!(
+            "contract_schema={CONTRACT_SCHEMA}\nsensor_identity={SENSOR_IDENTITY}\nsensor_version={SENSOR_VERSION}\npackage_fingerprint_sha256={package}\nmodel_fingerprint_sha256={model}\nfeature_schema=synthetic\nsource_wav_sha256={recording}\n"
+        );
+        let manifest = format!("{provenance}frozen_event_projection_sha256={projection_hash}\n");
+        let freeze = crate::sha256::hex(manifest.as_bytes());
+        fs::write(piece.join("sensor_freeze_manifest.txt"), manifest).unwrap();
+        fs::write(piece.join("SENSOR_OUTPUT_FROZEN.sha256"), &freeze).unwrap();
+        let path = piece.join("sensor_events.frozen.txt");
+        fs::write(&path, projection).unwrap();
+        fs::write(piece.join("audit_kv.txt"), format!(
+            "status=observed\nproject=synthetic\naudio_pulse_quarter_frames=31\n{provenance}freeze_sha256={freeze}\n"
+        )).unwrap();
+        let latest = root.join("latest_audit_kv.txt");
+        fs::write(&latest, "status=another_project").unwrap();
+        let fresh = read_fresh_piece_evidence(&root, "synthetic", &piece, 31, &recording);
+        assert!(fresh.observed);
+        assert_eq!(fresh.frozen_projection.as_deref(), Some(projection));
+        let warm = |sha: &str, frames| {
+            try_reuse_piece_evidence(&root, "synthetic", &piece, &latest, frames, sha)
+        };
+        let hit = warm(&recording, 31).unwrap();
+        assert_eq!(hit.frozen_projection, fresh.frozen_projection);
+        let wrong = read_fresh_piece_evidence(&root, "synthetic", &piece, 31, "different");
+        assert!(!wrong.observed);
+        assert_eq!(wrong.reason, "benchmark_provenance_mismatch");
+        assert!(wrong.frozen_projection.is_none());
+        assert!(warm("different", 31).is_none());
+        assert!(warm(&recording, 30).is_none());
+        fs::write(&path, "other bytes").unwrap();
+        assert!(warm(&recording, 31).is_none());
+        let own_audit = read_fresh_piece_evidence(&root, "synthetic", &piece, 31, &recording);
+        assert!(own_audit.observed);
+        assert!(own_audit.frozen_projection.is_none());
+        assert_eq!(hit.frozen_projection.as_deref(), Some(projection));
+        fs::write(&path, projection).unwrap();
+        fs::write(root.join("synthetic.mid"), "changed").unwrap();
+        assert!(warm(&recording, 31).is_none());
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn kv_readback_preserves_rust_evidence_only_authority() {

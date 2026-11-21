@@ -18,7 +18,7 @@ on:
       - 'docs/MATHEMATIK*.md'
       - 'docs/CONTRIBUTING.md'
       - 'docs/community/issue_templates/01_fehler.md'
-      - 'docs/evidence/r1968/**'
+      - 'docs/evidence/r1985/**'
       - '.gitattributes'
       - '.github/distribution/**'
       - '!.github/distribution/RELEASE.md'
@@ -40,7 +40,7 @@ on:
       - 'docs/MATHEMATIK*.md'
       - 'docs/CONTRIBUTING.md'
       - 'docs/community/issue_templates/01_fehler.md'
-      - 'docs/evidence/r1968/**'
+      - 'docs/evidence/r1985/**'
       - '.gitattributes'
       - '.github/distribution/**'
       - '!.github/distribution/RELEASE.md'
@@ -62,33 +62,18 @@ jobs:
     env:
       RUSTFLAGS: '-C target-feature=+crt-static'
       CARGO_INCREMENTAL: '0'
-      ETU_NATIVE_ROOT: D:\etu-r1968-review-input
-      ETU_BUILD_ROOT: D:\etu-r1968-build
-      TAKE_NAME: EtuSchlopf_v0_10_1839_r1968_Reduktion_unbuilt_source.zip
+      ETU_BUILD_ROOT: D:\etu-r1985-build
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           path: public
           persist-credentials: false
-      - name: Check out the successful native Windows review
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          ref: 5cb89ebe0a977d104f92535ed7778624cae07a41
-          path: review
-          persist-credentials: false
-      - name: Reproduce the accepted Take ZIP
-        working-directory: review
+      - name: Verify and reconstruct the accepted r1985 source
         run: |
-          python .github/strict-ci/verify.py prepare
-          if ($LASTEXITCODE -ne 0) { throw 'Could not reproduce the accepted r1968 Take' }
-      - name: Verify public sources against the exact native build
-        run: |
-          python .github/distribution/prepare-r1968-source.py $env:ETU_NATIVE_ROOT $env:ETU_BUILD_ROOT "$env:RUNNER_TEMP/etuschlopf-source"
-          if ($LASTEXITCODE -ne 0) { throw 'Native r1968 source preparation failed' }
-          python .github/distribution/verify-accepted-source.py --revision r1968 --accepted-root $env:ETU_BUILD_ROOT 233a6a86fb77ac85e08004d858654267ea2bd151918e5f53cef28a0fdbbdea0b f78592f5ff094d778874fa66cdf6573811e44528f303dace48ab0cbf40ab0a88
-          if ($LASTEXITCODE -ne 0) { throw 'Public or accepted native source verification failed' }
+          python .github/distribution/prepare-r1985-source.py . $env:ETU_BUILD_ROOT "$env:RUNNER_TEMP/etuschlopf-source"
+          if ($LASTEXITCODE -ne 0) { throw 'Native r1985 source preparation failed' }
       - name: Build accepted engine
-        working-directory: D:\etu-r1968-build
+        working-directory: D:\etu-r1985-build
         run: |
           rustup toolchain install 1.98.0 --profile minimal
           if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed' }
@@ -133,11 +118,11 @@ jobs:
           ./.github/distribution/smoke.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
       - name: Render the start example with the packaged EXE
         run: |
-          ./.github/distribution/start-example.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path -Output dist/EtuSchlopf-Beispiel-r1968.zip
+          ./.github/distribution/start-example.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path -Output dist/EtuSchlopf-Beispiel-r1985.zip
       - name: Hash Windows downloads
         run: |
-          @("revision=r1968", "public_commit=$env:GITHUB_SHA", "workflow=$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID", "native_review_commit=5cb89ebe0a977d104f92535ed7778624cae07a41", "native_review_run=44831896224", "accepted_take_sha256=2138a8f2ad1746367c443f5c7ac80dada47b48f04414f2f21a773bf4f7a11880", "native_tree_sha256=233a6a86fb77ac85e08004d858654267ea2bd151918e5f53cef28a0fdbbdea0b") | Set-Content -Encoding ascii dist/runtime-provenance.txt
-          $sums = foreach ($name in @('EtuSchlopf-Windows-x64.exe', 'EtuSchlopf-r1968-source.zip', $env:TAKE_NAME, 'EtuSchlopf-Beispiel-r1968.zip', 'runtime-provenance.txt')) {
+          @("revision=r1985", "public_commit=$env:GITHUB_SHA", "workflow=$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID", "accepted_take_sha256=5bf6cf758532cd99bbe6174e774fa6ee0499bb3e22f96a4b88eab7f28f363651", "native_snapshot_sha256=45d702204667afdbdddbe0fef65327db83f504d8877984cc88669d27caff95d2") | Set-Content -Encoding ascii dist/runtime-provenance.txt
+          $sums = foreach ($name in @('EtuSchlopf-Windows-x64.exe', 'EtuSchlopf-r1985-source.zip', 'EtuSchlopf-Beispiel-r1985.zip', 'runtime-provenance.txt')) {
             $hash = (Get-FileHash -Algorithm SHA256 "dist/$name").Hash.ToLowerInvariant()
             "$hash  $name"
           }
@@ -162,14 +147,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag=v0.10.1839-r1968-windows-preview
+          tag=v0.10.1839-r1985-windows-preview
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $tag already exists."
             exit 0
           fi
           gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name EtuSchlopf-Windows-x64 --dir dist
           (cd dist && sha256sum --check SHA256SUMS.txt)
-          notes="Die portable EXE enthält die nativ unter Windows angenommene Engine 0.10.1839 r1968. Der Windows-Vollkorpus r1968 setzte alle 14 Stücke. Alle 28 MusicXML-Dateien stimmen bytegenau und alle 57 PDF-Seiten bei 144 dpi pixelgenau mit r1965 überein. Das Startbeispiel enthält MIDI, WAV und die mit dieser EXE frisch gerenderte PDF. Zum Bauen enthält EtuSchlopf-r1968-source.zip die geprüfte Cargo.lock. Das zweite Quell-ZIP ist der angenommene Take für das Update von r1967 auf r1968. Für die PDF-Ausgabe brauchst du MuseScore. Die EXE ist unsigniert. [Abnahme r1968]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/evidence/r1968/README.md) · [Veröffentlichte Korpusnoten aus r1965]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/v0.10.1839-r1965-windows-preview) · [Windows-Build]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
-          gh release create "$tag" dist/EtuSchlopf-Windows-x64.exe dist/EtuSchlopf-r1968-source.zip dist/EtuSchlopf_v0_10_1839_r1968_Reduktion_unbuilt_source.zip dist/EtuSchlopf-Beispiel-r1968.zip dist/runtime-provenance.txt dist/SHA256SUMS.txt \
+          notes="Die portable EXE enthält EtuSchlopf 0.10.1839 r1985. Der Windows-Vollkorpus setzte alle 15 Stücke. Gegenüber r1973 sind 30 MusicXML-Dateien bytegleich und 59 PDF-Seiten bei 150 dpi pixelgleich. Das Startbeispiel enthält MIDI, WAV und das frisch gerenderte PDF. Das Quellarchiv enthält die geprüfte Cargo.lock. Für die PDF-Ausgabe brauchst du MuseScore. Die EXE ist unsigniert. [Windows-Abnahme r1985]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/evidence/r1985/README.md) · [Windows-Build]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+          gh release create "$tag" dist/EtuSchlopf-Windows-x64.exe dist/EtuSchlopf-r1985-source.zip dist/dist/EtuSchlopf-Beispiel-r1985.zip dist/runtime-provenance.txt dist/SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-            --title "EtuSchlopf r1968 Windows x64" --notes "$notes"
+            --title "EtuSchlopf r1985 Windows x64" --notes "$notes"

@@ -5,14 +5,12 @@
 //! No pitch candidate is promoted into CanonicalSourceEvents.
 
 use crate::audit_only::wav_attack_pulse_metric::{
-    build_audio_only_pitch_timing_snapshot, AudioOnlyAttackProbe, AudioOnlyPitchTimingSnapshot,
+    AudioOnlyAttackProbe, AudioOnlyPitchTimingSnapshot,
 };
 use crate::audit_only::wav_observation_legacy_oracle::{
     load_canonical_legacy_pitch_events_for_score_title, CanonicalLegacyPitchEventAudit,
 };
-use crate::audit_only::wav_signal_decode::{
-    load_decoded_wav_signal_for_score_title, DecodedWavSignalAudit,
-};
+use crate::audit_only::wav_signal_decode::{DecodedWavSignalAudit, ReportWav};
 use std::collections::{BTreeMap, BTreeSet};
 
 const PIANO_MIDI_MIN: i32 = 21;
@@ -87,14 +85,15 @@ struct FrozenExternalSensorEvent {
     onset_frame: u64,
 }
 
-pub(crate) fn build_for_score_title(
-    score_title: Option<&str>,
+pub(crate) fn build_for_report(
+    wav: &ReportWav<'_>,
+    frozen_projection: Option<&str>,
 ) -> Option<WavPitchHarmonicEvidenceProbeAudit> {
-    let signal = match load_decoded_wav_signal_for_score_title(score_title) {
-        Ok(signal) => signal,
+    let signal = match wav.captured() {
+        Ok(captured) => &captured.signal,
         Err(reason) => return Some(not_measured(reason)),
     };
-    let timing = match build_audio_only_pitch_timing_snapshot(&signal) {
+    let timing = match wav.pitch_timing() {
         Ok(timing) => timing,
         Err(reason) => return Some(not_measured(reason)),
     };
@@ -104,26 +103,24 @@ pub(crate) fn build_for_score_title(
     let selected_attacks = select_probe_attacks(&timing.attacks, MAX_PROBE_ATTACKS);
     let probes: Vec<AttackPitchProbe> = selected_attacks
         .iter()
-        .filter_map(|attack| build_pitch_probe(&signal, *attack))
+        .filter_map(|attack| build_pitch_probe(signal, *attack))
         .collect();
 
-    // Cross-view ordering remains fail-closed: the external sensor projection was already
-    // frozen by the preceding report section without source-oracle access. Read only that immutable
-    // projection here, still before loading any legacy oracle evidence.
-    let external_sensor_events = load_frozen_external_sensor_events(score_title);
+    // Only bytes already accepted by Basic Pitch for this recording enter the comparison.
+    let external_sensor_events = frozen_projection.map(parse_frozen_external_sensor_events);
 
-    let legacy_events = match load_canonical_legacy_pitch_events_for_score_title(score_title) {
+    let legacy_events = match load_canonical_legacy_pitch_events_for_score_title(wav.title) {
         Ok(events) => events,
         Err(reason) => {
-            let mut audit = audio_only_summary(&timing, &probes);
+            let mut audit = audio_only_summary(timing, &probes);
             audit.reason = reason;
             return Some(audit);
         }
     };
 
-    let projected_oracle = project_oracle_onsets(&timing, &legacy_events);
+    let projected_oracle = project_oracle_onsets(timing, &legacy_events);
     let mut audit = evaluate_probes(
-        &timing,
+        timing,
         &probes,
         &projected_oracle,
         external_sensor_events.as_deref(),
@@ -355,24 +352,6 @@ fn build_pitch_probe(
     })
 }
 
-
-fn load_frozen_external_sensor_events(
-    score_title: Option<&str>,
-) -> Option<Vec<FrozenExternalSensorEvent>> {
-    let title = score_title?.trim();
-    if title.is_empty() {
-        return None;
-    }
-    let current = std::env::current_dir().ok()?;
-    let piece_dir = current
-        .join("target/wav_pitch_external_sensor_audit/pieces")
-        .join(title);
-    if !piece_dir.join("SENSOR_OUTPUT_FROZEN.sha256").is_file() {
-        return None;
-    }
-    let text = std::fs::read_to_string(piece_dir.join("sensor_events.frozen.txt")).ok()?;
-    Some(parse_frozen_external_sensor_events(&text))
-}
 
 fn parse_frozen_external_sensor_events(text: &str) -> Vec<FrozenExternalSensorEvent> {
     let mut events = Vec::new();

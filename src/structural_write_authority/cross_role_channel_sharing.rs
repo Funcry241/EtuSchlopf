@@ -1413,7 +1413,7 @@ pub(super) fn check_original_component_written_reuse(
     component_sources: &BTreeSet<usize>,
     reuse: &ProjectionReuse<'_>,
 ) -> io::Result<()> {
-    if !canonical.original_beam_voice_groups.iter().any(|group| group.allocation_sources() == *component_sources)
+    if !canonical.allocation_original_beam_groups().any(|group| group.allocation_sources() == *component_sources)
         || component_sources.is_empty()
         || !std::ptr::eq(reuse.canonical, canonical)
         || production.source_to_role != proposed.source_to_role
@@ -1649,7 +1649,7 @@ pub(super) fn verify_original_component_projection(
     (restore_entry_rest, countervoices): (bool, &BTreeSet<usize>),
 ) -> io::Result<()> {
     let mut attested = BTreeSet::new();
-    for group in &canonical.original_beam_voice_groups {
+    for group in canonical.allocation_original_beam_groups() {
         let members = group.allocation_sources();
         if members.is_empty() || !members.is_subset(sources) { continue; }
         let labels = members.iter().map(|source| proposed.label_for_source(*source))

@@ -1745,7 +1745,7 @@ impl FrozenSerializationVoiceChannelPlan {
         );
         let mut accepted_sources = std::collections::BTreeSet::new();
         let mut accepted: Option<(Self, FrozenSerializedVoicePlan)> = None;
-        for group in &canonical.original_beam_voice_groups {
+        for group in canonical.allocation_original_beam_groups() {
             let sources = group.allocation_sources();
             let labels = sources.iter().filter_map(|source| production.label_for_source(*source))
                 .collect::<std::collections::BTreeSet<_>>();
@@ -1796,7 +1796,7 @@ impl FrozenSerializationVoiceChannelPlan {
             .collect::<std::collections::BTreeMap<_, _>>();
         let original_labels = legacy_preferences.iter().map(|row| (row.source_event_id, row.label.trim()))
             .collect::<std::collections::BTreeMap<_, _>>();
-        let groups: Vec<_> = canonical.original_beam_voice_groups.iter()
+        let groups: Vec<_> = canonical.allocation_original_beam_groups()
             .map(|group| group.allocation_sources())
             .filter(|sources| !sources.is_subset(&accepted_sources))
             .collect();
@@ -1898,7 +1898,7 @@ impl FrozenSerializationVoiceChannelPlan {
                     channel_order.entry(channel).or_insert(rank);
                 }
             }
-            for group in &canonical.original_beam_voice_groups {
+            for group in canonical.allocation_original_beam_groups() {
                 let sources = group.allocation_sources();
                 if !sources.is_subset(&accepted_sources) { continue; }
                 if let Some((next_channels, next_voices)) = channels.checked_original_component_written_reuse(
@@ -1917,7 +1917,7 @@ impl FrozenSerializationVoiceChannelPlan {
         // occupied by a split or already coherent group from another line.
         // Test the whole group against the current projection and require a
         // unique destination with independently captured notation identity.
-        for group in &canonical.original_beam_voice_groups {
+        for group in canonical.allocation_original_beam_groups() {
             let sources = group.allocation_sources();
             let (current, before) = accepted.as_ref()
                 .map_or((self, production), |(channels, voices)| (channels, voices));
@@ -2463,6 +2463,7 @@ pub(crate) struct PrimaryBeamVoicePartitionBoundPlan {
     selected_members: Vec<PrimaryBeamVoicePartitionSelectedMember>,
     scope_candidates: usize,
     original_group_alignment: Vec<String>,
+    original_grace_hosts: Vec<original_beam_voice_alignment::OriginalBeamGraceHost>,
     bridge_alignment_proofs: Vec<rest_bridge_extension_course::BridgeAlignmentProof>,
 }
 
@@ -2487,6 +2488,7 @@ impl PrimaryBeamVoicePartitionBoundPlan {
     pub(crate) const fn changed_voice_elements(&self) -> usize {
         self.edits.len()
     }
+
 }
 
 pub(crate) fn rebind_primary_beam_voice_partition_plan_to_current_xml(
@@ -2656,6 +2658,9 @@ pub(crate) fn rebind_primary_beam_voice_partition_plan_to_current_xml(
     }
 
     rest_bridge_extension_course::validate_alignment_proofs(source_continuation, &plan.bridge_alignment_proofs)?;
+    original_beam_voice_alignment::validate_late_grace_hosts(
+        source_continuation, &measures, &plan.selected_members, &plan.original_grace_hosts,
+    )?;
     if !plan.original_group_alignment.is_empty() {
         original_beam_voice_alignment::validate_late_groups(source_xml, source_continuation, &plan.original_group_alignment)?;
         original_beam_voice_alignment::validate_batch_occupancy(source_xml, &edits)?;
@@ -2667,6 +2672,7 @@ pub(crate) fn rebind_primary_beam_voice_partition_plan_to_current_xml(
         selected_members: plan.selected_members.clone(),
         scope_candidates: plan.scope_candidates,
         original_group_alignment: plan.original_group_alignment.clone(),
+        original_grace_hosts: plan.original_grace_hosts.clone(),
         bridge_alignment_proofs: plan.bridge_alignment_proofs.clone(),
     })
 }
@@ -5370,7 +5376,7 @@ fn build_frozen_serialization_voice_channels_inner<'owner>(
         );
     }
 
-    for group in &canonical.original_beam_voice_groups {
+    for group in canonical.allocation_original_beam_groups() {
         let sources = group.allocation_sources();
         if sources.is_empty() || !sources.is_subset(notation_components) { continue; }
         let first = *sources.first().expect("nonempty original notation component");
@@ -10211,6 +10217,7 @@ pub(crate) fn bind_primary_beam_voice_partition_plan(
     }
 
     let mut bridge_alignment_proofs = Vec::new();
+    let mut original_grace_hosts = Vec::new();
     let added = original_beam_voice_alignment::append_proven_alignment(
         original_beam_voice_alignment::AlignmentInput {
             source_xml, source: source_continuation, voices: voice_plan, classification_xml,
@@ -10219,6 +10226,7 @@ pub(crate) fn bind_primary_beam_voice_partition_plan(
         },
         original_beam_voice_alignment::AlignmentOutput {
             bridge_proofs: &mut bridge_alignment_proofs,
+            grace_hosts: &mut original_grace_hosts,
             repaired: &mut repaired_voice_plan, edits: &mut edits, selected: &mut selected_members,
         },
     )?;
@@ -10248,6 +10256,7 @@ pub(crate) fn bind_primary_beam_voice_partition_plan(
         selected_members,
         scope_candidates,
         original_group_alignment: added,
+        original_grace_hosts,
         bridge_alignment_proofs,
     })
 }

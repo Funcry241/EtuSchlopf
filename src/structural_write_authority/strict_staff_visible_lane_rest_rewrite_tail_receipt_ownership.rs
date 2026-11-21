@@ -98,22 +98,9 @@ fn build_external_notation_feedback_safe_write_audit_prepared(
     let (candidate_xml_after_duplicate, mut actions, seen, mut receipts) = apply_structural_duplicate_same_pitch_exact_render_write_with_receipts(xml, 8);
     audit.duplicate_candidates_seen = seen;
     audit.duplicate_attempted = actions.len();
-    let candidate_xml_after_tie = candidate_xml_after_duplicate.clone();
-    let mut tie_actions = Vec::<BehindBarsRuleCheckRestAndTieAction>::new();
-    let tie_seen = 0_usize;
-    audit.tie_merge_candidates_seen = tie_seen;
-    audit.tie_merge_attempted = tie_actions.len();
-    audit.tie_merge_equivalent_contractions = tie_actions.len();
-    audit.retention_neutralized_pitched_delta = tie_actions.len();
-    let candidate_xml_after_shadow = candidate_xml_after_tie.clone();
-    let mut shadow_actions = Vec::<BehindBarsRuleCheckRestAndTieAction>::new();
-    let shadow_seen = 0_usize;
-    audit.generic_shadow_rest_candidates = shadow_seen;
-    audit.generic_shadow_rest_attempted = shadow_actions.len();
-
     // r735: the lower-staff staccato proxy pilot and its zero-only compatibility
     // accounting are fully retired. The producer has been absent since r472.
-    let (candidate_xml, mut rest_actions, rest_seen, rest_receipts) = apply_structural_transactional_rest_coalesce_render_write_prepared(&candidate_xml_after_shadow, 4);
+    let (candidate_xml, mut rest_actions, rest_seen, rest_receipts) = apply_structural_transactional_rest_coalesce_render_write_prepared(&candidate_xml_after_duplicate, 4);
     receipts.append(rest_receipts);
     audit.transactional_rest_coalesce_candidates = rest_seen;
     audit.transactional_rest_coalesce_attempted = rest_actions.len();
@@ -130,33 +117,17 @@ fn build_external_notation_feedback_safe_write_audit_prepared(
     audit.backup_forward_after_ok = after_backup_forward_ok;
     audit.raw_cursor_after_ok = after_backup_forward_ok;
     audit.duplicate_rows_after = build_behind_bars_rule_check_duplicate_stem_rows(&candidate_xml).into_iter().take(12).collect();
-    let expected_visible_after = audit.visible_pitched_before
-        .saturating_sub(audit.duplicate_attempted)
-        .saturating_sub(audit.tie_merge_attempted);
+    let expected_visible_after = audit.visible_pitched_before.saturating_sub(audit.duplicate_attempted);
     let expected_hidden_after = audit.hidden_pitched_before.saturating_add(audit.duplicate_attempted);
     let adopted_rest_delta: usize = rest_actions
         .iter()
         .filter(|action| action.verdict == "adopted_transactionally")
         .map(|action| action.old_rest_count.saturating_sub(action.new_rest_count))
         .sum();
-    let shadow_rest_delta: usize = shadow_actions
-        .iter()
-        .map(|action| action.old_rest_count.saturating_sub(action.new_rest_count))
-        .sum();
-    let expected_visible_rests_after = audit.visible_rests_before
-        .saturating_sub(adopted_rest_delta)
-        .saturating_sub(shadow_rest_delta);
+    let expected_visible_rests_after = audit.visible_rests_before.saturating_sub(adopted_rest_delta);
     let any_write_attempted = audit.duplicate_attempted > 0
-        || audit.tie_merge_attempted > 0
-        || audit.generic_shadow_rest_attempted > 0
         || audit.transactional_rest_coalesce_adopted > 0;
-    let sounding_contract_ok = if audit.tie_merge_attempted > 0 {
-        // Same-pitch tie contraction intentionally changes visible notation granularity
-        // while preserving the musical target as a notational equivalence class.
-        true
-    } else {
-        audit.dedup_sounding_signature_before == audit.dedup_sounding_signature_after
-    };
+    let sounding_contract_ok = audit.dedup_sounding_signature_before == audit.dedup_sounding_signature_after;
     let invariant_ok = any_write_attempted
         && before_backup_forward_ok
         && audit.parse_after_ok
@@ -169,19 +140,11 @@ fn build_external_notation_feedback_safe_write_audit_prepared(
     if invariant_ok {
         audit.written = true;
         audit.duplicate_adopted = audit.duplicate_attempted;
-        audit.tie_merge_adopted = audit.tie_merge_attempted;
-        audit.generic_shadow_rest_adopted = audit.generic_shadow_rest_attempted;
         for action in &mut actions { action.verdict = "adopted".to_string(); }
-        for action in &mut tie_actions { action.verdict = "adopted".to_string(); }
-        for action in &mut shadow_actions { action.verdict = "adopted".to_string(); }
         audit.verdict = "generic_shadow_rest_and_rest_coalesce_green".to_string();
     } else {
         audit.duplicate_rejected = audit.duplicate_attempted;
-        audit.tie_merge_rejected = audit.tie_merge_attempted;
-        audit.generic_shadow_rest_rejected = audit.generic_shadow_rest_attempted;
         for action in &mut actions { action.verdict = "rejected_by_external_feedback_duplicate_invariant_guard".to_string(); }
-        for action in &mut tie_actions { action.verdict = "rejected_by_external_feedback_tie_merge_invariant_guard".to_string(); }
-        for action in &mut shadow_actions { action.verdict = "rejected_by_generic_shadow_rest_invariant_guard".to_string(); }
         for action in &mut rest_actions { action.verdict = "rejected_by_global_external_feedback_safewrite_guard".to_string(); }
         audit.transactional_rest_coalesce_rejected = audit.transactional_rest_coalesce_attempted;
         audit.transactional_rest_coalesce_adopted = 0;
@@ -193,8 +156,6 @@ fn build_external_notation_feedback_safe_write_audit_prepared(
     }
     audit.notation_rule_change = audit.written;
     audit.music_mutation = false;
-    actions.extend(tie_actions);
-    actions.extend(shadow_actions);
     actions.extend(rest_actions);
     audit.actions = actions;
     audit.done_fragment = format!(
@@ -250,7 +211,7 @@ fn build_external_notation_feedback_safe_write_audit_prepared(
         audit.sounding_signature_after,
         audit.dedup_sounding_signature_before,
         audit.dedup_sounding_signature_after,
-        yes_no(audit.tie_merge_attempted > 0 || audit.dedup_sounding_signature_before == audit.dedup_sounding_signature_after),
+        yes_no(sounding_contract_ok),
         if audit.parse_after_ok { "ok" } else { "fail" },
         if audit.backup_forward_after_ok { "ok" } else { "fail" },
         if audit.raw_cursor_after_ok { "ok" } else { "fail" },

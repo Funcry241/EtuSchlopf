@@ -8,12 +8,9 @@ Windows-Launcher `run.cmd`; eigene geeignete Eingaben sind erforderlich.
 
 ## Stand der Notenausgabe
 
-**r1968 / 0.10.1839** hat auf Windows alle 14 Stücke aus MIDI und WAV neu gesetzt.
-Gegenüber r1965 stimmen die 28 MusicXML-Dateien bytegenau und die 57 PDF-Seiten bei 144 dpi pixelgenau überein.
-Die zehn eigenen Etüden umfassen davon 49 Seiten. [Vollkorpus und Seitenvergleich r1968](docs/evidence/r1968/README.md)
-
-Bei Chopins Etüde op. 10 Nr. 3 stimmen für alle 448 regulären Noten Einsatz und Tonhöhe mit der Referenz überein.
-Bei 68 Noten weicht die geschriebene Dauer ab. [Mathematik, Kapitel 10.1](docs/MATHEMATIK.md#kapitel-10-1)
+**r1985 / 0.10.1839** hat auf Windows alle 15 Stücke aus MIDI und WAV neu gesetzt.
+Gegenüber r1973 sind die 30 MusicXML-Dateien bytegleich und alle 59 PDF-Seiten
+im Rastervergleich pixelgleich. [Windows-Abnahme und Seitenvergleich r1985](docs/evidence/r1985/README.md)
 
 [Mathematische Verfahren und nächste Vorhaben](docs/MATHEMATIK.md) ·
 [Notenbilder und Herkunft der Aufnahmen](https://github.com/Funcry241/EtuSchlopf/tree/main/docs/examples) ·

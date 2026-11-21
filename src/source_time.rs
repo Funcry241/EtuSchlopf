@@ -81,6 +81,9 @@ impl SourceTimeDomain {
     }
 }
 
+/// Single note values in the written grid of 96 divisions per quarter.
+pub(crate) const WRITTEN_NOTE_VALUES: [i64; 13] = [384, 288, 192, 144, 96, 72, 48, 36, 24, 18, 12, 9, 6];
+
 /// Duration of a written main pulse, including ternary grouping in compound meter.
 pub(crate) fn notation_pulse_duration(divisions: i64, beats: i64, beat_type: i64) -> i64 {
     let denominator_units = if beat_type == 8 && beats >= 6 && beats % 3 == 0 { 3 } else { 1 };
