@@ -155,6 +155,6 @@ jobs:
           gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name EtuSchlopf-Windows-x64 --dir dist
           (cd dist && sha256sum --check SHA256SUMS.txt)
           notes="Die portable EXE enthält EtuSchlopf 0.10.1839 r1985. Der Windows-Vollkorpus setzte alle 15 Stücke. Gegenüber r1973 sind 30 MusicXML-Dateien bytegleich und 59 PDF-Seiten bei 150 dpi pixelgleich. Das Startbeispiel enthält MIDI, WAV und das frisch gerenderte PDF. Das Quellarchiv enthält die geprüfte Cargo.lock. Für die PDF-Ausgabe brauchst du MuseScore. Die EXE ist unsigniert. [Windows-Abnahme r1985]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/evidence/r1985/README.md) · [Windows-Build]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
-          gh release create "$tag" dist/EtuSchlopf-Windows-x64.exe dist/EtuSchlopf-r1985-source.zip dist/dist/EtuSchlopf-Beispiel-r1985.zip dist/runtime-provenance.txt dist/SHA256SUMS.txt \
+          gh release create "$tag" dist/EtuSchlopf-Windows-x64.exe dist/EtuSchlopf-r1985-source.zip dist/EtuSchlopf-Beispiel-r1985.zip dist/runtime-provenance.txt dist/SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "EtuSchlopf r1985 Windows x64" --notes "$notes"
