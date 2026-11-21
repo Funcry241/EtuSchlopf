@@ -62,7 +62,7 @@ fn run_early_stage_case(offset: usize, copies: usize) {
     // independent cursor sequences must already hold at that boundary.
     let result = run_rest_and_articulation_render_stage(RestAndArticulationRenderStageInputs {
         render_state: &mut state, final_render_source_available: true,
-        reference: &ReferenceReport::default(), render_xml_trial_path: &path,
+        render_xml_trial_path: &path,
         pre_preview_render_xml_for_gap: &xml, render_final_chord_structural_plan: &mut plan,
         frozen_serialized_voice_plan: &voices, render_pruned_final_chord_omissions: &omissions,
     });

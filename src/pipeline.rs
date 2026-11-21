@@ -63,14 +63,11 @@ mod source {
         Ok(plan)
     }
 }
-#[path = "wav_truth_articulation.rs"]
-mod wav_truth_articulation;
 use etuschlopf::console_presentation_contract::{
     resolve_stream_render_policy, ColorPreference, ConsolePreferences, GlyphCapability, GlyphMode,
     GlyphPreference, ProgressMode, ProgressPreference, StreamCapability, StreamDestination,
     StreamRenderPolicy, StyleMode,
 };
-use wav_truth_articulation::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PipelineExit {

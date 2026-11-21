@@ -301,21 +301,6 @@ impl HorizontalLayoutPlanBuilder {
         }
     }
 
-    fn plan_new_page(
-        &mut self,
-        slot_index: usize,
-        owner: HorizontalLayoutDecisionOwner,
-    ) {
-        let slot = self
-            .slots
-            .get_mut(slot_index)
-            .expect("horizontal-layout slot comes from the same structural scan");
-        slot.directives.starts_new_page = true;
-        slot.directives.starts_new_system = false;
-        slot.page_owner = Some(owner);
-        slot.system_owner = Some(owner);
-    }
-
     fn plan_system_state(
         &mut self,
         slot_index: usize,
@@ -485,23 +470,34 @@ mod horizontal_layout_decision_plan_tests {
     }
 
     #[test]
-    fn page_replacement_owns_system_false_state() {
-        let xml = r#"<score><part><measure number="x"><print new-system="yes"/></measure></part></score>"#;
-        let seed = HorizontalLayoutSeedPlan {
-            manual_page_target: false,
-            slots: vec![HorizontalLayoutSeedSlot {
-                starts_new_system: true,
-                starts_new_page: false,
-            }],
-        };
-        let mut builder =
-            HorizontalLayoutPlanBuilder::from_seed(&seed, xml).expect("seed parity");
-        builder.plan_new_page(0, HorizontalLayoutDecisionOwner::VisualLayoutPressure);
-        let plan = builder.close().expect("plan close");
+    fn visual_pressure_keeps_an_existing_page_start() {
+        use crate::structural_write_authority::HorizontalSystemBreakMaterialization;
 
-        assert!(plan.slots[0].directives.starts_new_page);
-        assert!(!plan.slots[0].directives.starts_new_system);
+        for (preceding_measures, label) in [(1, "north"), (4, "west")] {
+            let page_slot = preceding_measures;
+            let mut slots = vec![HorizontalLayoutSeedSlot::default(); preceding_measures + 2];
+            slots[page_slot].starts_new_page = true;
+            let mut xml = String::from("<score><part>");
+            for (ordinal, slot) in slots.iter().enumerate() {
+                let print = if slot.starts_new_page { r#"<print new-page="yes"/>"# } else { "" };
+                xml.push_str(&format!(r#"<measure number="{label}-{ordinal}">{print}</measure>"#));
+            }
+            xml.push_str("</part></score>");
+            let seed = HorizontalLayoutSeedPlan { manual_page_target: false, slots };
+            let mut builder = HorizontalLayoutPlanBuilder::from_seed(&seed, &xml).unwrap();
+            builder.plan_new_system(page_slot, HorizontalLayoutDecisionOwner::VisualLayoutPressure);
+            let plan = builder.close().unwrap();
+
+            assert_eq!(plan.slots[page_slot].page_owner, Some(HorizontalLayoutDecisionOwner::Seed));
+            assert_eq!(plan.slots[page_slot].system_owner, None);
+            let directive = &plan.materialization_directives()[page_slot];
+            assert!(directive.starts_new_page);
+            assert_eq!(directive.system_break, HorizontalSystemBreakMaterialization::None);
+            assert!(plan.matches_materialized(&xml).unwrap());
+            assert!(!plan.matches_materialized(&xml.replace("new-page", "new-system")).unwrap());
+        }
     }
+
     #[test]
     fn planned_system_state_is_structural_and_identity_free() {
         let xml = r#"<score><part><measure number="alpha"></measure><measure number="beta"><print new-system="yes"/></measure><measure number="gamma"><print new-page="yes"/></measure></part></score>"#;

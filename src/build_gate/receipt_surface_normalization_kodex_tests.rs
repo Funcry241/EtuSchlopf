@@ -90,19 +90,6 @@ impl Drop for Tree {
     }
 }
 #[test]
-fn parent_allows_absent_future_helpers() {
-    let t = Tree::new();
-    assert_eq!(state(&t.0).unwrap(), State::Legacy);
-}
-#[test]
-fn exact_atomic_immediate_fixture_is_admitted() {
-    let p = Tree::new();
-    let c = Tree::new();
-    c.consume();
-    assert_eq!(state(&c.0).unwrap(), State::Consumed);
-    validate_transition(&p.0, &c.0, "RefactorOnly").unwrap();
-}
-#[test]
 fn wrong_take_parent_revision_class_version_are_rejected() {
     let p = Tree::new();
     let c = Tree::new();

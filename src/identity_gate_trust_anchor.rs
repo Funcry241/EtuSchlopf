@@ -267,8 +267,8 @@ pub const RUN_CMD_FNV1A64: u64 = fnv1a64(RUN_CMD_BYTES);
 const _: () = assert!(IDENTITY_BUILD_POLICY_FNV1A64 == 0x4003202173dec4b7);
 const _: () = assert!(IDENTITY_SCANNER_FNV1A64 == 0x75f817fb6b15e9fa);
 const _: () = assert!(IDENTITY_ZERO_BASELINE_FNV1A64 == 0xf2abe660ce4dd29c);
-const _: () = assert!(FEEDBACK_STRUCTURALIZATION_GATE_FNV1A64 == 0x56a542ccb94aac1b);
-const _: () = assert!(FEEDBACK_PROOF_TRANSPORT_FNV1A64 == 0x5d4e6fc3225d0cd0);
+const _: () = assert!(FEEDBACK_STRUCTURALIZATION_GATE_FNV1A64 == 0xe067dd5b72251e99);
+const _: () = assert!(FEEDBACK_PROOF_TRANSPORT_FNV1A64 == 0x7703edfc804ba93e);
 const _: () = assert!(FEEDBACK_RULE_ADMISSION_FNV1A64 == 0x6de07ec0a81e6c0e);
 const _: () = assert!(FEEDBACK_OBSERVABLE_SINK_ALLOWLIST_FNV1A64 == 0x52ecec0ed5ae8226);
 const _: () = assert!(FEEDBACK_COMPILE_TIME_KODEX_FNV1A64 == 0xe09ea2fffdae3c2d);
@@ -288,7 +288,7 @@ const _: () = assert!(SHARED_SHA256_FNV1A64 == 0xcbf211b6ba70da9c);
 const _: () = assert!(RUST_SOURCE_SCAN_PRIMITIVES_FNV1A64 == 0x61df2ba9b1c6f485);
 const _: () = assert!(RUST_SOURCE_FACT_PRIMITIVES_FNV1A64 == 0x779750c64c86fb48);
 const _: () = assert!(SEMANTIC_CAPABILITY_DIFF_FNV1A64 == 0x2a7f6989a19d2aae);
-const _: () = assert!(KODEX_CAPABILITY_RETIREMENTS_FNV1A64 == 0xb9fe59aa0bcf97a1);
+const _: () = assert!(KODEX_CAPABILITY_RETIREMENTS_FNV1A64 == 0x437ac97284ab2dee);
 const _: () = assert!(PRODUCTIVE_WRITE_PATH_SCANNER_FNV1A64 == 0x933947523b68dee2);
 const _: () = assert!(DESTRUCTIVE_POPULATION_FREEZE_GATE_FNV1A64 == 0x77035e9a18ac0a56);
 const _: () = assert!(RENDER_SOVEREIGNTY_KODEX_FNV1A64 == 0x012efd7d50fc2a79);
@@ -309,7 +309,7 @@ const _: () = assert!(LAUNCHER_ASSISTANT_EXPORT_FNV1A64 == 0xab2690e552cd2391);
 const _: () = assert!(LAUNCHER_INVENTORY_EXPORT_FNV1A64 == 0x633282e2d752a97e);
 const _: () = assert!(PUBLIC_ARTIFACT_RECOVERY_FNV1A64 == 0x6e8088e300ca8a66);
 const _: () = assert!(FORMAL_GREEN_CONTRACT_FNV1A64 == 0xd59a1810a0692951);
-const _: () = assert!(RUN_CMD_FNV1A64 == 0x39e8ace2dee3a3d0);
+const _: () = assert!(RUN_CMD_FNV1A64 == 0x328e31fa9abcd7f7);
 
 pub fn append_identity_gate_trust_anchor_section(out: &mut String) {
     crate::push_static_section_header_v793(
@@ -434,7 +434,7 @@ const _: () = assert!(RSP_CLOSED_9_FNV1A64 == 0x88d832fd93fa7f7f);
 const RSP_CLOSED_10_BYTES: &[u8] =
     include_bytes!("build_gate/receipt_surface_normalization_kodex_tests.rs");
 const RSP_CLOSED_10_FNV1A64: u64 = fnv1a64(RSP_CLOSED_10_BYTES);
-const _: () = assert!(RSP_CLOSED_10_FNV1A64 == 0xf06820a875fd5602);
+const _: () = assert!(RSP_CLOSED_10_FNV1A64 == 0x9f7d421a6d427b09);
 
 const RSP_CLOSED_11_BYTES: &[u8] =
     include_bytes!("build_gate/render_receipt_surface_permit_v1.txt");
@@ -569,7 +569,7 @@ const _: () = assert!(CURSOR_TEMPORAL_RETIREMENT_FNV1A64 == 0x58934073f3dac6ec);
 
 
 const CHECKPOINT58_PREPARE_BYTES: &[u8] = include_bytes!("build_gate/render_checkpoint_prepare_kodex.rs");
-const _: () = assert!(fnv1a64(CHECKPOINT58_PREPARE_BYTES) == 0x1dc9cf1cbee357a0);
+const _: () = assert!(fnv1a64(CHECKPOINT58_PREPARE_BYTES) == 0x3979de5d98deb7c7);
 const CHECKPOINT58_HISTORICAL_ADOPTION: &[u8] = include_bytes!("build_gate/ssc_test_fixture_r1449_render_adopted_state.txt");
 const _: () = assert!(fnv1a64(CHECKPOINT58_HISTORICAL_ADOPTION) == 0x51997746bec0b556);
 

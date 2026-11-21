@@ -8,16 +8,16 @@ Windows-Launcher `run.cmd`; eigene geeignete Eingaben sind erforderlich.
 
 ## Stand der Notenausgabe
 
-Der Windows-Lauf mit r1964 hat Mozarts KV 331 direkt aus MIDI und WAV bis
-zum zweiseitigen PDF verarbeitet. Alle 474 regulären Anschläge stimmen
-bei Einsatz und Tonhöhe mit der Korpuszuordnung überein, 460 auch in der
-Dauer. Der letzte vollständige Lauf über alle 14 Beispiele stammt aus
-r1961. Der Feinschliff in r1965 betrifft die Rechenarbeit bei wiederkehrenden
-Phrasen und beim Ermitteln der Taktart sowie den Zugriff auf Noten im Arrangement.
+**r1968 / 0.10.1839** hat auf Windows alle 14 Stücke aus MIDI und WAV neu gesetzt.
+Gegenüber r1965 stimmen die 28 MusicXML-Dateien bytegenau und die 57 PDF-Seiten bei 144 dpi pixelgenau überein.
+Die zehn eigenen Etüden umfassen davon 49 Seiten. [Vollkorpus und Seitenvergleich r1968](docs/evidence/r1968/README.md)
 
-[Mathematische Verfahren und nächste Vorhaben](docs/MATHEMATIK-VOLLKORPUS.md) ·
+Bei Chopins Etüde op. 10 Nr. 3 stimmen für alle 448 regulären Noten Einsatz und Tonhöhe mit der Referenz überein.
+Bei 68 Noten weicht die geschriebene Dauer ab. [Mathematik, Kapitel 10.1](docs/MATHEMATIK.md#kapitel-10-1)
+
+[Mathematische Verfahren und nächste Vorhaben](docs/MATHEMATIK.md) ·
 [Notenbilder und Herkunft der Aufnahmen](https://github.com/Funcry241/EtuSchlopf/tree/main/docs/examples) ·
-[Windows-Download](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1964-windows-preview)
+[Windows-Download r1968](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1968-windows-preview)
 
 Fehlerberichte sind jederzeit willkommen. Größere Änderungen bitte vorab über
 GitHub besprechen. Es gibt keine garantierten Antwortzeiten, Fehlerbehebungen

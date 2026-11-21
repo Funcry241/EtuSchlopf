@@ -10,9 +10,6 @@ pub fn push_static_ent_line_v765(out: &mut String, suffix: &str) {
 pub fn push_static_dec_line_v765(out: &mut String, suffix: &str) {
     out.push_static_named_report_line_v766("Decision", suffix);
 }
-pub fn push_static_write_policy_line_v765(out: &mut String, suffix: &str) {
-    out.push_static_named_report_line_v766("WritePolicy", suffix);
-}
 pub fn push_static_named_policy_line_v765(out: &mut String, name: &str, suffix: &str) {
     out.push_str(name);
     out.push_static_named_report_line_v766("Policy", suffix);
@@ -22,10 +19,6 @@ pub fn push_static_section_header_v793(out: &mut String, title: &str, underline:
     out.push('\n');
     out.push_str(underline);
     out.push('\n');
-}
-pub fn push_static_ledger_line_v804(out: &mut String, prefix: &str, suffix: &str) {
-    out.push_str(prefix);
-    out.push_static_named_report_line_v766("Ledger", suffix);
 }
 pub fn push_static_ledger_header_v804(out: &mut String, title: &str, columns: &str) {
     out.push_str(title);

@@ -31,7 +31,7 @@ Das Take-ZIP und der anschließend exportierte Quell-Snapshot sind unterschiedli
 
 ## Inhalt und Grenzen
 
-r1684 selbst überarbeitet die Mathematik-Dokumentation auf dem angenommenen Laufzeitstand r1683. Rust-Quellen, Tests, Gates und Abhängigkeiten sind gegenüber r1683 unverändert. Die [Mathematik-Seite](../../MATHEMATIK.md) unterscheidet 34 Verfahrensfamilien, produktive Entscheidungen, Audits, historische Modelle und offene Beweisgrenzen.
+r1684 selbst überarbeitet die Mathematik-Dokumentation auf dem angenommenen Laufzeitstand r1683. Rust-Quellen, Tests, Gates und Abhängigkeiten sind gegenüber r1683 unverändert. Die damalige Mathematik-Seite unterschied 34 Verfahrensfamilien, produktive Entscheidungen, Audits, historische Modelle und offene Beweisgrenzen. Den historischen Korpuslauf beschreibt [Kapitel 9.1 der Mathematikseite](../../MATHEMATIK.md#kapitel-9-1).
 
 Der kumulative Stand seit r1659 enthält unter anderem die C3-Evidenz für ursprüngliche Pausenanker und Verbesserungen der Watch-Webansicht. C3 kann damit weitere zulässige Originaldarstellungen übernehmen; systemübergreifende Gruppenabhängigkeiten bleiben als offene Grenze ausgewiesen. Die native Korpusabnahme ist kein allgemeiner Nachweis von Fehlerfreiheit, Lesbarkeit oder Spielbarkeit beliebiger Stücke.
 

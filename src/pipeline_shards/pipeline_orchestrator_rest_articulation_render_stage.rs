@@ -14,7 +14,6 @@ struct RestAndArticulationRenderStageOutcome {
 struct RestAndArticulationRenderStageInputs<'a> {
     render_state: &'a mut structural_write_authority::RenderSovereignState,
     final_render_source_available: bool,
-    reference: &'a reference::ReferenceReport,
     render_xml_trial_path: &'a Path,
     pre_preview_render_xml_for_gap: &'a str,
     render_final_chord_structural_plan:
@@ -31,7 +30,6 @@ fn run_rest_and_articulation_render_stage(
     let RestAndArticulationRenderStageInputs {
         render_state,
         final_render_source_available,
-        reference,
         render_xml_trial_path,
         pre_preview_render_xml_for_gap: _pre_preview_render_xml_for_gap,
         render_final_chord_structural_plan,
@@ -114,12 +112,10 @@ fn run_rest_and_articulation_render_stage(
         }
     };
     let single_clear_staccato_render_write_audit = if final_render_source_available {
-        let single_staccato_source_xml = render_state.require_document("RestArticulation source").to_owned();
+        let single_staccato_source_xml = render_state.require_document("RestArticulation source");
         let (single_staccato_after_xml, mut audit, occurrence_receipt) =
             apply_single_clear_staccato_render_write_with_placement_readback(
-                &single_staccato_source_xml,
-                "Render-XML nach Rest-/Pausen-Notation-Writes vor SingleClearStaccatoRenderWrite",
-                render_xml_trial_path,
+                single_staccato_source_xml,
             )?;
         repair_loop_invocation_evidence.staccato_primary_candidates = audit.clear_candidate_count;
         repair_loop_invocation_evidence.staccato_primary_written = audit.written;
@@ -166,35 +162,11 @@ fn run_rest_and_articulation_render_stage(
             }
             None => {}
         }
-        refresh_single_clear_staccato_audit_from_primary_boundary_artifact(
-            &mut audit,
-            &final_artifact_xml,
-            "unmittelbarer Primary-Boundary-Readback nach SingleClearStaccatoRenderWrite",
-        );
+        audit.written = audit.staccato_equivalence_stable && staccato_primary_persisted;
+        audit.render_xml_write = audit.written;
         audit
     } else {
-        SingleClearStaccatoRenderWriteAudit {
-            output_path: render_xml_trial_path.display().to_string(),
-            verdict: "single_clear_staccato_skipped_no_render_source".to_string(),
-            done_fragment: "SingleClearStaccatoRenderWriteWithPlacementReadback: uebersprungen; keine Render-XML-Quelle; RenderXmlWrite nein; MusicMutation nein".to_string(),
-            pipeline_line: format!("SingleClearStaccatoRenderWriteWithPlacementReadback v{}: uebersprungen; keine finale Render-XML-Quelle; RenderXmlWrite nein; MusicMutation nein.", env!("CARGO_PKG_VERSION")),
-            ..SingleClearStaccatoRenderWriteAudit::default()
-        }
-    };
-    let _wav_truth_articulation_gate_no_mutation = if final_render_source_available {
-        let wav_truth_articulation_xml = render_state.require_document("RestArticulation source").to_owned();
-        build_wav_truth_articulation_gate_no_mutation(
-            reference,
-            &wav_truth_articulation_xml,
-            "finale Render-MusicXML vor WavTruthArticulationFeatureLedgerMaterializedNoMutation",
-        )
-    } else {
-        WavTruthArticulationGateAudit {
-            done_fragment: "WavTruthArticulationFeatureLedgerMaterializedNoMutation: uebersprungen; keine finale Render-XML-Quelle; WriteReady 0; RenderXmlWrite nein; MusicMutation nein".to_string(),
-            pipeline_line: format!("WavTruthArticulationFeatureLedgerMaterializedNoMutation v{}: uebersprungen; keine finale Render-XML-Quelle; WriteReady 0; RenderXmlWrite nein; MusicMutation nein.", env!("CARGO_PKG_VERSION")),
-            verdict: "wav_truth_articulation_skipped_no_render_source".to_string(),
-            ..WavTruthArticulationGateAudit::default()
-        }
+        SingleClearStaccatoRenderWriteAudit::default()
     };
     let wav_truth_binding_clear_tiny_accent_render_write_audit = AssertiveVisibleArticulationRenderWriteAudit::default();
     let external_notation_feedback_beam_variant_a_tiny_render_write_audit =

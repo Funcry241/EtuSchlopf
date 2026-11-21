@@ -24,7 +24,7 @@ aus. Die Quellauswahl zählt die Ereignisse an einem eigenen Prüfpunkt. Ihr mit
 diesem Lauf verknüpfter Messbeleg (CMS-1) erfasst 330 kanonische Quellereignisse,
 von denen der Auswahlplan 323 übernimmt und sieben ausschließt. Die 100 % sind
 eine Erhaltskennzahl mit eigener Bezugsmenge. Wie das Verfahren und die
-Prüfgrenzen zusammenhängen, erläutert die [Mathematik-Seite](../../MATHEMATIK.md#prüfstände-und-verbleibende-grenzen).
+Prüfgrenzen zusammenhängen, erläutert die [Mathematik-Seite in Kapitel 9](../../MATHEMATIK.md#kapitel-9).
 
 ## Belege
 

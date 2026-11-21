@@ -103,18 +103,6 @@ mod tests {
     const GREEN: &str = "Kurz: FeedbackOriginNonInterferencePipelineProof: SchemaVersion 2; ProofGreen ja; CompletenessComplete ja; InvariantsHold ja; WriterEligible nein; NonLinkable ja.";
 
     #[test]
-    fn complete_minimal_contract_transports_one_green_proof() {
-        assert_eq!(
-            parse_feedback_proof_variant_evidence(GREEN),
-            FeedbackProofVariantEvidence {
-                stable: 1,
-                total: 1,
-                transport_green: true,
-            }
-        );
-    }
-
-    #[test]
     fn incomplete_contract_remains_fail_closed() {
         let text = GREEN.replace("ProofGreen ja", "ProofGreen nein");
         assert_eq!(

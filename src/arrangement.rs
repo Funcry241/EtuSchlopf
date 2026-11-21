@@ -78,7 +78,6 @@
         pub stems_added: usize,
         pub measures_simplified: usize,
         pub notes_hidden: usize,
-        pub rests_hidden: usize,
         pub chord_tones_hidden: usize,
         pub notes_restified_as_rests: usize,
         pub visible_notes_normalized: usize,
@@ -400,7 +399,6 @@
             stats.stems_added += local.stems_added;
             stats.measures_simplified += local.measures_simplified;
             stats.notes_hidden += local.notes_hidden;
-            stats.rests_hidden += local.rests_hidden;
             stats.chord_tones_hidden += local.chord_tones_hidden;
             stats.visible_notes_normalized += local.visible_notes_normalized;
             stats.visible_rhythm_rests_inserted += local.visible_rhythm_rests_inserted;
@@ -719,7 +717,6 @@
                 move_note_to_left_system_for_human_potential(&arranged, moved_for_presentation)
             } else if hidden.contains(&idx) {
                 match meta {
-                    Some(meta) if meta.is_rest => arranged,
                     Some(meta) if meta.is_chord => mark_note_hidden(&arranged),
                     Some(_) => restify_note_for_rhythm_ledger(&arranged),
                     None => mark_note_hidden(&arranged),
@@ -738,15 +735,11 @@
             if changed.stem_added { stats.stems_added += 1; }
             if hidden.contains(&idx)
                 && let Some(meta) = meta {
-                    if meta.is_rest {
-                        stats.rests_hidden += 1;
+                    stats.notes_hidden += 1;
+                    if meta.is_chord {
+                        stats.chord_tones_hidden += 1;
                     } else {
-                        stats.notes_hidden += 1;
-                        if meta.is_chord {
-                            stats.chord_tones_hidden += 1;
-                        } else {
-                            stats.notes_restified_as_rests += 1;
-                        }
+                        stats.notes_restified_as_rests += 1;
                     }
                 }
             if let Some(meta) = meta {
@@ -809,7 +802,6 @@
         stats.chord_cohorts_source_bound_split += ledger_stats.chord_cohorts_source_bound_split;
         stats.visible_rhythm_measures_completed += ledger_stats.measures_completed;
         if stats.notes_hidden > 0
-            || stats.rests_hidden > 0
             || stats.chord_tones_hidden > 0
             || ledger_stats.rests_inserted > 0
             || ledger_stats.values_split > 0
@@ -1057,7 +1049,6 @@
         hide_dense_chord_tones(metas, compact_chord_members, &mut hidden, profile);
         hide_parallel_import_notes(metas, compact_chord_members, &mut hidden, profile);
         hide_secondary_voice_notes(metas, &mut hidden, profile);
-        hide_import_artifact_rests();
         let (right_limit, left_limit) = if profile.preserve_reference {
             // WAV bleibt Primärreferenz. Ab v0.1.29 darf jede Hand bis zu zwei
             // lesbare Stimmen tragen; dadurch soll der Notenerhalt wieder Richtung
@@ -2003,11 +1994,6 @@
         for raw_idx in to_hide {
             hidden.insert(raw_idx);
         }
-    }
-    fn hide_import_artifact_rests() {
-        // v0.1.65 RhythmLedger: Pausen sind nicht mehr bloß technische Füller.
-        // Fehlende sichtbare Pausen lassen Takte rhythmisch unvollständig wirken.
-        // Deshalb werden importierte Pausen nicht mehr pauschal ausgeblendet.
     }
     fn hide_excess_measure_density(
         metas: &[NoteMeta],

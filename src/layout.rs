@@ -36,7 +36,6 @@
         pub measures_seen: usize,
         pub notes_seen: usize,
         pub notes_hidden: usize,
-        pub rests_hidden: usize,
         pub chord_tones_hidden: usize,
         pub beam_groups: usize,
         pub beamed_notes: usize,
@@ -65,7 +64,7 @@
         let visible_notes_per_measure = visible_notes as f64 / measures as f64;
         let beamed_notes_per_measure = input.beamed_notes as f64 / measures as f64;
         let beam_groups_per_measure = input.beam_groups as f64 / measures as f64;
-        let hidden_total = input.notes_hidden + input.rests_hidden + input.chord_tones_hidden;
+        let hidden_total = input.notes_hidden + input.chord_tones_hidden;
     
         let mut pages = if measures <= 16 {
             3

@@ -2,8 +2,9 @@ param([Parameter(Mandatory)][string]$Exe, [Parameter(Mandatory)][string]$Output)
 $ErrorActionPreference = 'Stop'
 $root = Join-Path $env:RUNNER_TEMP 'etuschlopf-start-example'
 New-Item -ItemType Directory -Path $root | Out-Null
-$previous = Join-Path $root 'EtuSchlopf-Beispiel-r1537.zip'
-Invoke-WebRequest 'https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1537-windows-preview/EtuSchlopf-Beispiel-r1537.zip' -OutFile $previous
+$previous = Join-Path $root 'EtuSchlopf-Beispiel-r1965.zip'
+Invoke-WebRequest 'https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1965-windows-preview/EtuSchlopf-Beispiel-r1965.zip' -OutFile $previous
+if ((Get-FileHash $previous -Algorithm SHA256).Hash.ToLowerInvariant() -ne '475914bb54ed57947b37e1c1991713863437c56d5a373758c90262cbe03027bf') { throw 'Public example input archive checksum mismatch' }
 Expand-Archive $previous (Join-Path $root 'original')
 $midi = @(Get-ChildItem (Join-Path $root 'original') -Recurse -File | Where-Object { $_.Extension -in '.mid', '.midi' })
 if ($midi.Count -ne 1) { throw 'Expected one example MIDI' }
