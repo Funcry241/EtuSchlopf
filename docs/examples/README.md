@@ -48,7 +48,7 @@ Die folgenden PDFs stammen aus zusätzlichen Einzelläufen mit MuseScore 4.7.5. 
 
 Bei allen drei Stücken stimmen die unter Linux erzeugten Master- und Render-MusicXML zwischen r1964 und r1965 bytegenau überein. Alle fünf PDF-Seiten sind bei 144 dpi pixelgleich. Für Chopin und Schubert führen die Vorschauen zu den PDFs aus r1964, für Mozart zur Ausgabe aus r1965. [Mozarts Notenbild r1965](zusatzrunden/mozart-k331-p01-r1965-linux.pdf)
 
-[Windows-Testversion r1968 herunterladen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1968-windows-preview) · [Windows-Paket zu den Galeriebildern aus r1965](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1965-windows-preview)
+[Windows-Testversion r1985 herunterladen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1985-windows-preview) · [Windows-Paket zu den Galeriebildern aus r1965](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1965-windows-preview)
 
 [Mozart-Einzellauf r1964](mozart-k331-p01-r1964.pdf) · [Windows-Galerie r1961](../evidence/r1961/score_sha256.tsv) · [Notenbilder r1938](../evidence/r1938/score_sha256.tsv) · [Notenbilder r1921](../evidence/r1921/score_sha256.tsv) · [Notenbilder r1886](../evidence/r1886/score_sha256.tsv)
 

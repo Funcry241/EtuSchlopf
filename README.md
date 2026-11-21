@@ -14,7 +14,7 @@ im Rastervergleich pixelgleich. [Windows-Abnahme und Seitenvergleich r1985](docs
 
 [Mathematische Verfahren und nächste Vorhaben](docs/MATHEMATIK.md) ·
 [Notenbilder und Herkunft der Aufnahmen](https://github.com/Funcry241/EtuSchlopf/tree/main/docs/examples) ·
-[Windows-Download r1968](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1968-windows-preview)
+[Windows-Download r1985](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1985-windows-preview)
 
 Fehlerberichte sind jederzeit willkommen. Größere Änderungen bitte vorab über
 GitHub besprechen. Es gibt keine garantierten Antwortzeiten, Fehlerbehebungen
