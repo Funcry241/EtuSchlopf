@@ -12,6 +12,7 @@ permissions: {}
 env:
   ARTIFACT_ID: '14765516020'
   ARTIFACT_DIGEST: c2259cb5fedee332c464a5f34a884bd44160daf764ac178dc066e1ed4288c617
+  MANIFEST_SHA256: 831bad288e70a1046e3c9bf5241adbc79b93dd6873c7b40e764876cf0b6730f5
   SOURCE_COMMIT: a86b1410dd8e1c6b3d85667822e037cead0d7c47
   RELEASE_TAG: v0.10.1839-r1992-windows-preview
 
@@ -21,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: read
+      contents: read
     steps:
       - name: Verify the tested Windows package
         env:
@@ -29,9 +31,23 @@ jobs:
           set -euo pipefail
           mkdir "$RUNNER_TEMP/r1992"
           cd "$RUNNER_TEMP/r1992"
-          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > artifact.zip
-          echo "$ARTIFACT_DIGEST  artifact.zip" | sha256sum --check -
-          unzip -q artifact.zip
+          if draft=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft); then
+            if [ "$draft" != false ]; then
+              echo "An existing draft requires inspection before publication." >&2
+              exit 1
+            fi
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --pattern EtuSchlopf-Windows-x64-r1992.exe \
+              --pattern EtuSchlopf-Beispiel-r1992.zip \
+              --pattern EtuSchlopf-r1992-source.zip \
+              --pattern runtime-provenance.txt \
+              --pattern SHA256SUMS.txt
+          else
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > artifact.zip
+            echo "$ARTIFACT_DIGEST  artifact.zip" | sha256sum --check -
+            unzip -q artifact.zip
+          fi
+          echo "$MANIFEST_SHA256  SHA256SUMS.txt" | sha256sum --check -
           sha256sum --strict --check SHA256SUMS.txt
           grep -Fx 'revision=r1992' < <(tr -d '\r' < runtime-provenance.txt)
           grep -Fx "source_commit=$SOURCE_COMMIT" < <(tr -d '\r' < runtime-provenance.txt)
