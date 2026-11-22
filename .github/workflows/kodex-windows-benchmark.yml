@@ -1,0 +1,33 @@
+name: Windows Kodex benchmark
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/kodex-windows-benchmark.yml'
+      - '.github/benchmarks/kodex-gate.py'
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: windows-2022
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: public
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: a86b1410dd8e1c6b3d85667822e037cead0d7c47
+          persist-credentials: false
+          path: accepted
+      - name: Reconstruct the checked r1992 source
+        run: python public/.github/distribution/prepare-r1992-source.py accepted D:\etu-kodex-source D:\etu-kodex-archive
+      - name: Compare serial and parallel Kodex checks
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed' }
+          rustup run 1.98.0 python public/.github/benchmarks/kodex-gate.py D:\etu-kodex-source D:\
