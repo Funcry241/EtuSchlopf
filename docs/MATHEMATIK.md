@@ -35,6 +35,7 @@ Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die
   - [6.14 Beschleunigung mit gleichen Entscheidungen](#kapitel-6-14)
   - [6.15 Speicherplanung für den Korpus](#kapitel-6-15)
   - [6.16 Projektion und Integrität](#kapitel-6-16)
+  - [6.17 Phrasierungsbögen und Konturabstände](#kapitel-6-17)
 - [7 Quellzeit, Pausen und Balken in r1938](#kapitel-7)
 - [8 Stimmfortsetzungen im Vollkorpus r1961](#kapitel-8)
 - [9 Prüfstände und verbleibende Grenzen](#kapitel-9)
@@ -626,6 +627,29 @@ h_{i+1}=((h_i\mathbin{\mathrm{XOR}}b_i)\cdot1099511628211)\bmod 2^{64}.
 Die Take-Prüfung vergleicht die so deklarierten Dateiänderungen mit dem tatsächlichen Paket. Kryptografische Bindungen des Pakets und seiner Herkunft verwenden gesondert SHA-256.<a name="beleg-6-16-hash"></a><sup><a href="#quelle-fnv">[21]</a> <a href="#quelle-nist">[22]</a></sup> [Prüfung des Paketdiffs](../src/take_change_control.rs)
 
 Hashes sind davon getrennt: Sie binden Bytes unter ihren jeweiligen Kollisionsannahmen. FNV-1a ist kein kryptografischer Beweis; auch SHA-256 ist mathematisch nicht injektiv über beliebig lange Eingaben. Provenienz, tatsächlich mitgeführte Ereignisidentität und bytebezogene Integritätsprüfung erfüllen verschiedene Aufgaben.
+
+<a name="kapitel-6-17"></a>
+
+### 6.17 Phrasierungsbögen und Konturabstände
+
+MuseScore zeichnet einen Bogen bei einem Systemumbruch in mehreren Segmenten. EtuSchlopf ordnet die Segmente in einer SVG-Vorschau demselben MusicXML-Bogen zu. Es zerlegt die Bézierkurven für den Vergleich in kurze Strecken und berücksichtigt die Strichbreite. Die Prüfung zählt Kontakte mit musikalischen Zeichen wie Balken, Hälsen oder Notenköpfen über alle Segmente.
+
+Sei $K_\varepsilon(l)$ die Zahl der Kontakte in der Lage $l$ bei einem Toleranzabstand $\varepsilon$ für Kurvenapproximation und Rundung. In r1992 kommt die Gegenlage für eine Übernahme infrage, wenn
+
+```math
+K_0(l_{\mathrm{auto}})=K_\varepsilon(l_{\mathrm{auto}})>0
+\qquad\text{und}\qquad
+K_\varepsilon(l_{\mathrm{gegen}})=0.
+```
+
+Bei einer zulässigen Gegenlage prüft EtuSchlopf zusätzlich Seitenformat, Zeichenzuordnung und Abstände zwischen benachbarten Zeichen, deren relative Lage sich ändert. Vorschläge auf verschiedenen Seiten müssen sich auch im gemeinsamen Rendervergleich bestätigen.
+
+| Windows-Lauf r1992 | Kontakte in automatischer Lage | Kontakte in Gegenlage | Ergebnis |
+| --- | ---: | ---: | --- |
+| Etüde Nr. 8, Takt 25–29 | 6 | 0 | Der Bogen wechselt auf die Oberseite über drei Systeme. |
+| Chopin op. 10 Nr. 3, p02, Takt 5–6 | 5 | 1 | Ein Balkenkontakt blockiert die Gegenlage. |
+
+Im Rastervergleich mit r1989 unterscheidet sich eine der 59 PDF-Seiten, Seite 4 von Etüde 8. In der zugehörigen Render-MusicXML erhält der Bogen ein Platzierungsattribut. Die 15 Master-MusicXML-Dateien sind bytegleich.
 
 <a name="kapitel-7"></a>
 <a name="quellzeit-pausen-und-balken-in-r1938"></a>
