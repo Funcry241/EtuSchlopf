@@ -175,6 +175,10 @@ struct RenderPdfSourceSelectionStageOutcome {
         structural_write_authority::AuthorizedWriterEntryBoundaryAudit,
 }
 
+fn read_released_notation_artifact(path: &Path, phase: &str) -> anyhow::Result<String> {
+    std::fs::read_to_string(path).with_context(|| format!("{phase}: {}", path.display()))
+}
+
 fn run_render_pdf_source_selection_stage(
     inputs: RenderPdfSourceSelectionStageInputs<'_>,
 ) -> anyhow::Result<RenderPdfSourceSelectionStageOutcome> {
@@ -280,10 +284,14 @@ fn run_render_pdf_source_selection_stage(
         final_master_layout_receipt,
         "ReleasedMaster/FinalLayoutPhrase",
     );
+    let mut phrase_preview = render::PhraseSvgPreview::default();
     if render_state.document().is_some() {
         let intents = crate::audit_only::phrase_boundary_evidence::pending_visual_notation_intents();
         if let Some(commit) = final_pdf_source_commit.as_ref() {
-            commit.adopt_layout_and_phrase_course(render_state, &final_horizontal_layout_materialization, &intents)?;
+            commit.adopt_layout_and_phrase_course(
+                render_state, &final_horizontal_layout_materialization, &intents,
+                (pdf_render_requested && render_xml_selected_for_pdf).then_some(&mut phrase_preview),
+            )?;
         } else {
             structural_write_authority::adopt_final_layout_phrase_projection(
                 render_state, &final_horizontal_layout_materialization, &intents,
@@ -318,12 +326,10 @@ fn run_render_pdf_source_selection_stage(
     // The Master file is an artifact and integrity witness only: its bytes
     // must equal the sovereign Master document byte for byte.
     let released_master_artifact =
-        std::fs::read_to_string(&source.musicxml_out).with_context(|| {
-            format!(
-                "FinalNotationLayoutSnapshotClosure konnte kanonische Master-MusicXML nicht lesen: {}",
-                source.musicxml_out.display()
-            )
-        })?;
+        read_released_notation_artifact(
+            &source.musicxml_out,
+            "FinalNotationLayoutSnapshotClosure konnte kanonische Master-MusicXML nicht lesen",
+        )?;
     master_state.witness_released_artifact(&released_master_artifact);
 
     // After the single final materialization, freeze the sovereign Master state
@@ -339,12 +345,10 @@ fn run_render_pdf_source_selection_stage(
             "FinalNotationLayoutSnapshotClosure: Render-Quelle wurde ausgewaehlt, aber kein gebundener finaler Render-Snapshot existiert"
         })?;
     let selected_final_notation_read_before_renderer =
-        std::fs::read_to_string(pdf_source_path).with_context(|| {
-            format!(
-                "FinalNotationLayoutSnapshotClosure konnte ausgewaehlte finale Notationsquelle nicht lesen: {}",
-                pdf_source_path.display()
-            )
-        });
+        read_released_notation_artifact(
+            pdf_source_path,
+            "FinalNotationLayoutSnapshotClosure konnte ausgewaehlte finale Notationsquelle nicht lesen",
+        );
     if render_xml_selected_for_pdf {
         master_state_identity::record_render_artifact_read(
             master_state_identity::RenderArtifactReadPurpose::WitnessAgainstSovereignState,
@@ -444,6 +448,8 @@ fn run_render_pdf_source_selection_stage(
             &source.pdf_out,
             final_pdf_source_commit,
         );
+        anyhow::ensure!(phrase_preview.matches_pdf(&render, pdf_source_path, &source.pdf_out),
+            "PhraseSlurClearance: final PDF renderer differs from the geometric preview");
         match render.status {
             RenderStatus::Written | RenderStatus::WrittenButNonZeroExit => {
                 pdf_actual_pages = count_pdf_pages(&source.pdf_out);
@@ -472,12 +478,10 @@ fn run_render_pdf_source_selection_stage(
     }
 
     let selected_final_notation_read_after_renderer =
-        std::fs::read_to_string(pdf_source_path).with_context(|| {
-            format!(
-                "FinalNotationLayoutSnapshotClosure konnte ausgewaehlte finale Notationsquelle nach Renderer nicht lesen: {}",
-                pdf_source_path.display()
-            )
-        });
+        read_released_notation_artifact(
+            pdf_source_path,
+            "FinalNotationLayoutSnapshotClosure konnte ausgewaehlte finale Notationsquelle nach Renderer nicht lesen",
+        );
     if render_xml_selected_for_pdf {
         master_state_identity::record_render_artifact_read(
             master_state_identity::RenderArtifactReadPurpose::WitnessAgainstSovereignState,

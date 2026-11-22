@@ -464,6 +464,100 @@ struct RendererProcessLifecycle {
     wait_outcome: PdfWaitOutcome,
     output_structure: PdfStructureProbe,
 }
+// A lazy, per-release SVG preview. It uses the PDF converter's last successful
+// invocation and serves only temporary files outside the registered products.
+#[derive(Default)]
+pub(crate) struct PhraseSvgPreview {
+    attempted: bool,
+    renderer: Option<(String, String, String)>,
+    directory: Option<PathBuf>,
+    serial: usize,
+    pub(crate) adopted: bool,
+}
+
+impl PhraseSvgPreview {
+    pub(crate) fn render(
+        &mut self,
+        source: &str,
+        stage: impl FnOnce(&Path, &str) -> Option<()>,
+    ) -> Option<Vec<String>> {
+        if !self.attempted {
+            self.attempted = true;
+            let selected = discover_renderer_candidates().into_iter().find_map(|candidate| {
+                let executable = validate_renderer_executable(&strip_optional_quotes(&candidate.executable), candidate.source)?;
+                let command = run_local_renderer_winning_command(&executable)?;
+                let identity = renderer_executable_identity(&executable);
+                (!identity.starts_with("unavailable") && !identity.contains("bytes_unavailable"))
+                    .then_some((executable, command, identity))
+            })?;
+            static ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let directory = std::env::temp_dir().join(format!("etuschlopf-phrase-{}-{}-{}", std::process::id(), unix_ms_now_string_v1110(),
+                ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+            fs::create_dir(&directory).ok()?;
+            self.directory = Some(directory);
+            self.renderer = Some(selected);
+        }
+        let (executable, command, identity) = self.renderer.as_ref()?;
+        if renderer_executable_identity(executable) != *identity {
+            return None;
+        }
+        self.serial += 1;
+        let trial = self.directory.as_ref()?.join("target")
+            .join("etuschlopf_renderer_feasibility_shadow").join(self.serial.to_string());
+        fs::create_dir_all(&trial).ok()?;
+        let input = trial.join("constraint_candidate.render.musicxml");
+        let output = trial.join("preview.svg");
+        if !super::persisted_schema_validation::shadow_renderer_paths_outside_products(&input, &output) {
+            return None;
+        }
+        stage(&input, source)?;
+        let variant = render_command_variants(&absolute_path(&input), &absolute_path(&output))
+            .into_iter().find(|variant| variant.label == command)?;
+        let run = run_renderer_command(executable, &variant.args, None).ok()?;
+        if run.code != Some(0) || fs::read_to_string(&input).ok()?.as_str() != source {
+            return None;
+        }
+        let mut pages = std::collections::BTreeMap::new();
+        for entry in fs::read_dir(&trial).ok()? {
+            let path = entry.ok()?.path();
+            if path.extension().and_then(std::ffi::OsStr::to_str) != Some("svg") {
+                continue;
+            }
+            let stem = path.file_stem()?.to_str()?;
+            let page: usize = if stem == "preview" { 1 } else { stem.strip_prefix("preview-")?.parse().ok()? };
+            if pages.insert(page, fs::read_to_string(path).ok()?).is_some() {
+                return None;
+            }
+        }
+        if pages.is_empty() || !pages.keys().copied().eq(1..=pages.len()) {
+            return None;
+        }
+        Some(pages.into_values().collect())
+    }
+
+    pub(super) fn matches_pdf(&self, render: &RenderResult, input: &Path, output: &Path) -> bool {
+        if !self.adopted {
+            return true;
+        }
+        let Some((executable, command, identity)) = &self.renderer else { return false };
+        renderer_executable_identity(executable) == *identity
+            && render.probe_identity.as_ref().is_some_and(|actual| {
+                actual.executable == *executable
+                    && render_command_variants(&absolute_path(input), &absolute_path(output)).iter().any(|variant| {
+                        variant.label == command && format_command(executable, &variant.args) == actual.command
+                    })
+            })
+    }
+}
+
+impl Drop for PhraseSvgPreview {
+    fn drop(&mut self) {
+        if let Some(directory) = &self.directory {
+            let _ = fs::remove_dir_all(directory);
+        }
+    }
+}
+
 fn load_musicxml_bytes_for_renderer_guard(path: &Path) -> Option<Vec<u8>> {
     fs::read(path).ok()
 }

@@ -751,7 +751,7 @@ mod tests {
         let channels =
             build_frozen_serialization_voice_channels_for_canonical(&canonical, &attacks).unwrap();
         let labels = bind_musicxml_voice_labels(&channels, &[]).unwrap();
-        let plan = bind_canonical_final_chord_encoding_plan(xml, &canonical, &labels).unwrap();
+        let plan = bind_canonical_final_chord_encoding_plan(xml, &canonical, &labels, false).unwrap();
         let (after, receipt) = project_final_chord_encoding_plan(xml, &plan);
         let after = after.unwrap();
         assert!(receipt.is_some());

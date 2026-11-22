@@ -37,6 +37,52 @@ pub(crate) struct JointReadingOwnerHead {
 }
 
 impl JointReadingOwnerInput {
+    fn bind_source_holds(
+        &self,
+        clock: &c3_adapter::WriterClock,
+        time: &crate::midi::notation_time::NotationTimePlan,
+        capabilities: &mut c3_adapter::Capabilities,
+    ) {
+        let divisions = time.metric.divisions;
+        if divisions != crate::source_event::CANONICAL_DIVISIONS { return; }
+        let Ok(document) = roxmltree::Document::parse(self.bound_source()) else { return; };
+        let notes = document.descendants().filter(|node| node.has_tag_name("note"))
+            .map(|note| (note.range().start, note)).collect::<BTreeMap<_, _>>();
+        let quarters = |ticks| c3_adapter::Q::new(i128::from(ticks), i128::from(divisions));
+        let mut attacks = BTreeMap::<_, Vec<_>>::new();
+        for head in &self.heads {
+            attacks.entry((head.source_event_id, head.attack_id)).or_default().push(head);
+        }
+        for ((source, _), mut heads) in attacks {
+            let Ok(hold) = time.written_sustain_interval(source.0) else { continue; };
+            heads.sort_by_key(|head| (head.measure, head.onset));
+            let first = heads[0];
+            let last = heads[heads.len() - 1];
+            let Some(bar) = first.measure.checked_sub(1).and_then(|i| time.metric.measure(i)) else { continue; };
+            if last.measure != first.measure
+                || first.continuation || heads[1..].iter().any(|head| !head.continuation)
+                || heads.iter().any(|head| head.staff != first.staff || !head.visible)
+                || heads.windows(2).any(|pair| pair[0].onset.checked_add(pair[0].duration) != Some(pair[1].onset))
+                || bar.start.checked_add(first.onset) != Some(hold.start)
+                || last.onset.checked_add(last.duration) != bar.end.checked_sub(bar.start)
+                || hold.end <= bar.end
+                || clock.times.get(&(first.source_span.start, false)).copied() != quarters(hold.start)
+                || clock.times.get(&(last.source_span.end, true)).copied() != quarters(bar.end)
+            { continue; }
+            // The authenticated release extends beyond the last written head.
+            // A later source writer may expose that duration as tied fragments.
+            // Keep newly chosen octave boundaries out of the still-held note.
+            let Some(start) = clock.times.get(&(last.source_span.start, false)).copied() else { continue; };
+            let Some(end) = quarters(hold.end).filter(|&end| end <= clock.end) else { continue; };
+            let Some(boundary) = quarters(bar.end) else { continue; };
+            let Some(terminal) = notes.get(&last.source_span.start).copied() else { continue; };
+            if !source_hold_has_rest_carrier(&notes, clock, terminal, &last.staff, boundary, end) {
+                continue;
+            }
+            capabilities.source_holds.entry(last.staff.clone()).or_default().push(start..end);
+        }
+    }
+
     fn from_carried_material(candidate: &SolverCandidate) -> anyhow::Result<Self> {
         anyhow::ensure!(candidate.material_lineage.authority_bound,
             "Joint reading input has no carried material authority");
@@ -246,6 +292,34 @@ impl JointReadingOwnerInput {
     pub(crate) fn groups(&self) -> &[JointReadingOwnerGroup] { &self.groups }
 }
 
+fn source_hold_has_rest_carrier(
+    notes: &BTreeMap<usize, roxmltree::Node<'_, '_>>,
+    clock: &c3_adapter::WriterClock,
+    terminal: roxmltree::Node<'_, '_>,
+    staff: &str,
+    start: c3_adapter::Q,
+    end: c3_adapter::Q,
+) -> bool {
+    fn field<'a, 'input: 'a>(note: roxmltree::Node<'a, 'input>, name: &str) -> Option<&'a str> {
+        note.children().find(|child| child.has_tag_name(name)).and_then(|child| child.text())
+    }
+    // The continuation writer needs the rhythmic anchor of the onset.
+    // A held chord follower alone cannot replace the following rest.
+    if terminal.children().any(|child| child.has_tag_name("chord")) { return false; }
+    let Some(voice) = field(terminal, "voice") else { return false; };
+    let mut receiving_lane = notes.values().copied().filter(|&note| {
+        field(note, "voice") == Some(voice)
+            && clock.times.get(&(note.range().start, false)).is_some_and(|&onset| start <= onset && onset < end)
+    });
+    let Some(rest) = receiving_lane.next() else { return false; };
+    receiving_lane.next().is_none()
+        && field(rest, "staff") == Some(staff)
+        && clock.times.get(&(rest.range().start, false)) == Some(&start)
+        && clock.times.get(&(rest.range().end, true)).is_some_and(|&after| end <= after)
+        && rest.children().any(|child| child.has_tag_name("rest"))
+        && !rest.children().any(|child| child.has_tag_name("chord") || child.has_tag_name("beam"))
+}
+
 impl JointReadingOwnerGroup {
     fn c3_kind(&self) -> c3_adapter::AdapterGroupKind {
         match self.kind {
@@ -287,7 +361,11 @@ impl JointReadingOwnerInput {
 
 /// Negotiate actual existing-owner capabilities before the finite search.
 /// A nominal state is never authority for an otherwise unwriteable boundary.
-fn observe_joint_capabilities(source: &str) -> anyhow::Result<c3_adapter::Capabilities> {
+fn observe_joint_capabilities(
+    input: &JointReadingOwnerInput,
+    time: &crate::midi::notation_time::NotationTimePlan,
+) -> anyhow::Result<c3_adapter::Capabilities> {
+    let source = input.bound_source();
     let clock = c3_adapter::observe_clock(source).map_err(|error| anyhow!("C3 writer clock: {error:?}"))?;
     let octave = observe_joint_octave_anchors(source)?;
     let clef = crate::structural_write_authority::RustigClefSurfaceDecision::observe_joint_boundaries(source);
@@ -335,6 +413,7 @@ fn observe_joint_capabilities(source: &str) -> anyhow::Result<c3_adapter::Capabi
             boundary_in_silence: true, boundary_at_hidden_head_only: true,
         });
     }
+    input.bind_source_holds(&clock, time, &mut capabilities);
     Ok(capabilities)
 }
 

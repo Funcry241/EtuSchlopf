@@ -45,6 +45,9 @@ fn read(root: &Path, path: &str) -> Result<Vec<u8>, String> {
 // below may succeed the accepted pins; every other #58 binding stays exact.
 fn phrase_transport_successor(path: &str, digest: &str) -> bool {
     const EXACT: &[(&str, &str)] = &[
+        // Satzfix 4: exact E007 placement preview and PDF course successor.
+        ("src/structural_write_authority/final_notation_phrase_projection_transaction.rs", "2986d57d4b4fb2fbd2df66d1cda8bb3477ee31196d0b17762260a50a17b02d95"),
+        ("src/structural_write_authority/final_pdf_source_commit.rs", "0544630d4762bb9d98e8af263d09ffdc1cbcf568794ee597d8423b0085122a53"),
         ("src/structural_write_authority/final_notation_phrase_projection_transaction.rs", "c0576f715e0e38e9a70873f719069fead8b19be426c83ef8a2a5017254b09397"),
         ("src/structural_write_authority/mod.rs", "5d550e4ca788a368e740c65c76ff92d8194caf9bdba9638f5e4ed04c2d402b44"),
         ("src/structural_write_authority/final_notation_phrase_projection_transaction.rs", "dfda2487c5f9e6306f498b17454d60b7052a6b192254f721f0d030dbaf20a168"),

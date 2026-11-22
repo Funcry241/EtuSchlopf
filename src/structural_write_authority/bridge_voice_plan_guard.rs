@@ -116,7 +116,7 @@ impl CanonicalFinalChordStructuralPlan {
         omissions: &BTreeSet<RenderPrunedFinalChordOmissionKey>,
     ) -> io::Result<Self> {
         let bound = bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound(
-            input, self, voices, Some(omissions),
+            input, self, voices, Some(omissions), false,
         )?;
         let mut labels = BTreeMap::new();
         let mut bindings = BTreeMap::new();

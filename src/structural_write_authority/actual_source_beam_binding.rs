@@ -915,7 +915,7 @@ mod tests {
                 assert_eq!(final_voices.role_for_source(source),baseline_voices.role_for_source(source));
             }
             let bound=bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound(
-                &xml,&canonical,&final_voices,None).unwrap();
+                &xml,&canonical,&final_voices,None,false).unwrap();
             let emitted=project_canonical_bound_final_chord_encoding_plan_for_transaction_output_alpha(
                 &xml,&canonical,&bound).unwrap();
             verify_canonical_final_chord_transaction_local_output_alpha(

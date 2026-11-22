@@ -163,7 +163,7 @@ fn execute_with_original_chains(state: &OwnedRhythmicContinuation, renamed: bool
         source_event_id: row.source_event_id, label: format!("lane-α-{}", row.staff),
     }).collect() } else { Vec::new() };
     let voices = authority::bind_musicxml_voice_labels(&channels, &preferences).unwrap();
-    let plan = authority::bind_canonical_final_chord_encoding_plan(state.document(), &canonical, &voices).unwrap();
+    let plan = authority::bind_canonical_final_chord_encoding_plan(state.document(), &canonical, &voices, true).unwrap();
     let (post, receipt) = authority::project_final_chord_encoding_plan(state.document(), &plan);
     let post = post.unwrap();
     let chains = plan.continue_original_respelling_chains(state.document(), &post, receipt.as_ref());

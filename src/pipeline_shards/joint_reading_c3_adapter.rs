@@ -140,10 +140,15 @@ pub struct StaffCapability {
 pub struct Capabilities {
     source: String,
     pub staves: BTreeMap<String, StaffCapability>,
+    pub source_holds: BTreeMap<String, Vec<std::ops::Range<Q>>>,
 }
 impl Capabilities {
     pub fn new(source: &str) -> Self {
-        Self { source: source.to_owned(), staves: BTreeMap::new() }
+        Self {
+            source: source.to_owned(),
+            staves: BTreeMap::new(),
+            source_holds: BTreeMap::new(),
+        }
     }
 }
 
@@ -560,7 +565,8 @@ pub fn propose(
         } else if let Some(r) = observed.unsupported.get(&staff) {
             StaffVerdict::Unknown { reason: format!("unsupported register markup: {r}") }
         } else {
-            match staff_domain(&observed, heads, &head_at, groups, &staff, capabilities.staves.get(&staff)) {
+            let source_holds = capabilities.source_holds.get(&staff).map_or(&[][..], Vec::as_slice);
+            match staff_domain(&observed, heads, &head_at, groups, &staff, capabilities.staves.get(&staff), source_holds) {
                 Ok((domain, anchors)) => match k::solve(&domain, expansion_limit) {
                     Ok(outcome) if outcome.complete => StaffVerdict::Solved(Box::new(SolvedStaff { domain, anchors, outcome })),
                     Ok(_) => StaffVerdict::Unknown { reason: "search resource bound reached".into() },
@@ -581,6 +587,7 @@ fn staff_domain(
     groups: &[AdapterGroup],
     staff: &str,
     cap: Option<&StaffCapability>,
+    source_holds: &[std::ops::Range<Q>],
 ) -> Result<(k::Domain, Vec<LayerAnchor>), String> {
     let mine: Vec<usize> = (0..heads.len()).filter(|&i| heads[i].staff == staff).collect();
     let start = mine.iter().map(|&i| head_at[i]).min().ok_or("no head")?;
@@ -683,6 +690,7 @@ fn staff_domain(
         let boundary = cap.boundaries.get(&t).copied().unwrap_or_default();
         let in_beam = inside(t, &beams);
         let in_tie = inside(t, &ties);
+        let in_source_hold = source_holds.iter().any(|span| span.start < t && t < span.end);
         let silent = at_heads.is_empty();
         let hidden_only = !silent && at_heads.iter().all(|&i| !heads[i].visible);
         let mut incoming = [[false; 10]; 10];
@@ -701,7 +709,8 @@ fn staff_domain(
                         && !(clef_change && in_beam && !cap.clef_change_inside_primary_beam)
                         && !(clef_change && in_tie && !cap.clef_change_inside_tie)
                         && !(octave_change && in_beam && !cap.octave_change_inside_primary_beam)
-                        && !(octave_change && in_tie && !cap.octave_change_inside_tie);
+                        && !(octave_change && in_tie && !cap.octave_change_inside_tie)
+                        && !(octave_change && in_source_hold);
                     incoming[usize::from(a.index())][usize::from(b.index())] = existing || new_ok;
                 }
             }

@@ -31,7 +31,7 @@ pub(crate) use notation::{LedgerBoundedLowerStaffClefReadbackPreservingMint, Not
 pub(crate) use notation::NotationClefIslandPreservingMint;
 #[path = "render.rs"]
 mod render;
-pub(crate) use render::SameLaneRawSpliceExactMint;
+pub(crate) use render::{PhraseSvgPreview, SameLaneRawSpliceExactMint};
 #[path = "persisted_schema_validation.rs"]
 mod persisted_schema_validation;
 

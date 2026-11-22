@@ -1518,6 +1518,7 @@ impl CanonicalFinalChordStructuralPlan {
             output_topology_fingerprint_fnv64: 0,
             occurrences,
             certified_omitted_fragment_ids: BTreeSet::new(),
+            independent_rest_anchor_fragments: BTreeSet::new(),
             original_beam_voice_groups: self.original_beam_voice_groups.clone(),
         };
         FinalPdfSourceOccurrenceContinuation::from_original_transport(course.xml.clone(), receipt).unwrap()
@@ -1682,6 +1683,7 @@ impl CanonicalFinalChordStructuralPlan {
             output_topology_fingerprint_fnv64: 0,
             occurrences,
             certified_omitted_fragment_ids: BTreeSet::new(),
+            independent_rest_anchor_fragments: BTreeSet::new(),
             original_beam_voice_groups: self.original_beam_voice_groups.clone(),
         };
         let source = FinalPdfSourceOccurrenceContinuation::from_original_transport(

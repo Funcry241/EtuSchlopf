@@ -36,13 +36,13 @@ fn run(xml: &str) -> (CanonicalFinalChordStructuralPlan, String) {
     let attacks = attacks.into_values().collect::<Vec<_>>();
     let channels = build_frozen_serialization_voice_channels_for_canonical(&canonical, &attacks).unwrap();
     let labels = bind_musicxml_voice_labels(&channels, &[]).unwrap();
-    let bound = bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound(xml, &canonical, &labels, None).unwrap();
+    let bound = bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound(xml, &canonical, &labels, None, false).unwrap();
     let projected = project_canonical_bound_final_chord_encoding_plan_for_transaction_output_alpha(xml, &canonical, &bound).unwrap();
     verify_canonical_final_chord_transaction_local_output_alpha(
         &projected.xml, &canonical, &labels, None, &projected.receipt,
         bound.plan.source_fingerprint, bound.plan.source_len,
     ).unwrap();
-    assert!(audit_musicxml_voice_label_binding_alpha(xml, &canonical, &labels).unwrap().green());
+    assert!(audit_musicxml_voice_label_binding_alpha(xml, &canonical, &labels, false).unwrap().green());
     (canonical, projected.xml)
 }
 
