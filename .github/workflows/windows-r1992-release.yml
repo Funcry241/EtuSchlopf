@@ -1,0 +1,73 @@
+name: Publish Windows r1992 preview
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/windows-r1992-release.yml']
+  push:
+    branches: [main]
+    paths: ['.github/workflows/windows-r1992-release.yml']
+
+permissions: {}
+
+env:
+  ARTIFACT_ID: '14765516020'
+  ARTIFACT_DIGEST: c2259cb5fedee332c464a5f34a884bd44160daf764ac178dc066e1ed4288c617
+  SOURCE_COMMIT: a86b1410dd8e1c6b3d85667822e037cead0d7c47
+  RELEASE_TAG: v0.10.1839-r1992-windows-preview
+
+jobs:
+  verify:
+    if: github.repository == 'Funcry241/EtuSchlopf'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - name: Verify the tested Windows package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/r1992"
+          cd "$RUNNER_TEMP/r1992"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > artifact.zip
+          echo "$ARTIFACT_DIGEST  artifact.zip" | sha256sum --check -
+          unzip -q artifact.zip
+          sha256sum --strict --check SHA256SUMS.txt
+          grep -Fx 'revision=r1992' < <(tr -d '\r' < runtime-provenance.txt)
+          grep -Fx "source_commit=$SOURCE_COMMIT" < <(tr -d '\r' < runtime-provenance.txt)
+          grep -Fx "workflow=https://github.com/$GITHUB_REPOSITORY/actions/runs/45049538953" < <(tr -d '\r' < runtime-provenance.txt)
+          for asset in EtuSchlopf-Windows-x64-r1992.exe EtuSchlopf-Beispiel-r1992.zip EtuSchlopf-r1992-source.zip runtime-provenance.txt SHA256SUMS.txt; do
+            test -s "$asset"
+          done
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'Funcry241/EtuSchlopf'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Publish the verified Windows preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft > "$RUNNER_TEMP/r1992-release-state"; then
+            if grep -Fxq false "$RUNNER_TEMP/r1992-release-state"; then
+              echo "Release $RELEASE_TAG is already published."
+              exit 0
+            fi
+            echo "An existing draft requires inspection before publication." >&2
+            exit 1
+          fi
+          mkdir "$RUNNER_TEMP/r1992"
+          cd "$RUNNER_TEMP/r1992"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > artifact.zip
+          echo "$ARTIFACT_DIGEST  artifact.zip" | sha256sum --check -
+          unzip -q artifact.zip
+          sha256sum --strict --check SHA256SUMS.txt
+          notes="Die portable Windows-x64-EXE enthält EtuSchlopf 0.10.1839 r1992. Der Starttest prüfte die EXE ohne Entwicklerumgebung und renderte das MIDI/WAV-Beispiel bis zum PDF. Die EXE ist unsigniert. Für eigene PDFs brauchst du MuseScore. [Windows-Prüfbeleg r1992](https://github.com/$GITHUB_REPOSITORY/blob/$SOURCE_COMMIT/docs/evidence/r1992/README.md) · [Geprüfter Windows-Build](https://github.com/$GITHUB_REPOSITORY/actions/runs/45049538953)"
+          gh release create "$RELEASE_TAG" \
+            EtuSchlopf-Windows-x64-r1992.exe EtuSchlopf-Beispiel-r1992.zip EtuSchlopf-r1992-source.zip runtime-provenance.txt SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$SOURCE_COMMIT" --prerelease \
+            --title "EtuSchlopf r1992 Windows x64" --notes "$notes"
