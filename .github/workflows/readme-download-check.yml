@@ -1,0 +1,71 @@
+name: README download check
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'README.md'
+      - '.github/README.md'
+      - '.github/workflows/readme-download-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check the public Windows download links
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+          from urllib.parse import quote
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          release_path = re.escape(f'https://github.com/{repo}/releases')
+          tag_link = rf'\]\({release_path}/tag/([^/)\s]+)\)'
+          asset_link = rf'\]\({release_path}/download/([^/)\s]+)/([^/)\s]+)\)'
+
+          def section(path, heading):
+              text = Path(path).read_text(encoding="utf-8")
+              match = re.search(rf'(?ms)^{re.escape(heading)}\n(.*?)(?=^## |\Z)', text)
+              if not match:
+                  raise SystemExit(f"{path}: missing heading {heading}")
+              return match.group(1)
+
+          front = section(".github/README.md", "## Dein erstes Stück")
+          root = section("README.md", "## Stand der Notenausgabe")
+          tags = re.findall(tag_link, front)
+          if len(tags) != 1 or re.findall(tag_link, root) != tags:
+              raise SystemExit("The two READMEs must link to the same Windows release.")
+
+          (tag,) = tags
+          downloads = re.findall(asset_link, front)
+          suffixes = sorted(Path(name).suffix.lower() for _, name in downloads)
+          if suffixes != [".exe", ".zip"]:
+              raise SystemExit("The first-start instructions need one EXE and one ZIP download.")
+          if any(asset_tag != tag for asset_tag, _ in downloads):
+              raise SystemExit(f"The EXE and ZIP links must both use release {tag}.")
+
+          release = json.loads(subprocess.check_output(
+              ["gh", "api", f"repos/{repo}/releases/tags/{quote(tag, safe='')}"],
+              text=True,
+          ))
+          if release["draft"]:
+              raise SystemExit(f"Release {tag} is still a draft.")
+          available = {asset["name"] for asset in release["assets"] if asset["state"] == "uploaded"}
+          expected = {name for _, name in downloads} | {"SHA256SUMS.txt"}
+          missing = expected - available
+          if missing:
+              raise SystemExit(f"Missing assets in {tag}: {', '.join(sorted(missing))}")
+          print(f"Both READMEs point to {tag}; its EXE, ZIP and checksum file are available.")
+          PY
