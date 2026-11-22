@@ -60,7 +60,7 @@ Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die
 | --- | --- |
 | Wie gelangt eine frei gespielte Note in den gedruckten Takt? | [Kapitel 3 · Vom Anschlag zur geschriebenen Dauer](#kapitel-3) |
 | Welche Zusammenhänge beschreibt das Modell für Stimmen, Register und Seiten? | [Kapitel 4 · Verfahrensfamilien](#kapitel-4) und [Kapitel 6 · Formeln](#kapitel-6) |
-| Was wurde mit welchen Stücken geprüft? | [Kapitel 9 · Prüfstände](#kapitel-9), [Vollkorpus r1968](evidence/r1968/README.md) und [Ausgangsstand r1965](evidence/r1965/README.md) |
+| Was wurde mit welchen Stücken geprüft? | [Kapitel 9 · Prüfstände](#kapitel-9) · [Windows-Vollkorpus r1992](evidence/r1992/README.md) |
 | Woran ließe sich als Nächstes arbeiten? | [Kapitel 10 · Nächste mathematische Vorhaben](#kapitel-10) |
 
 <a name="kapitel-1"></a>
@@ -589,6 +589,8 @@ Bei **1024 Einsatzgruppen** ($m=1025$) sinkt der Bedarf von **12.607.500 auf 1.0
 
 Im isolierten MIDI/WAV-Lauf für die Aufführungsanalyse von Mozarts KV 331 sank die mediane **Prozess-CPU-Zeit von 0,399568 auf 0,266895 Sekunden** (acht Läufe pro Version, abwechselnd auf demselben Linux-Rechner). Die Messung umfasst das Einlesen im Prüfprogramm und die Inferenz bis zum Zeitplan. Der anschließende Notensatz und PDF-Export liegen außerhalb dieser Messung. [Quellstand r1965 und Äquivalenznachweis](selector_derivation_contract_performance_trace_equivalence.md)
 
+**Windows-Experiment zur Kodex-Prüfung.** Die SSC-Evidenzprüfung und die Prüfung der musikalischen Herkunft lesen denselben Quellbaum unabhängig voneinander. Für zwei unabhängige Prüfungen mit Laufzeiten $t_1$ und $t_2$ sinkt die Dauer bei idealer Überlappung von $t_1+t_2$ auf $\max(t_1,t_2)$. Auf demselben Windows-Runner sank die gemessene Dauer des gesamten r1992-Buildskripts von **85,63 auf 67,14 Sekunden**. Die Compiler-Direktiven und alle drei erzeugten Dateien stimmten überein. Beide Varianten wiesen einen absichtlich veränderten SSC-Vertrag mit demselben Fehler und Exitcode 101 zurück. Der Versuch liegt als PR-Entwurf vor. [Windows-Gegenprobe](https://github.com/Funcry241/EtuSchlopf/actions/runs/45063859869) · [Entwurf](https://github.com/Funcry241/EtuSchlopf/pull/37)
+
 <a name="kapitel-6-15"></a>
 <a name="speicherplanung-für-den-korpus"></a>
 
@@ -649,7 +651,7 @@ Bei einer zulässigen Gegenlage prüft EtuSchlopf zusätzlich Seitenformat, Zeic
 | Etüde Nr. 8, Takt 25–29 | 6 | 0 | Der Bogen wechselt auf die Oberseite über drei Systeme. |
 | Chopin op. 10 Nr. 3, p02, Takt 5–6 | 5 | 1 | Ein Balkenkontakt blockiert die Gegenlage. |
 
-Im Rastervergleich mit r1989 unterscheidet sich eine der 59 PDF-Seiten, Seite 4 von Etüde 8. In der zugehörigen Render-MusicXML erhält der Bogen ein Platzierungsattribut. Die 15 Master-MusicXML-Dateien sind bytegleich.
+Im Rastervergleich mit r1989 unterscheidet sich eine der 59 PDF-Seiten, Seite 4 von Etüde 8. In der zugehörigen Render-MusicXML erhält der Bogen ein Platzierungsattribut. Die 15 Master-MusicXML-Dateien sind bytegleich. [Windows-Prüfbeleg r1992](evidence/r1992/README.md)
 
 <a name="kapitel-7"></a>
 <a name="quellzeit-pausen-und-balken-in-r1938"></a>
@@ -697,8 +699,9 @@ Die 493 offenen Zielpaare verteilen sich auf 244 Fälle mit Akkordträger oder f
 
 ## 9 Prüfstände und verbleibende Grenzen
 
-| Material | Letzter belegter Vergleich |
+| Material | Belegter Vergleich |
 | --- | --- |
+| Windows-Vollkorpus r1992 | Alle 15 Stücke wurden aus MIDI und WAV neu gesetzt und vollständig ausgegeben. Der Vergleich mit r1989 prüft Master-MusicXML, Render-MusicXML und die gerenderten PDF-Seiten. [Prüfbeleg](evidence/r1992/README.md) · [Befunde zur Bogenlage](#kapitel-6-17) |
 | Chopin · Etüde op. 10 Nr. 3, p01 | Bei allen 448 regulären Noten stimmen Einsatz und Tonhöhe mit der Referenz überein, bei 380 die geschriebene Dauer. Die vier Vorschläge werden getrennt gezählt. Master und Render blieben von r1965 bis r1968 bytegleich, die PDF-Seite bei 144 dpi pixelgleich. [Dauervergleich](evidence/r1965/vergleich.md) · [Vergleich r1968](evidence/r1968/README.md) |
 | Bach · Fuge c-Moll BWV 847 | Der Abgleich r1745 erfasste 754 Notenansätze mit Notenwerten und Haltebögen. In beiden Vergleichen r1961–r1965 und r1965–r1968 blieben die drei Windows-PDF-Seiten bei 144 dpi pixelgleich. [Abnahme r1749](evidence/r1749/README.md) · [Seitenvergleich](evidence/r1965/vergleich.md) |
 | Schubert · Deutscher Tanz D. 783 Nr. 15, p18 | Im r1965-Import stimmen Einsatz, Tonhöhe und Dauer bei allen 315 verglichenen regulären Anschlägen. Die Eingabe enthält notenspezifische Entscheidungen. [Vergleich und Grenzen des Imports](evidence/r1965/vergleich.md) |
