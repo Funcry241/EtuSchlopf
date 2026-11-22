@@ -13,11 +13,6 @@ on:
       - 'docs/THIRD_PARTY_NOTICES.md'
       - 'docs/licenses/**'
       - 'docs/normative_sources/musicxml/**'
-      - 'README.md'
-      - 'docs/README.md'
-      - 'docs/MATHEMATIK*.md'
-      - 'docs/CONTRIBUTING.md'
-      - 'docs/community/issue_templates/01_fehler.md'
       - 'docs/evidence/r1985/**'
       - '.gitattributes'
       - '.github/distribution/**'
@@ -35,11 +30,6 @@ on:
       - 'docs/THIRD_PARTY_NOTICES.md'
       - 'docs/licenses/**'
       - 'docs/normative_sources/musicxml/**'
-      - 'README.md'
-      - 'docs/README.md'
-      - 'docs/MATHEMATIK*.md'
-      - 'docs/CONTRIBUTING.md'
-      - 'docs/community/issue_templates/01_fehler.md'
       - 'docs/evidence/r1985/**'
       - '.gitattributes'
       - '.github/distribution/**'
@@ -50,9 +40,33 @@ permissions:
 concurrency:
   group: windows-download-${{ github.ref }}
   cancel-in-progress: false
+env:
+  RELEASE_TAG: v0.10.1839-r1985-windows-preview
 jobs:
-  build:
+  # A push to main only needs the ten-minute Windows build while the preview
+  # release is still missing. Pull requests and manual runs always build.
+  release-check:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.check.outputs.build }}
+    steps:
+      - name: Check whether the Windows preview is already published
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = push ] && gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists. The push run skips the Windows build." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo 'build=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'build=true' >> "$GITHUB_OUTPUT"
+          fi
+  build:
+    needs: release-check
+    if: needs.release-check.outputs.build == 'true'
     runs-on: windows-2022
     timeout-minutes: 45
     defaults:
@@ -72,14 +86,31 @@ jobs:
         run: |
           python .github/distribution/prepare-r1985-source.py . $env:ETU_BUILD_ROOT "$env:RUNNER_TEMP/etuschlopf-source"
           if ($LASTEXITCODE -ne 0) { throw 'Native r1985 source preparation failed' }
-      - name: Build accepted engine
-        working-directory: D:\etu-r1985-build
+      - name: Install Rust toolchain
         run: |
           rustup toolchain install 1.98.0 --profile minimal
           if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed' }
+      # The engine comes only from the checksum-verified r1985 inventory, so its
+      # binary is keyed on that inventory, the preparation script and the toolchain.
+      - name: Restore accepted engine from cache
+        id: engine-cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: D:\etu-r1985-build\target\strict\etuschlopf.exe
+          key: etu-r1985-engine-v1-${{ runner.os }}-${{ runner.arch }}-rust1.98.0-strict-crtstatic-${{ hashFiles('public/docs/evidence/r1985/accepted-source.tsv', 'public/.github/distribution/prepare-r1985-source.py') }}
+      - name: Build accepted engine
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        working-directory: D:\etu-r1985-build
+        run: |
           $jobs = [Math]::Max(1, [Environment]::ProcessorCount - 1)
           cargo +1.98.0 build --locked --profile strict --bin etuschlopf --jobs $jobs --color never
           if ($LASTEXITCODE -ne 0) { throw 'Accepted engine build failed' }
+      - name: Save accepted engine for later runs
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: D:\etu-r1985-build\target\strict\etuschlopf.exe
+          key: ${{ steps.engine-cache.outputs.cache-primary-key }}
       - name: Bundle runtime data and licences
         run: |
           $ErrorActionPreference = 'Stop'
@@ -120,8 +151,10 @@ jobs:
         run: |
           ./.github/distribution/start-example.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path -Output dist/EtuSchlopf-Beispiel-r1985.zip
       - name: Hash Windows downloads
+        env:
+          ENGINE_CACHE_HIT: ${{ steps.engine-cache.outputs.cache-hit == 'true' }}
         run: |
-          @("revision=r1985", "public_commit=$env:GITHUB_SHA", "workflow=$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID", "accepted_take_sha256=5bf6cf758532cd99bbe6174e774fa6ee0499bb3e22f96a4b88eab7f28f363651", "native_snapshot_sha256=45d702204667afdbdddbe0fef65327db83f504d8877984cc88669d27caff95d2") | Set-Content -Encoding ascii dist/runtime-provenance.txt
+          @("revision=r1985", "public_commit=$env:GITHUB_SHA", "workflow=$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID", "accepted_take_sha256=5bf6cf758532cd99bbe6174e774fa6ee0499bb3e22f96a4b88eab7f28f363651", "native_snapshot_sha256=45d702204667afdbdddbe0fef65327db83f504d8877984cc88669d27caff95d2", "engine_cache_hit=$env:ENGINE_CACHE_HIT") | Set-Content -Encoding ascii dist/runtime-provenance.txt
           $sums = foreach ($name in @('EtuSchlopf-Windows-x64.exe', 'EtuSchlopf-r1985-source.zip', 'EtuSchlopf-Beispiel-r1985.zip', 'runtime-provenance.txt')) {
             $hash = (Get-FileHash -Algorithm SHA256 "dist/$name").Hash.ToLowerInvariant()
             "$hash  $name"
@@ -147,7 +180,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag=v0.10.1839-r1985-windows-preview
+          tag="$RELEASE_TAG"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $tag already exists."
             exit 0
