@@ -17,12 +17,27 @@ impl Direction {
             Self::Down => "<stem>down</stem>",
         }
     }
+
+    fn opposite(self) -> Self {
+        match self {
+            Self::Up => Self::Down,
+            Self::Down => Self::Up,
+        }
+    }
+
+    fn outward(self, distance: i64) -> i64 {
+        match self {
+            Self::Up => distance,
+            Self::Down => -distance,
+        }
+    }
 }
 
 struct Head {
     distance: i64,
     stem: Option<StemEdit>,
     written_pitch: Option<i64>,
+    ties: Option<StemTies>,
 }
 
 struct Attack<'a> {
@@ -33,8 +48,9 @@ struct Attack<'a> {
     beam: Option<&'a str>,
     flagged: bool,
     primary_only: bool,
+    ordinary_beam_levels: Option<i64>,
     tie: Option<TieEndpoint>,
-    valid: bool,
+    clef: Option<PianoClef>,
     isolation_supported: bool,
     heads: Vec<Head>,
 }
@@ -43,6 +59,54 @@ struct Attack<'a> {
 enum TieEndpoint {
     Start(i32),
     Stop(i32),
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+struct TieSides {
+    start: Option<u32>,
+    stop: Option<u32>,
+}
+
+#[derive(Clone, Copy)]
+struct StemTies {
+    sides: TieSides,
+    alteration: i32,
+}
+
+fn tie_sides<'a, 'input: 'a>(marks: impl Iterator<Item = Node<'a, 'input>>) -> Option<TieSides> {
+    let mut sides = TieSides::default();
+    for mark in marks {
+        if mark.attribute("time-only").is_some() {
+            return None;
+        }
+        let side = match mark.attribute("type")? {
+            "start" => &mut sides.start,
+            "stop" => &mut sides.stop,
+            _ => return None,
+        };
+        let number = mark.attribute("number").unwrap_or("1").parse().ok()?;
+        if side.replace(number).is_some() {
+            return None;
+        }
+    }
+    Some(sides)
+}
+
+fn stem_ties(note: Node<'_, '_>) -> Option<StemTies> {
+    let sound = tie_sides(note.children().filter(|n| n.has_tag_name("tie")))?;
+    let print = tie_sides(note.children().filter(|n| n.has_tag_name("notations"))
+        .flat_map(|notations| notations.children().filter(|n| n.has_tag_name("tied"))))?;
+    let empty = TieSides::default();
+    if sound != empty && print != empty
+        && (sound.start.is_some(), sound.stop.is_some()) != (print.start.is_some(), print.stop.is_some())
+    {
+        return None;
+    }
+    let sides = if print == empty { sound } else { print };
+    let alteration = if sides == empty { 0 } else {
+        field(child(note, "pitch")?, "alter").unwrap_or("0").parse().ok()?
+    };
+    Some(StemTies { sides, alteration })
 }
 
 struct Group<'a> {
@@ -71,7 +135,9 @@ impl Group<'_> {
     }
 
     fn writable(&self) -> bool {
-        self.topology_writable() && self.attacks.iter().all(|attack| attack.valid)
+        let clef = self.attacks[0].clef;
+        clef.is_some() && self.topology_writable()
+            && self.attacks.iter().all(|attack| attack.clef == clef)
     }
 }
 
@@ -196,9 +262,19 @@ fn measure_octave_course(
 }
 
 struct StaffPrint {
-    clef: PianoClef,
+    clefs: BTreeMap<i64, Option<PianoClef>>,
     octave: Vec<OctaveSpan>,
     has_octave_context: bool,
+}
+
+impl StaffPrint {
+    fn clef_during(&self, start: i64, end: i64) -> Option<PianoClef> {
+        use std::ops::Bound::Excluded;
+        if start >= end || self.clefs.range((Excluded(start), Excluded(end))).next().is_some() {
+            return None;
+        }
+        *self.clefs.range(..=start).next_back()?.1
+    }
 }
 
 fn rhythmic_duration(node: Node<'_, '_>) -> Option<i64> {
@@ -212,6 +288,9 @@ fn rhythmic_duration(node: Node<'_, '_>) -> Option<i64> {
 fn rhythmic_cursor(node: Node<'_, '_>, cursor: i64) -> Option<i64> {
     let is_note = node.has_tag_name("note");
     let duration = rhythmic_duration(node)?;
+    if is_note && child(node, "grace").is_some() {
+        return (duration == 0).then_some(cursor);
+    }
     let next = if is_note && child(node, "chord").is_some() {
         cursor
     } else if node.has_tag_name("backup") {
@@ -242,12 +321,13 @@ impl PrintContext {
     fn for_measure(&mut self, measure: Node<'_, '_>) -> [Option<StaffPrint>; 2] {
         let carried = self.octave_shifts.clone();
         let mut events = [Vec::new(), Vec::new()];
-        let mut stable = [true; 2];
-        let mut cursor = measure
-            .children()
-            .filter(|node| node.has_tag_name("direction"))
-            .any(|node| octave_markers(node).next().is_some())
-            .then_some(0);
+        let mut clef_events: [BTreeMap<i64, Option<PianoClef>>; 2] = Default::default();
+        let mut unpositioned_clef = [None; 2];
+        let mut stable_divisions = true;
+        let mut cursor = measure.children().any(|node|
+            (node.has_tag_name("attributes") && child(node, "clef").is_some())
+                || (node.has_tag_name("direction") && octave_markers(node).next().is_some())
+        ).then_some(0);
         let mut sounding = false;
         for node in measure.children().filter(Node::is_element) {
             match node.tag_name().name() {
@@ -257,13 +337,20 @@ impl PrintContext {
                 }
                 "attributes" => {
                     if sounding && child(node, "divisions").is_some() {
-                        stable = [false; 2];
+                        stable_divisions = false;
                     }
                     for clef in node.children().filter(|n| n.has_tag_name("clef")) {
                         if let Some(staff) = staff_index(clef.attribute("number").unwrap_or("1")) {
                             let next = printed_clef(clef);
-                            stable[staff] &= !sounding || self.clefs[staff] == next;
-                            self.clefs[staff] = next;
+                            let agreed = match cursor {
+                                Some(at) => clef_events[staff].entry(at).or_insert(next),
+                                None => unpositioned_clef[staff].get_or_insert(next),
+                            };
+                            // Parallel voices may restate the same boundary. Conflicting
+                            // declarations leave it unresolved in either XML order.
+                            if *agreed != next {
+                                *agreed = None;
+                            }
                         }
                     }
                 }
@@ -300,10 +387,30 @@ impl PrintContext {
             }
         }
         std::array::from_fn(|staff| {
-            let clef = self.clefs[staff].filter(|_| stable[staff])?;
+            let mut clefs = std::mem::take(&mut clef_events[staff]);
+            if !stable_divisions || unpositioned_clef[staff].is_some() {
+                // If time positions cannot be compared, equal declarations still
+                // determine the next measure's clef independently of their order.
+                let mut declarations = clefs.values().copied().chain(unpositioned_clef[staff]);
+                if let Some(first) = declarations.next() {
+                    self.clefs[staff] = first.filter(|clef| declarations.all(|other| other == Some(*clef)));
+                }
+                return None;
+            }
+            clefs.entry(0).or_insert(self.clefs[staff]);
+            let mut previous = None;
+            clefs.retain(|_, value| {
+                let changed = previous != *value;
+                previous = *value;
+                changed
+            });
+            self.clefs[staff] = previous;
+            if clefs.is_empty() {
+                return None;
+            }
             let has_octave_context = !carried[staff].is_empty() || !events[staff].is_empty();
             let octave = measure_octave_course(carried[staff].clone(), &events[staff])?;
-            Some(StaffPrint { clef, octave, has_octave_context })
+            Some(StaffPrint { clefs, octave, has_octave_context })
         })
     }
 }
@@ -371,10 +478,11 @@ fn collect_attacks<'a>(
         };
         let end = start.checked_add(duration)?;
         let pitch = observe_pitch(xml.get(node.range())?);
-        let distance = print[staff].as_ref().and_then(|context| {
+        let printed = print[staff].as_ref().and_then(|context| {
+            let clef = context.clef_during(start, end)?;
             let steps = context.octave.iter()
                 .find(|span| span.start <= start && end <= span.stop)?.steps;
-            Some(context.clef.distance_from_middle_line(pitch?.shifted(steps)))
+            Some((clef, clef.distance_from_middle_line(pitch?.shifted(steps))))
         });
         let stem = child(node, "stem").and_then(|stem| {
             let range = stem.range();
@@ -390,26 +498,39 @@ fn collect_attacks<'a>(
             .clone()
             .find(|n| n.attribute("number").unwrap_or("1") == "1");
         let primary_only = primary.is_some() && beams.clone().count() == 1;
+        let ordinary_beam_levels = if primary.is_some()
+            && !node.children().any(|child| matches!(child.tag_name().name(),
+                "tie" | "notations" | "time-modification" | "cue" | "notehead"))
+        {
+            match beams.clone().count() {
+                1 => Some(1),
+                2 if beams.clone().any(|beam| beam.attribute("number") == Some("2")
+                    && matches!(beam.text().map(str::trim), Some("begin" | "continue" | "end"))) => Some(2),
+                _ => None,
+            }
+        } else {
+            None
+        };
         let beam = match primary {
             Some(primary) => Some(primary.text()?.trim()),
             None if beams.next().is_some() => Some("unbound"),
             None => None,
         };
         let head = Head {
-            distance: distance.unwrap_or(0),
+            distance: printed.map_or(0, |(_, distance)| distance),
             stem,
             written_pitch: pitch.map(|pitch| PianoClef::TrebleG2.distance_from_middle_line(pitch)),
+            ties: stem_ties(node),
         };
-        let valid = distance.is_some() && child(node, "grace").is_none();
+        let clef = printed.map(|(clef, _)| clef);
         if is_chord {
             let i = attachment?;
             let attack = &mut attacks[i];
-            attack.valid &= valid
-                && attack.staff == staff
-                && attack.voice == voice
-                && attack.end == end
-                && beam.is_none();
+            if attack.clef != clef {
+                attack.clef = None;
+            }
             if attack.staff != staff || attack.voice != voice || attack.end != end || beam.is_some() {
+                attack.clef = None;
                 for head in &mut attack.heads {
                     head.written_pitch = None;
                 }
@@ -425,10 +546,11 @@ fn collect_attacks<'a>(
                 voice,
                 beam,
                 primary_only,
+                ordinary_beam_levels,
                 flagged: beam.is_none() && matches!(field(node, "type"),
                     Some("eighth" | "16th" | "32nd" | "64th" | "128th" | "256th")),
                 tie: tie_endpoint(node),
-                valid,
+                clef,
                 isolation_supported: print[staff].as_ref().is_some_and(|context| !context.has_octave_context),
                 heads: vec![head],
             });
@@ -664,6 +786,67 @@ fn isolated_direction(group: &Group<'_>) -> Option<Direction> {
     }
 }
 
+// The middle-line rule alone cannot decide one fragment of a tie independently
+// of its printed partner. Each endpoint binds by musical time and written pitch.
+fn isolated_directions(groups: &[Group<'_>], relations: &[Relation]) -> Vec<Option<Direction>> {
+    let mut directions: Vec<_> = groups.iter().zip(relations).map(|(group, relation)| {
+        (relation.neighbors.is_empty() && group.writable()).then(|| isolated_direction(group)).flatten()
+    }).collect();
+    let mut endpoints = BTreeMap::new();
+    for (index, group) in groups.iter().enumerate() {
+        for attack in &group.attacks {
+            for head in &attack.heads {
+                let Some(tie) = head.ties else {
+                    directions[index] = None;
+                    continue;
+                };
+                for (number, at, start) in [
+                    (tie.sides.start, attack.end, true),
+                    (tie.sides.stop, attack.start, false),
+                ] {
+                    let Some(number) = number else { continue; };
+                    let Some(pitch) = head.written_pitch else {
+                        directions[index] = None;
+                        continue;
+                    };
+                    let key = (attack.staff, attack.voice, at, pitch, tie.alteration, number);
+                    let (starts, stops) = endpoints.entry(key).or_insert_with(|| (Vec::new(), Vec::new()));
+                    if start { starts.push(index); } else { stops.push(index); }
+                }
+            }
+        }
+    }
+    if endpoints.is_empty() {
+        return directions;
+    }
+    let mut neighbors = vec![Vec::new(); groups.len()];
+    for (starts, stops) in endpoints.into_values() {
+        if let ([left], [right]) = (starts.as_slice(), stops.as_slice()) {
+            neighbors[*left].push(*right);
+            neighbors[*right].push(*left);
+        } else {
+            for index in starts.into_iter().chain(stops) {
+                directions[index] = None;
+            }
+        }
+    }
+    let mut visited = vec![false; groups.len()];
+    for root in 0..groups.len() {
+        if visited[root] || neighbors[root].is_empty() { continue; }
+        let mut pending = vec![root];
+        let mut connected = Vec::new();
+        while let Some(index) = pending.pop() {
+            if std::mem::replace(&mut visited[index], true) { continue; }
+            connected.push(index);
+            pending.extend(&neighbors[index]);
+        }
+        if connected.iter().any(|&index| directions[index] != directions[root]) {
+            for index in connected { directions[index] = None; }
+        }
+    }
+    directions
+}
+
 fn overlapping_directions(
     groups: &[Group<'_>],
     relations: &[Relation],
@@ -689,6 +872,120 @@ fn overlapping_directions(
         && roles.values().any(|role| *role == Direction::Down)).then_some(result)
 }
 
+struct BeamFootprint<'group, 'source> {
+    attacks: &'group [Attack<'source>],
+    start: i64,
+    end: i64,
+    direction: Direction,
+    levels: i64,
+    low: i64,
+    high: i64,
+}
+
+impl<'group, 'source> BeamFootprint<'group, 'source> {
+    const LEVEL_STEP: i64 = 2;
+
+    fn new(group: &'group Group<'source>) -> Option<Self> {
+        let [first, .., last] = group.attacks.as_slice() else {
+            return None;
+        };
+        let direction = match first.heads[0].stem?.2 {
+            "<stem>up</stem>" => Direction::Up,
+            "<stem>down</stem>" => Direction::Down,
+            _ => return None,
+        };
+        let mut low = i64::MAX;
+        let mut high = i64::MIN;
+        let mut levels = 1;
+        for attack in &group.attacks {
+            for head in &attack.heads {
+                if head.stem?.2 != direction.xml() || !(-8..=8).contains(&head.distance) {
+                    return None;
+                }
+                low = low.min(head.distance);
+                high = high.max(head.distance);
+            }
+            levels = levels.max(attack.ordinary_beam_levels?);
+        }
+        Some(Self { attacks: &group.attacks, start: first.start, end: last.start,
+            direction, levels, low, high })
+    }
+
+    fn outer_head(&self, direction: Direction) -> i64 {
+        match direction {
+            Direction::Up => self.high,
+            Direction::Down => -self.low,
+        }
+    }
+
+    fn crosses_other_stem(&self, other: &Self) -> bool {
+        // Compare nominal beam heights in staff steps (half-line spaces).
+        // A stem at an interior onset can run through the other voice's band
+        // on its way to its own beam. Endpoint alignment alone is insufficient.
+        const NOMINAL_REACH: i64 = 5;
+        let height = self.outer_head(self.direction) + NOMINAL_REACH;
+        let other_height = other.outer_head(self.direction) + NOMINAL_REACH;
+        height - Self::LEVEL_STEP * (self.levels - 1) <= other_height
+            && other.attacks.iter().any(|attack| {
+                self.start < attack.start && attack.start < self.end
+                    && attack.heads.iter().any(|head| self.direction.outward(head.distance) < height)
+            })
+    }
+
+    fn clears(&self, other: &Self, direction: Direction) -> bool {
+        // For an opposite-facing pair, a beam beyond every other head also
+        // clears the other stems. Reserve room on the inward side for slope,
+        // beam thickness and secondary levels of an ordinary beam.
+        const PRIMARY_INNER_EDGE: i64 = 1;
+        let inside_beam_edge = self.outer_head(direction) + PRIMARY_INNER_EDGE
+            - Self::LEVEL_STEP * (self.levels - 1);
+        // At a later onset the beam has already ended, even if that attack
+        // and the beam's last note still sound together.
+        other.attacks.iter().filter(|attack| (self.start..=self.end).contains(&attack.start))
+            .flat_map(|attack| &attack.heads)
+            .all(|head| inside_beam_edge > direction.outward(head.distance))
+    }
+
+    fn can_reverse(&self) -> bool {
+        self.attacks.iter().all(|attack| attack.heads.len() == 1)
+    }
+}
+
+fn separated_beam_directions(
+    groups: &[Group<'_>],
+    component: &[usize],
+    other_symbols: &[PositionedSymbol],
+) -> Option<Vec<Direction>> {
+    let &[first, second] = component else { return None; };
+    let left = &groups[first];
+    let right = &groups[second];
+    if left.staff() != right.staff() || left.voice() == right.voice()
+        || left.attacks[0].clef != right.attacks[0].clef
+    {
+        return None;
+    }
+    let a = BeamFootprint::new(left)?;
+    let b = BeamFootprint::new(right)?;
+    let direction = a.direction;
+    if direction != b.direction || !(a.crosses_other_stem(&b) || b.crosses_other_stem(&a)) {
+        return None;
+    }
+    let occupied_span = a.start.min(b.start)..=a.end.max(b.end);
+    if other_symbols.iter().any(|symbol| {
+        symbol.staff.is_none_or(|staff| staff == left.staff()) && occupied_span.contains(&symbol.onset)
+    }) {
+        return None;
+    }
+    let opposite = direction.opposite();
+    match (b.can_reverse() && a.clears(&b, direction) && b.clears(&a, opposite),
+        a.can_reverse() && a.clears(&b, opposite) && b.clears(&a, direction))
+    {
+        (true, false) => Some(vec![direction, opposite]),
+        (false, true) => Some(vec![opposite, direction]),
+        _ => None,
+    }
+}
+
 // If a larger component has no consistent pitch-role ordering, an explicit
 // flag can still be separated from an adjacent beam of a different voice.
 fn separate_flag_from_beam(groups: &[Group<'_>], edits: &mut Vec<StemEdit>, require_pitch_order: bool) {
@@ -712,7 +1009,7 @@ fn separate_flag_from_beam(groups: &[Group<'_>], edits: &mut Vec<StemEdit>, requ
         let [flag] = group.attacks.as_slice() else {
             continue;
         };
-        if !flag.flagged || !flag.valid || !group.topology_writable()
+        if !flag.flagged || !group.writable()
             || flag.heads.iter().any(|head| head.stem.is_some_and(|(at, _, _)| planned.contains_key(&at)))
         {
             continue;
@@ -794,7 +1091,7 @@ fn interleaved_beam_side(
         for attack in other.attacks.iter().filter(|attack| {
             (left.start..=right.start).contains(&attack.start)
         }) {
-            if !attack.valid || other.voice() == group.voice() {
+            if attack.clef.is_none() || other.voice() == group.voice() {
                 return None;
             }
             for head in &attack.heads {
@@ -852,9 +1149,10 @@ fn clear_interleaved_horizontal_beams(
 
 fn measure_edits(groups: &[Group<'_>], other_symbols: &[PositionedSymbol]) -> Vec<StemEdit> {
     let relations = compare_groups(groups);
+    let isolated = isolated_directions(groups, &relations);
     let mut visited = vec![false; groups.len()];
     let mut edits = Vec::new();
-    for root in 0..groups.len() {
+    for (root, &isolated_direction) in isolated.iter().enumerate() {
         let mut pending = vec![root];
         let mut component = Vec::new();
         while let Some(i) = pending.pop() {
@@ -868,9 +1166,10 @@ fn measure_edits(groups: &[Group<'_>], other_symbols: &[PositionedSymbol]) -> Ve
             continue;
         }
         let directions = if component.len() == 1 {
-            isolated_direction(&groups[root]).map(|direction| vec![direction])
+            isolated_direction.map(|direction| vec![direction])
         } else {
             overlapping_directions(groups, &relations, &component)
+                .or_else(|| separated_beam_directions(groups, &component, other_symbols))
         };
         let Some(directions) = directions else {
             continue;
@@ -1106,6 +1405,60 @@ mod tests {
     }
 
     #[test]
+    fn independent_beams_separate_on_the_clear_side() {
+        for (mirror, reverse_serialization, fast_voice, slow_voice) in
+            [(false, false, 3, 7), (true, true, 8, 2)]
+        {
+            let toward = if mirror { "down" } else { "up" };
+            let away = if mirror { "up" } else { "down" };
+            let build = |pitches: &[(&str, &str)], duration, voice, direction, double: bool| {
+                pitches.iter().enumerate().map(|(index, &(pitch, reflected))| {
+                    let pitch = if mirror { reflected } else { pitch };
+                    let mark = match index {
+                        0 => "begin",
+                        i if i + 1 == pitches.len() => "end",
+                        _ => "continue",
+                    };
+                    let secondary = if !double { "" } else if index % 2 == 0 {
+                        "<beam number=\"2\">begin</beam>"
+                    } else {
+                        "<beam number=\"2\">end</beam>"
+                    };
+                    note(&pitch[..1], duration, voice, direction, &format!(
+                        "<beam number=\"1\">{mark}</beam>{secondary}"
+                    )).replace("<octave>5</octave>", &format!("<octave>{}</octave>", &pitch[1..]))
+                }).collect::<String>()
+            };
+            let slow = build(&[("D5", "G4"), ("C5", "A4"), ("E5", "F4")], 2, slow_voice, toward, false);
+            let changed = slow.replace(&format!("<stem>{toward}</stem>"), &format!("<stem>{away}</stem>"));
+            let fast_pitches = [("E5", "F4"), ("G5", "D4"), ("D5", "G4"),
+                ("D5", "G4"), ("C5", "A4"), ("E5", "F4")];
+            let fast = build(&fast_pitches, 1, fast_voice, toward, true);
+            let overlap = |fast: &str, slow: &str| {
+                let (first, second) = if reverse_serialization { (slow, fast) } else { (fast, slow) };
+                format!("{first}<backup><duration>6</duration></backup>{second}")
+            };
+            let input = score(&overlap(&fast, &slow));
+            let expected = score(&overlap(&fast, &changed));
+            assert_eq!(preview(&input), expected);
+            assert_eq!(preview(&expected), expected);
+
+            let mut blocked_pitches = fast_pitches;
+            blocked_pitches[3] = ("G4", "D5");
+            let blocked_fast = build(&blocked_pitches, 1, fast_voice, toward, true);
+            let incomplete = fast.replace("<beam number=\"1\">end</beam>", "<beam number=\"1\">continue</beam>");
+            let rest = "<backup><duration>4</duration></backup><note><rest/><duration>1</duration><voice>9</voice></note>";
+            for blocked in [
+                score(&overlap(&blocked_fast, &slow)),
+                score(&overlap(&incomplete, &slow)),
+                score(&format!("{}{rest}", overlap(&fast, &slow))),
+            ] {
+                assert_eq!(preview(&blocked), blocked);
+            }
+        }
+    }
+
+    #[test]
     fn a_tie_across_another_voices_beam_boundary_establishes_independent_timing() {
         let begin = "<beam number=\"1\">begin</beam>";
         let end = "<beam number=\"1\">end</beam>";
@@ -1196,5 +1549,181 @@ mod tests {
         ] {
             assert_eq!(preview(&unresolved), unresolved);
         }
+    }
+
+    const BASS: &str = "<attributes><clef><sign>F</sign><line>4</line></clef></attributes>";
+    const TREBLE: &str = "<attributes><clef><sign>G</sign><line>2</line></clef></attributes>";
+
+    fn beam_at_pitch(step: &str, octave: u8, duration: u8, stem: &str) -> String {
+        ["begin", "end"].map(|mark| {
+            note(step, duration, 1, stem, &format!("<beam>{mark}</beam>"))
+                .replace("<octave>5</octave>", &format!("<octave>{octave}</octave>"))
+        }).concat()
+    }
+
+    #[test]
+    fn independent_beams_use_the_clef_at_their_own_time_and_carry_it_forward() {
+        // All pitches lie between the two middle lines. Changing clef must reverse
+        // the isolated direction even when the written pitch stays the same.
+        for (step, octave, duration) in [("E", 3, 1), ("A", 3, 3), ("G", 4, 2)] {
+            let down = beam_at_pitch(step, octave, duration, "down");
+            let up = beam_at_pitch(step, octave, duration, "up");
+            assert_eq!(preview(&score(&down)), score(&up));
+            for copies in [1, 2] {
+                let early_input = down.repeat(copies);
+                let early_result = up.repeat(copies);
+                let next_measure = "</measure><measure number=\"continuation\">";
+                let elapsed = (copies + 1) * 2 * usize::from(duration);
+                // A later XML voice may restate the opening clef at musical time zero.
+                for rewind in [String::new(), format!(
+                    "<backup><duration>{elapsed}</duration></backup>{TREBLE}<forward><duration>{elapsed}</duration></forward>"
+                )] {
+                    let input = score(&format!("{early_input}{BASS}{up}{rewind}{next_measure}{up}"));
+                    let expected = score(&format!("{early_result}{BASS}{down}{rewind}{next_measure}{down}"));
+                    assert_eq!(preview(&input), expected);
+                    assert_eq!(preview(&expected), expected);
+                    assert!(super::super::project_master_countervoice_stems(&input).unwrap().is_none());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn countervoice_roles_follow_musical_time_across_serialized_voices() {
+        for (beam_voice, flag_voice, duration) in [(2, 6, 1), (8, 3, 3)] {
+            let beam = format!("{}{}", note("F", duration, beam_voice, "up", "<beam>begin</beam>"),
+                note("E", duration, beam_voice, "up", "<beam>end</beam>"));
+            let flag = note("C", duration, flag_voice, "up", "").replace("<stem>", "<type>16th</type><stem>");
+            let forward = format!("<forward><duration>{duration}</duration></forward>");
+            let rewind = format!("<backup><duration>{}</duration></backup>", 2 * duration);
+            for body in [
+                format!("{beam}{BASS}{rewind}{flag}{forward}"),
+                format!("{flag}{forward}{BASS}{rewind}{beam}"),
+            ] {
+                let source = score(&body);
+                let expected = source.replace(&flag, &flag.replace("<stem>up</stem>", "<stem>down</stem>"));
+                let (master, receipt) = super::super::project_master_countervoice_stems(&source)
+                    .unwrap().expect("lower independent flag needs the opposite direction");
+                receipt.validate_preserving_transition::<super::super::NotationPolishPreservingMint>(&source, &master).unwrap();
+                assert_eq!(master, expected);
+                assert_eq!(preview(&source), expected);
+                assert!(super::super::project_master_countervoice_stems(&master).unwrap().is_none());
+                assert_eq!(preview(&expected), expected);
+            }
+        }
+    }
+
+    #[test]
+    fn unclear_clef_and_crossing_beam_leave_separate_material_writable() {
+        let early = beam_at_pitch("G", 4, 2, "down");
+        let fixed_early = beam_at_pitch("G", 4, 2, "up");
+        let after = beam_at_pitch("A", 3, 2, "up");
+        let fixed_after = beam_at_pitch("A", 3, 2, "down");
+        let uncertain = beam_at_pitch("E", 5, 3, "up");
+        let unsupported = "<attributes><clef><sign>C</sign><line>3</line></clef></attributes>";
+        for middle in [
+            format!("{unsupported}{uncertain}{BASS}"),
+            format!("{TREBLE}{BASS}{uncertain}{BASS}"),
+            format!("{}{BASS}{}", note("F", 3, 1, "up", "<beam>begin</beam>"),
+                note("E", 3, 1, "up", "<beam>end</beam>")),
+        ] {
+            let source = score(&format!("{early}{middle}{after}"));
+            let expected = score(&format!("{fixed_early}{middle}{fixed_after}"));
+            assert_eq!(preview(&source), expected);
+            assert_eq!(preview(&expected), expected);
+        }
+    }
+
+    #[test]
+    fn divisions_redeclaration_preserves_known_clefs_for_the_following_measure() {
+        let treble_wrong = beam_at_pitch("G", 4, 2, "down").replacen("<stem>down</stem>", "<stem>up</stem>", 1);
+        let treble_fixed = beam_at_pitch("G", 4, 2, "up");
+        let bass_wrong = beam_at_pitch("G", 4, 2, "up")
+            .replace("<voice>1</voice>", "<voice>3</voice>")
+            .replace("<beam>", "<staff>2</staff><beam>");
+        let bass_fixed = bass_wrong.replace("<stem>up</stem>", "<stem>down</stem>");
+        let second_staff = BASS.replace("<clef>", "<staves>2</staves><clef number=\"2\">");
+        let voices = format!("{treble_wrong}<backup><duration>4</duration></backup>{bass_wrong}");
+        let next_measure = "</measure><measure number=\"continuation\">";
+        for divisions in [8, 12] {
+            let changed = format!("<attributes><divisions>{divisions}</divisions></attributes>");
+            for (late_clef, next_treble) in [("", &treble_fixed), (TREBLE, &treble_fixed), (BASS, &treble_wrong)] {
+                let prefix = format!("{second_staff}{voices}{changed}{late_clef}{next_measure}");
+                let input = score(&format!("{prefix}{voices}"));
+                let expected = score(&format!(
+                    "{prefix}{next_treble}<backup><duration>4</duration></backup>{bass_fixed}"
+                ));
+                assert_eq!(preview(&input), expected);
+                assert_eq!(preview(&expected), expected);
+            }
+        }
+    }
+
+    #[test]
+    fn isolated_stem_evidence_does_not_move_one_endpoint_of_a_tie_between_groups() {
+        for (step, octave, other_octave, toward, away, duration) in [
+            ("E", 5, 4, "up", "down", 1),
+            ("G", 4, 5, "down", "up", 3),
+        ] {
+            let at = |octave: u8, beam: &str| {
+                note(step, duration, 4, toward, beam)
+                    .replace("<octave>5</octave>", &format!("<octave>{octave}</octave>"))
+                    .replace("<stem>", "<type>eighth</type><stem>")
+            };
+            let tied = |head: &str, end: &str| {
+                head.replace("<voice>", &format!("<tie type=\"{end}\"/><voice>"))
+                    .replace("</note>", &format!("<notations><tied type=\"{end}\"/></notations></note>"))
+            };
+            let single = at(octave, "");
+            let free = single.replace("<voice>4</voice>", "<voice>6</voice>");
+            let opposite = |head: &str| head.replace(
+                &format!("<stem>{toward}</stem>"), &format!("<stem>{away}</stem>"),
+            );
+            // The beam straddles the middle line, so neither of its two heads
+            // supplies an isolated direction for the complete group.
+            for single_first in [true, false] {
+                let (plain, changed, connected) = if single_first {
+                    let anchor = at(octave, "<beam>begin</beam>");
+                    let remote = at(other_octave, "<beam>end</beam>");
+                    (format!("{single}{anchor}{remote}"), format!("{}{anchor}{remote}", opposite(&single)),
+                     format!("{}{}{remote}", tied(&single, "start"), tied(&anchor, "stop")))
+                } else {
+                    let remote = at(other_octave, "<beam>begin</beam>");
+                    let anchor = at(octave, "<beam>end</beam>");
+                    (format!("{remote}{anchor}{single}"), format!("{remote}{anchor}{}", opposite(&single)),
+                     format!("{remote}{}{}", tied(&anchor, "start"), tied(&single, "stop")))
+                };
+                let projected = |phrase: &str, tail: &str| score(&format!("{phrase}{tail}"))
+                    .replace("<divisions>8</divisions>", &format!("<divisions>{}</divisions>", 2 * duration));
+                let fixed_free = opposite(&free);
+                assert_eq!(preview(&projected(&plain, &free)), projected(&changed, &fixed_free));
+                let input = projected(&connected, &free);
+                let expected = projected(&connected, &fixed_free);
+                assert_eq!(preview(&input), expected);
+                assert_eq!(preview(&expected), expected);
+
+                // Both independent courses can agree on a shared direction.
+                let same_side = connected.replace(
+                    &format!("<octave>{other_octave}</octave>"),
+                    &format!("<octave>{octave}</octave>"),
+                );
+                let consistent = projected(&same_side, &free);
+                let both = opposite(&consistent);
+                assert_eq!(preview(&consistent), both);
+                assert_eq!(preview(&both), both);
+            }
+        }
+
+        // On opposite sides of a clef boundary both local courses can be
+        // decisive, yet prescribe incompatible stems to the same tied pitch.
+        let low = |stem: &str, beam: &str, ties: &str| note("A", 4, 1, stem, beam)
+            .replace("<octave>5</octave>", "<octave>3</octave>")
+            .replace("<voice>", &format!("{ties}<voice>"))
+            .replace("<stem>", "<type>eighth</type><stem>");
+        let left = low("down", "", "<tie type=\"start\"/>");
+        let anchor = low("up", "<beam>begin</beam>", "<tie type=\"stop\"/>");
+        let end = low("up", "<beam>end</beam>", "");
+        let disagreement = score(&format!("{left}{BASS}{anchor}{end}"));
+        assert_eq!(preview(&disagreement), disagreement);
     }
 }

@@ -3,7 +3,7 @@ use crate::audit_only::phrase_boundary_evidence::PhraseNotationIntentProjection;
 use crate::master_state_identity::RenderTransitionReceipts;
 use crate::structural_write_authority::HorizontalLayoutMaterializationDirective;
 use crate::structural_write_authority::final_notation_phrase_projection_transaction::{
-    PreparedFinalLayoutPhrase, prepare_final_render_notation_with_phrase_projection,
+    PreparedFinalLayoutPhrase, prepare_final_render_notation_with_phrase_course,
 };
 use anyhow::{ensure, Context, Result};
 use std::cell::RefCell;
@@ -81,7 +81,7 @@ pub(crate) fn adopt_final_layout_phrase_projection(
     directives: &[HorizontalLayoutMaterializationDirective],
     intents: &[PhraseNotationIntentProjection],
 ) -> Result<usize> {
-    adopt_final_layout_phrase_projection_with_course(state, directives, intents, None)
+    adopt_final_layout_phrase_projection_with_course(state, directives, intents, None, None)
 }
 
 pub(crate) fn adopt_final_layout_phrase_projection_with_course(
@@ -89,6 +89,7 @@ pub(crate) fn adopt_final_layout_phrase_projection_with_course(
     directives: &[HorizontalLayoutMaterializationDirective],
     intents: &[PhraseNotationIntentProjection],
     course: Option<&crate::structural_write_authority::final_notation_phrase_projection_transaction::BoundPhraseOccurrenceCourse>,
+    preview: Option<&mut crate::pipeline::PhraseSvgPreview>,
 ) -> Result<usize> {
     let root = state.require_state_root("Release/E007");
     let ticket = RefCell::<Option<PreparedFinalLayoutPhrase>>::new(None);
@@ -96,9 +97,9 @@ pub(crate) fn adopt_final_layout_phrase_projection_with_course(
         root,
         RenderSinkKind::FinalLayoutPhraseProjection,
         |pre| {
-            let (prepared, receipt) = if course.is_some() {
-                crate::structural_write_authority::final_notation_phrase_projection_transaction::prepare_final_render_notation_with_phrase_course(pre, directives, intents, course)
-            } else { prepare_final_render_notation_with_phrase_projection(pre, directives, intents) };
+            let (prepared, receipt) = prepare_final_render_notation_with_phrase_course(
+                pre, directives, intents, course, preview,
+            );
             match prepared {
                 Err(error) => RenderPathBoundOutcome {
                     value: Err(error), planned_post: None,

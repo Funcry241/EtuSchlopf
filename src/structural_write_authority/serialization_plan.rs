@@ -881,6 +881,7 @@ struct CanonicalBoundFinalChordEncodingPlan {
     plan: FinalChordEncodingPlan,
     input_bindings: Vec<FinalChordCanonicalInputBindingRow>,
     certified_omitted_fragment_ids: std::collections::BTreeSet<usize>,
+    independent_rest_anchor_fragments: std::collections::BTreeSet<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -911,6 +912,7 @@ struct FinalChordTransactionLocalOutputAlphaReceipt {
     output_topology_fingerprint_fnv64: u64,
     occurrences: Vec<FinalChordTransactionOutputOccurrenceWitness>,
     certified_omitted_fragment_ids: std::collections::BTreeSet<usize>,
+    independent_rest_anchor_fragments: std::collections::BTreeSet<usize>,
     original_beam_voice_groups: Vec<original_beam_voice_alignment::OriginalBeamVoiceGroup>,
 }
 
@@ -6723,6 +6725,7 @@ fn audit_musicxml_voice_label_binding_alpha_with_optional_render_omissions(
     canonical: &CanonicalFinalChordStructuralPlan,
     voice_plan: &FrozenSerializedVoicePlan,
     render_omissions: Option<&std::collections::BTreeSet<RenderPrunedFinalChordOmissionKey>>,
+    final_output: bool,
 ) -> io::Result<VoiceLabelBindingMetamorphicAudit> {
     if !canonical.voice_free_evidence_sufficiency_green() || !voice_plan.is_bound() {
         return Err(io::Error::new(
@@ -6763,6 +6766,7 @@ fn audit_musicxml_voice_label_binding_alpha_with_optional_render_omissions(
             canonical,
             voice_plan,
             render_omissions,
+            final_output,
         )?;
     let original_projected =
         project_canonical_bound_final_chord_encoding_plan_for_transaction_output_alpha(
@@ -6862,12 +6866,14 @@ pub(crate) fn audit_musicxml_voice_label_binding_alpha(
     candidate_xml: &str,
     canonical: &CanonicalFinalChordStructuralPlan,
     voice_plan: &FrozenSerializedVoicePlan,
+    final_output: bool,
 ) -> io::Result<VoiceLabelBindingMetamorphicAudit> {
     audit_musicxml_voice_label_binding_alpha_with_optional_render_omissions(
         candidate_xml,
         canonical,
         voice_plan,
         None,
+        final_output,
     )
 }
 
@@ -6882,6 +6888,7 @@ pub(crate) fn audit_musicxml_voice_label_binding_alpha_for_render_projection(
         canonical,
         voice_plan,
         Some(render_omissions),
+        true,
     )
 }
 
@@ -6985,6 +6992,7 @@ struct FinalChordBindingMeasure {
     divisions: i64,
     expected_duration: i64,
     measure_close: usize,
+    end_cursor: i64,
     notes: Vec<FinalChordEncodingNote>,
 }
 
@@ -7143,6 +7151,7 @@ fn final_chord_parse_binding_measures(candidate_xml: &str) -> io::Result<Vec<Fin
                 divisions,
                 expected_duration,
                 measure_close,
+                end_cursor: cursor,
                 notes,
             });
         }
@@ -7262,6 +7271,7 @@ pub(crate) fn advance_final_chord_render_occurrence_through_staccato_persistence
         canonical,
         voice_plan,
         Some(render_omissions),
+        false,
     )?;
     let source_measures = final_chord_parse_binding_measures(source_xml)?;
     let persisted_measures = final_chord_parse_binding_measures(persisted_xml)?;
@@ -7400,6 +7410,7 @@ pub(crate) fn advance_final_chord_render_occurrence_through_staccato_persistence
         &advanced,
         voice_plan,
         Some(render_omissions),
+        false,
     )?;
     Ok(advanced)
 }
@@ -7753,12 +7764,14 @@ pub(crate) fn bind_canonical_final_chord_encoding_plan(
     candidate_xml: &str,
     canonical: &CanonicalFinalChordStructuralPlan,
     voice_plan: &FrozenSerializedVoicePlan,
+    final_output: bool,
 ) -> io::Result<FinalChordEncodingPlan> {
     Ok(bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound(
         candidate_xml,
         canonical,
         voice_plan,
         None,
+        final_output,
     )?
     .plan)
 }
@@ -7775,6 +7788,7 @@ fn bind_canonical_final_chord_encoding_plan_for_render_projection(
         canonical,
         voice_plan,
         Some(render_omissions),
+        false,
     )?
     .plan)
 }
@@ -7784,6 +7798,7 @@ fn bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound
     canonical: &CanonicalFinalChordStructuralPlan,
     voice_plan: &FrozenSerializedVoicePlan,
     render_omissions: Option<&std::collections::BTreeSet<RenderPrunedFinalChordOmissionKey>>,
+    final_output: bool,
 ) -> io::Result<CanonicalBoundFinalChordEncodingPlan> {
     if !canonical.voice_free_evidence_sufficiency_green() || !voice_plan.is_bound() {
         return Err(io::Error::new(
@@ -7792,8 +7807,8 @@ fn bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound
         ));
     }
     let source = FinalChordBindingSource::parse(candidate_xml)?;
-    bind_canonical_final_chord_encoding_plan_from_parsed_source(
-        &source, &FinalChordFragmentIndex::new(canonical), voice_plan, render_omissions,
+    bind_final_chord_physical_projection(
+        &source, &FinalChordFragmentIndex::new(canonical), voice_plan, render_omissions, final_output,
     )
 }
 
@@ -7815,11 +7830,31 @@ impl<'a> FinalChordFragmentIndex<'a> {
     }
 }
 
+struct BoundAuxMember<'a> {
+    note: &'a FinalChordEncodingNote,
+    xml: String,
+    onset: i64,
+    order: usize,
+    duration: i64,
+}
+
+type BoundAuxRuns<'a> = std::collections::BTreeMap<(usize, Option<usize>, String, String), Vec<BoundAuxMember<'a>>>;
+
 fn bind_canonical_final_chord_encoding_plan_from_parsed_source(
     source: &FinalChordBindingSource<'_>,
     fragments: &FinalChordFragmentIndex<'_>,
     voice_plan: &FrozenSerializedVoicePlan,
     render_omissions: Option<&std::collections::BTreeSet<RenderPrunedFinalChordOmissionKey>>,
+) -> io::Result<CanonicalBoundFinalChordEncodingPlan> {
+    bind_final_chord_physical_projection(source, fragments, voice_plan, render_omissions, false)
+}
+
+fn bind_final_chord_physical_projection(
+    source: &FinalChordBindingSource<'_>,
+    fragments: &FinalChordFragmentIndex<'_>,
+    voice_plan: &FrozenSerializedVoicePlan,
+    render_omissions: Option<&std::collections::BTreeSet<RenderPrunedFinalChordOmissionKey>>,
+    final_output: bool,
 ) -> io::Result<CanonicalBoundFinalChordEncodingPlan> {
     let canonical = fragments.canonical;
     if !canonical.voice_free_evidence_sufficiency_green() || !voice_plan.is_bound() {
@@ -7838,6 +7873,7 @@ fn bind_canonical_final_chord_encoding_plan_from_parsed_source(
     let mut forward_materializations = Vec::<FinalChordForwardMaterializationAuditRow>::new();
     let mut input_bindings = Vec::<FinalChordCanonicalInputBindingRow>::new();
     let mut certified_omitted_fragment_ids = std::collections::BTreeSet::<usize>::new();
+    let mut unassigned_chord_representation = std::collections::BTreeMap::new();
 
     // First bind every source that survives in place. This stage may only select
     // bytes and materialize already-sealed label/retained-duration evidence; it
@@ -7888,6 +7924,13 @@ fn bind_canonical_final_chord_encoding_plan_from_parsed_source(
                 ),
             )
         })?;
+        // Voice allocation evaluates candidate bindings before the final label
+        // choice. Only the committed presentation may separate the carriers.
+        if final_output && action.is_none() && note.chord_member && note.onset == locator.onset
+            && note.duration == locator.duration
+        {
+            unassigned_chord_representation.insert(note.range.start, (locator.fragment_id, label));
+        }
         let source = candidate_xml.get(note.range.clone()).ok_or_else(|| {
             io::Error::new(io::ErrorKind::InvalidData, "bound source note bytes disappeared")
         })?;
@@ -8052,14 +8095,7 @@ fn bind_canonical_final_chord_encoding_plan_from_parsed_source(
         }
     }
 
-    #[derive(Debug)]
-    struct BoundAuxMember<'a> {
-        action: &'a FinalChordCanonicalActionRow,
-        note: &'a FinalChordEncodingNote,
-        xml: String,
-        duration: i64,
-    }
-    let mut aux_runs = std::collections::BTreeMap::<(usize, usize, String, String), Vec<BoundAuxMember<'_>>>::new();
+    let mut aux_runs = BoundAuxRuns::new();
     for action in canonical.actions.iter() {
         let FinalChordCanonicalActionKind::AuxiliaryLane {
             serialization_run_id,
@@ -8111,19 +8147,23 @@ fn bind_canonical_final_chord_encoding_plan_from_parsed_source(
         aux_runs
             .entry((
                 action.locator.measure,
-                *serialization_run_id,
+                Some(*serialization_run_id),
                 label.clone(),
                 action.locator.staff.clone(),
             ))
             .or_default()
             .push(BoundAuxMember {
-                action,
                 note,
                 xml,
+                onset: action.locator.onset,
+                order: action.locator.raw_note_index,
                 duration: *canonical_duration,
             });
     }
 
+    let independent_rest_anchor_fragments = bind_independent_rest_anchor_attacks(
+        source, voice_plan, &unassigned_chord_representation, &mut edits, &mut aux_runs,
+    );
     for ((measure_ordinal, _run_id, label, staff), mut members) in aux_runs {
         let measure = measures
             .iter()
@@ -8136,23 +8176,23 @@ fn bind_canonical_final_chord_encoding_plan_from_parsed_source(
                 "auxiliary physical binding measure duration drift",
             ));
         }
-        members.sort_by_key(|member| (member.action.locator.onset, member.action.locator.raw_note_index));
+        members.sort_by_key(|member| (member.onset, member.order));
         let mut lane = format!("\n      <backup><duration>{expected_duration}</duration></backup>");
         let mut lane_generated_fragments =
             Vec::<FinalChordGeneratedFragmentEditProvenance>::new();
         let mut lane_cursor = 0_i64;
         let mut start = 0usize;
         while start < members.len() {
-            let onset = members[start].action.locator.onset;
+            let onset = members[start].onset;
             let mut end = start + 1;
-            while end < members.len() && members[end].action.locator.onset == onset {
+            while end < members.len() && members[end].onset == onset {
                 end += 1;
             }
             let group = &members[start..end];
             let anchor_offset = group
                 .iter()
                 .enumerate()
-                .max_by_key(|(_, member)| (member.duration, std::cmp::Reverse(member.action.locator.raw_note_index)))
+                .max_by_key(|(_, member)| (member.duration, std::cmp::Reverse(member.order)))
                 .map(|(offset, _)| offset)
                 .unwrap_or(0);
             let gap = onset.saturating_sub(lane_cursor);
@@ -8171,7 +8211,7 @@ fn bind_canonical_final_chord_encoding_plan_from_parsed_source(
             order.sort_by_key(|&offset| {
                 (
                     usize::from(offset != anchor_offset),
-                    group[offset].action.locator.raw_note_index,
+                    group[offset].order,
                 )
             });
             for offset in order {
@@ -8219,8 +8259,8 @@ fn bind_canonical_final_chord_encoding_plan_from_parsed_source(
             forward_materializations.push(FinalChordForwardMaterializationAuditRow {
                 source_note_start: member.note.range.start,
                 source_note_end: member.note.range.end,
-                source_onset: member.action.locator.onset,
-                projected_sounding_onset: member.action.locator.onset,
+                source_onset: member.onset,
+                projected_sounding_onset: member.onset,
                 generated_fragment_count: 1,
                 kind: FinalChordForwardMaterializationKind::AuxiliaryLane,
             });
@@ -8272,11 +8312,112 @@ fn bind_canonical_final_chord_encoding_plan_from_parsed_source(
     )?;
     plan.original_respelling_input = canonical.original_respelling_input.clone();
     plan.original_course_bindings = Some(course_capture::OriginalCourseBindings::from_original_bind(
-        &input_bindings, canonical,
+        &input_bindings, canonical, &independent_rest_anchor_fragments,
     ).map(std::sync::Arc::new).map_err(|error| error.to_string()));
     Ok(CanonicalBoundFinalChordEncodingPlan {
-        plan, input_bindings, certified_omitted_fragment_ids,
+        plan, input_bindings, certified_omitted_fragment_ids, independent_rest_anchor_fragments,
     })
+}
+
+fn bind_independent_rest_anchor_attacks<'a>(
+    source: &'a FinalChordBindingSource<'_>,
+    voices: &FrozenSerializedVoicePlan,
+    bound_members: &std::collections::BTreeMap<usize, (usize, &str)>,
+    edits: &mut Vec<FinalChordEncodingEdit>,
+    aux_runs: &mut BoundAuxRuns<'a>,
+) -> std::collections::BTreeSet<usize> {
+    let mut independent = std::collections::BTreeSet::new();
+    if bound_members.is_empty() {
+        return independent;
+    }
+    for (measure_index, measure) in source.measures.iter().enumerate() {
+        if measure.end_cursor != measure.expected_duration {
+            continue;
+        }
+        for (index, triple) in measure.notes.windows(3).enumerate() {
+            let [rest, first, second] = triple else { continue; };
+            if !rest.rest_like || rest.chord_member || rest.duration <= 0
+                || [first, second].iter().any(|note| {
+                    note.anchor_index != Some(index) || note.duration != rest.duration
+                        || note.staff != rest.staff || note.tie_start || note.tie_stop
+                })
+                || measure.notes.get(index + 3).is_some_and(|note| note.anchor_index == Some(index))
+                || ![rest.range.end..first.range.start, first.range.end..second.range.start]
+                    .iter().all(|range| source.xml[range.clone()].trim().is_empty())
+            {
+                continue;
+            }
+            let (Some(&(first_id, first_label)), Some(&(second_id, second_label))) =
+                (bound_members.get(&first.range.start), bound_members.get(&second.range.start))
+            else { continue; };
+            let head_position = |note: &FinalChordEncodingNote| {
+                crate::clef_readability_observation::observe_pitch(&source.xml[note.range.clone()])
+                    .map(|pitch| crate::clef_readability_observation::PianoClef::TrebleG2.distance_from_middle_line(pitch))
+            };
+            let (Some(first_pitch), Some(second_pitch)) = (head_position(first), head_position(second))
+            else { continue; };
+            let rest_xml = &source.xml[rest.range.clone()];
+            if first_label == second_label || first_pitch == second_pitch
+                || (first_label != rest.voice && second_label != rest.voice)
+                || !final_chord_note_fragment_is_visible(rest_xml) || rest_xml.contains("measure=")
+            {
+                continue;
+            }
+            let rest_end = rest.onset.saturating_add(rest.duration);
+            if rest.onset < 0 || rest_end > measure.expected_duration {
+                continue;
+            }
+            let protected_gap = voices.source_voice_gaps.iter().any(|(channel, gap)| {
+                gap.measure == measure_index && gap.divisions == measure.divisions
+                    && rest.staff.parse::<u8>().ok() == Some(gap.staff)
+                    && (gap.seed_voice.to_string() == rest.voice
+                        || voices.channel_for_label(&rest.voice) == Some(*channel))
+                    && gap.start < rest_end && rest.onset < gap.start.saturating_add(gap.duration)
+            });
+            if protected_gap || measure.notes.iter().enumerate().any(|(other_index, other)| {
+                !(index..index + 3).contains(&other_index) && other.staff == rest.staff
+                    && other.duration > 0 && other.onset < rest_end
+                    && rest.onset < other.onset.saturating_add(other.duration)
+                    && (!other.rest_like || other.voice == rest.voice)
+            }) {
+                continue;
+            }
+
+            // The existing rest-interval projection carries the occupied rest as
+            // forward time. Serialize the sounding notes in complete auxiliary runs
+            // of their sealed voices, preserving both occurrence identities.
+            let (first_stem, second_stem) = if first_pitch > second_pitch { ("up", "down") }
+                else { ("down", "up") };
+            let pair = [(first, first_id, first_label, first_stem),
+                (second, second_id, second_label, second_stem)];
+            let replacements = pair.iter().map(|(note, _, label, stem)| {
+                let text = source.xml.get(note.range.clone())?;
+                let document = roxmltree::Document::parse(text).ok()?;
+                let node = document.root_element();
+                if !final_chord_note_fragment_is_visible(text)
+                    || !matches!(final_chord_direct_child_text(node, "type").as_deref(),
+                        Some("eighth" | "16th" | "32nd" | "64th" | "128th" | "256th"))
+                    || node.children().any(|child| matches!(child.tag_name().name(),
+                        "beam" | "grace" | "cue" | "time-modification" | "notations"))
+                {
+                    return None;
+                }
+                let promoted = final_chord_remove_simple_child_blocks(text.to_owned(), "chord");
+                let revoiced = final_chord_set_child_text(&promoted, "voice", label)?;
+                final_chord_set_child_text(&revoiced, "stem", stem)
+            }).collect::<Option<Vec<_>>>();
+            let Some(replacements) = replacements else { continue; };
+            for ((note, id, label, _), xml) in pair.into_iter().zip(replacements) {
+                edits.retain(|edit| edit.start != note.range.start || edit.end != note.range.end);
+                aux_runs.entry((measure.measure, None, label.to_owned(), note.staff.clone()))
+                    .or_default().push(BoundAuxMember {
+                        note, xml, onset: note.onset, order: note.raw_note_index, duration: note.duration,
+                    });
+                independent.insert(id);
+            }
+        }
+    }
+    independent
 }
 
 fn final_chord_shift_projection_offset(value: usize, delta: i128) -> io::Result<usize> {
@@ -9017,9 +9158,14 @@ fn project_canonical_final_chord_with_binding_measures(
                 }
             }
             _ => {
+                let detached = bound.independent_rest_anchor_fragments.contains(&locator.fragment_id);
+                let materialization = if detached {
+                    FinalChordProjectionMaterializationKind::AuxiliaryLane
+                } else {
+                    FinalChordProjectionMaterializationKind::SurvivingSourceNote
+                };
                 if rows.len() != 1
-                    || rows[0].materialization_kind
-                        != FinalChordProjectionMaterializationKind::SurvivingSourceNote
+                    || rows[0].materialization_kind != materialization
                     || rows[0].fragment_ordinal != 0
                 {
                     return Err(io::Error::new(
@@ -9046,6 +9192,7 @@ fn project_canonical_final_chord_with_binding_measures(
             output_topology_fingerprint_fnv64,
             occurrences,
             certified_omitted_fragment_ids: bound.certified_omitted_fragment_ids.clone(),
+            independent_rest_anchor_fragments: bound.independent_rest_anchor_fragments.clone(),
             original_beam_voice_groups: canonical.original_beam_voice_groups.clone(),
         },
     }, measures))
@@ -9076,6 +9223,7 @@ pub(crate) fn project_canonical_final_chord_render_occurrence_continuation_with_
         canonical,
         voice_plan,
         Some(render_omissions),
+        true,
     )?;
     let projected =
         project_canonical_bound_final_chord_encoding_plan_for_transaction_output_alpha_with_receipts(
@@ -9489,9 +9637,14 @@ fn verify_canonical_final_chord_occurrence_receipt(
                 }
             }
             _ => {
+                let detached = receipt.independent_rest_anchor_fragments.contains(&locator.fragment_id);
+                let materialization = if detached {
+                    FinalChordProjectionMaterializationKind::AuxiliaryLane
+                } else {
+                    FinalChordProjectionMaterializationKind::SurvivingSourceNote
+                };
                 if rows.len() != 1
-                    || rows[0].materialization_kind
-                        != FinalChordProjectionMaterializationKind::SurvivingSourceNote
+                    || rows[0].materialization_kind != materialization
                     || rows[0].fragment_ordinal != 0
                 {
                     return Err(io::Error::new(
@@ -9510,8 +9663,8 @@ fn verify_canonical_final_chord_occurrence_receipt(
                     || note.duration != representation_duration
                     || note.pitch_midi != Some(locator.pitch_midi)
                     || note.staff != locator.staff
-                    || (require_canonical_chord_syntax
-                        && note.chord_member != locator.chord_syntax)
+                    || (detached && (note.chord_member || !locator.chord_syntax || note.onset != locator.onset))
+                    || (!detached && require_canonical_chord_syntax && note.chord_member != locator.chord_syntax)
                     || note.tie_start != locator.tie_start
                     || note.tie_stop != locator.tie_stop
                     || note.voice != label
@@ -11577,7 +11730,7 @@ mod tests {
         }).collect::<Vec<_>>();
         let channels = build_frozen_serialization_voice_channels_for_canonical(&canonical, &attacks).unwrap();
         let labels = bind_musicxml_voice_labels(&channels, &[]).unwrap();
-        let bound = bind_canonical_final_chord_encoding_plan(&xml, &canonical, &labels).unwrap();
+        let bound = bind_canonical_final_chord_encoding_plan(&xml, &canonical, &labels, false).unwrap();
         let after = project_final_chord_encoding_plan_with_provenance(&xml, &bound).unwrap().xml;
         let geometry = |text: &str| final_chord_parse_binding_measures(text).unwrap().into_iter()
             .flat_map(|measure| measure.notes).map(|note| (note.measure, note.onset, note.duration,
@@ -12227,6 +12380,83 @@ mod tests {
     }
 
     #[test]
+    fn sealed_independent_attacks_reuse_occupied_rest_time() {
+        let rest = "<note><rest/><duration>2</duration><voice>2</voice><type>eighth</type><staff>1</staff></note>";
+        let tone = |step, chord| format!("<note>{chord}<pitch><step>{step}</step><octave>4</octave></pitch>\
+            <duration>2</duration><voice>2</voice><type>eighth</type><stem>up</stem><staff>1</staff></note>");
+        let tail = "<forward><duration>10</duration></forward>";
+        let prefix = "<forward><duration>4</duration></forward>";
+        let input = final_chord_score(&format!("{prefix}{rest}\n{}\n{}{tail}",
+            tone("A", "<chord/>"), tone("D", "<chord/>")));
+        let mut voices = frozen_serialized_voice_plan_for_rest_role_replay_test("2", "7");
+        voices.source_to_label = [(1, "2".to_string()), (2, "7".to_string())].into_iter().collect();
+        voices.source_to_channel = [(1, 1), (2, 2)].into_iter().collect();
+        voices.source_to_role = [(1, SerializedVoicePresentationRole::UpperPrimary),
+            (2, SerializedVoicePresentationRole::UpperSecondary)].into_iter().collect();
+        let project = |xml: &str, voices: &FrozenSerializedVoicePlan, final_output| {
+            let evidence = final_chord_declassified_evidence_from_xml(xml).unwrap();
+            let (canonical, _) = plan_canonical_final_chord_structure_once(xml, &evidence).unwrap();
+            let bound = bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound(
+                xml, &canonical, voices, None, final_output,
+            ).unwrap();
+            let (master, exact) = project_final_chord_encoding_plan(xml, &bound.plan);
+            let projected = project_canonical_bound_final_chord_encoding_plan_for_transaction_output_alpha(
+                xml, &canonical, &bound,
+            ).unwrap();
+            assert_eq!(master.unwrap(), projected.xml);
+            if !bound.independent_rest_anchor_fragments.is_empty() {
+                let exact = exact.unwrap();
+                assert!(exact.final_chord_capture().unwrap().is_ok());
+                let document = validate_final_chord_musicxml(&projected.xml).unwrap();
+                let backups = document.descendants().filter(|n| n.has_tag_name("backup"))
+                    .map(|n| final_chord_direct_child_i64(n, "duration"))
+                    .collect::<Vec<_>>();
+                assert_eq!(backups, [Some(16), Some(16)]);
+            }
+            verify_canonical_final_chord_transaction_local_output_alpha(
+                &projected.xml, &canonical, voices, None, &projected.receipt,
+                bound.plan.source_fingerprint, bound.plan.source_len,
+            ).unwrap();
+            projected
+        };
+        let provisional = project(&input, &voices, false);
+        assert!(provisional.receipt.independent_rest_anchor_fragments.is_empty());
+        assert!(provisional.xml.contains(rest));
+        let projected = project(&input, &voices, true);
+        assert_eq!(projected.receipt.independent_rest_anchor_fragments.len(), 2);
+        let measures = final_chord_parse_binding_measures(&projected.xml).unwrap();
+        let [first, second] = measures[0].notes.as_slice() else { panic!("expected two sounding notes"); };
+        let (first, second) = if first.voice == "2" { (first, second) } else { (second, first) };
+        assert_eq!((first.onset, first.duration, first.chord_member, first.voice.as_str()), (4, 2, false, "2"));
+        assert_eq!((second.onset, second.duration, second.chord_member, second.voice.as_str()), (4, 2, false, "7"));
+        assert!(projected.xml[second.range.clone()].contains("<stem>down</stem>"));
+        assert_eq!(projected.non_pitched_continuations[0].carrier, FinalChordNonPitchedCarrier::Forward);
+        let mut projected_voices = voices.clone();
+        if measures[0].notes[0].voice == "7" {
+            projected_voices.source_to_label = [(1, "7".to_string()), (2, "2".to_string())].into_iter().collect();
+            projected_voices.source_to_channel = [(1, 2), (2, 1)].into_iter().collect();
+            projected_voices.source_to_role = [(1, SerializedVoicePresentationRole::UpperSecondary),
+                (2, SerializedVoicePresentationRole::UpperPrimary)].into_iter().collect();
+        }
+        assert_eq!(project(&projected.xml, &projected_voices, true).xml, projected.xml);
+
+        let chord = final_chord_score(&format!("{prefix}{}{}{tail}", tone("A", ""), tone("D", "<chord/>")));
+        let mut shared = voices.clone();
+        shared.source_to_label.insert(2, "2".to_string());
+        shared.source_to_channel.insert(2, 1);
+        shared.source_to_role.insert(2, SerializedVoicePresentationRole::UpperPrimary);
+        assert_eq!(project(&chord, &shared, true).xml, chord);
+
+        voices.bind_source_voice_gaps(vec![crate::midi_seed::SourceVoiceGap {
+            measure: 0, divisions: 4, start: 4, duration: 2, staff: 1,
+            seed_voice: 2, above_lower_staff: false,
+        }]);
+        let protected = project(&input, &voices, true);
+        assert!(protected.receipt.independent_rest_anchor_fragments.is_empty());
+        assert!(protected.xml.contains(rest));
+    }
+
+    #[test]
     fn p2_render_occurrence_witness_binds_stale_ambiguous_physical_locator_without_inversion() {
         let render_xml = final_chord_score(
             fixture_xml!(FIXTURE_NOTE_64DC3197A6, r#"
@@ -12360,7 +12590,7 @@ mod tests {
         };
 
         assert!(
-            bind_canonical_final_chord_encoding_plan(&render_xml, &base, &voice_plan).is_err(),
+            bind_canonical_final_chord_encoding_plan(&render_xml, &base, &voice_plan, false).is_err(),
             "stale duplicate physical locator must remain ambiguous without writer continuation"
         );
 
@@ -12383,7 +12613,7 @@ mod tests {
         .expect("attach writer continuation");
 
         assert!(
-            bind_canonical_final_chord_encoding_plan(&render_xml, &canonical, &voice_plan).is_err(),
+            bind_canonical_final_chord_encoding_plan(&render_xml, &canonical, &voice_plan, false).is_err(),
             "master/normal binding must never consume render-only writer continuation"
         );
         let render_omissions =
@@ -12427,6 +12657,7 @@ mod tests {
                 &canonical,
                 &voice_plan,
                 Some(&render_omissions),
+                false,
             )
             .expect("render canonical-bound transaction plan");
         let projected =
@@ -12663,7 +12894,7 @@ mod tests {
         .expect("receipt-bound staccato occurrence continuation");
 
         assert!(
-            bind_canonical_final_chord_encoding_plan(&persisted_xml, &advanced, &voice_plan)
+            bind_canonical_final_chord_encoding_plan(&persisted_xml, &advanced, &voice_plan, false)
                 .is_err(),
             "master/normal binding must never consume render-only duration continuation"
         );
@@ -12681,6 +12912,7 @@ mod tests {
             &advanced,
             &voice_plan,
             Some(&render_omissions),
+            false,
         )
         .expect("advanced render binding");
         let projected =
@@ -12841,7 +13073,7 @@ mod tests {
             semantic_fingerprint_fnv64: 41,
         };
 
-        let alpha = audit_musicxml_voice_label_binding_alpha(&render_xml, &canonical, &voice_plan)
+        let alpha = audit_musicxml_voice_label_binding_alpha(&render_xml, &canonical, &voice_plan, false)
             .expect("transaction-local Output-Alpha must carry one canonical owner to two tied output occurrences");
         assert!(alpha.green());
         assert_eq!(alpha.paired_binding_failures(), 0);
@@ -12935,7 +13167,7 @@ mod tests {
             semantic_fingerprint_fnv64: 42,
         };
 
-        let alpha = audit_musicxml_voice_label_binding_alpha(&render_xml, &canonical, &voice_plan)
+        let alpha = audit_musicxml_voice_label_binding_alpha(&render_xml, &canonical, &voice_plan, false)
             .expect("transaction-local Output-Alpha must carry auxiliary occurrence across 1<->17 label permutation");
         assert!(alpha.green());
         assert_eq!(alpha.cases(), 1);
@@ -13077,7 +13309,7 @@ mod tests {
         let (render_xml, canonical, voice_plan, omissions) = render_prune_binding_fixture();
 
         assert!(
-            bind_canonical_final_chord_encoding_plan(&render_xml, &canonical, &voice_plan)
+            bind_canonical_final_chord_encoding_plan(&render_xml, &canonical, &voice_plan, false)
                 .is_err()
         );
 
@@ -13133,7 +13365,7 @@ mod tests {
         }]);
 
         assert!(
-            bind_canonical_final_chord_encoding_plan(&render_xml, &canonical, &voice_plan).is_err(),
+            bind_canonical_final_chord_encoding_plan(&render_xml, &canonical, &voice_plan, false).is_err(),
             "auxiliary source omission must remain render-projection-only"
         );
 
@@ -13368,7 +13600,7 @@ mod tests {
             render_pruned_tied_chain_fixture(false);
 
         assert!(
-            bind_canonical_final_chord_encoding_plan(&render_xml, &canonical, &voice_plan)
+            bind_canonical_final_chord_encoding_plan(&render_xml, &canonical, &voice_plan, false)
                 .is_err()
         );
 
@@ -14501,7 +14733,7 @@ mod tests {
             &twins, &canonical, &voice_plan, &omissions).expect("carried identity resolves existing twins");
         assert!(alpha.green());
         let bound = bind_canonical_final_chord_encoding_plan_with_optional_render_omissions_bound(
-            &twins, &canonical, &voice_plan, Some(&omissions)).unwrap();
+            &twins, &canonical, &voice_plan, Some(&omissions), false).unwrap();
         assert_eq!(bound.input_bindings.len(), 3);
         let drifted = twins.replacen("<step>E</step>", "<step>F</step>", 1);
         assert!(audit_musicxml_voice_label_binding_alpha_for_render_projection(

@@ -209,9 +209,9 @@ impl JointReadingCandidate for SolverCandidate {
         let mut render_input=custody.input(render_source)?;
         render_input.project_render_tonal_spelling()?;
         crate::audit_only::c3_diagnostics::phase("master_capabilities");
-        let master_capabilities=observe_joint_capabilities(master_input.bound_source())?;
+        let master_capabilities=observe_joint_capabilities(&master_input, &best.midi_seed_stats.notation_time)?;
         crate::audit_only::c3_diagnostics::phase("render_capabilities");
-        let render_capabilities=observe_joint_capabilities(render_input.bound_source())?;
+        let render_capabilities=observe_joint_capabilities(&render_input, &best.midi_seed_stats.notation_time)?;
         crate::audit_only::c3_diagnostics::phase("master_search");
         let mut master_proposal=master_input.c3_proposal(&master_capabilities,None).map_err(|e|anyhow!("{e:?}"))?;
         record_joint_search_result("Master",master_input.bound_source(),&master_proposal);

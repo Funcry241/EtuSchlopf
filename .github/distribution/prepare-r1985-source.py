@@ -2,12 +2,14 @@
 
 import argparse
 import hashlib
+import subprocess
 from pathlib import Path, PurePosixPath
 from zipfile import ZIP_DEFLATED, ZipFile
 
 
 EVIDENCE = Path("docs/evidence/r1985")
 NATIVE_DOCUMENTS = EVIDENCE / "native-documents"
+R1985_PUBLIC_COMMIT = "89ed56ce9b8e018593bf5d47229773079d7bdb0b"
 PROJECTED = {
     "README.md",
     "docs/README.md",
@@ -27,14 +29,31 @@ def prepare(public, build, downloads):
     if header != "sha256\tpath" or len(rows) != 2229:
         raise ValueError("Unexpected r1985 inventory")
     files = {}
+    historical_source_ready = False
     for row in rows:
         expected, name = row.split("\t")
         path = PurePosixPath(name)
         if path.is_absolute() or ".." in path.parts or name in files:
             raise ValueError(f"Invalid source inventory path: {name}")
         source = public / (NATIVE_DOCUMENTS / name if name in PROJECTED else path)
-        payload = source.read_bytes()
-        if hashlib.sha256(payload).hexdigest() != expected:
+        payload = source.read_bytes() if source.is_file() else None
+        if name not in PROJECTED and (
+            payload is None or hashlib.sha256(payload).hexdigest() != expected
+        ):
+            # The preview remains bound to r1985 as the main source advances.
+            git = ["git", "-C", str(public)]
+            if not historical_source_ready:
+                if subprocess.run(
+                    git + ["cat-file", "-e", f"{R1985_PUBLIC_COMMIT}^{{commit}}"],
+                    capture_output=True,
+                ).returncode != 0:
+                    subprocess.run(
+                        git + ["fetch", "--no-tags", "--depth=1", "origin", R1985_PUBLIC_COMMIT],
+                        check=True,
+                    )
+                historical_source_ready = True
+            payload = subprocess.check_output(git + ["show", f"{R1985_PUBLIC_COMMIT}:{name}"])
+        if payload is None or hashlib.sha256(payload).hexdigest() != expected:
             raise ValueError(f"Native source checksum mismatch: {name}")
         files[name] = payload
 

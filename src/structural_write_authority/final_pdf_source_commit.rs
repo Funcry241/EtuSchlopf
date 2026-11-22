@@ -46,10 +46,11 @@ impl FinalPdfSourceCommit {
     pub(in crate::pipeline) fn adopt_layout_and_phrase_course(&self, state: &mut RenderSovereignState,
         directives: &[crate::structural_write_authority::HorizontalLayoutMaterializationDirective],
         intents: &[crate::audit_only::phrase_boundary_evidence::PhraseNotationIntentProjection],
+        preview: Option<&mut crate::pipeline::PhraseSvgPreview>,
     ) -> anyhow::Result<usize> {
         anyhow::ensure!(self.shadow_partial.is_none(), "Shadow partial closure cannot adopt into Live layout");
         crate::structural_write_authority::adopt_final_layout_phrase_projection_with_course(
-            state, directives, intents, self.phrase_occurrence_course.as_ref())
+            state, directives, intents, self.phrase_occurrence_course.as_ref(), preview)
     }
 
     pub(super) fn pipeline_line(&self) -> &str {

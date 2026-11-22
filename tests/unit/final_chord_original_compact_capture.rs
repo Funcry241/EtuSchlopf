@@ -32,7 +32,7 @@ fn original_adjacent_emissions_survive_exact_script_coalescence() {
                 let (canonical, _) = plan_canonical_final_chord_structure_once(&before, &evidence).unwrap();
                 let channels = build_frozen_serialization_voice_channels_for_canonical(&canonical, &attacks).unwrap();
                 let voices = bind_musicxml_voice_labels(&channels, &[]).unwrap();
-                let plan = bind_canonical_final_chord_encoding_plan(&before, &canonical, &voices).unwrap();
+                let plan = bind_canonical_final_chord_encoding_plan(&before, &canonical, &voices, false).unwrap();
                 let mut unrecorded = plan.clone(); unrecorded.original_course_bindings = None;
                 assert_eq!(plan, unrecorded);
                 assert_eq!(format!("{plan:?}"), format!("{unrecorded:?}"));
@@ -79,7 +79,7 @@ fn original_tied_emitter_certifies_a_total_correspondence_of_the_original_domain
         }).collect::<Vec<_>>();
         let channels = build_frozen_serialization_voice_channels_for_canonical(&canonical, &attacks).unwrap();
         let voices = bind_musicxml_voice_labels(&channels, &[]).unwrap();
-        let plan = bind_canonical_final_chord_encoding_plan(&before, &canonical, &voices).unwrap();
+        let plan = bind_canonical_final_chord_encoding_plan(&before, &canonical, &voices, false).unwrap();
         let (post, receipt) = project_final_chord_encoding_plan(&before, &plan);
         let post = post.unwrap(); let receipt = receipt.unwrap();
         let capture = receipt.final_chord_capture().unwrap().as_ref().unwrap();

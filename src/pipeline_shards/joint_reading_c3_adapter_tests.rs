@@ -703,6 +703,78 @@ fn fixture_owner_input(xml: &str) -> crate::pipeline::JointReadingOwnerInput {
 }
 
 #[test]
+fn register_course_keeps_the_octave_during_a_source_bound_hold() {
+    // A written quarter ends at the barline; its original MIDI note ends
+    // at the following quarter. A different attack follows in the same lane.
+    let meter = [0, 255, 88, 4, 4, 2, 24, 8];
+    let notes = [
+        0x82, 0x20, 0x90, 83, 80, 0x81, 0x40, 0x80, 83, 0,
+        0, 0x90, 76, 80, 0x82, 0x20, 0x80, 76, 0, 0, 255, 47, 0,
+    ];
+    let mut midi = b"MThd\0\0\0\x06\0\0\0\x01\0\x60MTrk".to_vec();
+    midi.extend(u32::try_from(meter.len() + notes.len()).unwrap().to_be_bytes());
+    midi.extend(meter);
+    midi.extend(notes);
+    let source = crate::midi::decode_standard_midi_bytes(&midi).unwrap();
+    let time = crate::midi::notation_time::NotationTimePlan::from_midi(&source).unwrap();
+    let first = head_attrs(96, 4, 4, "F") + &rest(288, 1) + &note_xml(&n('B', 5, 96, 1));
+    let second = rest(96, 1) + &note_xml(&n('E', 5, 288, 1));
+    let xml = score(&[first, second]);
+    let clock = observe_clock(&xml).unwrap();
+    let mut input = fixture_owner_input(&xml);
+    input.heads[0].duration = 96;
+    input.heads[1].duration = 288;
+    let mut caps = caps_all(&xml);
+    caps.staves.get_mut("1").unwrap().boundaries.insert(q(4, 1),
+        BoundaryCapability { octave_start: true, octave_stop: true, ..Default::default() });
+    caps.staves.get_mut("1").unwrap().boundary_in_silence = true;
+    let closing_edge = |caps: &Capabilities, at| {
+        let p = input.c3_proposal(caps, None).unwrap();
+        let (domain, layers, _) = solved(&p, "1");
+        domain.layers[layers.iter().position(|a| a.at == at).unwrap()].incoming[1][0]
+    };
+    assert!(closing_edge(&caps, q(4, 1)));
+    let mut protected = caps.clone();
+    input.bind_source_holds(&clock, &time, &mut protected);
+    assert_eq!(protected.source_holds["1"], [q(3, 1)..q(5, 1)]);
+    assert!(!closing_edge(&protected, q(4, 1)));
+    assert!(closing_edge(&protected, q(5, 1)));
+
+    // The same notation with different, nonmatching source identities is
+    // insufficient evidence to protect any boundary.
+    input.heads.swap(0, 1);
+    input.heads[0].source_event_id = crate::pipeline::MaterialSourceEventId(0);
+    input.heads[1].source_event_id = crate::pipeline::MaterialSourceEventId(1);
+    input.bind_source_holds(&clock, &time, &mut caps);
+    assert!(caps.source_holds.is_empty());
+
+    for replacement in [rest(96, 2), note_xml(&n('D', 5, 96, 1))] {
+        let occupied = xml.replacen(&rest(96, 1), &replacement, 1);
+        let mut owner = fixture_owner_input(&occupied);
+        owner.heads[0].duration = 96;
+        let mut capabilities = caps_all(&occupied);
+        owner.bind_source_holds(&observe_clock(&occupied).unwrap(), &time, &mut capabilities);
+        assert!(capabilities.source_holds.is_empty());
+    }
+
+    let mut secondary = n('E', 5, 96, 1);
+    secondary.chord = true;
+    let chord = xml.replacen(
+        &note_xml(&n('B', 5, 96, 1)),
+        &(note_xml(&n('A', 5, 96, 1)) + &note_xml(&secondary)),
+        1,
+    );
+    let document = roxmltree::Document::parse(&chord).unwrap();
+    let notes = document.descendants().filter(|node| node.has_tag_name("note"))
+        .map(|note| (note.range().start, note)).collect::<BTreeMap<_, _>>();
+    let member = notes.values().copied()
+        .find(|note| note.children().any(|child| child.has_tag_name("chord"))).unwrap();
+    assert!(!crate::pipeline::source_hold_has_rest_carrier(
+        &notes, &observe_clock(&chord).unwrap(), member, "1", q(4, 1), q(5, 1),
+    ));
+}
+
+#[test]
 fn original_rest_host_closes_chord_context_without_a_beam_head() {
     for orphan_staff in [1, 2] { for copies in [1, 2] {
         let independent = 3 - orphan_staff;

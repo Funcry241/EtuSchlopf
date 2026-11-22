@@ -243,7 +243,7 @@ impl FinalChordEncodingPlan {
                 .map_err(|reason| ("reference_master", reason.to_owned()))?;
             let before = reference_execution.0;
             let alpha =
-                audit_musicxml_voice_label_binding_alpha(before, canonical, &selected.selected)
+                audit_musicxml_voice_label_binding_alpha(before, canonical, &selected.selected, false)
                     .map_err(|error| ("master_label_alpha", error.to_string()))?;
             if !alpha.green() {
                 return Err((
@@ -257,7 +257,7 @@ impl FinalChordEncodingPlan {
                 ));
             }
             let plan =
-                bind_canonical_final_chord_encoding_plan(before, canonical, &selected.selected)
+                bind_canonical_final_chord_encoding_plan(before, canonical, &selected.selected, false)
                     .map_err(|error| ("master_plan_binding", error.to_string()))?;
             let (xml, receipt) = project_final_chord_encoding_plan(before, &plan);
             let xml = xml.map_err(|error| ("master_projection", error.to_string()))?;

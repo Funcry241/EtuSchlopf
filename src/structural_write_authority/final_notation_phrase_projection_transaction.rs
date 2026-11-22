@@ -17,6 +17,9 @@ use std::path::Path;
 use super::horizontal_layout_plan_materialization::materialize_horizontal_layout_file_authorized;
 use super::HorizontalLayoutMaterializationDirective;
 
+#[path = "phrase_svg_placement.rs"]
+mod phrase_svg_placement;
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct RenderNoteFingerprint {
     part: String,
@@ -322,18 +325,20 @@ impl PreparedFinalLayoutPhrase {
     }
 }
 
-pub(super) fn prepare_final_render_notation_with_phrase_projection(
+#[cfg(test)]
+fn prepare_final_render_notation_with_phrase_projection(
     source: &str,
     directives: &[HorizontalLayoutMaterializationDirective],
     phrase_notation_intents: &[PhraseNotationIntentProjection],
 ) -> (Result<PreparedFinalLayoutPhrase>, Option<PreservingTransformationReceipt>) {
-    prepare_final_render_notation_with_phrase_course(source, directives, phrase_notation_intents, None)
+    prepare_final_render_notation_with_phrase_course(source, directives, phrase_notation_intents, None, None)
 }
 
 pub(super) fn prepare_final_render_notation_with_phrase_course(
     source: &str, directives: &[HorizontalLayoutMaterializationDirective],
     phrase_notation_intents: &[PhraseNotationIntentProjection],
     course: Option<&BoundPhraseOccurrenceCourse>,
+    preview: Option<&mut crate::pipeline::PhraseSvgPreview>,
 ) -> (Result<PreparedFinalLayoutPhrase>, Option<PreservingTransformationReceipt>) {
     let result = (|| -> Result<PreparedFinalLayoutPhrase> {
         let layout_copies = super::horizontal_layout_plan_materialization::
@@ -353,12 +358,43 @@ pub(super) fn prepare_final_render_notation_with_phrase_course(
             };
             if let Some(plan) = plan {
                     original_insertions = plan.insertions.clone();
-                    let insertions = plan.insertions.iter()
-                        .map(|insertion| (insertion.position, insertion.text.clone()))
-                        .collect::<Vec<_>>();
-                    final_post = super::master_adoption::mutate_final_layout_phrase_insertions(
-                        &layout_post, &insertions,
-                    )?;
+                    let realize = |insertions: &[PhraseSlurInsertion]| {
+                        let edits = insertions.iter().map(|edit| (edit.position, edit.text.clone())).collect::<Vec<_>>();
+                        super::master_adoption::mutate_final_layout_phrase_insertions(&layout_post, &edits)
+                    };
+                    final_post = realize(&original_insertions)?;
+                    if let Some(preview) = preview
+                        && let Some(placements) = phrase_svg_placement::placement(&final_post, preview)
+                    {
+                        // Every verified start tag must map into an original E007 insertion.
+                        let mut pending = placements.into_iter().peekable();
+                        let mut prior_length = 0;
+                        for insertion in &mut original_insertions {
+                            let start = insertion.position + prior_length;
+                            prior_length += insertion.text.len();
+                            let mut spans = Vec::new();
+                            let mut cursor = 0;
+                            while let Some(&(at, attribute)) = pending.peek() {
+                                let local = at.checked_sub(start)
+                                    .context("phrase placement escaped the original insertion order")?;
+                                if local >= insertion.text.len() {
+                                    break;
+                                }
+                                anyhow::ensure!(insertion.text.get(local..).is_some_and(|text| text.starts_with("/>")),
+                                    "phrase placement is not bound to the original start tag");
+                                spans.extend([&insertion.text[cursor..local], attribute]);
+                                cursor = local;
+                                pending.next();
+                            }
+                            if !spans.is_empty() {
+                                spans.push(&insertion.text[cursor..]);
+                                insertion.text = spans.concat();
+                            }
+                        }
+                        anyhow::ensure!(pending.next().is_none(), "phrase placement has no original insertion");
+                        final_post = realize(&original_insertions)?;
+                        preview.adopted = true;
+                    }
                     // Die vier heutigen E007-Checks, unverÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤ndert vorgezogen.
                     if Document::parse(&final_post).is_err() {
                         bail!("phrase-slur render candidate is not parseable MusicXML");
@@ -1435,7 +1471,7 @@ mod phrase_occurrence_course_tests {
                 &post, std::slice::from_ref(&intent)).unwrap().is_empty(), "technical merging must exercise the old decision loss");
             let bound = approved.carry(&carried).unwrap();
             let directives = vec![HorizontalLayoutMaterializationDirective { explicit_width: Some("900".into()), system_break: super::super::horizontal_layout_plan_materialization::HorizontalSystemBreakMaterialization::None, starts_new_page: false }; 2];
-            let (prepared, receipt) = prepare_final_render_notation_with_phrase_course(&post, &directives, &[], Some(&bound));
+            let (prepared, receipt) = prepare_final_render_notation_with_phrase_course(&post, &directives, &[], Some(&bound), None);
             let prepared = prepared.unwrap();
             assert!(prepared.phrase_write);
             assert_eq!(slur_pair_counts(prepared.final_post()), BTreeMap::from([(1, 1)]));
@@ -1445,7 +1481,7 @@ mod phrase_occurrence_course_tests {
             receipts.push_preserving(receipt, prepared.final_post());
             receipts.discard_unadopted(crate::master_state_identity::RenderDiscardReason::ReadOnlyProbe);
             let wrong = post.replace("Piano", "Another source");
-            let (rejected, receipt) = prepare_final_render_notation_with_phrase_course(&wrong, &directives, &[], Some(&bound));
+            let (rejected, receipt) = prepare_final_render_notation_with_phrase_course(&wrong, &directives, &[], Some(&bound), None);
             assert!(rejected.is_err()); assert!(receipt.is_none());
         }
     }

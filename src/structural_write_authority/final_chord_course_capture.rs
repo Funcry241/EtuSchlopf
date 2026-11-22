@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct OriginalCourseBindings {
     rows: Vec<(FinalChordCanonicalInputBindingRow, Option<FinalChordCanonicalActionKind>, i64)>,
+    independent_rest_anchor_fragments: BTreeSet<usize>,
 }
 
 impl OriginalCourseBindings {
@@ -22,6 +23,7 @@ impl OriginalCourseBindings {
 
     pub(super) fn from_original_bind(
         inputs: &[FinalChordCanonicalInputBindingRow], canonical: &CanonicalFinalChordStructuralPlan,
+        independent_rest_anchor_fragments: &BTreeSet<usize>,
     ) -> io::Result<Self> {
         let mut rows = Vec::new();
         for input in inputs {
@@ -47,7 +49,7 @@ impl OriginalCourseBindings {
             };
             rows.push((input.clone(), action.map(|action| action.kind.clone()), offset));
         }
-        Ok(Self { rows })
+        Ok(Self { rows, independent_rest_anchor_fragments: independent_rest_anchor_fragments.clone() })
     }
 }
 
@@ -76,6 +78,10 @@ pub(super) fn capture_original_execution(
             },
             Some(FinalChordCanonicalActionKind::AuxiliaryLane { .. }) => {
                 ensure!(emitted.fragment_ordinal == 0, "Foreign auxiliary fragment ordinal");
+                FinalChordProjectionMaterializationKind::AuxiliaryLane
+            },
+            None if bindings.independent_rest_anchor_fragments.contains(&binding.fragment_id) => {
+                ensure!(emitted.fragment_ordinal == 0, "Foreign independent attack ordinal");
                 FinalChordProjectionMaterializationKind::AuxiliaryLane
             },
             _ => {

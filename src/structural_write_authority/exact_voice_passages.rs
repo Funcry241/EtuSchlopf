@@ -175,7 +175,7 @@ impl FrozenSerializationVoiceChannelPlan {
                     .or_default()
                     .push(row);
             }
-            let plan = bind_canonical_final_chord_encoding_plan(input, canonical, voices)
+            let plan = bind_canonical_final_chord_encoding_plan(input, canonical, voices, false)
                 .map_err(|_| "master_plan_unbound")?;
             let (xml, receipt) = project_final_chord_encoding_plan(input, &plan);
             let xml = xml.map_err(|_| "master_projection_unavailable")?;

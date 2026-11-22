@@ -405,11 +405,13 @@ fn run_metric_beam_and_final_notation_stage(
             canonical_master_functional_respelling_from_render,
         )
         .bind_tonal_frame(master_export_tonal_frame);
+    let frozen_lane = &initial_render.frozen_sounding_temporal_lane_plan;
     let master_voice_label_alpha_audit =
         structural_write_authority::audit_musicxml_voice_label_binding_alpha(
             &initial_render.final_export_xml,
-            &initial_render.frozen_sounding_temporal_lane_plan.final_chord_structural_plan,
-            &initial_render.frozen_sounding_temporal_lane_plan.frozen_serialized_voice_plan,
+            &frozen_lane.final_chord_structural_plan,
+            &frozen_lane.frozen_serialized_voice_plan,
+            true,
         )
         .with_context(|| {
             "FrozenSerializedVoiceChordConstraintCutover Master-Label-Alpha-Gate konnte nicht ausgewertet werden"
@@ -426,8 +428,9 @@ fn run_metric_beam_and_final_notation_stage(
     let final_chord_encoding_plan =
         structural_write_authority::bind_canonical_final_chord_encoding_plan(
             &initial_render.final_export_xml,
-            &initial_render.frozen_sounding_temporal_lane_plan.final_chord_structural_plan,
-            &initial_render.frozen_sounding_temporal_lane_plan.frozen_serialized_voice_plan,
+            &frozen_lane.final_chord_structural_plan,
+            &frozen_lane.frozen_serialized_voice_plan,
+            true,
         )
         .with_context(|| {
             "FrozenSerializedVoiceChordConstraintCutover konnte den Master-Kandidaten nicht an den kanonischen Plan binden"
@@ -451,7 +454,6 @@ fn run_metric_beam_and_final_notation_stage(
         final_chord_obligation_evidence.push_str(&format!(
             "FinalChordNotationObligations: Unknown; {error}; canonical_role_authority=none\n"));
     }
-    let frozen_lane = &initial_render.frozen_sounding_temporal_lane_plan;
     final_chord_encoding_plan.append_primary_beam_pair_readback(
         &mut final_chord_obligation_evidence,
         &frozen_lane.final_chord_structural_plan,

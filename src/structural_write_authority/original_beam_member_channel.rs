@@ -418,7 +418,7 @@ pub(super) fn selected_master_edge_states(
         .iter()
         .map(|row| (row.fragment_id, row))
         .collect();
-    let plan = bind_canonical_final_chord_encoding_plan(input, canonical, voices)?;
+    let plan = bind_canonical_final_chord_encoding_plan(input, canonical, voices, false)?;
     let (xml, receipt) = project_final_chord_encoding_plan(input, &plan);
     master_edge_states(&plan, (input, &xml?, receipt.as_ref()), &edges, &locators)
         .map_err(io::Error::other)
@@ -433,7 +433,7 @@ fn verify_master_retention(
 ) -> io::Result<Vec<(usize, usize)>> {
     let input = canonical.written_projection.as_ref()
         .ok_or_else(|| io::Error::other("master_reference_input_unbound"))?.original_xml.as_ref();
-    let alpha = audit_musicxml_voice_label_binding_alpha(input, canonical, after)?;
+    let alpha = audit_musicxml_voice_label_binding_alpha(input, canonical, after, false)?;
     if !alpha.green() {
         return Err(io::Error::other("master_candidate_label_alpha_failed"));
     }
