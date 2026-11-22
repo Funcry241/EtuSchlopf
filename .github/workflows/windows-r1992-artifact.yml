@@ -41,7 +41,7 @@ jobs:
         run: |
           rustup toolchain install 1.98.0 --profile minimal
           if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed' }
-          $jobs = [Math]::Max(1, [Environment]::ProcessorCount - 1)
+          $jobs = [Environment]::ProcessorCount
           cargo +1.98.0 build --locked --profile strict --bin etuschlopf --jobs $jobs --color never
       - name: Bundle runtime data and licences
         run: |
