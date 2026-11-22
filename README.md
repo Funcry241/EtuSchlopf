@@ -13,12 +13,12 @@ neu gesetzt. Von den 59 PDF-Seiten unterscheidet sich gegenüber r1989 im
 Rastervergleich nur Seite 4 von Etüde 8. Der Phrasierungsbogen in Takt 25–29
 liegt jetzt über den Noten. Alle Master-MusicXML-Dateien sind bytegleich.
 
-Der öffentliche **Windows-Download** enthält **r1985**.
-[Windows-Abnahme und Seitenvergleich r1985](docs/evidence/r1985/README.md)
+Der öffentliche **Windows-Download** enthält **r1992**.
+[Windows-Prüfbeleg und Seitenvergleich r1992](docs/evidence/r1992/README.md)
 
 [Mathematische Verfahren und nächste Vorhaben](docs/MATHEMATIK.md) ·
 [Notenbilder und Herkunft der Aufnahmen](https://github.com/Funcry241/EtuSchlopf/tree/main/docs/examples) ·
-[Windows-Download r1985](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1985-windows-preview)
+[Windows-Download r1992](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1992-windows-preview)
 
 Fehlerberichte sind jederzeit willkommen. Größere Änderungen bitte vorab über
 GitHub besprechen. Es gibt keine garantierten Antwortzeiten, Fehlerbehebungen

@@ -19,4 +19,4 @@ SHA-256 des nativen Quellarchivs aus dem geprüften Windows-Export
 
 Der öffentliche Quellabgleich übernimmt Engine, Tests und Revisionsmetadaten
 aus diesem Archiv. Für die öffentliche Dokumentation gelten die GitHub-Fassungen.
-Der veröffentlichte Windows-Download bleibt auf seinem eigenen Prüfstand r1985.
+Das geprüfte Windows-Paket ist als [Windows-Vorschau r1992](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1992-windows-preview) verfügbar.
