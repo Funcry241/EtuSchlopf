@@ -1,0 +1,100 @@
+name: Windows compile benchmark
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/windows-compile-benchmark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: windows-2022
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        order: [baseline-first, all-first]
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: public
+    env:
+      RUSTFLAGS: '-C target-feature=+crt-static'
+      CARGO_INCREMENTAL: '0'
+      ETU_BUILD_ROOT: D:\etu-r1992-build
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          path: public
+          persist-credentials: false
+      - name: Check out the accepted source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: a86b1410dd8e1c6b3d85667822e037cead0d7c47
+          path: accepted
+          persist-credentials: false
+      - name: Verify and reconstruct the accepted r1992 source
+        run: python .github/distribution/prepare-r1992-source.py ../accepted $env:ETU_BUILD_ROOT "$env:RUNNER_TEMP/etuschlopf-r1992-source"
+      - name: Prepare the toolchain and download locked dependencies
+        working-directory: D:\etu-r1992-build
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed' }
+          rustc +1.98.0 --version --verbose
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain details unavailable' }
+          cargo +1.98.0 fetch --locked
+      - name: Measure both clean builds on this runner
+        working-directory: D:\etu-r1992-build
+        env:
+          ETU_BENCHMARK_ORDER: ${{ matrix.order }}
+        run: |
+          $processors = [Environment]::ProcessorCount
+          if ($processors -lt 2) { throw 'At least two logical processors are needed for the comparison' }
+          $variantOrder = @('baseline', 'all')
+          if ($env:ETU_BENCHMARK_ORDER -eq 'all-first') {
+            [array]::Reverse($variantOrder)
+          }
+          $jobsByVariant = @{ baseline = $processors - 1; all = $processors }
+          $reports = Join-Path $env:RUNNER_TEMP 'etu-compile-benchmark'
+          New-Item -ItemType Directory -Path $reports | Out-Null
+          Write-Host "Compile benchmark: $processors logical processors, runner image $env:ImageVersion"
+          @(
+            "### r1992 compile benchmark ($($env:ETU_BENCHMARK_ORDER))"
+            ''
+            "Logical processors: $processors. Runner image: $env:ImageVersion."
+            ''
+            '| Variant | Cargo jobs | Build time (s) | EXE SHA-256 |'
+            '| --- | ---: | ---: | --- |'
+          ) | Add-Content -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+
+          foreach ($variant in $variantOrder) {
+            cargo +1.98.0 clean
+            if ($LASTEXITCODE -ne 0) { throw 'Cleaning build outputs failed' }
+            $jobs = $jobsByVariant[$variant]
+            $clock = [System.Diagnostics.Stopwatch]::StartNew()
+            cargo +1.98.0 build --locked --offline --profile strict --bin etuschlopf --jobs $jobs --color never --timings
+            $clock.Stop()
+            if ($LASTEXITCODE -ne 0) { throw "Compile failed for $variant" }
+
+            $exe = 'target/strict/etuschlopf.exe'
+            $version = & (Resolve-Path $exe).Path --version
+            if ($LASTEXITCODE -ne 0 -or "$version" -notmatch '\b0\.10\.1839\b') {
+              throw "Engine version probe failed for $variant"
+            }
+            $hash = (Get-FileHash -Algorithm SHA256 $exe).Hash.ToLowerInvariant()
+            $seconds = $clock.Elapsed.TotalSeconds.ToString('0.00', [Globalization.CultureInfo]::InvariantCulture)
+            Write-Host "Compile result: variant=$variant jobs=$jobs seconds=$seconds sha256=$hash"
+            "| $variant | $jobs | $seconds | $hash |" | Add-Content -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+            Copy-Item 'target/cargo-timings/cargo-timing.html' (Join-Path $reports "$variant.html")
+          }
+      - name: Keep Cargo timing reports
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: etu-compile-${{ matrix.order }}
+          path: ${{ runner.temp }}/etu-compile-benchmark/*.html
+          retention-days: 7
+          if-no-files-found: error
