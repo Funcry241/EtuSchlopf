@@ -8,9 +8,13 @@ Windows-Launcher `run.cmd`; eigene geeignete Eingaben sind erforderlich.
 
 ## Stand der Notenausgabe
 
-**r1985 / 0.10.1839** hat auf Windows alle 15 Stücke aus MIDI und WAV neu gesetzt.
-Gegenüber r1973 sind die 30 MusicXML-Dateien bytegleich und alle 59 PDF-Seiten
-im Rastervergleich pixelgleich. [Windows-Abnahme und Seitenvergleich r1985](docs/evidence/r1985/README.md)
+Der **Windows-Prüfstand r1992 / 0.10.1839** hat alle 15 Stücke aus MIDI und WAV
+neu gesetzt. Von den 59 PDF-Seiten unterscheidet sich gegenüber r1989 im
+Rastervergleich nur Seite 4 von Etüde 8. Der Phrasierungsbogen in Takt 25–29
+liegt jetzt über den Noten. Alle Master-MusicXML-Dateien sind bytegleich.
+
+Der öffentliche **Windows-Download** enthält **r1985**.
+[Windows-Abnahme und Seitenvergleich r1985](docs/evidence/r1985/README.md)
 
 [Mathematische Verfahren und nächste Vorhaben](docs/MATHEMATIK.md) ·
 [Notenbilder und Herkunft der Aufnahmen](https://github.com/Funcry241/EtuSchlopf/tree/main/docs/examples) ·
