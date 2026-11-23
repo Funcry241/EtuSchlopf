@@ -72,7 +72,7 @@ wissenschaftliche Validierung der gesamten Pipeline. Forschung zu Transkription,
 Motorik und Spielbarkeit liefert unterschiedliche Arten von Evidenz; sie darf
 nicht miteinander oder mit einem grünen Softwarelauf gleichgesetzt werden.
 
-Die [implementierten Grundlagen](IMPLEMENTED_FOUNDATIONS.md) zeigen getrennt,
+Die [mathematischen Verfahren](MATHEMATIK.md) zeigen getrennt,
 welche Optimierungen, symbolischen Bedingungen und Herkunftsprüfungen im Code
 stehen. Aktuelle Forschung ist hier eine überprüfte Einordnung mit expliziter
 Rollenangabe, keine rückwirkend erfundene Entstehungsgeschichte.
