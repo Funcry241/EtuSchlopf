@@ -11,11 +11,11 @@ Windows-Launcher `run.cmd`; eigene geeignete Eingaben sind erforderlich.
 Der abgenommene **Windows-Quellstand r1994 / 0.10.1839** erzeugte alle
 15 Partituren mit zusammen 59 PDF-Seiten. Gegenüber r1992 sind alle
 MusicXML-Dateien bytegleich und alle PDF-Seiten pixelgleich. Die Galerie zeigt
-die PDFs aus dem r1994-Lauf. Die verfügbare Windows-EXE enthält derzeit r1992.
+die PDFs aus dem r1994-Lauf.
 
 [Notenbilder r1994](docs/examples/README.md#notenbilder) ·
 [Windows-Abnahme r1994](docs/evidence/r1994/README.md) ·
-[Windows-Download r1992](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1992-windows-preview) ·
+[Windows-Download r1994](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1994-windows-preview) ·
 [Mathematische Verfahren](docs/MATHEMATIK.md)
 
 Fehlerberichte sind jederzeit willkommen. Größere Änderungen bitte vorab über
