@@ -5,16 +5,8 @@ alle 15 Stücke frisch aus MIDI und WAV. Alle 15 Projekte endeten mit Exitcode 0
 und vollständigen Ausgaben. Der PDF-Renderer lief erfolgreich. Die Strict-Prüfung
 meldete 3.168 bestandene Tests, vier übersprungene Tests und null Clippy-Warnungen.
 
-Die PDF-Prüfung liest komprimierte Streams nun anhand der im PDF deklarierten
-Länge. Dadurch bleiben auch gültige Nutzdaten am Stream-Ende erhalten. Etüde 3,
-deren Prüfung nach der Cargo-Aktualisierung beim Dekomprimieren abbrach,
-lieferte im abgenommenen Lauf alle vier Seiten.
-
-| Vergleich r1992 → r1994 | Befund |
-| --- | --- |
-| Master-MusicXML | Alle 15 Dateien sind bytegleich. |
-| Render-MusicXML | Alle 15 Dateien sind bytegleich. |
-| PDF | Alle 59 Seiten sind im Rastervergleich bei 144 dpi pixelgleich. |
+Die PDF-Prüfung verwendet die im PDF deklarierte Streamlänge. So berücksichtigt
+sie auch gültige komprimierte Nutzdaten am Stream-Ende.
 
 Die [Galerie](../../examples/README.md#notenbilder) enthält die Original-PDFs
 aus dem r1994-Lauf. Die [SHA-256-Prüfsummen](score-sha256.txt) beziehen sich

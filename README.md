@@ -8,10 +8,9 @@ Windows-Launcher `run.cmd`; eigene geeignete Eingaben sind erforderlich.
 
 ## Stand der Notenausgabe
 
-Der abgenommene **Windows-Quellstand r1994 / 0.10.1839** erzeugte alle
-15 Partituren mit zusammen 59 PDF-Seiten. Gegenüber r1992 sind alle
-MusicXML-Dateien bytegleich und alle PDF-Seiten pixelgleich. Die Galerie zeigt
-die PDFs aus dem r1994-Lauf.
+Der veröffentlichte **Windows-Stand r1994 / 0.10.1839** erzeugt 15
+Partituren mit zusammen 59 PDF-Seiten. Die Galerie zeigt die PDFs aus
+dem Windows-Lauf dieses Stands.
 
 [Notenbilder r1994](docs/examples/README.md#notenbilder) ·
 [Windows-Abnahme r1994](docs/evidence/r1994/README.md) ·
@@ -153,8 +152,8 @@ zurückfallen; der Windows-Launcher fordert ausdrücklich die Webansicht an.
 
 ## Vollständige Aufrufreferenz
 
-Die folgenden Tabellen erfassen die aktuellen Launcher- und Programmoptionen
-einschließlich Aliasen, Standardwerten und entfallenen Schaltern. Grundlage sind
+Die folgenden Tabellen erfassen die Launcher- und Programmoptionen
+einschließlich Aliasen und Standardwerten. Grundlage sind
 [`src/cli.rs`](src/cli.rs),
 [`src/bin/etuschlopf_launcher.rs`](src/bin/etuschlopf_launcher.rs) und der
 [Take-Bootstrap](src/bin/etuschlopf_take_bootstrap.rs).
@@ -244,13 +243,10 @@ Programmstart führt die Launcher-Schritte für Tests, Exporte, Inventur und
 Watch nicht aus. Für die Programmhilfe ist er auch deshalb der passende Weg:
 `run.cmd --help` ohne Laufziel wird vom Launcher als fehlender Aufruf behandelt.
 
-### Kompatibilität und interne Schalter
+### Interne Schalter
 
 | Schreibweise | Status |
 | --- | --- |
-| `etuschlopf check "Projektname" …` | Historisches Präfix beim direkten Programmaufruf; `check` wird vor dem Parsen entfernt. Aktuell genügt `etuschlopf "Projektname" …`. |
-| `--candidate-budget-jobs <ANZAHL>` | Versteckter, entfallener Schalter; wird ausdrücklich zurückgewiesen. `--jobs` steuert die Parallelität, der Suchumfang bleibt fest `192/5`. |
-| `--take-zip`, `--take-zip=…` | Pensionierter direkter Launcher-Take-Pfad; wird zurückgewiesen. Der unterstützte Einstieg ist `run.cmd --take`. |
 | `--recover-pending-take` | Interner Recovery-Einstieg des gesicherten Take-Bootstraps, bei offener Transaktion durch `run.cmd` aufgerufen. |
 | `--recover-pending-public-artifacts` | Interner Recovery-Einstieg des gesicherten Bootstraps für einen offenen Public-Artifact-Vorgang, ebenfalls durch `run.cmd` koordiniert. |
 
@@ -347,8 +343,7 @@ Breite und seine tatsächlichen Folgen.
 Der erste systematische Einstieg in diese Ebene ist
 [`docs/assistant_memory/000_start_here.md`](docs/assistant_memory/000_start_here.md).
 Die dort beschriebene Lesereihenfolge führt zu den Architekturhinweisen und den
-zuständigen Verträgen. Historische Notizen können die Suche verkürzen. Aktuelle
-Quellen und gebundene Laufbelege entscheiden über den aktuellen Zustand.
+zuständigen Verträgen und gebundenen Laufbelegen.
 
 ## Der Maschinenraum
 
@@ -358,7 +353,7 @@ Quellen und gebundene Laufbelege entscheiden über den aktuellen Zustand.
 | `src/structural_write_authority/` | zuständige strukturelle Schreibpfade und Zustandsübergänge |
 | `src/audit_only/` | ausdrücklich beobachtende Auswertungen |
 | `tests/` | synthetische Regressionen und Architekturprüfungen |
-| `docs/` | Verträge, Entwurfsbegründungen und Entwicklungsspuren |
+| `docs/` | Verträge und aktuelle Dokumentation |
 | `tools/` | Hilfsprogramme und qualifizierte Komponenten |
 
 Die Verzeichnisnamen geben eine erste Orientierung. Die konkrete Zuständigkeit
@@ -379,20 +374,10 @@ Darum betrachtet das Projekt mehrere Ebenen getrennt: Quellstand, Annahmebeleg,
 XML-Veränderung, klingende Ereignisse, Renderer-Ergebnis und sichtbare Seite.
 Sie werden miteinander verbunden, ohne einander stillschweigend zu ersetzen.
 
-## Revisionen, Takes und Rückkehr
+## Takes und Windows-Prüfung
 
-Der erste öffentliche Ausgangspunkt dieses Repositorys ist der akzeptierte
-Quellstand **r1507**, Paketversion **0.10.1839**. Die öffentliche README, die MIT-Lizenz und die Git-Ausschlussregeln ergänzen
-den importierten Quellstand. Der Git-Verlauf dokumentiert die Veröffentlichung.
-
-Die frühere Entwicklung wird nicht als nachträglich erfundene Git-Historie
-rekonstruiert. Ihre im Quellbaum enthaltenen Verträge und Begründungen bleiben
-lesbar. Der öffentliche Verlauf beginnt mit diesem Import.
-
-Daneben besitzt EtuSchlopf einen eigenen Take-Ablauf. Ein Take ist ein nach
-Projektvertrag verpackter Quellstand mit deklariertem Änderungsumfang. Die
-Annahme bindet sich an das konkrete Paket. Ein Git-Commit und ein akzeptierter
-Take sind unterschiedliche Identitäten.
+Ein Take ist ein Quellpaket mit deklariertem Änderungsumfang. EtuSchlopf bindet
+die Annahme an die Prüfsumme des konkreten Pakets.
 
 Einen solchen Take anwenden und anschließend den Vollkorpus prüfen:
 
@@ -424,15 +409,6 @@ entdeckt werden. Ihre Regel muss auch außerhalb dieses Falls verständlich sein
 
 Die Prüfbedingungen im Repository gehören zum Entwurf. Ihre Abschwächung ist
 selbst eine Änderung, die erklärt und beurteilt werden muss.
-
-## Eine letzte Schwelle
-
-EtuSchlopf ist ein gewachsenes Experiment. Es trägt Spuren seiner Versuche,
-verworfene Wege in Dokumenten und präzise Grenzen an Stellen, an denen früher
-etwas zu leicht möglich war.
-
-Wer nur die Ausgabe sehen möchte, beginnt mit einem Projekt.
-Wer verstehen möchte, weshalb sie so entstehen darf, folgt den Übergängen.
 
 ## Lizenz
 

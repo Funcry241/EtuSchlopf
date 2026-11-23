@@ -25,8 +25,7 @@ Die Galerie enthält alle 15 PDFs aus dem abgenommenen Windows-Lauf r1994. [Alle
 
 ## Stand auf main
 
-**r1994 / 0.10.1839** setzt alle 15 Stücke vollständig. Gegenüber r1992 sind
-sämtliche 30 MusicXML-Dateien bytegleich und alle 59 PDF-Seiten pixelgleich.
+**r1994 / 0.10.1839** setzt alle 15 Stücke auf insgesamt 59 PDF-Seiten.
 [Windows-Abnahme r1994](../docs/evidence/r1994/README.md) · [Mathematik in EtuSchlopf](../docs/MATHEMATIK.md)
 
 EtuSchlopf ist experimentell. Bleiben Einsätze oder Taktgrenzen einer frei gespielten Aufnahme mehrdeutig, kann EtuSchlopf den Lauf abbrechen. Chopins Ballade op. 38 wird separat als Stresstest geführt. [Ballade op. 38](../docs/examples/chopin-op38-p01.md)

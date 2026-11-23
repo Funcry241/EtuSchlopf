@@ -7,7 +7,7 @@ Der abgenommene Windows-Vollkorpus **r1994** umfasst 15 Stücke und 59 PDF-Seite
 | Windows-EXE herunterladen und erstes Stück verarbeiten | [Erster Start und Download](../.github/README.md#dein-erstes-stück) |
 | Noten ansehen, bevor du etwas installierst | [Alle 15 Notenbilder](examples/README.md#notenbilder) |
 | Eine falsche Note oder ein Startproblem melden | [Kurzer Fehlerbericht](https://github.com/Funcry241/EtuSchlopf/issues/new?template=01_fehler.md) |
-| Aufrufe und Optionen des Launchers und der Engine | [Aufrufreferenz, dokumentiert in r1964](DEVELOPMENT.md#vollständige-aufrufreferenz) |
+| Aufrufe und Optionen des Launchers und der Engine | [Aufrufreferenz](DEVELOPMENT.md#vollständige-aufrufreferenz) |
 | Fehler melden oder etwas beitragen | [Beitragsleitfaden](CONTRIBUTING.md) |
 | Sicherheitslücke melden | [Sicherheitsrichtlinie](SECURITY.md) |
 | Umgang miteinander und Moderation | [Verhaltenskodex](CODE_OF_CONDUCT.md) |

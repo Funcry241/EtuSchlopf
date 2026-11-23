@@ -1,8 +1,9 @@
 # Technische Referenz und Quellenarbeit
 
-Der öffentliche Quellstand ist **r1968 / 0.10.1839**. Die native Windows-Prüfung umfasst die Installation des Takes, die Strict-Tests und den PDF-Export des Startbeispiels. Der Windows-Vollkorpus r1968 umfasst 14 Stücke. Alle 28 MusicXML-Ausgaben sind bytegleich, alle 57 Seiten bei 144 dpi pixelgleich zum Vollkorpus r1965. [Windows-Vollkorpus r1968](evidence/r1968/README.md) [Windows-Prüflauf r1968](https://github.com/Funcry241/EtuSchlopf/actions/runs/44831896224) · [Windows-Vollkorpus r1965](evidence/r1965/README.md)
-
-Seit r1659 enthält der Quellstand weitere Zuständigkeitsbereinigungen, indizierte Endpunktabfragen und Verbesserungen an Fokus, Verbindungsstatus und PDF-Sitzungsbindung der Watch-Webansicht. r1683 führt ursprüngliche Pausenanker als eigene Evidenz in die C3-Entscheidung; nicht geschlossene systemübergreifende Gruppenabhängigkeiten bleiben offen. Der Korpusstand r1683 umfasste 34 Verfahrensfamilien. [Kapitel 4 der Mathematikseite](MATHEMATIK.md#kapitel-4) ordnet die Verfahren ihren Quellen, Wirkungen und Beweisgrenzen zu. Die native Abnahme bestätigt den geprüften Korpus; sie belegt weder allgemeine Fehlerfreiheit noch die Spielbarkeit beliebiger Eingaben.
+Der öffentliche Windows-Stand ist **r1994 / 0.10.1839**. Die Abnahme
+umfasst Strict-Prüfung und PDF-Export von 15 Partituren. Die Aufrufreferenz
+beschreibt den Einstieg für den Windows-Launcher und das Programm.
+[Windows-Vollkorpus](evidence/r1994/README.md) · [Notenbilder](examples/README.md#notenbilder)
 
 Das Projekt hat zwei eng verbundene Gegenstände:
 
@@ -21,12 +22,7 @@ Programme und bleiben Gegenstand von Gegenbeispielen und Prüfung.
 **Zum Verständnis des Projekts:**
 
 - [Mathematik in EtuSchlopf · Kapitelübersicht](MATHEMATIK.md)
-- [Historischer Architektur-Wegweiser auf Basis r1526](IMPLEMENTED_FOUNDATIONS.md)
 - [Forschungsbezüge und ihre genaue Rolle](../docs/RESEARCH_CONTEXT.md)
-- [Historischer Windows-Korpus r1684](evidence/r1684/README.md)
-- [Native Abnahme r1602](evidence/r1602/README.md)
-- [Windows-Testversion und native Abnahme r1577](evidence/r1577/README.md)
-- [Historische Abnahme r1533](evidence/r1533/README.md)
 - [Kaltstart ohne Gesprächsgedächtnis](../docs/assistant_memory/000_start_here.md)
 
 
@@ -171,8 +167,8 @@ zurückfallen; der Windows-Launcher fordert ausdrücklich die Webansicht an.
 
 ## Vollständige Aufrufreferenz
 
-Die folgenden Tabellen erfassen die aktuellen Launcher- und Programmoptionen
-einschließlich Aliasen, Standardwerten und entfallenen Schaltern. Grundlage sind
+Die folgenden Tabellen erfassen die Launcher- und Programmoptionen
+einschließlich Aliasen und Standardwerten. Grundlage sind
 [`src/cli.rs`](../src/cli.rs),
 [`src/bin/etuschlopf_launcher.rs`](../src/bin/etuschlopf_launcher.rs) und der
 [Take-Bootstrap](../src/bin/etuschlopf_take_bootstrap.rs).
@@ -254,13 +250,10 @@ Programmstart führt die Launcher-Schritte für Tests, Exporte, Inventur und
 Watch nicht aus. Für die Programmhilfe ist er auch deshalb der passende Weg:
 `run.cmd --help` ohne Laufziel wird vom Launcher als fehlender Aufruf behandelt.
 
-### Kompatibilität und interne Schalter
+### Interne Schalter
 
 | Schreibweise | Status |
 | --- | --- |
-| `etuschlopf check "Projektname" …` | Historisches Präfix beim direkten Programmaufruf; `check` wird vor dem Parsen entfernt. Aktuell genügt `etuschlopf "Projektname" …`. |
-| `--candidate-budget-jobs <ANZAHL>` | Versteckter, entfallener Schalter; wird ausdrücklich zurückgewiesen. `--jobs` steuert die Parallelität, der Suchumfang bleibt fest `192/5`. |
-| `--take-zip`, `--take-zip=…` | Pensionierter direkter Launcher-Take-Pfad; wird zurückgewiesen. Der unterstützte Einstieg ist `run.cmd --take`. |
 | `--recover-pending-take` | Interner Recovery-Einstieg des gesicherten Take-Bootstraps, bei offener Transaktion durch `run.cmd` aufgerufen. |
 | `--recover-pending-public-artifacts` | Interner Recovery-Einstieg des gesicherten Bootstraps für einen offenen Public-Artifact-Vorgang, ebenfalls durch `run.cmd` koordiniert. |
 

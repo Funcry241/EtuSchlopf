@@ -1,6 +1,6 @@
 # Mathematik in EtuSchlopf
 
-**Wie lange soll eine gespielte Note im Notenbild stehen?** EtuSchlopf leitet die Dauer einer frei gespielten Klaviernote aus den Einsätzen, der Artikulation und den gleichzeitig laufenden Stimmen ab. Beim Vergleich mit einer Druckvorlage lassen sich Einsatz, Tonhöhe und geschriebene Dauer einzeln prüfen. Die folgenden Formeln beschreiben diese Entscheidungen und die Grenzen der Auswertung. [Aktuelle Referenzen](examples/README.md#aktuelle-referenzen) · [Messwerte des Windows-Laufs r1965](evidence/r1965/vergleich.md)
+**Wie lange soll eine gespielte Note im Notenbild stehen?** EtuSchlopf leitet die Dauer einer frei gespielten Klaviernote aus den Einsätzen, der Artikulation und den gleichzeitig laufenden Stimmen ab. Beim Vergleich mit einer Druckvorlage lassen sich Einsatz, Tonhöhe und geschriebene Dauer einzeln prüfen. Die folgenden Formeln beschreiben diese Entscheidungen und die Grenzen der Auswertung. [Aktuelle Referenzen](examples/README.md#aktuelle-referenzen) · [Aktueller Windows-Prüfbeleg](evidence/r1994/README.md)
 
 Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die Kapitelnummer, etwa [Kapitel 3.2 · Folgeeinsatz oder Akkordende](#kapitel-3-2). Bestehende Kapitel behalten ihre Nummer.
 
@@ -36,9 +36,9 @@ Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die
   - [6.15 Speicherplanung für den Korpus](#kapitel-6-15)
   - [6.16 Projektion und Integrität](#kapitel-6-16)
   - [6.17 Phrasierungsbögen und Konturabstände](#kapitel-6-17)
-- [7 Quellzeit, Pausen und Balken in r1938](#kapitel-7)
-- [8 Stimmfortsetzungen im Vollkorpus r1961](#kapitel-8)
-- [9 Prüfstände und verbleibende Grenzen](#kapitel-9)
+- [7 Quellzeit, Pausen und Balken](#kapitel-7)
+- [8 Stimmfortsetzungen prüfen](#kapitel-8)
+- [9 Korpusprüfung und Grenzen](#kapitel-9)
   - [9.1 Vergleich der eigenen Etüden](#kapitel-9-1)
 - [10 Nächste mathematische Vorhaben](#kapitel-10)
   - [10.1 Notendauern freier Einspielungen](#kapitel-10-1)
@@ -60,7 +60,7 @@ Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die
 | --- | --- |
 | Wie gelangt eine frei gespielte Note in den gedruckten Takt? | [Kapitel 3 · Vom Anschlag zur geschriebenen Dauer](#kapitel-3) |
 | Welche Zusammenhänge beschreibt das Modell für Stimmen, Register und Seiten? | [Kapitel 4 · Verfahrensfamilien](#kapitel-4) und [Kapitel 6 · Formeln](#kapitel-6) |
-| Was wurde mit welchen Stücken geprüft? | [Kapitel 9 · Prüfstände](#kapitel-9) · [Windows-Vollkorpus r1994](evidence/r1994/README.md) |
+| Was wurde mit welchen Stücken geprüft? | [Kapitel 9 · Korpusprüfung](#kapitel-9) · [Windows-Vollkorpus r1994](evidence/r1994/README.md) |
 | Woran ließe sich als Nächstes arbeiten? | [Kapitel 10 · Nächste mathematische Vorhaben](#kapitel-10) |
 
 <a name="kapitel-1"></a>
@@ -81,7 +81,6 @@ Hochgestellte Ziffern führen von einer Aussage zu ihrer Fundstelle in [Kapitel 
 | Entscheidet | Ein bestehender fachlicher Owner kann das Ergebnis unter seinen weiteren Bedingungen für eine Auswahl oder Materialisierung verwenden. Nicht jede Auswertung wird übernommen. |
 | Misst / prüft | Liefert Beobachtungen, Gegenbeispiele oder eine Prüfung; erhält dadurch keine musikalische Schreibbefugnis. |
 | Technische Erhaltung | Verändert Aufwand oder Aufbewahrung unter einem Äquivalenznachweis, ohne eine neue musikalische Präferenz einzuführen. |
-| Extern / historisch | Ein Diagnoseexperiment oder ein alter Messstand, kein aktueller Produktnachweis. |
 | Entwurf | Noch keine produktive Implementierung der beschriebenen Gesamtaufgabe. |
 
 `UNKNOWN`, eine unvollständige Suche und eine bewiesene Unzulässigkeit sind unterschiedliche Ergebnisse. Fehlende Information wird weder zu Nullkosten noch zu einer Erlaubnis. „Optimal“ bedeutet höchstens optimal im ausdrücklich gebundenen Modell und Suchraum.
@@ -206,13 +205,7 @@ s_1=a,\qquad e_m=b,\qquad s_k\lt e_k,\qquad e_k=s_{k+1}\quad(1\le k\lt m).
 
 Dadurch hat ein bei 72 beginnender Ton mit Dauer 96 auch dann sein Ende bei 168, wenn auf demselben System bei 120 eine andere Note beginnt. EtuSchlopf kann dafür einen weiteren MusicXML-Stimmkanal verwenden. Bei einer Teilung behält jedes Fragment die Quellidentität und Tonhöhe.<a name="beleg-3-3-fragment"></a><sup><a href="#quelle-zeit">[44]</a></sup> Nur das erste trägt den Anschlag, die folgenden schließen mit Haltebögen an. Ein Vorschlag hat eigene Regeln für Nullzeit und Hauptnote. Der Schreibpfad prüft die Zeiten gegen die tatsächlich ausgegebenen Noten und Cursorbewegungen. [Fragmentplanung und Ausgabekontrolle](../src/midi_seed/bound_duration.rs)
 
-| Historischer Vergleich mit Mozart KV 331, Einspielung p01 | r1963 | r1964 | r1965 |
-| --- | ---: | ---: | ---: |
-| Reguläre Noten mit passendem Einsatz und passender Tonhöhe | 474 von 474 | 474 von 474 | 474 von 474 |
-| Passende geschriebene Dauer einschließlich Haltefortsetzungen | 438 von 474 | 460 von 474 | 460 von 474 |
-| Abweichende geschriebene Dauer | 36 | 14 | 14 |
-
-Der Vergleich verwendet MIDI und WAV als Programmeingaben. Die annotierte Zuordnung aus dem Vienna-4×22-Korpus dient erst zum Prüfen von Master- und Render-MusicXML.<a name="beleg-3-3-korpus"></a><sup><a href="#quelle-goebl">[43]</a></sup> Die 14 Differenzen begrenzen die Aussage über die Dauererkennung an dieser Aufnahme. Der Erhalt der gewählten Intervalle und die Übereinstimmung dieser Wahl mit der musikalischen Referenz sind zwei getrennt messbare Eigenschaften. [Annotierte Einspielung](https://github.com/wergo/vienna4x22/blob/53872cd670182b039ff118d27abcba30de1e0785/match/Mozart_K331_1st-mov_p01.match) · [Prüfbeleg r1964](evidence/r1964/README.md) · [Prüfbeleg r1965](evidence/r1965/README.md)
+Die annotierte Zuordnung aus dem Vienna-4×22-Korpus dient beim Vergleich zur Prüfung der Ausgabe.<a name="beleg-3-3-korpus"></a><sup><a href="#quelle-goebl">[43]</a></sup> Der Erhalt der gewählten Intervalle und die Übereinstimmung dieser Wahl mit der musikalischen Referenz sind getrennt messbar.
 
 <a name="kapitel-4"></a>
 <a name="verfahrensfamilien-der-bestandsaufnahme"></a>
@@ -252,12 +245,11 @@ Die Quellstellen nennen die jeweiligen Implementierungsstellen, nicht automatisc
 | 26 | Horizontaler Systemumbruch: endliche Partitionen, Kapazität und lexikografische Kosten<a name="beleg-4-verfahren-26"></a><sup><a href="#quelle-hegazy">[24]</a></sup> | Entscheidet im vorhandenen Layoutpfad. Seitenumfang und echte Lesbarkeit sind damit nicht global optimiert. | [horizontal_layout_global_reflow.rs](../src/pipeline_shards/horizontal_layout_global_reflow.rs) |
 | 27 | Renderer-Geometrie: Hüllen, Rechteckschnitt, Abstände und Umbruch-Readback | Misst / prüft nur unterstützte, eindeutig zugeordnete Geometrie. Kein vollständiger automatischer Schönheitsbeweis. | [Seitenabstände](../src/audit_only/renderer_page_clearance.rs), [Systemumbrüche](../src/audit_only/renderer_system_break_readback.rs) |
 | 28 | Lexikografische Seitenpackung nach Schlöpfchen | Entwurf; von der vorhandenen Systemplanung getrennt. | [Seitenfehlerklasse](selector_derivation_contract_redundant_page_retention.md) |
-| 29 | Präfixsummen und binäre Intervallsuche für dieselben additiven Kosten | Technische Erhaltung. Beschleunigung, keine neue musikalische Zielgröße. | [Schlüsselplanung](../src/structural_write_authority/rustig_clef_planning.rs), [Äquivalenzvertrag r1652](selector_derivation_contract_exact_clef_passage_prefix_costs_r1652.md) |
-| 30 | Indizierte Existenzprüfung von Bogenendpunkten | Technische Erhaltung im bestehenden Owner. Kein allgemeines optimales bipartites Bogenmatching. | [Nachweis r1666](indexed_slur_endpoint_pairing_r1666.md) |
+| 29 | Präfixsummen und binäre Intervallsuche für dieselben additiven Kosten | Technische Erhaltung. Beschleunigung, keine neue musikalische Zielgröße. | [Schlüsselplanung](../src/structural_write_authority/rustig_clef_planning.rs), [Äquivalenzvertrag](selector_derivation_contract_exact_clef_passage_prefix_costs_r1652.md) |
+| 30 | Indizierte Existenzprüfung von Bogenendpunkten | Technische Erhaltung im bestehenden Owner. Kein allgemeines optimales bipartites Bogenmatching. | [Verfahrensnachweis](indexed_slur_endpoint_pairing_r1666.md) |
 | 31 | Erreichbarkeit im Aufrufgraph, Capability- und Herkunftsprüfungen | Technische Zulassungsprüfungen. Pfad- und Quelltextprüfungen bestehen daneben weiter. | [semantic_capability_diff.rs](../src/build_gate/semantic_capability_diff.rs), [take_change_control.rs](../src/take_change_control.rs) |
 | 32 | Beobachtungsäquivalenz und reduzierte Aufbewahrung | Technische Erhaltung unter nachgewiesenen Leserabhängigkeiten. | [solver_candidate_retention.rs](../src/pipeline_shards/solver_candidate_retention.rs) |
 | 33 | Fingerprints und Hashfunktionen: FNV-1a, SHA-256<a name="beleg-4-verfahren-33"></a><sup><a href="#quelle-fnv">[21]</a> <a href="#quelle-nist">[22]</a></sup> | Integritäts- und Bindungsprüfungen mit jeweiligen Kollisionsannahmen. Kein eigenständiger musikalischer Identitätsbeweis. | [SHA-256](../src/build_gate/sha256.rs), [Herkunft](../src/master_state_identity.rs) |
-| 34 | Externe Versionsvergleiche, vereinfachte Weglass-Untergrenzen und Regressionsmodelle | Historische Diagnosewerkzeuge. Keine produktive musikalische Autorität. | historische r1556-Auswertung der früheren Seitenfassung |
 | 35 | Notationszeit, Taktgrenzen und exakt gebundene Haltefortsetzungen<a name="beleg-4-verfahren-35"></a><sup><a href="#quelle-zeit">[44]</a></sup> | Entscheidet im MIDI-Seed unter Quell- und Metrikbindung. | [Notationszeit](../src/notation_time.rs), [MIDI-Seed](../src/midi_seed.rs) |
 | 36 | Wiederholungsakkorde und belegte Handzuordnung über klingende Zeitintervalle | Entscheidet bei eindeutiger Wiederholung und zulässiger Tastenbelegung. | [Handzuordnung](selector_derivation_contract_repeated_accompaniment_hand_implementation.md), [Warnungsprüfung](../src/rules.rs) |
 | 37 | Begrenzter gemeinsamer Seiten- und Systemplan mit Renderer-Rückmeldung<a name="beleg-4-verfahren-37"></a><sup><a href="#quelle-renz">[25]</a></sup> | Entscheidet und prüft innerhalb zugelassener Seitenzahlen und Kapazitäten. | [Planung](../src/pipeline_shards/horizontal_layout_global_page_system.rs), [Partitionssuche](../src/pipeline_shards/renderer_exact_partition_search.rs) |
@@ -276,8 +268,6 @@ Der jeweilige Notationsschritt wertet die am Einsatz belegten Stimmen und ihre N
 | Pausen im geschriebenen Takt | Rationale Start- und Endzeiten, metrische Gruppen sowie belegte Zeitintervalle der sichtbaren Stimme | Der Pausenplan bestimmt die freie Zeit innerhalb des lokalen Takts und bewertet ihre Zerlegung anhand der metrischen Gruppierung. [Metrische Pausen](../src/model/metric_rest_notation.rs) · [Lokale Intervalle](selector_derivation_contract_final_local_rest_intervals.md) |
 | Notenhals am Stimmeinsatz | Stimme, gleichzeitige Nachbarstimmen und bereits gebundene Balkengruppen | Die Richtung folgt den sichtbaren Beziehungen am Einsatz und innerhalb der gebundenen Gruppe. [Notenhälse](../src/notation_final_stems.rs) · [Vertrag](selector_derivation_contract_final_stem_direction.md) |
 | Registerkontinuität | Benachbarte Abschnitte, gebundene Stimmzuordnung und Lesbarkeit des Schlüsselverlaufs | Die Entscheidung berücksichtigt den Anschluss zwischen Abschnitten. Der Nachweis bindet die Darstellung an die musikalischen Ereignisse. [Register und Stimmeinsatz](selector_derivation_contract_voice_entry_and_register_continuity.md) |
-
-Den automatisch ermittelten 6/8-Takt, die regulären Anschläge und die geschriebene Dauer dokumentiert der Einzellauf zu Mozart. [Mozart KV 331, Prüfbeleg r1964](evidence/r1964/README.md)
 
 <a name="kapitel-6"></a>
 <a name="zentrale-formeln-und-ihre-beweisgrenzen"></a>
@@ -323,12 +313,7 @@ Die maximale Überlappung ist damit die minimale Farbzahl **dieses Graphen**. Da
 
 Für die Mengen verbundener ursprünglicher Primärbalkenpaare im Referenzmaster $R$ und im Vergleichsmaster $V$ zählt jedes identifizierte Notenpaar einzeln. Quellnote, Anschlag, Fragment und der Ausgabebeleg identifizieren seine beiden Endpunkte auch bei einer Änderung der Stimmnummer.
 
-| Mastervergleich an der Fuge BWV 847 | Erhalten $\lvert R\cap V\rvert$ | Gewonnen $\lvert V\setminus R\rvert$ | Verloren $\lvert R\setminus V\rvert$ |
-|---|---:|---:|---:|
-| Gleichstandsversuch r1958 gegen seine Referenz | 399 | 3 | 3 |
-| Produktiver Stimmenwechsel r1960 gegen r1959 | 402 | 6 | 0 |
-
-Im ersten Versuch zeigen beide Master 402 Verbindungen. Erst der Paarvergleich macht die drei verlorenen Anschlüsse sichtbar.<a name="beleg-6-3-balken"></a><sup><a href="#quelle-beams">[47]</a></sup> Im zweiten gilt $R\subseteq V$. Der gemeinsame Stimmenwechsel bewahrt jede der 402 Verbindungen und gewinnt sechs hinzu. Ob der Leser einen Balken sieht, wird am Render-MusicXML und am PDF geprüft. [Master-Rücklesung](../src/structural_write_authority/primary_beam_pair_readback.rs) · [Gemeinsamer Stimmenwechsel](selector_derivation_contract_original_countervoice_exchange_r1960.md)
+Eine unveränderte Anzahl von Verbindungen kann verdecken, dass einzelne Balkenpaare verloren gingen. Der Planer prüft deshalb die gebundene Paarmenge.<a name="beleg-6-3-balken"></a><sup><a href="#quelle-beams">[47]</a></sup> Ein Stimmenwechsel erfüllt den Erhalt genau dann, wenn alle ursprünglichen Verbindungen in der Ausgabe vorkommen, also $R\subseteq V$.
 
 <a name="kapitel-6-4"></a>
 <a name="welche-stimmfortsetzung-ist-erzwungen"></a>
@@ -350,7 +335,7 @@ Sei $P$ die Menge aller im lokalen Modell zulässigen Stimmpläne und $E(p)$ die
 e\text{ ist im Modell erzwungen}\quad\Longleftrightarrow\quad P\ne\varnothing\ \land\ \forall p\in P:\ e\in E(p).
 ```
 
-r1961 prüft konkret, ob zwei gebundene Noten denselben Ausgabekanal belegen. Die Suche hält die Umgebung fest und berücksichtigt notierte und klingende Zeit, Rollen, Pausen, vorhandene Verbindungen und gebundene Randnachbarn. Zwei gegensätzliche Zeugen belegen Mehrdeutigkeit. Für einen Zwangsnachweis braucht es einen positiven Zeugen und eine abgeschlossene Suche nach Gegenplänen. Eine leere Lösungsmenge oder ein ausgeschöpftes Suchbudget lässt die Frage nach dem Zwang offen. Der Suchkern erweitert Teilpläne schrittweise und verwirft sie bei einem Widerspruch. Diese Suche mit Rückkehr zum letzten Entscheidungspunkt heißt Backtracking.<a name="beleg-6-4-suche"></a><sup><a href="#quelle-backtrack">[8]</a></sup> [Suchkern und synthetische Gegenprobe](../src/structural_write_authority/exact_voice_passages.rs) · [Modellgrenzen](selector_derivation_contract_exact_voice_passages.md)
+Die lokale Suche prüft, ob zwei gebundene Noten denselben Ausgabekanal belegen. Die Suche hält die Umgebung fest und berücksichtigt notierte und klingende Zeit, Rollen, Pausen, vorhandene Verbindungen und gebundene Randnachbarn. Zwei gegensätzliche Zeugen belegen Mehrdeutigkeit. Für einen Zwangsnachweis braucht es einen positiven Zeugen und eine abgeschlossene Suche nach Gegenplänen. Eine leere Lösungsmenge oder ein ausgeschöpftes Suchbudget lässt die Frage nach dem Zwang offen. Der Suchkern erweitert Teilpläne schrittweise und verwirft sie bei einem Widerspruch. Diese Suche mit Rückkehr zum letzten Entscheidungspunkt heißt Backtracking.<a name="beleg-6-4-suche"></a><sup><a href="#quelle-backtrack">[8]</a></sup> [Suchkern und synthetische Gegenprobe](../src/structural_write_authority/exact_voice_passages.rs) · [Modellgrenzen](selector_derivation_contract_exact_voice_passages.md)
 
 <a name="kapitel-6-5"></a>
 <a name="notationszeit-haltebögen-und-handzuordnung"></a>
@@ -363,9 +348,9 @@ Bei einem gebundenen Anschlag mit Einsatz $t$, Ende $e$ in der Notationszeit und
 [t,e)=[t,b)\cup[b,e),\qquad e-t=(b-t)+(e-b).
 ```
 
-Der Haltebogen verbindet beide Fragmente mit demselben Anschlag. Der Pfad prüft unter anderem exakte Notenwerte, die belegte Taktgrenze und konkurrierende Anschläge derselben Tonhöhe. In Schuberts Auftakt ergibt die gebundene Dauer $240=96+144$ Ticks, also eine Viertel am Auftakt und eine punktierte Viertel am Beginn des Folgetakts. [MIDI-Seed](../src/midi_seed.rs) · [Schubert, Prüfbeleg r1872](evidence/r1872/README.md)
+Der Haltebogen verbindet beide Fragmente mit demselben Anschlag. Der Pfad prüft unter anderem exakte Notenwerte, die belegte Taktgrenze und konkurrierende Anschläge derselben Tonhöhe.
 
-Für einen durch die bisherige Handgrenze geteilten Akkord vergleicht r1872 die Menge der MIDI-Tasten mit zeitlich direkt angrenzenden Akkordgruppen. Ein Zeuge muss vor der Korrektur vollständig derselben Hand zugeordnet sein. Widersprechen sich die Zeugen, bleibt die Einteilung bestehen. Für jede Hand $h$ und jede geprüfte Anschlagsgrenze $u$ verlangt der Code für die klingende Tastenmenge $K_h(u)$:
+Für einen durch die bisherige Handgrenze geteilten Akkord vergleicht die Prüfung die Menge der MIDI-Tasten mit zeitlich direkt angrenzenden Akkordgruppen. Ein Zeuge muss vor der Korrektur vollständig derselben Hand zugeordnet sein. Widersprechen sich die Zeugen, bleibt die Einteilung bestehen. Für jede Hand $h$ und jede geprüfte Anschlagsgrenze $u$ verlangt der Code für die klingende Tastenmenge $K_h(u)$:
 
 ```math
 |K_h(u)|\le 5,\qquad \max K_h(u)-\min K_h(u)\le 12\quad\text{für }K_h(u)\ne\varnothing.
@@ -426,7 +411,7 @@ E(t,s)=3\Delta t^2+24\Delta p^2+42^2[\text{System verschieden}]
 
 Zeit wird hier in der vorhandenen 96-Ticks-pro-Viertel-Projektion gemessen, Tonhöhe in Halbtönen. Der Code begrenzt zusätzlich den Kandidatenraum und prüft je nach Aufruf die Zielbelegung. Die Formel allein ist weder vollständige Zulässigkeit noch Erhaltungsbeweis. Der Name „Gauss“ bezeichnet hier quadratische Kosten; er behauptet keine Gauß-Verteilung der Musikdaten, kein statistisches Maximum-Likelihood-Modell und keine globale optimale Zuordnung aller Töne.
 
-Gewichte, Kandidatengrenzen und Strafen sind Projekteinstellungen. Der historische Bezug bei Legendre und Gauß ist die Bewertung über Quadratsummen.<a name="beleg-6-8-quadratsumme"></a><sup><a href="#quelle-quadrate">[11]</a></sup> Ein Kandidaten-Score ist kein gemessener menschlicher Lese- oder Spielaufwand.
+Gewichte, Kandidatengrenzen und Strafen sind Projekteinstellungen. Die Bewertung verwendet Quadratsummen im Sinne der kleinsten Quadrate.<a name="beleg-6-8-quadratsumme"></a><sup><a href="#quelle-quadrate">[11]</a></sup> Ein Kandidaten-Score ist kein gemessener menschlicher Lese- oder Spielaufwand.
 
 <a name="kapitel-6-9"></a>
 <a name="tonartprofil-und-schreibweise"></a>
@@ -458,19 +443,13 @@ p(l)=l^2+8\max(l-3,0)
 
 und Kosten für Schlüsselwechsel, Redundanzen und kurze Ausflüge. Seine bekannten 24 Einheiten je Wechsel beziehungsweise kurzem Ausflug sind Setzungen dieses Modells. Daraus folgt keine universelle Grenze von drei Hilfslinien.
 
-Die historische C3-Policy verwendete die eingefrorene **lexikografische** Reihenfolge
-
-```math
-(h_8,h_7,h_6,h_5,h_4,k_o,u_k,k_s,g_b,h_3,c_h,h_2,h_1).
-```
-
-Die versionierte [C4-Policy](joint_register_dp_policy_c4_v1.md) vertauscht ausschließlich die benachbarten Prioritäten $h_3$ und $c_h$:
+Der gemeinsame Kurs bewertet zulässige Pläne nach der lexikografischen Reihenfolge der [C4-Policy](joint_register_dp_policy_c4_v1.md).
 
 ```math
 (h_8,h_7,h_6,h_5,h_4,k_o,u_k,k_s,g_b,c_h,h_3,h_2,h_1).
 ```
 
-Damit kann ein Kurs mit weniger Registerzeichen trotz zusätzlicher Drei-Hilfslinien-Köpfe gewinnen. Schwerere Hilfslinienklassen, die Kopf-Schutzregel, Gruppengrenzen und alle tatsächlichen Schreibbedingungen behalten ihren Vorrang. Es gibt keine neue Gewichts- oder Schwellenkalibrierung. Der Dateiname des bestehenden Suchkerns und die C3-Präfixe einiger Transporttypen bleiben aus Kompatibilitätsgründen erhalten.
+Ein Kurs mit weniger Registerzeichen kann trotz zusätzlicher Drei-Hilfslinien-Köpfe gewinnen. Die Zulässigkeitsbedingungen und die vorherigen Kostenkomponenten haben Vorrang.
 
 | Größe | Bedeutung |
 |---|---|
@@ -495,9 +474,9 @@ Die Schutzregel lautet für jeden sichtbaren Kopf $n$:
 
 Ein Kandidat darf also keine neue oder verschärfte Belastung ab vier Hilfslinien erzeugen. Ein bereits belasteter Ausgangszustand wird nicht durch Behauptung unsichtbar. Unter den zulässigen vollständigen Kursen zählt die erste abweichende Kostenkomponente; Gleichstand erhält den Ausgang.
 
-**Wichtige Folge:** Weniger Umschaltungen gewinnt nicht immer. Zum Beispiel kann die Vermeidung eines Vier-Hilfslinien-Kopfes einen kurzen Schlüsselwechsel rechtfertigen. Diese auch in C4 erhaltene Priorität ist nicht identisch mit der alten skalaren Druckfunktion und kein universelles Lesbarkeitsgesetz.
+**Wichtige Folge:** Weniger Umschaltungen gewinnt nicht immer. Zum Beispiel kann die Vermeidung eines Vier-Hilfslinien-Kopfes einen kurzen Schlüsselwechsel rechtfertigen. Die Priorität gehört zur Zielfunktion des gemeinsamen Kurses.
 
-Der Suchkern trägt zusätzlich zum Registerzustand das genaue, bei einer Taktlänge gesättigte Abschnittsalter. Rationale Taktkoordinaten behandeln Takt- und Divisionswechsel. Ein Ressourcenabbruch oder eine unbekannte Abhängigkeit beweist kein Optimum. Die [C3-Policy](joint_register_dp_policy_v1.md) bleibt als unveränderte historische Spezifikation erhalten; im aktuellen Suchkern gilt die [C4-Policy](joint_register_dp_policy_c4_v1.md).
+Der Suchkern trägt zusätzlich zum Registerzustand das genaue, bei einer Taktlänge gesättigte Abschnittsalter. Rationale Taktkoordinaten behandeln Takt- und Divisionswechsel. Ein Ressourcenabbruch oder eine unbekannte Abhängigkeit beweist kein Optimum.
 
 Ein dynamischer Planer kann mehrere zulässige Schlüsselverläufe vergleichen, ohne alle vollständigen Verläufe aufzubewahren. Bezeichnet $D_i(z)$ die beste bis Abschnitt $i$ erreichbare Bewertung mit Endzustand $z$, folgt das Verfahren dem Bellman-Prinzip
 
@@ -579,17 +558,13 @@ Die Indizes entstehen aus der exakten halboffenen Zeitbedingung, nicht aus einer
 
 Die Bogenprüfung verwendet einen anderen Index: Für jede Nummer beantworten erster sichtbarer Anfang und letzter sichtbarer Schluss dieselben Existenzfragen wie die frühere Vollsuche. Das ist kein allgemeines globales Matching aller möglichen Bögen. Eine solche Erweiterung wäre eine eigene musikalische Entscheidung.
 
-In r1965 vergleicht EtuSchlopf wiederkehrende Phrasen mit dynamischer Programmierung.<a name="beleg-6-14-wiederholungen"></a><sup><a href="#quelle-smith">[3]</a></sup> Für $n$ Einsatzgruppen hat die Tabelle einschließlich ihres Randes die Breite $m=n+1$. r1964 hielt jede Bewertung als 8-Byte-Zahl und jede Rückrichtung als 4-Byte-Zahl fest. In r1965 genügen die vorherige und die aktuelle Bewertungszeile. Für den späteren Rückweg bleiben alle Richtungen gespeichert, mit einem Byte je Zelle. Für die Nutzdaten dieser beiden Tabellen ergibt sich
+EtuSchlopf vergleicht wiederkehrende Phrasen mit dynamischer Programmierung.<a name="beleg-6-14-wiederholungen"></a><sup><a href="#quelle-smith">[3]</a></sup> Für $n$ Einsatzgruppen hat die Tabelle einschließlich ihres Randes die Breite $m=n+1$. Zwei Bewertungszeilen mit je acht Byte pro Zelle und eine Rückrichtung mit einem Byte pro Zelle benötigen zusammen
 
 ```math
-B_{1964}(m)=12m^2,\qquad B_{1965}(m)=16m+m^2\quad\text{Byte}.
+B(m)=16m+m^2\quad\text{Byte}.
 ```
 
-Bei **1024 Einsatzgruppen** ($m=1025$) sinkt der Bedarf von **12.607.500 auf 1.067.025 Byte**. Bei der Suche nach dem Metrum berechnet EtuSchlopf außerdem die festen Sprungkosten einmal pro Phasenmodell. Die Reihenfolge gleichwertiger Kandidaten bleibt erhalten.
-
-Im isolierten MIDI/WAV-Lauf für die Aufführungsanalyse von Mozarts KV 331 sank die mediane **Prozess-CPU-Zeit von 0,399568 auf 0,266895 Sekunden** (acht Läufe pro Version, abwechselnd auf demselben Linux-Rechner). Die Messung umfasst das Einlesen im Prüfprogramm und die Inferenz bis zum Zeitplan. Der anschließende Notensatz und PDF-Export liegen außerhalb dieser Messung. [Quellstand r1965 und Äquivalenznachweis](selector_derivation_contract_performance_trace_equivalence.md)
-
-**Windows-Experiment zur Kodex-Prüfung.** Die SSC-Evidenzprüfung und die Prüfung der musikalischen Herkunft lesen denselben Quellbaum unabhängig voneinander. Für zwei unabhängige Prüfungen mit Laufzeiten $t_1$ und $t_2$ sinkt die Dauer bei idealer Überlappung von $t_1+t_2$ auf $\max(t_1,t_2)$. Auf demselben Windows-Runner sank die gemessene Dauer des gesamten r1992-Buildskripts von **85,63 auf 67,14 Sekunden**. Die Compiler-Direktiven und alle drei erzeugten Dateien stimmten überein. Beide Varianten wiesen einen absichtlich veränderten SSC-Vertrag mit demselben Fehler und Exitcode 101 zurück. Der Versuch liegt als PR-Entwurf vor. [Windows-Gegenprobe](https://github.com/Funcry241/EtuSchlopf/actions/runs/45063859869) · [Entwurf](https://github.com/Funcry241/EtuSchlopf/pull/37)
+Bei der Metrumsuche berechnet EtuSchlopf feste Sprungkosten einmal pro Phasenmodell. Die Reihenfolge gleichwertiger Kandidaten bleibt erhalten. [Äquivalenzvertrag](selector_derivation_contract_performance_trace_equivalence.md)
 
 <a name="kapitel-6-15"></a>
 <a name="speicherplanung-für-den-korpus"></a>
@@ -636,7 +611,7 @@ Hashes sind davon getrennt: Sie binden Bytes unter ihren jeweiligen Kollisionsan
 
 MuseScore zeichnet einen Bogen bei einem Systemumbruch in mehreren Segmenten. EtuSchlopf ordnet die Segmente in einer SVG-Vorschau demselben MusicXML-Bogen zu. Es zerlegt die Bézierkurven für den Vergleich in kurze Strecken und berücksichtigt die Strichbreite. Die Prüfung zählt Kontakte mit musikalischen Zeichen wie Balken, Hälsen oder Notenköpfen über alle Segmente.
 
-Sei $K_\varepsilon(l)$ die Zahl der Kontakte in der Lage $l$ bei einem Toleranzabstand $\varepsilon$ für Kurvenapproximation und Rundung. In r1992 kommt die Gegenlage für eine Übernahme infrage, wenn
+Sei $K_\varepsilon(l)$ die Zahl der Kontakte in der Lage $l$ bei einem Toleranzabstand $\varepsilon$ für Kurvenapproximation und Rundung. Die Gegenlage kommt für eine Übernahme infrage, wenn
 
 ```math
 K_0(l_{\mathrm{auto}})=K_\varepsilon(l_{\mathrm{auto}})>0
@@ -646,17 +621,11 @@ K_\varepsilon(l_{\mathrm{gegen}})=0.
 
 Bei einer zulässigen Gegenlage prüft EtuSchlopf zusätzlich Seitenformat, Zeichenzuordnung und Abstände zwischen benachbarten Zeichen, deren relative Lage sich ändert. Vorschläge auf verschiedenen Seiten müssen sich auch im gemeinsamen Rendervergleich bestätigen.
 
-| Windows-Lauf r1992 | Kontakte in automatischer Lage | Kontakte in Gegenlage | Ergebnis |
-| --- | ---: | ---: | --- |
-| Etüde Nr. 8, Takt 25–29 | 6 | 0 | Der Bogen wechselt auf die Oberseite über drei Systeme. |
-| Chopin op. 10 Nr. 3, p02, Takt 5–6 | 5 | 1 | Ein Balkenkontakt blockiert die Gegenlage. |
-
-Im Rastervergleich mit r1989 unterscheidet sich eine der 59 PDF-Seiten, Seite 4 von Etüde 8. In der zugehörigen Render-MusicXML erhält der Bogen ein Platzierungsattribut. Die 15 Master-MusicXML-Dateien sind bytegleich. [Windows-Prüfbeleg r1992](evidence/r1992/README.md)
+Die gemeinsame Vorschau bindet die Bewertung an die tatsächlich gezeichnete Kontur. Bleibt ein Kontakt oder lässt sich die Zuordnung über den Umbruch nicht eindeutig herstellen, behält EtuSchlopf die Ausgangslage. [Verfahren und Prüfkriterien](selector_derivation_contract_phrase_slur_clearance_implementation.md)
 
 <a name="kapitel-7"></a>
-<a name="quellzeit-pausen-und-balken-in-r1938"></a>
 
-## 7 Quellzeit, Pausen und Balken in r1938
+## 7 Quellzeit, Pausen und Balken
 
 Ein Ton belegt das halboffene Quellzeitintervall $[s,e)$. Der MIDI-Seed hält den Quellanschlag und die Loslasszeit zusammen.<a name="beleg-7-zeit"></a><sup><a href="#quelle-zeit">[44]</a></sup> Für eine gehaltene Oberstimme prüft er, ob sich deren Fortsetzung im vorhandenen metrischen Zeitfenster eindeutig bestimmen lässt. Jeder Folgeanschlag muss an die belegte Loslasszeit des vorigen Tons anschließen. Die Dauern müssen sich im Notenraster exakt darstellen lassen und das Fenster vollständig ausfüllen. Ein erneuter Anschlag derselben Tonhöhe innerhalb des Halteintervalls verhindert die Trennung. Wenn die neue Zuordnung uneindeutig ist, gilt der bisherige Ableitungsweg. [MIDI-Seed](../src/midi_seed.rs) · [Vertrag der zeitlich belegten Fortsetzung](selector_derivation_contract_timed_held_upper_voice_implementation.md)
 
@@ -673,51 +642,24 @@ Ein Balkenplan verbindet metrisch zusammengehörige Anschläge. Auf höheren Ebe
 Der Korpusnachweis unterscheidet zwischen einer beobachteten Render-Materialisierung und einem belegten direkten PDF-Export aus der Master-Quelle. Mozart KV 331 belegt den zweiten Weg. [Manifestprüfung](../src/corpus_run_manifest.rs)
 
 <a name="kapitel-8"></a>
-<a name="stimmfortsetzungen-im-vollkorpus-r1961"></a>
+<a name="stimmfortsetzungen-prüfen"></a>
 
-## 8 Stimmfortsetzungen im Vollkorpus r1961
+## 8 Stimmfortsetzungen prüfen
 
-Von 5.751 ursprünglichen Primärbalkenpaaren fanden sich im Master 5.229 verbunden und 520 auf verschiedene Stimmen verteilt. Bei zwei weiteren Paaren blieb die Rücklesung offen, je eines in Chopin op. 10 Nr. 3 und Etüde Nr. 6. Für die 520 getrennten Paare prüfte die Gegenprobe die Beziehung „gleicher Ausgabekanal“. Alle 14 Projektberichte stammen aus demselben Windows-Lauf.<a name="beleg-8-lauf"></a><sup><a href="#quelle-r1961">[49]</a></sup> [Prüfbeleg r1961](evidence/r1961/README.md)
-
-| Befund für getrennte Paare | Bach BWV 847 | Übrige 13 Stücke | Gesamt |
-|---|---:|---:|---:|
-| Im lokalen Modell erzwungen | 4 | 0 | 4 |
-| Im lokalen Modell ausgeschlossen | 8 | 15 | 23 |
-| Im lokalen Modell mehrdeutig | 0 | 0 | 0 |
-| Offen | 7 | 486 | 493 |
-| **Getrennte Paare** | **19** | **501** | **520** |
-
-Bei allen vier positiven Bach-Fällen ließ die bestehende Stimmzuordnung den jeweiligen Einzelplan als Vergleich zu. Jeder Plan gewann das untersuchte Master-Paar und bewahrte die 408 zuvor verbundenen Paare. Es waren die Achtelpaare B–A in Takt 4, As–As in Takt 11, Es–D in Takt 21 und H–C in Takt 28. Im bestehenden PDF waren alle vier bereits gebalkt. Alle drei Bach-Seiten blieben im Vergleich zu r1960 bei 300 dpi pixelgleich. Eine gemeinsame Übernahme der vier Pläne müsste als eigener Kandidat geprüft werden. [Prüfbeleg](evidence/r1961/README.md)
-
-Auch außerhalb der Fuge lieferte die Suche einen musikalisch lesbaren Befund. In Etüde Nr. 8, Takt 44, stehen auf der vierten Zählzeit die vier Sechzehntel C5–E5–G5–C6. Im lokalen Modell gehören C5–E5 und E5–G5 jeweils demselben Kanal an. Ein gemeinsamer Kanal für G5 und C6 ist unter denselben Bedingungen ausgeschlossen. Der Master zeigt die ersten drei Töne in Stimme 1 und das letzte C in Stimme 3.
-
-Die 493 offenen Zielpaare verteilen sich auf 244 Fälle mit Akkordträger oder fehlender eindeutiger Trägerbindung, 174 mit einer vom Modell nicht unterstützten oder unvollständig gebundenen Quelle und 75 mit leerer lokaler Lösungsmenge. Die Zahl der offenen Fälle beschreibt die Abdeckung der Gegenprobe. Die Schreibentscheidung bleibt beim bestehenden musikalischen Verfahren. [Suchraum und Prüfung positiver Zeugen](selector_derivation_contract_exact_voice_passages.md)
+Zwei zeitlich gebundene Noten können im selben Ausgabekanal liegen, wenn eine zulässige Stimmzuordnung beide verbindet. Die Gegenprobe hält den Kontext der Passage fest und sucht jeweils nach einer Lösung mit gleichem und mit unterschiedlichem Kanal. Ein erzwungener Anschluss verlangt einen gültigen Zeugen für die Verbindung und einen vollständigen Ausschluss der Gegenlage. Die zuständige musikalische Regel prüft die Übernahme und den Erhalt bereits gebundener Anschlüsse. [Suchraum und Prüfung positiver Zeugen](selector_derivation_contract_exact_voice_passages.md)
 
 <a name="kapitel-9"></a>
-<a name="historische-prüfstände-und-ihre-grenzen"></a>
-<a name="prüfstände-und-verbleibende-grenzen"></a>
+<a name="korpusprüfung-und-grenzen"></a>
 
-## 9 Prüfstände und verbleibende Grenzen
+## 9 Korpusprüfung und Grenzen
 
-| Material | Belegter Vergleich |
-| --- | --- |
-| Windows-Vollkorpus r1994 | Alle 30 MusicXML-Dateien sind gegenüber r1992 bytegleich, alle 59 PDF-Seiten bei 144 dpi pixelgleich. Die PDF-Prüfung verwendet die deklarierte Streamlänge. [Abnahme r1994](evidence/r1994/README.md) · [Notenbilder r1994](examples/README.md#notenbilder) |
-| Windows-Vollkorpus r1992 | Alle 15 Stücke wurden aus MIDI und WAV neu gesetzt und vollständig ausgegeben. Der Vergleich mit r1989 prüft Master-MusicXML, Render-MusicXML und die gerenderten PDF-Seiten. [Prüfbeleg](evidence/r1992/README.md) · [Befunde zur Bogenlage](#kapitel-6-17) |
-| Chopin · Etüde op. 10 Nr. 3, p01 | Bei allen 448 regulären Noten stimmen Einsatz und Tonhöhe mit der Referenz überein, bei 380 die geschriebene Dauer. Die vier Vorschläge werden getrennt gezählt. Master und Render blieben von r1965 bis r1968 bytegleich, die PDF-Seite bei 144 dpi pixelgleich. [Dauervergleich](evidence/r1965/vergleich.md) · [Vergleich r1968](evidence/r1968/README.md) |
-| Bach · Fuge c-Moll BWV 847 | Der Abgleich r1745 erfasste 754 Notenansätze mit Notenwerten und Haltebögen. In beiden Vergleichen r1961–r1965 und r1965–r1968 blieben die drei Windows-PDF-Seiten bei 144 dpi pixelgleich. [Abnahme r1749](evidence/r1749/README.md) · [Seitenvergleich](evidence/r1965/vergleich.md) |
-| Schubert · Deutscher Tanz D. 783 Nr. 15, p18 | Im r1965-Import stimmen Einsatz, Tonhöhe und Dauer bei allen 315 verglichenen regulären Anschlägen. Die Eingabe enthält notenspezifische Entscheidungen. [Vergleich und Grenzen des Imports](evidence/r1965/vergleich.md) |
-| Beethoven | Als Referenz vorgesehen. Die Wahl des Stücks und ein Vergleich mit einer konkreten Einspielung stehen aus. [Aktive Referenzen](examples/README.md#aktuelle-referenzen) |
-
-Das Notenerhaltsmaß zählt die im jeweiligen Lauf definierte Grundgesamtheit. Die Übereinstimmung mit einer Druckvorlage erfordert einen Vergleich der fertigen Partitur. Die vorbereitete [Ballade op. 38](examples/chopin-op38-p01.md) dient als eigenständiger Stresstest. Die Einzelbefunde zu r1965 und der Seitenvergleich bis r1968 sind je Stück nachprüfbar.<a name="beleg-9-befunde"></a><sup><a href="#quelle-r1965">[50]</a> <a href="#quelle-r1968">[51]</a></sup>
+Der veröffentlichte Windows-Stand r1994 erzeugt aus MIDI und WAV 15 Partituren mit 59 PDF-Seiten. Die Galerie enthält die Originalausgaben dieses Laufs. Der Windows-Lauf prüft die Ausführung und den PDF-Export. Ein musikalischer Vergleich mit einer Referenz bewertet zusätzlich Tonhöhe, Einsatz, geschriebene Dauer und sichtbare Notation. [Windows-Prüfbeleg](evidence/r1994/README.md) · [Notenbilder](examples/README.md#notenbilder)
 
 <a name="kapitel-9-1"></a>
-<a name="historischer-vollkorpuslauf-r1683"></a>
 
 ### 9.1 Vergleich der eigenen Etüden
 
-Der Windows-Vollkorpus r1968 enthält die zehn eigenen Etüden mit 383 Takten auf 49 PDF-Seiten. Gegenüber r1965 stimmen alle 20 MusicXML-Ausgaben bytegenau und alle 49 Seiten bei 144 dpi pixelgenau überein.<a name="beleg-9-1-etueden"></a><sup><a href="#quelle-r1968">[51]</a></sup> Derselbe Bildvergleich war bereits zwischen r1961 und r1965 für alle zehn Etüden identisch. Er belegt, dass die Aufräumarbeiten das Notenbild bewahrt haben. Ob eine Stimme an der musikalisch beabsichtigten Stelle endet, verlangt eine eigene Prüfung. [Seitenvergleich je Stück](evidence/r1965/vergleich.md) · [Prüfstand r1968](evidence/r1968/README.md)
-
-Als frühere Gegenprobe zeigt der Vergleich r1682–r1683, warum der Abgleich bis ins PDF reicht. Damals änderten sich zwei Balkengruppierungen und sieben Pausenglyphen-Positionen. Neun der 39 gerenderten Seiten wichen ab. [Historischer Korpusnachweis](evidence/r1684/README.md)
+Der Korpus enthält zehn eigene Etüden mit 49 Seiten. Ein Rastervergleich zeigt, auf welchen Seiten sich das Notenbild geändert hat. Die musikalische Beurteilung prüft die betroffenen Stimmen, Dauern und Zeichen im Zusammenhang. [Etüden und Referenzstücke](examples/README.md#notenbilder)
 
 <a name="kapitel-10"></a>
 <a name="nächste-mathematische-vorhaben"></a>
@@ -732,7 +674,7 @@ Welche Stimmfortsetzungen bleiben bei plausibler Änderung von Artikulation und 
 
 Nakamura, Yoshii und Dixon untersuchen genau die Unterscheidung zwischen gespielter und notierter Dauer im mehrstimmigen Kontext.<a name="beleg-10-1-dauer"></a><sup><a href="#quelle-nakamura-yoshii-dixon">[36]</a></sup> Ein anderer Vergleich ist die direkte Übersetzung einer gesamten Performance-MIDI in Notenschrift bei Beyer und Dai.<a name="beleg-10-1-transkription"></a><sup><a href="#quelle-beyer-dai">[40]</a></sup>
 
-Bei Chopins Etüde op. 10 Nr. 3 stimmen im Vergleich für r1965 bei 448 regulären Anschlägen Einsatz und Tonhöhe. Von 68 abweichenden Dauern werden 29 Viertel und 16 Achtel als Sechzehntel ausgegeben. In allen 45 Fällen endet die geschriebene Note beim nächsten Anschlag einer anderen Referenzstimme. Die Gegenprobe für die Dauerentscheidung in [Kapitel 3.2](#kapitel-3-2) ist ein gehaltener Ton, über dem eine zweite Stimme früher oder später einsetzt. Ein tatsächlich kurz gespielter Ton mit anschließend notierter Pause bildet den Gegenfall. [Windows-Vergleich](evidence/r1965/vergleich.md) · [Referenzzuordnung zur Einspielung](https://github.com/CPJKU/vienna4x22/blob/master/match/Chopin_op10_no3_p01.match)
+Eine Gegenprobe für die Dauerentscheidung in [Kapitel 3.2](#kapitel-3-2) ist ein gehaltener Ton, über dem eine zweite Stimme früher oder später einsetzt. Dazu passt als Gegenfall ein tatsächlich kurz gespielter Ton mit anschließender notierter Pause. [Referenzzuordnung der Chopin-Einspielung p01](https://github.com/CPJKU/vienna4x22/blob/master/match/Chopin_op10_no3_p01.match)
 
 **Gegenprobe.** Für unabhängige, synthetische Stimmen kurze gehaltene, kurz gespielte lange und überlappende Noten unterscheiden. Auf zurückgehaltenen Einspielungen Dauern, neu gewonnene und verlorene Treffer getrennt ausweisen. Eine ergänzende metamorphische Probe verdoppelt MIDI-Auflösung und Tickpositionen gemeinsam. Die rationalen Dauern müssen gleich bleiben.<a name="beleg-10-1-test"></a><sup><a href="#quelle-metamorphische-tests">[20]</a></sup>
 
@@ -903,12 +845,6 @@ Jeder Eintrag nennt den Beitrag der Quelle zur verlinkten Aussage. Die Pfeile f�
 
 <a name="quelle-bilanzen"></a>**[46]** EtuSchlopf, *Materialbilanz und sichtbarer Notenerhalt*. Der Bericht zählt Quelltöne, geschriebene Ereignisse und sichtbare Köpfe jeweils in ihrer eigenen Grundgesamtheit. [Bericht im Quellcode](../src/audit_only/material_conservation.rs) · [↑ 6.1](#beleg-6-1-bilanz) · [↑ 4, Nr. 3](#beleg-4-verfahren-3)
 
-<a name="quelle-beams"></a>**[47]** EtuSchlopf, *Ursprüngliche Gegenstimmen und verbundene Primärbalkenpaare* (r1960). Die Rücklesung identifiziert die beiden Endnoten jeder Verbindung vor und nach einem Stimmenwechsel. [Verfahrensvertrag](selector_derivation_contract_original_countervoice_exchange_r1960.md) · [Rücklesung](../src/structural_write_authority/primary_beam_pair_readback.rs) · [↑ 6.3](#beleg-6-3-balken)
+<a name="quelle-beams"></a>**[47]** EtuSchlopf, *Ursprüngliche Gegenstimmen und verbundene Primärbalkenpaare*. Die Rücklesung identifiziert die beiden Endnoten jeder Verbindung vor und nach einem Stimmenwechsel. [Verfahrensvertrag](selector_derivation_contract_original_countervoice_exchange_r1960.md) · [Rücklesung](../src/structural_write_authority/primary_beam_pair_readback.rs) · [↑ 6.3](#beleg-6-3-balken)
 
 <a name="quelle-speicher"></a>**[48]** EtuSchlopf, *Speicherabschätzung für den parallelen Korpuslauf*. Die Konstanten für Reserve, Prozess und Worker stammen aus der Projektplanung. [Berechnung und Voraussetzungen](../src/pipeline_shards/corpus_memory_capacity.rs) · [↑ 6.15](#beleg-6-15-speicher) · [↑ 4, Nr. 38](#beleg-4-verfahren-38)
-
-<a name="quelle-r1961"></a>**[49]** EtuSchlopf, *Windows-Vollkorpus und Gegenprobe zur Stimmfortsetzung* (r1961). Ergebnisse nach Stück und Nachweisgrenzen der Suche. [Prüfbericht](evidence/r1961/README.md) · [↑ 8](#beleg-8-lauf)
-
-<a name="quelle-r1965"></a>**[50]** EtuSchlopf, *Vergleich des Notenbilds und der geschriebenen Dauern* (r1965). Getrennte Befunde für Tonhöhe, Einsatz, Notenwert und gerenderte Seite. [Messwerte je Stück](evidence/r1965/vergleich.md) · [↑ 9](#beleg-9-befunde)
-
-<a name="quelle-r1968"></a>**[51]** EtuSchlopf, *Windows-Abnahme und Notenvergleich* (r1968). Einzelbelege für die 14 Projekte und den gerenderten Seitenvergleich. [Abnahme](evidence/r1968/README.md) · [Vergleich je Stück](evidence/r1968/compare-scores.tsv) · [Vergleich je Seite](evidence/r1968/compare-pages.tsv) · [↑ 9](#beleg-9-befunde) · [↑ 9.1](#beleg-9-1-etueden)
