@@ -81,7 +81,7 @@ jobs:
         run: ./.github/distribution/start-example.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64-r1994.exe).Path -Output dist/EtuSchlopf-Beispiel-r1994.zip
       - name: Record source and artifact checksums
         run: |
-          $sourceCommit = git rev-parse HEAD
+          $sourceCommit = git -C ../accepted rev-parse HEAD
           if ($LASTEXITCODE -ne 0) { throw 'Accepted source commit unavailable' }
           @(
             'revision=r1994'
