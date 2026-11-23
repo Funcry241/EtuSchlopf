@@ -8,17 +8,15 @@ Windows-Launcher `run.cmd`; eigene geeignete Eingaben sind erforderlich.
 
 ## Stand der Notenausgabe
 
-Der **Windows-Prüfstand r1992 / 0.10.1839** hat alle 15 Stücke aus MIDI und WAV
-neu gesetzt. Von den 59 PDF-Seiten unterscheidet sich gegenüber r1989 im
-Rastervergleich nur Seite 4 von Etüde 8. Der Phrasierungsbogen in Takt 25–29
-liegt jetzt über den Noten. Alle Master-MusicXML-Dateien sind bytegleich.
+Der abgenommene **Windows-Quellstand r1994 / 0.10.1839** erzeugte alle
+15 Partituren mit zusammen 59 PDF-Seiten. Gegenüber r1992 sind alle
+MusicXML-Dateien bytegleich und alle PDF-Seiten pixelgleich. Die Galerie zeigt
+die PDFs aus dem r1994-Lauf. Die verfügbare Windows-EXE enthält derzeit r1992.
 
-Der öffentliche **Windows-Download** enthält **r1992**.
-[Windows-Prüfbeleg und Seitenvergleich r1992](docs/evidence/r1992/README.md)
-
-[Mathematische Verfahren und nächste Vorhaben](docs/MATHEMATIK.md) ·
-[Notenbilder und Herkunft der Aufnahmen](https://github.com/Funcry241/EtuSchlopf/tree/main/docs/examples) ·
-[Windows-Download r1992](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1992-windows-preview)
+[Notenbilder r1994](docs/examples/README.md#notenbilder) ·
+[Windows-Abnahme r1994](docs/evidence/r1994/README.md) ·
+[Windows-Download r1992](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1992-windows-preview) ·
+[Mathematische Verfahren](docs/MATHEMATIK.md)
 
 Fehlerberichte sind jederzeit willkommen. Größere Änderungen bitte vorab über
 GitHub besprechen. Es gibt keine garantierten Antwortzeiten, Fehlerbehebungen

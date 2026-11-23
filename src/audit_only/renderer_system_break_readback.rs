@@ -88,7 +88,7 @@ impl PdfObject {
         std::str::from_utf8(&self.body[..end]).unwrap_or("")
     }
 
-    fn decoded_stream(&self) -> anyhow::Result<Option<Vec<u8>>> {
+    fn stream_bytes(&self, objects: &BTreeMap<u32, PdfObject>) -> anyhow::Result<Option<&[u8]>> {
         let Some(stream_marker) = find_subslice(&self.body, b"stream") else {
             return Ok(None);
         };
@@ -99,18 +99,56 @@ impl PdfObject {
         if self.body.get(start) == Some(&b'\n') {
             start += 1;
         }
-        let end_rel = find_subslice(&self.body[start..], b"endstream")
-            .ok_or_else(|| anyhow::anyhow!("PDF stream besitzt kein endstream"))?;
-        let mut stream = self.body[start..start + end_rel].to_vec();
-        while matches!(stream.last(), Some(&b'\r') | Some(&b'\n')) {
-            stream.pop();
+        let dictionary = self.dictionary_text();
+        let mut length_fields = dictionary
+            .split('/')
+            .skip(1)
+            .find_map(|field| {
+                field
+                    .strip_prefix("Length")
+                    .filter(|tail| tail.starts_with(char::is_whitespace))
+            })
+            .ok_or_else(|| anyhow::anyhow!("PDF stream besitzt keine /Length"))?
+            .split_ascii_whitespace()
+            .map(|token| token.trim_matches(pdf_ref_delimiter))
+            .filter(|token| !token.is_empty());
+        let length_or_reference = length_fields
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("PDF stream besitzt keine /Length-Angabe"))?;
+        let length: usize = match length_fields.next() {
+            None => length_or_reference.parse()?,
+            Some("0") if length_fields.next() == Some("R") => {
+                let object_id = length_or_reference.parse()?;
+                let length_object = objects
+                    .get(&object_id)
+                    .ok_or_else(|| anyhow::anyhow!("PDF /Length-Objekt {object_id} fehlt"))?;
+                std::str::from_utf8(&length_object.body)?.trim().parse()?
+            }
+            _ => anyhow::bail!("PDF stream besitzt eine ungueltige /Length"),
+        };
+        let end = start
+            .checked_add(length)
+            .ok_or_else(|| anyhow::anyhow!("PDF stream /Length ist zu gross"))?;
+        let stream = self
+            .body
+            .get(start..end)
+            .ok_or_else(|| anyhow::anyhow!("PDF stream endet vor der deklarierten /Length"))?;
+        if !self.body[end..].trim_ascii_start().starts_with(b"endstream") {
+            anyhow::bail!("PDF stream besitzt nach der deklarierten /Length kein endstream");
         }
+        Ok(Some(stream))
+    }
+
+    fn decoded_stream(&self, objects: &BTreeMap<u32, PdfObject>) -> anyhow::Result<Option<Vec<u8>>> {
+        let Some(stream) = self.stream_bytes(objects)? else {
+            return Ok(None);
+        };
         if self.dictionary_text().contains("/FlateDecode") {
             let mut decoded = Vec::new();
-            ZlibDecoder::new(stream.as_slice()).read_to_end(&mut decoded)?;
+            ZlibDecoder::new(stream).read_to_end(&mut decoded)?;
             Ok(Some(decoded))
         } else {
-            Ok(Some(stream))
+            Ok(Some(stream.to_vec()))
         }
     }
 }
@@ -911,7 +949,7 @@ pub(super) fn extract_pdf_text_events(bytes: &[u8]) -> anyhow::Result<(Vec<PdfTe
             let Some(cmap_obj) = objects.get(&to_unicode_id) else {
                 continue;
             };
-            let Some(cmap_stream) = cmap_obj.decoded_stream()? else {
+            let Some(cmap_stream) = cmap_obj.decoded_stream(&objects)? else {
                 continue;
             };
             let cmap = parse_to_unicode_cmap(&cmap_stream);
@@ -926,7 +964,7 @@ pub(super) fn extract_pdf_text_events(bytes: &[u8]) -> anyhow::Result<(Vec<PdfTe
         let contents = objects
             .get(&contents_id)
             .ok_or_else(|| anyhow::anyhow!("PDF contents object {contents_id} fehlt"))?
-            .decoded_stream()?
+            .decoded_stream(&objects)?
             .ok_or_else(|| {
                 anyhow::anyhow!("PDF contents object {contents_id} besitzt keinen stream")
             })?;
@@ -1380,7 +1418,7 @@ pub(super) fn extract_pdf_vector_geometry(
         let contents = objects
             .get(&contents_id)
             .ok_or_else(|| anyhow::anyhow!("PDF contents object {contents_id} fehlt"))?
-            .decoded_stream()?
+            .decoded_stream(&objects)?
             .ok_or_else(|| {
                 anyhow::anyhow!("PDF contents object {contents_id} besitzt keinen stream")
             })?;
@@ -2377,6 +2415,33 @@ fn rfind_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn flate_stream_preserves_a_final_linefeed_inside_declared_length() {
+        let payload = b"\x78\x9c\x2b\xae\xcc\x2b\xc9\x48\x2d\xc9\x4c\xd6\x2d\x48\x49\xd3\
+                        \x2d\x2e\x29\x4a\x4d\xcc\xd5\x35\xb3\xb4\xb4\x04\x00\x80\x8c\x09\x0a";
+        for length in [payload.len().to_string(), "2 0 R".to_string()] {
+            let mut pdf = format!(
+                "%PDF-1.4\n1 0 obj\n<< /Length {length} /Filter /FlateDecode >>\nstream\n"
+            )
+            .into_bytes();
+            pdf.extend_from_slice(payload);
+            pdf.extend_from_slice(
+                format!("\nendstream\nendobj\n2 0 obj\n{}\nendobj\n%%EOF\n", payload.len())
+                    .as_bytes(),
+            );
+            let objects = parse_pdf_objects(&pdf).expect("objects");
+            let stream = &objects[&1];
+            assert_eq!(
+                stream.stream_bytes(&objects).expect("stream"),
+                Some(payload.as_slice()),
+            );
+            assert_eq!(
+                stream.decoded_stream(&objects).expect("flate stream").as_deref(),
+                Some(b"synthetic-pdf-stream-6999".as_slice()),
+            );
+        }
+    }
+
     fn synthetic_pdf() -> Vec<u8> {
         let content1 = b"0.060000000 0 0 -0.060000000 0 792 cm\nq 1 0 0 1 708 3000 cm\nBT\n/F1 133 Tf 1 0 0 -1 0 0 Tm\n0 0 Td <0001> Tj\nET Q\n";
         let content2 = b"0.060000000 0 0 -0.060000000 0 792 cm\nq 1 0 0 1 708 1200 cm\nBT\n/F1 133 Tf 1 0 0 -1 0 0 Tm\n0 0 Td <0002> Tj\nET Q\n";
@@ -2728,7 +2793,7 @@ fn embedded_glyph_metrics(
     let descendant = objects.get(descendant)?.dictionary_text();
     if !descendant.contains("/CIDToGIDMap /Identity") { return None; }
     let descriptor = objects.get(&parse_single_ref_after(descendant, "/FontDescriptor")?)?.dictionary_text();
-    let bytes = objects.get(&parse_single_ref_after(descriptor, "/FontFile2")?)?.decoded_stream().ok()??;
+    let bytes = objects.get(&parse_single_ref_after(descriptor, "/FontFile2")?)?.decoded_stream(objects).ok()??;
     let u16_at = |offset: usize| -> Option<u16> {
         Some(u16::from_be_bytes(bytes.get(offset..offset.checked_add(2)?)?.try_into().ok()?))
     };

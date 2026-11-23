@@ -60,7 +60,7 @@ Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die
 | --- | --- |
 | Wie gelangt eine frei gespielte Note in den gedruckten Takt? | [Kapitel 3 · Vom Anschlag zur geschriebenen Dauer](#kapitel-3) |
 | Welche Zusammenhänge beschreibt das Modell für Stimmen, Register und Seiten? | [Kapitel 4 · Verfahrensfamilien](#kapitel-4) und [Kapitel 6 · Formeln](#kapitel-6) |
-| Was wurde mit welchen Stücken geprüft? | [Kapitel 9 · Prüfstände](#kapitel-9) · [Windows-Vollkorpus r1992](evidence/r1992/README.md) |
+| Was wurde mit welchen Stücken geprüft? | [Kapitel 9 · Prüfstände](#kapitel-9) · [Windows-Vollkorpus r1994](evidence/r1994/README.md) |
 | Woran ließe sich als Nächstes arbeiten? | [Kapitel 10 · Nächste mathematische Vorhaben](#kapitel-10) |
 
 <a name="kapitel-1"></a>
@@ -212,7 +212,7 @@ Dadurch hat ein bei 72 beginnender Ton mit Dauer 96 auch dann sein Ende bei 168,
 | Passende geschriebene Dauer einschließlich Haltefortsetzungen | 438 von 474 | 460 von 474 | 460 von 474 |
 | Abweichende geschriebene Dauer | 36 | 14 | 14 |
 
-Der Vergleich verwendet MIDI und WAV als Programmeingaben. Die annotierte Zuordnung aus dem Vienna-4×22-Korpus dient erst zum Prüfen von Master- und Render-MusicXML.<a name="beleg-3-3-korpus"></a><sup><a href="#quelle-goebl">[43]</a></sup> Die 14 Differenzen begrenzen die Aussage über die Dauererkennung an dieser Aufnahme. Der Erhalt der gewählten Intervalle und die Übereinstimmung dieser Wahl mit der musikalischen Referenz sind zwei getrennt messbare Eigenschaften. [Annotierte Einspielung](https://github.com/wergo/vienna4x22/blob/53872cd670182b039ff118d27abcba30de1e0785/match/Mozart_K331_1st-mov_p01.match) · [Windows-Einzellauf r1964](examples/mozart-k331-p01-r1964.pdf) · [Windows-Vollkorpus r1965](examples/mozart-k331-p01-r1965.pdf)
+Der Vergleich verwendet MIDI und WAV als Programmeingaben. Die annotierte Zuordnung aus dem Vienna-4×22-Korpus dient erst zum Prüfen von Master- und Render-MusicXML.<a name="beleg-3-3-korpus"></a><sup><a href="#quelle-goebl">[43]</a></sup> Die 14 Differenzen begrenzen die Aussage über die Dauererkennung an dieser Aufnahme. Der Erhalt der gewählten Intervalle und die Übereinstimmung dieser Wahl mit der musikalischen Referenz sind zwei getrennt messbare Eigenschaften. [Annotierte Einspielung](https://github.com/wergo/vienna4x22/blob/53872cd670182b039ff118d27abcba30de1e0785/match/Mozart_K331_1st-mov_p01.match) · [Prüfbeleg r1964](evidence/r1964/README.md) · [Prüfbeleg r1965](evidence/r1965/README.md)
 
 <a name="kapitel-4"></a>
 <a name="verfahrensfamilien-der-bestandsaufnahme"></a>
@@ -277,7 +277,7 @@ Der jeweilige Notationsschritt wertet die am Einsatz belegten Stimmen und ihre N
 | Notenhals am Stimmeinsatz | Stimme, gleichzeitige Nachbarstimmen und bereits gebundene Balkengruppen | Die Richtung folgt den sichtbaren Beziehungen am Einsatz und innerhalb der gebundenen Gruppe. [Notenhälse](../src/notation_final_stems.rs) · [Vertrag](selector_derivation_contract_final_stem_direction.md) |
 | Registerkontinuität | Benachbarte Abschnitte, gebundene Stimmzuordnung und Lesbarkeit des Schlüsselverlaufs | Die Entscheidung berücksichtigt den Anschluss zwischen Abschnitten. Der Nachweis bindet die Darstellung an die musikalischen Ereignisse. [Register und Stimmeinsatz](selector_derivation_contract_voice_entry_and_register_continuity.md) |
 
-Den automatisch ermittelten 6/8-Takt, die regulären Anschläge und die geschriebene Dauer dokumentiert der Einzellauf zu Mozart. [Mozart KV 331, r1964](examples/mozart-k331-p01-r1964.pdf)
+Den automatisch ermittelten 6/8-Takt, die regulären Anschläge und die geschriebene Dauer dokumentiert der Einzellauf zu Mozart. [Mozart KV 331, Prüfbeleg r1964](evidence/r1964/README.md)
 
 <a name="kapitel-6"></a>
 <a name="zentrale-formeln-und-ihre-beweisgrenzen"></a>
@@ -363,7 +363,7 @@ Bei einem gebundenen Anschlag mit Einsatz $t$, Ende $e$ in der Notationszeit und
 [t,e)=[t,b)\cup[b,e),\qquad e-t=(b-t)+(e-b).
 ```
 
-Der Haltebogen verbindet beide Fragmente mit demselben Anschlag. Der Pfad prüft unter anderem exakte Notenwerte, die belegte Taktgrenze und konkurrierende Anschläge derselben Tonhöhe. In Schuberts Auftakt ergibt die gebundene Dauer $240=96+144$ Ticks, also eine Viertel am Auftakt und eine punktierte Viertel am Beginn des Folgetakts. [MIDI-Seed](../src/midi_seed.rs) · [Windows-Notenbild](examples/schubert-d783-no15-p18-r1872.pdf).
+Der Haltebogen verbindet beide Fragmente mit demselben Anschlag. Der Pfad prüft unter anderem exakte Notenwerte, die belegte Taktgrenze und konkurrierende Anschläge derselben Tonhöhe. In Schuberts Auftakt ergibt die gebundene Dauer $240=96+144$ Ticks, also eine Viertel am Auftakt und eine punktierte Viertel am Beginn des Folgetakts. [MIDI-Seed](../src/midi_seed.rs) · [Schubert, Prüfbeleg r1872](evidence/r1872/README.md)
 
 Für einen durch die bisherige Handgrenze geteilten Akkord vergleicht r1872 die Menge der MIDI-Tasten mit zeitlich direkt angrenzenden Akkordgruppen. Ein Zeuge muss vor der Korrektur vollständig derselben Hand zugeordnet sein. Widersprechen sich die Zeugen, bleibt die Einteilung bestehen. Für jede Hand $h$ und jede geprüfte Anschlagsgrenze $u$ verlangt der Code für die klingende Tastenmenge $K_h(u)$:
 
@@ -687,7 +687,7 @@ Von 5.751 ursprünglichen Primärbalkenpaaren fanden sich im Master 5.229 verbun
 | Offen | 7 | 486 | 493 |
 | **Getrennte Paare** | **19** | **501** | **520** |
 
-Bei allen vier positiven Bach-Fällen ließ die bestehende Stimmzuordnung den jeweiligen Einzelplan als Vergleich zu. Jeder Plan gewann das untersuchte Master-Paar und bewahrte die 408 zuvor verbundenen Paare. Es waren die Achtelpaare B–A in Takt 4, As–As in Takt 11, Es–D in Takt 21 und H–C in Takt 28. Im bestehenden PDF waren alle vier bereits gebalkt. Alle drei Bach-Seiten blieben im Vergleich zu r1960 bei 300 dpi pixelgleich. Eine gemeinsame Übernahme der vier Pläne müsste als eigener Kandidat geprüft werden. [Prüfbeleg und Notenbild](evidence/r1961/README.md)
+Bei allen vier positiven Bach-Fällen ließ die bestehende Stimmzuordnung den jeweiligen Einzelplan als Vergleich zu. Jeder Plan gewann das untersuchte Master-Paar und bewahrte die 408 zuvor verbundenen Paare. Es waren die Achtelpaare B–A in Takt 4, As–As in Takt 11, Es–D in Takt 21 und H–C in Takt 28. Im bestehenden PDF waren alle vier bereits gebalkt. Alle drei Bach-Seiten blieben im Vergleich zu r1960 bei 300 dpi pixelgleich. Eine gemeinsame Übernahme der vier Pläne müsste als eigener Kandidat geprüft werden. [Prüfbeleg](evidence/r1961/README.md)
 
 Auch außerhalb der Fuge lieferte die Suche einen musikalisch lesbaren Befund. In Etüde Nr. 8, Takt 44, stehen auf der vierten Zählzeit die vier Sechzehntel C5–E5–G5–C6. Im lokalen Modell gehören C5–E5 und E5–G5 jeweils demselben Kanal an. Ein gemeinsamer Kanal für G5 und C6 ist unter denselben Bedingungen ausgeschlossen. Der Master zeigt die ersten drei Töne in Stimme 1 und das letzte C in Stimme 3.
 
@@ -701,6 +701,7 @@ Die 493 offenen Zielpaare verteilen sich auf 244 Fälle mit Akkordträger oder f
 
 | Material | Belegter Vergleich |
 | --- | --- |
+| Windows-Vollkorpus r1994 | Alle 30 MusicXML-Dateien sind gegenüber r1992 bytegleich, alle 59 PDF-Seiten bei 144 dpi pixelgleich. Die PDF-Prüfung verwendet die deklarierte Streamlänge. [Abnahme r1994](evidence/r1994/README.md) · [Notenbilder r1994](examples/README.md#notenbilder) |
 | Windows-Vollkorpus r1992 | Alle 15 Stücke wurden aus MIDI und WAV neu gesetzt und vollständig ausgegeben. Der Vergleich mit r1989 prüft Master-MusicXML, Render-MusicXML und die gerenderten PDF-Seiten. [Prüfbeleg](evidence/r1992/README.md) · [Befunde zur Bogenlage](#kapitel-6-17) |
 | Chopin · Etüde op. 10 Nr. 3, p01 | Bei allen 448 regulären Noten stimmen Einsatz und Tonhöhe mit der Referenz überein, bei 380 die geschriebene Dauer. Die vier Vorschläge werden getrennt gezählt. Master und Render blieben von r1965 bis r1968 bytegleich, die PDF-Seite bei 144 dpi pixelgleich. [Dauervergleich](evidence/r1965/vergleich.md) · [Vergleich r1968](evidence/r1968/README.md) |
 | Bach · Fuge c-Moll BWV 847 | Der Abgleich r1745 erfasste 754 Notenansätze mit Notenwerten und Haltebögen. In beiden Vergleichen r1961–r1965 und r1965–r1968 blieben die drei Windows-PDF-Seiten bei 144 dpi pixelgleich. [Abnahme r1749](evidence/r1749/README.md) · [Seitenvergleich](evidence/r1965/vergleich.md) |
@@ -906,7 +907,7 @@ Jeder Eintrag nennt den Beitrag der Quelle zur verlinkten Aussage. Die Pfeile f�
 
 <a name="quelle-speicher"></a>**[48]** EtuSchlopf, *Speicherabschätzung für den parallelen Korpuslauf*. Die Konstanten für Reserve, Prozess und Worker stammen aus der Projektplanung. [Berechnung und Voraussetzungen](../src/pipeline_shards/corpus_memory_capacity.rs) · [↑ 6.15](#beleg-6-15-speicher) · [↑ 4, Nr. 38](#beleg-4-verfahren-38)
 
-<a name="quelle-r1961"></a>**[49]** EtuSchlopf, *Windows-Vollkorpus und Gegenprobe zur Stimmfortsetzung* (r1961). Ergebnisse nach Stück und Nachweisgrenzen der Suche. [Prüfbericht und Notenbilder](evidence/r1961/README.md) · [↑ 8](#beleg-8-lauf)
+<a name="quelle-r1961"></a>**[49]** EtuSchlopf, *Windows-Vollkorpus und Gegenprobe zur Stimmfortsetzung* (r1961). Ergebnisse nach Stück und Nachweisgrenzen der Suche. [Prüfbericht](evidence/r1961/README.md) · [↑ 8](#beleg-8-lauf)
 
 <a name="quelle-r1965"></a>**[50]** EtuSchlopf, *Vergleich des Notenbilds und der geschriebenen Dauern* (r1965). Getrennte Befunde für Tonhöhe, Einsatz, Notenwert und gerenderte Seite. [Messwerte je Stück](evidence/r1965/vergleich.md) · [↑ 9](#beleg-9-befunde)
 

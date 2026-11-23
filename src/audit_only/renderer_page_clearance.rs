@@ -87,14 +87,14 @@ fn clearance_font(
                 .ok_or_else(|| anyhow::anyhow!("PageClearance: embedded TrueType required"))?,
         )
         .ok_or_else(|| anyhow::anyhow!("PageClearance: font object"))?
-        .decoded_stream()?
+        .decoded_stream(objects)?
         .ok_or_else(|| anyhow::anyhow!("PageClearance: font stream"))?;
     let cmap_id = parse_single_ref_after(dict, "/ToUnicode")
         .ok_or_else(|| anyhow::anyhow!("PageClearance: unicode map"))?;
     let cmap_bytes = objects
         .get(&cmap_id)
         .ok_or_else(|| anyhow::anyhow!("PageClearance: unicode object"))?
-        .decoded_stream()?
+        .decoded_stream(objects)?
         .ok_or_else(|| anyhow::anyhow!("PageClearance: unicode stream"))?;
     clearance_true_type(&font_bytes, &parse_to_unicode_cmap(&cmap_bytes))
 }
@@ -608,7 +608,7 @@ fn clearance_components(bytes: &[u8]) -> anyhow::Result<Vec<Vec<ClearanceCompone
                     .ok_or_else(|| anyhow::anyhow!("PageClearance: content"))?,
             )
             .ok_or_else(|| anyhow::anyhow!("PageClearance: content object"))?
-            .decoded_stream()?
+            .decoded_stream(&objects)?
             .ok_or_else(|| anyhow::anyhow!("PageClearance: content stream"))?;
         output.push(clearance_contents(&content, height, width, &fonts, &bold)?);
     }

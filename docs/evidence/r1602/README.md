@@ -13,7 +13,6 @@ sind alle 39 Seiten pixelgleich. Damit bleibt auch die Balkenreparatur aus
 r1601 im Notenbild erhalten.
 
 [Native Annahme](native_acceptance.txt) · [Laufstatus](native_run_outcome.txt) ·
-[Notenbeispiel aus r1602](../../examples/etude-1-r1602.pdf)
 
 
 ## Windows-Testversion

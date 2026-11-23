@@ -12,7 +12,6 @@ und Render-MusicXML bytegleich zu r1791 und die gerenderten Seiten pixelgleich.
 
 - [Nativer Annahmebeleg](native_acceptance.txt)
 - [Laufergebnis](run_outcome_audit.txt)
-- [Erzeugtes Chopin-Notenbild](../../examples/chopin-op10-no3-p01-r1792.pdf)
 - [Quelle und Namensnennung der Einspielung](../../THIRD_PARTY_NOTICES.md#chopin-etüde-e-dur-op-10-nr-3-aufführung-p01)
 
 Die Windows-Abnahme gilt für dieses Einzelprojekt. Den früheren Vollkorpuslauf

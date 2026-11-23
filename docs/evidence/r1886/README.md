@@ -6,7 +6,6 @@ Im Einzellauf von Etüde Nr. 10 bestanden Build, Strict Clippy und 3.081 Tests. 
 
 Bei Etüde Nr. 10 übernahm MuseScore im vierten Durchlauf alle geplanten System- und Seitenumbrüche. Das PDF hat sechs Seiten und 21 Systeme.
 
-- [Alle 13 Notenbilder](../../examples/README.md#notenbilder)
 - [Nativer Annahmebeleg](native_acceptance.txt) und [Ergebnis des Einzellaufs](run_outcome_audit.txt)
 - [Ergebnisse des Korpuslaufs](corpus_result.txt)
 - [Prüfsummen des nativen Quellstands](accepted_source_sha256.tsv), [GitHub-Dokumentation](github_projection_sha256.tsv) und [Notenbilder](score_sha256.tsv)

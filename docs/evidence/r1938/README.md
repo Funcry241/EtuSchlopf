@@ -22,6 +22,6 @@ Der angenommene Quellstand **r1938 / 0.10.1839** erzeugte vollständige Ausgaben
 - SHA-256 des angenommenen Take-Pakets: `8a171bd46f546c4e5979bc3e8ff6145a1d85681b6162c9b0d4d08d832548314e`
 - SHA-256 des angenommenen Quell-Snapshots: `20620db6b20be7a246d390ba814a466b7225cd65190ff3232a560a270ccd0720`
 - Prüfsummen für [Quell-Snapshot](accepted_source_sha256.tsv), [öffentliche Dokumentation](github_projection_sha256.tsv) und [Notenbilder](score_sha256.tsv)
-- [Notengalerie](../../examples/README.md#notenbilder) und [Namensnennungen](score_credits.md)
+- [Namensnennungen](score_credits.md)
 
 Für den GitHub-Stand wurden die öffentliche Dokumentation, die Notengalerie und diese Prüfseite ergänzt. Die mitgelieferten Laufzeitquellen entsprechen bytegenau dem angenommenen Snapshot.

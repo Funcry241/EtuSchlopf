@@ -1,6 +1,6 @@
 # Windows-Abnahme r1965
 
-**EtuSchlopf 0.10.1839 r1965** verarbeitete am 20. November 2026 unter Windows alle 14 Stücke des Vollkorpus. Der Lauf erzeugte **14 PDFs mit 57 Seiten** und endete mit Exitcode 0. Alle 14 Projektberichte melden null Blocker, Warnungen und Hinweise. [14 Notenbilder mit PDFs](../../examples/README.md#notenbilder) · [Vergleich mit den bisherigen Ausgaben](vergleich.md)
+**EtuSchlopf 0.10.1839 r1965** verarbeitete am 20. November 2026 unter Windows alle 14 Stücke des Vollkorpus. Der Lauf erzeugte **14 PDFs mit 57 Seiten** und endete mit Exitcode 0. Alle 14 Projektberichte melden null Blocker, Warnungen und Hinweise. [Vergleich mit den bisherigen Ausgaben](vergleich.md)
 
 ## Umfang und Laufzeit
 
