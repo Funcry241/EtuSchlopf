@@ -14,8 +14,6 @@ Nr. 15, Aufführung p18.
 ## Notenbild
 
 Im ersten vollen Takt steht das E wieder als Viertel im linken Begleitakkord.
-Der [Notenvergleich r1871 und r1872](../../examples/README.md#schubert-im-vergleich)
-zeigt die Stelle im Zusammenhang. Das [vollständige PDF](../../examples/schubert-d783-no15-p18-r1872.pdf) stammt aus diesem Windows-Lauf.
 
 ## Notenerhalt und Quellauswahl
 

@@ -6,5 +6,5 @@ Mozart KV 331 wurde direkt aus der Master-MusicXML gerendert. Das Korpusmanifest
 
 - [Annahmebeleg](native_acceptance.txt), [Quell-Snapshot](source_snapshot.txt) und [Laufaudit](run_outcome_audit.txt)
 - [Ergebnisse aller 14 Projekte](corpus_result.txt)
-- [Notenbilder](../../examples/README.md#notenbilder) und [Namensnennungen](score_credits.md)
+- [Namensnennungen](score_credits.md)
 - Prüfsummen für [Quell-Snapshot](accepted_source_sha256.tsv), [öffentliche Dokumentation](github_projection_sha256.tsv) und [Notenbilder](score_sha256.tsv)

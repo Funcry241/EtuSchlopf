@@ -17,19 +17,18 @@ Der Ergebnisordner liegt neben der MIDI. EtuSchlopf arbeitet dort mit Kopien der
 
 ## Notenbilder
 
-Die aktiven Referenzkomponisten sind Bach, Beethoven, Chopin und Schubert. Für Beethoven steht die Wahl des Stücks noch aus. [Aktuelle Referenzen](../docs/examples/README.md#aktuelle-referenzen)
+Die Galerie enthält alle 15 PDFs aus dem abgenommenen Windows-Lauf r1994. [Alle Notenbilder r1994](../docs/examples/README.md#notenbilder) · [Musikquellen](../docs/examples/README.md#quellen-und-rechte)
 
 | Bach · Fuge c-Moll BWV 847 | Chopin · Etüde E-Dur op. 10 Nr. 3 | Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15 |
 | --- | --- | --- |
-| [![Bach, Fuge c-Moll, r1965](../docs/images/bwv847-fuge-r1965-ausschnitt.png)](../docs/examples/bwv847-fuge-r1965.pdf) | [![Chopin, Etüde E-Dur, r1965](../docs/images/chopin-op10-no3-p01-r1965-ausschnitt.png)](../docs/examples/chopin-op10-no3-p01-r1965.pdf) | [![Schubert, Deutscher Tanz, r1965](../docs/images/schubert-d783-no15-p18-r1965-ausschnitt.png)](../docs/examples/schubert-d783-no15-p18-r1965.pdf) |
-
-Die Galerie zeigt die 14 veröffentlichten PDF-Partituren aus r1965. [Alle 14 Notenbilder](../docs/examples/README.md#notenbilder) · [Seitenvergleich r1968](../docs/evidence/r1968/README.md)
+| [![Bach, Fuge c-Moll, r1994](../docs/images/bwv847-fuge-r1994-ausschnitt.png)](../docs/examples/bwv847-fuge-r1994.pdf) | [![Chopin, Etüde E-Dur, r1994](../docs/images/chopin-op10-no3-p01-r1994-ausschnitt.png)](../docs/examples/chopin-op10-no3-p01-r1994.pdf) | [![Schubert, Deutscher Tanz, r1994](../docs/images/schubert-d783-no15-p18-r1994-ausschnitt.png)](../docs/examples/schubert-d783-no15-p18-r1994.pdf) |
 
 ## Stand auf main
 
-**r1992 / 0.10.1839** hat unter Windows alle 15 Stücke neu gesetzt. Gegenüber r1989 sind alle Master-MusicXML-Dateien bytegleich. Im Rastervergleich unterscheidet sich eine der 59 PDF-Seiten. Auf Seite 4 von Etüde 8 liegt der Phrasierungsbogen in Takt 25–29 jetzt über den Noten. [Windows-Prüfbeleg und Seitenvergleich r1992](../docs/evidence/r1992/README.md) · [Geprüfter Windows-Paketlauf r1992](https://github.com/Funcry241/EtuSchlopf/actions/runs/45049538953)
-
-[Mathematik in EtuSchlopf · Kapitelübersicht](../docs/MATHEMATIK.md) · [Messwerte des Windows-Laufs r1965](../docs/evidence/r1965/vergleich.md)
+**r1994 / 0.10.1839** setzt alle 15 Stücke vollständig. Gegenüber r1992 sind
+sämtliche 30 MusicXML-Dateien bytegleich und alle 59 PDF-Seiten pixelgleich.
+Die oben verlinkte Windows-EXE enthält derzeit r1992.
+[Windows-Abnahme r1994](../docs/evidence/r1994/README.md) · [Mathematik in EtuSchlopf](../docs/MATHEMATIK.md)
 
 EtuSchlopf ist experimentell. Bleiben Einsätze oder Taktgrenzen einer frei gespielten Aufnahme mehrdeutig, kann EtuSchlopf den Lauf abbrechen. Chopins Ballade op. 38 wird separat als Stresstest geführt. [Ballade op. 38](../docs/examples/chopin-op38-p01.md)
 

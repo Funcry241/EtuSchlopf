@@ -10,4 +10,4 @@ Die Galerie enthält 14 PDF-Partituren und zu jeder Partitur einen Ausschnitt au
 
 - **Etüden Nr. 1 bis Nr. 10.** Die Galerie zeigt die zehn nummerierten Etüden aus dem abgenommenen EtuSchlopf-Korpus. Alle zehn Beispiele stammen aus dem Windows-Lauf r1961.
 
-[Einzelne Notenbilder, Druckvorlagen, Quellen und Bearbeitungen](https://github.com/Funcry241/EtuSchlopf/blob/main/docs/examples/README.md#quellen-und-rechte)
+[Druckvorlagen, Quellen und Bearbeitungen](https://github.com/Funcry241/EtuSchlopf/blob/main/docs/examples/README.md#quellen-und-rechte)

@@ -6,7 +6,7 @@ Die Windows-Prüfung mit Rust 1.98.0 meldete **3.145 bestandene und vier ignorie
 
 ## Gegenprobe zur Stimmzuordnung
 
-Die Diagnose liest jedes Paar benachbarter Noten einer ursprünglich belegten Primärbalkengruppe im erzeugten Master zurück. Die Tabelle zählt die dort verbundenen Paare, die auf verschiedene Stimmen verteilten Paare und die übrigen Rückleseergebnisse. Der Lauf erzeugte für jedes aufgeführte Stück sämtliche Ausgaben. [Mathematische Auswertung in Kapitel 8](../../MATHEMATIK.md#kapitel-8) · [Notengalerie](../../examples/README.md#notenbilder)
+Die Diagnose liest jedes Paar benachbarter Noten einer ursprünglich belegten Primärbalkengruppe im erzeugten Master zurück. Die Tabelle zählt die dort verbundenen Paare, die auf verschiedene Stimmen verteilten Paare und die übrigen Rückleseergebnisse. Der Lauf erzeugte für jedes aufgeführte Stück sämtliche Ausgaben. [Mathematische Auswertung in Kapitel 8](../../MATHEMATIK.md#kapitel-8)
 
 | Stück | PDF-Seiten | Verbunden | Auf verschiedene Stimmen verteilt | Übrige |
 | --- | ---: | ---: | ---: | ---: |

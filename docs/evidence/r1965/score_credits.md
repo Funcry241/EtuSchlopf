@@ -10,4 +10,4 @@ Die 14 PDF-Partituren stammen aus dem vollständigen Windows-Lauf r1965. Jedes V
 
 - **Etüden Nr. 1 bis Nr. 10.** Die Galerie zeigt die zehn nummerierten Etüden aus dem abgenommenen EtuSchlopf-Korpus. Alle zehn Beispiele stammen aus dem Windows-Vollkorpus r1965.
 
-[Einzelne Notenbilder, Druckvorlagen, Quellen und Bearbeitungen](https://github.com/Funcry241/EtuSchlopf/blob/main/docs/examples/README.md#quellen-und-rechte)
+[Druckvorlagen, Quellen und Bearbeitungen](https://github.com/Funcry241/EtuSchlopf/blob/main/docs/examples/README.md#quellen-und-rechte)

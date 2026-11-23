@@ -10,7 +10,7 @@ EtuSchlopf 0.10.1839 r1964 wurde am 20. November 2026 unter Windows angenommen. 
 | Übereinstimmende geschriebene Dauern | 438 von 474 | 460 von 474 |
 | Sichtbare Pauseneinträge im MusicXML | 14 | 54 |
 
-Der Vergleich verwendet die unabhängige Notationszuordnung zur Aufnahme nach dem Lauf. Die Systemzuordnung bleibt bei allen 474 regulären Tönen gleich. Von den 36 früheren Dauerabweichungen sind 24 korrigiert. In Takt 18 und 28 kommt je eine Abweichung hinzu. Das A erscheint dort als punktierte Viertelnote, die Referenz schreibt eine Achtel. Master- und Render-MusicXML stimmen bytegenau überein. [Mozart-PDF](../../examples/mozart-k331-p01-r1964.pdf) · [Notengalerie](../../examples/README.md)
+Der Vergleich verwendet die unabhängige Notationszuordnung zur Aufnahme nach dem Lauf. Die Systemzuordnung bleibt bei allen 474 regulären Tönen gleich. Von den 36 früheren Dauerabweichungen sind 24 korrigiert. In Takt 18 und 28 kommt je eine Abweichung hinzu. Das A erscheint dort als punktierte Viertelnote, die Referenz schreibt eine Achtel. Master- und Render-MusicXML stimmen bytegenau überein. · [Notengalerie](../../examples/README.md)
 
 Die Galerie enthält diesen neuen Mozart-Lauf und 13 PDFs aus dem letzten belegten [Windows-Vollkorpuslauf r1961](../r1961/README.md). Der Vollkorpus umfasste 14 Stücke mit insgesamt 57 Seiten.
 
