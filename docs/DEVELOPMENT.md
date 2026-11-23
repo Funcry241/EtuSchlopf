@@ -176,6 +176,14 @@ einschließlich Aliasen und Standardwerten. Grundlage sind
 ### Launcher: Projekt, GUI, Prüfungen und Exporte
 
 Aufruf: `.\run.cmd [Launcher-Optionen] "Projektname" [Programmoptionen]`.
+Setze in der Windows-Eingabeaufforderung `set "ETUSCHLOPF_LOW_RAM=1"`,
+um den Start auf einem speicherbegrenzten Runner zu entlasten. Bootstrap,
+Cargo-Build und Clippy verwenden dann je einen Cargo-Job. Die vollständigen
+Strict-Tests laufen mit einem Test-Thread und ohne parallelen Test-Vorbau.
+Bei `run.cmd --all` startet standardmäßig ein Projekt mit einem Solver-Worker.
+Eine bereits gesetzte Vorgabe `ETUSCHLOPF_CORPUS_JOBS` hat Vorrang für den Korpus.
+Der RAM-Modus kann die Gesamtlaufzeit verlängern.
+
 Für den regulären Lauf ist ein Projekt, `--all` oder `--visual-preflight`
 anzugeben. `--clippy-deep` ist ein eigenständiger Diagnosemodus.
 
