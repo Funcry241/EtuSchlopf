@@ -6,12 +6,12 @@
 
 ## Dein erstes Stück
 
-1. Lade die **Windows-EXE r1992 für x64** herunter. Für die PDF-Ausgabe brauchst du MuseScore. [EtuSchlopf-Windows-x64-r1992.exe](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1992-windows-preview/EtuSchlopf-Windows-x64-r1992.exe) · [MuseScore](https://musescore.org/de/download)
-2. Lege `Mein Stück.mid` und `Mein Stück.wav` in denselben Ordner. Beide Dateien müssen zur selben Einspielung gehören. Zum Ausprobieren kannst du das fertige MIDI/WAV-Paar entpacken. [Startbeispiel r1992 als ZIP](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1992-windows-preview/EtuSchlopf-Beispiel-r1992.zip)
+1. Lade die **Windows-EXE r1994 für x64** herunter. Für die PDF-Ausgabe brauchst du MuseScore. [EtuSchlopf-Windows-x64-r1994.exe](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1994-windows-preview/EtuSchlopf-Windows-x64-r1994.exe) · [MuseScore](https://musescore.org/de/download)
+2. Lege `Mein Stück.mid` und `Mein Stück.wav` in denselben Ordner. Beide Dateien müssen zur selben Einspielung gehören. Zum Ausprobieren kannst du das fertige MIDI/WAV-Paar entpacken. [Startbeispiel r1994 als ZIP](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r1994-windows-preview/EtuSchlopf-Beispiel-r1994.zip)
 3. Ziehe die MIDI-Datei auf die EXE. Du kannst die EXE auch öffnen und den Pfad zur MIDI eingeben.
 4. Öffne im neuen Laufordner unter `EtuSchlopf-Ergebnisse` das PDF. Für die Weiterbearbeitung in MuseScore öffnest du die `.render.musicxml`. Verwendet der PDF-Export direkt den Master, öffnest du die `.musicxml`.
 
-Der Ergebnisordner liegt neben der MIDI. EtuSchlopf arbeitet dort mit Kopien der Eingaben. Bei einem Fehler zeigt die Konsole die Meldung. Wenn der Lauf einen Bericht geschrieben hat, findest du ihn im Laufordner als `.result.txt`. [Version und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1992-windows-preview)
+Der Ergebnisordner liegt neben der MIDI. EtuSchlopf arbeitet dort mit Kopien der Eingaben. Bei einem Fehler zeigt die Konsole die Meldung. Wenn der Lauf einen Bericht geschrieben hat, findest du ihn im Laufordner als `.result.txt`. [Version und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1994-windows-preview)
 
 > **In English:** EtuSchlopf uses a matching MIDI and WAV pair to produce piano sheet music as PDF and MusicXML. The Windows x64 preview uses MuseScore for PDF export. Issues in English are welcome.
 
@@ -27,7 +27,6 @@ Die Galerie enthält alle 15 PDFs aus dem abgenommenen Windows-Lauf r1994. [Alle
 
 **r1994 / 0.10.1839** setzt alle 15 Stücke vollständig. Gegenüber r1992 sind
 sämtliche 30 MusicXML-Dateien bytegleich und alle 59 PDF-Seiten pixelgleich.
-Die oben verlinkte Windows-EXE enthält derzeit r1992.
 [Windows-Abnahme r1994](../docs/evidence/r1994/README.md) · [Mathematik in EtuSchlopf](../docs/MATHEMATIK.md)
 
 EtuSchlopf ist experimentell. Bleiben Einsätze oder Taktgrenzen einer frei gespielten Aufnahme mehrdeutig, kann EtuSchlopf den Lauf abbrechen. Chopins Ballade op. 38 wird separat als Stresstest geführt. [Ballade op. 38](../docs/examples/chopin-op38-p01.md)
