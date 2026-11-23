@@ -250,23 +250,50 @@ fn run() -> Result<(), String> {
     managed_source_tree_definition::validate_root_project_file_roles()?;
     println!("cargo:rerun-if-env-changed=ETUSCHLOPF_TAKE_FROM");
     println!("cargo:rerun-if-env-changed=ETUSCHLOPF_TAKE_CHANGE_CLASS");
+    println!("cargo:rerun-if-env-changed=ETUSCHLOPF_LOW_RAM");
     println!("cargo:rerun-if-env-changed=CARGO_ENCODED_RUSTFLAGS");
     println!(
         "cargo:rerun-if-changed=src/build_gate/dead_code_suppression_debt_ceiling.tsv"
     );
 
     let manifest_dir = kodex_build_context::manifest_dir()?;
-    let validated_ssc =
-        take_change_control::ssc_evidence_proof_shadow_permit_kodex::validate_current_tree(&manifest_dir)?;
-    let dead_code_suppression_count =
-        take_change_control::validate_dead_code_detection_integrity_installed(&manifest_dir)?;
-    println!(
-        "cargo:rustc-env=ETUSCHLOPF_DEAD_CODE_SUPPRESSION_DEBT_CURRENT={dead_code_suppression_count}"
-    );
-    println!("cargo:rustc-env=ETUSCHLOPF_DEAD_CODE_DETECTION_INTEGRITY_GREEN=1");
-    println!("cargo:rustc-env=ETUSCHLOPF_WARNING_FREE_FOUNDATION_GREEN=1");
-    println!("cargo:rustc-env=ETUSCHLOPF_WARNING_DEBT_POLICY_FOUNDATION_GREEN=1");
-    take_change_control::validate_productive_music_identity_provenance_tree(&manifest_dir)?;
+    let validated_ssc = std::thread::scope(|scope| {
+        let validate_music_identity = || {
+            take_change_control::validate_productive_music_identity_provenance_tree(&manifest_dir)
+        };
+        let music_identity_worker = if env::var("ETUSCHLOPF_LOW_RAM").as_deref() == Ok("1") {
+            None
+        } else {
+            std::thread::Builder::new()
+                .spawn_scoped(scope, validate_music_identity)
+                .ok()
+        };
+
+        let initial_checks = (|| {
+            let validated_ssc =
+                take_change_control::ssc_evidence_proof_shadow_permit_kodex::validate_current_tree(
+                    &manifest_dir,
+                )?;
+            let dead_code_suppression_count =
+                take_change_control::validate_dead_code_detection_integrity_installed(&manifest_dir)?;
+            println!(
+                "cargo:rustc-env=ETUSCHLOPF_DEAD_CODE_SUPPRESSION_DEBT_CURRENT={dead_code_suppression_count}"
+            );
+            println!("cargo:rustc-env=ETUSCHLOPF_DEAD_CODE_DETECTION_INTEGRITY_GREEN=1");
+            println!("cargo:rustc-env=ETUSCHLOPF_WARNING_FREE_FOUNDATION_GREEN=1");
+            println!("cargo:rustc-env=ETUSCHLOPF_WARNING_DEBT_POLICY_FOUNDATION_GREEN=1");
+            Ok::<_, String>(validated_ssc)
+        })();
+
+        // Keep the original diagnostic order even if the worker finishes first.
+        let music_identity = music_identity_worker.map(|worker| worker.join());
+        let validated_ssc = initial_checks?;
+        match music_identity {
+            Some(result) => result.unwrap_or_else(|panic| std::panic::resume_unwind(panic))?,
+            None => validate_music_identity()?,
+        }
+        Ok::<_, String>(validated_ssc)
+    })?;
     println!("cargo:rustc-env=ETUSCHLOPF_PRODUCTIVE_MUSIC_IDENTITY_PROVENANCE_FIREWALL_GREEN=1");
 
     let context = kodex_build_context::KodexBuildContext::load(manifest_dir)?;

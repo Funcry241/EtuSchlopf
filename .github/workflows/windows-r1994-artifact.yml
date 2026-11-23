@@ -29,8 +29,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           path: public
           persist-credentials: false
+      - name: Check out the accepted r1994 source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 299afd1e32c8fbc1ecd7f81e2af72c63b1475157
+          path: accepted
+          persist-credentials: false
       - name: Verify and reconstruct the accepted r1994 source
-        run: python .github/distribution/prepare-r1994-source.py . $env:ETU_BUILD_ROOT "$env:RUNNER_TEMP/etuschlopf-r1994-source"
+        run: python .github/distribution/prepare-r1994-source.py ../accepted $env:ETU_BUILD_ROOT "$env:RUNNER_TEMP/etuschlopf-r1994-source"
       - name: Build accepted engine
         working-directory: D:\etu-r1994-build
         run: |
