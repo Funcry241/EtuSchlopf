@@ -8,9 +8,7 @@ meldete 3.168 bestandene Tests, vier übersprungene Tests und null Clippy-Warnun
 Die PDF-Prüfung verwendet die im PDF deklarierte Streamlänge. So berücksichtigt
 sie auch gültige komprimierte Nutzdaten am Stream-Ende.
 
-Die [Galerie](../../examples/README.md#notenbilder) enthält die Original-PDFs
-aus dem r1994-Lauf. Die [SHA-256-Prüfsummen](score-sha256.txt) beziehen sich
-auf diese veröffentlichten Dateien.
+Die [Galerie r1994](https://github.com/Funcry241/EtuSchlopf/blob/299afd1e32c8fbc1ecd7f81e2af72c63b1475157/docs/examples/README.md#notenbilder) enthält die 15 Original-PDFs aus dem r1994-Lauf. Die [SHA-256-Prüfsummen](https://github.com/Funcry241/EtuSchlopf/blob/299afd1e32c8fbc1ecd7f81e2af72c63b1475157/docs/evidence/r1994/score-sha256.txt) beziehen sich auf dieselben Dateien im selben Commit.
 
 | Abnahmenachweis | Wert |
 | --- | --- |
