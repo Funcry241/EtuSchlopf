@@ -1,23 +1,6 @@
 name: Windows download
 on:
   workflow_dispatch:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'tools/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'ZIP_KIND.txt'
-      - 'LICENSE'
-      - 'docs/THIRD_PARTY_NOTICES.md'
-      - 'docs/licenses/**'
-      - 'docs/normative_sources/musicxml/**'
-      - 'docs/evidence/r1985/**'
-      - '.gitattributes'
-      - '.github/distribution/**'
-      - '!.github/distribution/RELEASE.md'
-      - '.github/workflows/windows-download.yml'
   push:
     branches: [main]
     paths:
@@ -30,7 +13,7 @@ on:
       - 'docs/THIRD_PARTY_NOTICES.md'
       - 'docs/licenses/**'
       - 'docs/normative_sources/musicxml/**'
-      - 'docs/evidence/r1985/**'
+      - 'docs/evidence/r1998/**'
       - '.gitattributes'
       - '.github/distribution/**'
       - '!.github/distribution/RELEASE.md'
@@ -41,12 +24,11 @@ concurrency:
   group: windows-download-${{ github.ref }}
   cancel-in-progress: false
 env:
-  RELEASE_TAG: v0.10.1839-r1985-windows-preview
+  RELEASE_TAG: v0.10.1839-r1998-windows-preview
 jobs:
   # A push to main only needs the ten-minute Windows build while the preview
-  # release is still missing. Pull requests and manual runs always build.
+  # release is still missing. Manual runs always build.
   release-check:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -76,40 +58,40 @@ jobs:
     env:
       RUSTFLAGS: '-C target-feature=+crt-static'
       CARGO_INCREMENTAL: '0'
-      ETU_BUILD_ROOT: D:\etu-r1985-build
+      ETU_BUILD_ROOT: D:\etu-r1998-build
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: public
           persist-credentials: false
-      - name: Verify and reconstruct the accepted r1985 source
+      - name: Verify and reconstruct the accepted r1998 source
         run: |
-          python .github/distribution/prepare-r1985-source.py . $env:ETU_BUILD_ROOT "$env:RUNNER_TEMP/etuschlopf-source"
-          if ($LASTEXITCODE -ne 0) { throw 'Native r1985 source preparation failed' }
+          python .github/distribution/prepare-r1998-source.py . $env:ETU_BUILD_ROOT "$env:RUNNER_TEMP/etuschlopf-source"
+          if ($LASTEXITCODE -ne 0) { throw 'Native r1998 source preparation failed' }
       - name: Install Rust toolchain
         run: |
           rustup toolchain install 1.98.0 --profile minimal
           if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed' }
-      # The engine comes only from the checksum-verified r1985 inventory, so its
+      # The engine comes only from the checksum-verified r1998 inventory, so its
       # binary is keyed on that inventory, the preparation script and the toolchain.
       - name: Restore accepted engine from cache
         id: engine-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: D:\etu-r1985-build\target\strict\etuschlopf.exe
-          key: etu-r1985-engine-v1-${{ runner.os }}-${{ runner.arch }}-rust1.98.0-strict-crtstatic-${{ hashFiles('public/docs/evidence/r1985/accepted-source.tsv', 'public/.github/distribution/prepare-r1985-source.py') }}
+          path: D:\etu-r1998-build\target\strict\etuschlopf.exe
+          key: etu-r1998-engine-v1-${{ runner.os }}-${{ runner.arch }}-rust1.98.0-strict-crtstatic-${{ hashFiles('public/docs/evidence/r1998/accepted-source.tsv', 'public/docs/evidence/r1998/native-documents.zip', 'public/.github/distribution/prepare-r1998-source.py') }}
       - name: Build accepted engine
         if: steps.engine-cache.outputs.cache-hit != 'true'
-        working-directory: D:\etu-r1985-build
+        working-directory: D:\etu-r1998-build
         run: |
-          $jobs = [Math]::Max(1, [Environment]::ProcessorCount - 1)
+          $jobs = [Environment]::ProcessorCount
           cargo +1.98.0 build --locked --profile strict --bin etuschlopf --jobs $jobs --color never
           if ($LASTEXITCODE -ne 0) { throw 'Accepted engine build failed' }
       - name: Save accepted engine for later runs
         if: steps.engine-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: D:\etu-r1985-build\target\strict\etuschlopf.exe
+          path: D:\etu-r1998-build\target\strict\etuschlopf.exe
           key: ${{ steps.engine-cache.outputs.cache-primary-key }}
       - name: Bundle runtime data and licences
         run: |
@@ -131,10 +113,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Distribution tests failed' }
           cargo +1.98.0 build --locked --manifest-path .github/distribution/Cargo.toml --release
           if ($LASTEXITCODE -ne 0) { throw 'Distribution build failed' }
-          Copy-Item .github/distribution/target/release/etuschlopf_windows_download.exe dist/EtuSchlopf-Windows-x64.exe
+          Copy-Item .github/distribution/target/release/etuschlopf_windows_download.exe dist/EtuSchlopf-Windows-x64-r1998.exe
       - name: Test packaged EXE without developer PATH
         run: |
-          $exe = (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
+          $exe = (Resolve-Path dist/EtuSchlopf-Windows-x64-r1998.exe).Path
           $originalPath = $env:PATH
           try {
             $env:PATH = "$env:windir\System32;$env:windir"
@@ -146,16 +128,16 @@ jobs:
           } finally { $env:PATH = $originalPath }
       - name: Verify isolated runtime and safe rejection
         run: |
-          ./.github/distribution/smoke.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path
+          ./.github/distribution/smoke.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64-r1998.exe).Path
       - name: Render the start example with the packaged EXE
         run: |
-          ./.github/distribution/start-example.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64.exe).Path -Output dist/EtuSchlopf-Beispiel-r1985.zip
+          ./.github/distribution/start-example.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64-r1998.exe).Path -Output dist/EtuSchlopf-Beispiel-r1998.zip
       - name: Hash Windows downloads
         env:
           ENGINE_CACHE_HIT: ${{ steps.engine-cache.outputs.cache-hit == 'true' }}
         run: |
-          @("revision=r1985", "public_commit=$env:GITHUB_SHA", "workflow=$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID", "accepted_take_sha256=5bf6cf758532cd99bbe6174e774fa6ee0499bb3e22f96a4b88eab7f28f363651", "native_snapshot_sha256=45d702204667afdbdddbe0fef65327db83f504d8877984cc88669d27caff95d2", "engine_cache_hit=$env:ENGINE_CACHE_HIT") | Set-Content -Encoding ascii dist/runtime-provenance.txt
-          $sums = foreach ($name in @('EtuSchlopf-Windows-x64.exe', 'EtuSchlopf-r1985-source.zip', 'EtuSchlopf-Beispiel-r1985.zip', 'runtime-provenance.txt')) {
+          @("revision=r1998", "public_commit=$env:GITHUB_SHA", "workflow=$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID", "accepted_take_sha256=8a9571e096d435d6e51521c060d10c7d9712e7f42356c7050768cc801c59653d", "native_snapshot_sha256=edf20e76a2abd934ff8c1449f465d5cdfa757a9ea7d026c947d6e5b028dc2398", "engine_cache_hit=$env:ENGINE_CACHE_HIT") | Set-Content -Encoding ascii dist/runtime-provenance.txt
+          $sums = foreach ($name in @('EtuSchlopf-Windows-x64-r1998.exe', 'EtuSchlopf-r1998-source.zip', 'EtuSchlopf-Beispiel-r1998.zip', 'runtime-provenance.txt')) {
             $hash = (Get-FileHash -Algorithm SHA256 "dist/$name").Hash.ToLowerInvariant()
             "$hash  $name"
           }
@@ -187,7 +169,7 @@ jobs:
           fi
           gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name EtuSchlopf-Windows-x64 --dir dist
           (cd dist && sha256sum --check SHA256SUMS.txt)
-          notes="Die portable EXE enthält EtuSchlopf 0.10.1839 r1985. Der Windows-Vollkorpus setzte alle 15 Stücke. Gegenüber r1973 sind 30 MusicXML-Dateien bytegleich und 59 PDF-Seiten bei 150 dpi pixelgleich. Das Startbeispiel enthält MIDI, WAV und das frisch gerenderte PDF. Das Quellarchiv enthält die geprüfte Cargo.lock. Für die PDF-Ausgabe brauchst du MuseScore. Die EXE ist unsigniert. [Windows-Abnahme r1985]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/evidence/r1985/README.md) · [Windows-Build]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
-          gh release create "$tag" dist/EtuSchlopf-Windows-x64.exe dist/EtuSchlopf-r1985-source.zip dist/EtuSchlopf-Beispiel-r1985.zip dist/runtime-provenance.txt dist/SHA256SUMS.txt \
+          notes="Die portable EXE enthält EtuSchlopf 0.10.1839 r1998. Der Windows-Vollkorpus setzte alle 15 Stücke. Der gemeinsame Balken in Bach BWV 847 verbindet F–D–C in Takt 25. Das H und beide Achtelpausen sind weiterhin sichtbar. Gegenüber r1997 sind 58 von 59 PDF-Seiten bei 144 dpi pixelgleich. Das Startbeispiel enthält MIDI, WAV und das frisch gerenderte PDF. Das Quellarchiv enthält die geprüfte Cargo.lock. Für die PDF-Ausgabe brauchst du MuseScore. Die EXE ist unsigniert. [Windows-Abnahme r1998]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/evidence/r1998/README.md) · [Windows-Build]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+          gh release create "$tag" dist/EtuSchlopf-Windows-x64-r1998.exe dist/EtuSchlopf-r1998-source.zip dist/EtuSchlopf-Beispiel-r1998.zip dist/runtime-provenance.txt dist/SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-            --title "EtuSchlopf r1985 Windows x64" --notes "$notes"
+            --title "EtuSchlopf r1998 Windows x64" --notes "$notes"

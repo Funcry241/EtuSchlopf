@@ -1,0 +1,51 @@
+{
+  "scores": 15,
+  "pages": 59,
+  "changed_pages": [
+    [
+      "p11",
+      1
+    ],
+    [
+      "p14",
+      2
+    ]
+  ],
+  "segments": [
+    {
+      "case": "p11",
+      "page": 1,
+      "drawing": 151,
+      "distance": 0.5552,
+      "minimum": 0.5454006246416481
+    },
+    {
+      "case": "p14",
+      "page": 2,
+      "drawing": 230,
+      "distance": 1.0,
+      "minimum": 0.5453992563221746
+    },
+    {
+      "case": "p14",
+      "page": 2,
+      "drawing": 229,
+      "distance": 1.0,
+      "minimum": 0.5453982527856089
+    },
+    {
+      "case": "p14",
+      "page": 2,
+      "drawing": 227,
+      "distance": 1.0,
+      "minimum": 0.5454056479714133
+    },
+    {
+      "case": "p14",
+      "page": 2,
+      "drawing": 228,
+      "distance": 1.0,
+      "minimum": 0.5453985552764048
+    }
+  ]
+}

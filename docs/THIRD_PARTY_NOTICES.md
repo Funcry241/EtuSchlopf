@@ -111,9 +111,7 @@ nicht und ersetzt nicht den Identitätsnachweis.
 
 ## MuseScore, Eingaben und Ausgaben
 
-MuseScore wird als separat installiertes Programm aufgerufen. Weder dessen
-Programmdateien noch Quellcode werden hier mitgeliefert. Eine eigene
-Weiterverteilung von MuseScore wäre gesondert nach dessen Lizenz zu behandeln.
+EtuSchlopf ruft MuseScore als separates Programm auf. Der optionale Satzfix-Renderer basiert auf MuseScore Studio 4.7.5. Der Patch und der zugehörige C++-Header stehen unter der [GNU General Public License, Version 3](../tools/satzfix_renderer/MuseScore-LICENSE.txt). Die [Renderer-Dokumentation](../tools/satzfix_renderer/README.md) nennt den zugrunde liegenden MuseScore-Commit und die Änderungen. Die Windows-Vorschau enthält den EtuSchlopf-Programmcode und nutzt eine separat installierte MuseScore-Version.
 
 Das Repository enthält den Programmquellbaum und ausgewählte von EtuSchlopf
 erzeugte [Notensatzbeispiele](examples). Die MIT-Lizenz für den Code erteilt

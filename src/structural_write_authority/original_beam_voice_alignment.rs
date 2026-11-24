@@ -21,6 +21,28 @@ type ClosedBridgeOrigins = Vec<(usize, BTreeSet<OriginalBeamOccurrenceKey>)>;
 type BoundNote<'a> = (&'a FinalChordEncodingNote, &'a FinalChordTransactionOutputOccurrenceWitness);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct CompanionRest {
+    onset: i64,
+    duration: i64,
+    staff: String,
+    original_xml: String,
+    gap: OriginalRestInterval,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct OriginalRestInterval {
+    start: i64,
+    end: i64,
+    seed_voice: usize,
+    measure_ordinal: usize,
+}
+
+struct RestContinuation<'a> {
+    interval: OriginalRestInterval,
+    label: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct OriginalBeamGraceHost {
     grace: OriginalBeamOccurrenceKey,
     host: OriginalBeamOccurrenceKey,
@@ -860,11 +882,27 @@ pub(super) fn append_proven_alignment(
                 if note.voice.trim() == target_label { continue; }
                 let (start,end) = primary_beam_voice_partition_voice_text_range(source_xml,note.range.clone())?;
                 group_edits.push(PrimaryBeamVoicePartitionBoundEdit { measure: row.measure,
-                    pitched_ordinal: row.pitched_ordinal, voice_text_start: start, voice_text_end: end,
+                    pitched_ordinal: row.pitched_ordinal, companion_rest: None,
+                    voice_text_start: start, voice_text_end: end,
                     expected_old_label: note.voice.trim().to_owned(), target_label: target_label.to_owned() });
             }
             let mut trial = edits.clone(); trial.extend(group_edits.clone());
-            let (collisions, lost_registration) = new_batch_conflicts(source_xml, current, &baseline, &trial)?;
+            let (mut collisions, mut lost_registration) =
+                new_batch_conflicts(source_xml, current, &baseline, &trial)?;
+            if !collisions.is_empty() && observed_fragments.is_some_and(|count| count > group.primary_group_count)
+                && voices.has_canonical_role_allocation()
+                && let Some(rests) = exact_companion_rests(
+                    (source_xml, current), (classification_xml, classification),
+                    voices, &group_edits, &collisions,
+                    |measure, rest| original_rest_continuation(
+                        group, voices, measure, rest, current, source_xml,
+                    ),
+                )?
+            {
+                trial.extend(rests.iter().cloned());
+                (collisions, lost_registration) = new_batch_conflicts(source_xml, current, &baseline, &trial)?;
+                group_edits.extend(rests);
+            }
             let unusual = beam_diagnostics::record(Observation::Admission {
                 scalar_changes: group_edits.len(),
                 collisions: !collisions.is_empty(),
@@ -936,16 +974,7 @@ pub(super) fn append_proven_alignment(
                 if headless.contains(&edit.expected_old_label) {
                     return true;
                 }
-                let raw = current
-                    .iter()
-                    .find(|m| m.measure == edit.measure)
-                    .and_then(|m| {
-                        m.notes
-                            .iter()
-                            .filter(|n| !n.rest_like && n.pitch_midi.is_some())
-                            .nth(edit.pitched_ordinal)
-                    })
-                    .map(|n| n.raw_note_index);
+                let raw = bound_scalar_note(source_xml, current, edit).map(|n| n.raw_note_index);
                 raw.is_some_and(|raw| {
                     conflicts.iter().any(|&(measure, left, right)| {
                         measure == edit.measure && (left == raw || right == raw)
@@ -959,6 +988,7 @@ pub(super) fn append_proven_alignment(
     }
     let mut admitted = Vec::new();
     for (group, target_index, target_channel, target_label, proposed, resources, proofs, hosts) in proposals {
+        carry_companion_gaps(repaired, &proposed);
         bridge_proofs.extend(proofs);
         grace_hosts.extend(hosts);
         edits.extend(proposed);
@@ -982,6 +1012,297 @@ pub(super) fn append_proven_alignment(
         admitted.push(group.id.clone());
     }
     Ok(admitted)
+}
+
+fn bound_scalar_note<'a>(
+    xml: &str,
+    measures: &'a [FinalChordBindingMeasure],
+    edit: &PrimaryBeamVoicePartitionBoundEdit,
+) -> Option<&'a FinalChordEncodingNote> {
+    let measure = measures.iter().find(|measure| measure.measure == edit.measure)?;
+    match &edit.companion_rest {
+        None => measure.notes.iter().filter(|note| !note.rest_like && note.pitch_midi.is_some())
+            .nth(edit.pitched_ordinal),
+        Some(rest) => {
+            let mut matching = measure.notes.iter().filter(|note|
+                note.rest_like && !note.chord_member && note.onset == rest.onset
+                    && note.duration == rest.duration && note.staff == rest.staff
+                    && xml.get(note.range.clone()) == Some(rest.original_xml.as_str()));
+            let note = matching.next()?;
+            matching.next().is_none().then_some(note)
+        }
+    }
+}
+
+pub(super) fn rebind_companion_rest(
+    xml: &str,
+    measures: &[FinalChordBindingMeasure],
+    edit: &PrimaryBeamVoicePartitionBoundEdit,
+) -> io::Result<PrimaryBeamVoicePartitionBoundEdit> {
+    let note = bound_scalar_note(xml, measures, edit)
+        .ok_or_else(|| invalid_alignment("companion rest lost its exact source binding"))?;
+    let (voice_text_start, voice_text_end) =
+        primary_beam_voice_partition_voice_text_range(xml, note.range.clone())?;
+    Ok(PrimaryBeamVoicePartitionBoundEdit {
+        voice_text_start,
+        voice_text_end,
+        ..edit.clone()
+    })
+}
+
+fn exact_companion_rests<'a>(
+    (xml, measures): (&str, &[FinalChordBindingMeasure]),
+    (classified_xml, classified): (&str, &[FinalChordBindingMeasure]),
+    voices: &FrozenSerializedVoicePlan,
+    pitched_edits: &[PrimaryBeamVoicePartitionBoundEdit],
+    collisions: &BTreeSet<(usize, usize, usize)>,
+    prove_original_rest_line: impl Fn(&FinalChordBindingMeasure, &FinalChordEncodingNote)
+        -> Option<RestContinuation<'a>>,
+) -> io::Result<Option<Vec<PrimaryBeamVoicePartitionBoundEdit>>> {
+    let mut pressed = BTreeMap::<(usize, usize), Vec<&FinalChordEncodingNote>>::new();
+    let mut moved = BTreeMap::new();
+    for edit in pitched_edits {
+        let Some(note) = bound_scalar_note(xml, measures, edit) else { return Ok(None); };
+        moved.insert((note.measure, note.raw_note_index), edit.target_label.as_str());
+    }
+    for &(number, left, right) in collisions {
+        let Some(measure) = measures.iter().find(|m| m.measure == number) else {
+            return Ok(None);
+        };
+        let Some((left, right)) = measure.notes.get(left).zip(measure.notes.get(right)) else {
+            return Ok(None);
+        };
+        let (rest, head) = match (left.rest_like, right.rest_like) {
+            (true, false) => (left, right),
+            (false, true) => (right, left),
+            _ => return Ok(None),
+        };
+        if moved.get(&(number, head.raw_note_index)).copied() != Some(rest.voice.trim())
+            || head.staff != rest.staff
+        {
+            return Ok(None);
+        }
+        pressed.entry((number, rest.raw_note_index)).or_default().push(head);
+    }
+
+    let mut result = BTreeMap::new();
+    for ((number, raw_index), mut heads) in pressed {
+        let measure = measures.iter().find(|m| m.measure == number).expect("bound collision");
+        let rest = &measure.notes[raw_index];
+        // Only the entire rest interval can be carried into another channel.
+        // Partial coverage would need a separate authorized rhythmic decision.
+        heads.sort_unstable_by_key(|note| note.onset);
+        if heads.first().is_none_or(|head| head.onset != rest.onset)
+            || heads.last().is_none_or(|head| head.onset.checked_add(head.duration)
+                != rest.onset.checked_add(rest.duration))
+            || heads.windows(2).any(|pair| pair[0].onset.checked_add(pair[0].duration) != Some(pair[1].onset))
+        {
+            return Ok(None);
+        }
+        let Some(RestContinuation { interval, label }) = prove_original_rest_line(measure, rest) else {
+            return Ok(None);
+        };
+        let same_staff = voices.role_for_label(&rest.voice).zip(voices.role_for_label(label))
+            .is_some_and(|(old, target)| channel_role_staff(old) == channel_role_staff(target));
+        let lane = || measure.notes.iter().filter(|note| !note.chord_member && note.duration > 0)
+            .filter(|note| moved.get(&(number, note.raw_note_index)).copied().unwrap_or(note.voice.trim()) == label);
+        let before = lane().filter(|note| note.onset < interval.start).max_by_key(|note| note.onset);
+        let after = lane().filter(|note| note.onset >= interval.end).min_by_key(|note| note.onset);
+        if label == rest.voice.trim() || !same_staff
+            || lane().any(|note| note.onset.saturating_add(note.duration) > interval.start && note.onset < interval.end)
+            || before.is_some_and(|note| matches!(primary_beam_voice_partition_note_primary_state(xml, note).as_deref(),
+                Some("begin" | "continue")))
+            || after.is_some_and(|note| matches!(primary_beam_voice_partition_note_primary_state(xml, note).as_deref(),
+                Some("end" | "continue")))
+        {
+            return Ok(None);
+        }
+        for member in measure.notes.iter().filter(|note| note.rest_like && !note.chord_member
+            && note.staff == rest.staff && note.voice == rest.voice && interval.start <= note.onset
+            && note.onset < interval.end)
+        {
+            let original = &xml[member.range.clone()];
+            let classified_rest_count = classified.iter().filter(|m| m.measure == number)
+                .flat_map(|m| &m.notes).filter(|note| note.rest_like && !note.chord_member
+                    && note.staff == member.staff && note.voice == member.voice && note.onset == member.onset
+                    && note.duration == member.duration && plain_companion_rest(&classified_xml[note.range.clone()]))
+                .count();
+            if classified_rest_count != 1 || !plain_companion_rest(original)
+                || measure.notes.iter().any(|note| note.chord_member
+                    && note.anchor_index == Some(member.raw_note_index))
+            {
+                return Ok(None);
+            }
+            let (voice_text_start, voice_text_end) =
+                primary_beam_voice_partition_voice_text_range(xml, member.range.clone())?;
+            let edit = PrimaryBeamVoicePartitionBoundEdit {
+                measure: number,
+                pitched_ordinal: 0,
+                companion_rest: Some(CompanionRest {
+                    onset: member.onset,
+                    duration: member.duration,
+                    staff: member.staff.clone(),
+                    original_xml: original.to_owned(),
+                    gap: interval,
+                }),
+                voice_text_start,
+                voice_text_end,
+                expected_old_label: member.voice.trim().to_owned(),
+                target_label: label.to_owned(),
+            };
+            if result.insert(voice_text_start, edit.clone()).is_some_and(|previous| previous != edit) {
+                return Ok(None);
+            }
+        }
+    }
+    Ok(Some(result.into_values().collect()))
+}
+
+fn carry_companion_gaps(voices: &mut FrozenSerializedVoicePlan, edits: &[PrimaryBeamVoicePartitionBoundEdit]) {
+    let mut replacements = BTreeMap::new();
+    for edit in edits {
+        let Some(rest) = &edit.companion_rest else { continue; };
+        let (Some(old), Some(target)) = (
+            voices.channel_for_label(&edit.expected_old_label), voices.channel_for_label(&edit.target_label),
+        ) else { continue; };
+        for (index, (channel, gap)) in voices.source_voice_gaps.iter().enumerate() {
+            if *channel == old && gap.measure == rest.gap.measure_ordinal
+                && gap.seed_voice == rest.gap.seed_voice && gap.staff.to_string() == rest.staff
+                && rest.gap.start <= gap.start && gap.start.saturating_add(gap.duration) <= rest.gap.end
+            {
+                replacements.insert(index, target);
+            }
+        }
+    }
+    if !replacements.is_empty() {
+        let gaps = std::sync::Arc::make_mut(&mut voices.source_voice_gaps);
+        for (index, target) in replacements {
+            gaps[index].0 = target;
+        }
+    }
+}
+
+fn original_rest_continuation<'a>(
+    group: &OriginalBeamVoiceGroup,
+    voices: &'a FrozenSerializedVoicePlan,
+    measure: &FinalChordBindingMeasure,
+    rest: &FinalChordEncodingNote,
+    measures: &[FinalChordBindingMeasure],
+    xml: &str,
+) -> Option<RestContinuation<'a>> {
+    let ordinal = measures.iter().position(|row| std::ptr::eq(row, measure))?;
+    let channel = voices.channel_for_label(rest.voice.trim())?;
+    let staff = rest.staff.parse::<u8>().ok()?;
+    let gaps = voices.source_voice_gaps.iter().filter_map(|(bound_channel, gap)|
+        (*bound_channel == channel && gap.measure == ordinal && gap.divisions == measure.divisions
+            && gap.staff == staff && gap.duration > 0).then_some(gap));
+    let rest_end = rest.onset.checked_add(rest.duration)?;
+    let partition = measure.notes.iter().filter(|note| note.rest_like && !note.chord_member
+        && note.staff == rest.staff && note.voice == rest.voice && note.duration > 0)
+        .map(|note| {
+            let end = note.onset.checked_add(note.duration)?;
+            let visible = xml.get(note.range.clone()).is_some_and(plain_companion_rest);
+            Some((note.onset, end, visible))
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let (start, end, seed_voice) = original_gap_partition(gaps, &partition, (rest.onset, rest_end))?;
+    let interval = OriginalRestInterval { start, end, seed_voice, measure_ordinal: ordinal };
+    let seed_voice = seed_voice.to_string();
+    let mut continuing = group.source_resources.iter().filter(|note|
+        note.measure == measure.measure && note.staff == rest.staff && note.onset == end
+            && !note.tie_stop && group.notation_voices.get(&(note.source_event_id, note.attack_id))
+                .is_some_and(|voice| voice == &seed_voice));
+    let head = continuing.next()?;
+    if continuing.next().is_some() {
+        return None;
+    }
+    Some(RestContinuation { interval, label: voices.label_for_source(head.source_event_id)? })
+}
+
+fn original_gap_partition<'a>(
+    gaps: impl Iterator<Item = &'a crate::midi_seed::SourceVoiceGap>,
+    written: &[(i64, i64, bool)],
+    selected: (i64, i64),
+) -> Option<(i64, i64, usize)> {
+    let mut intervals = gaps.map(|gap| {
+        Some((gap.start, gap.start.checked_add(gap.duration)?, gap.seed_voice))
+    }).collect::<Option<Vec<_>>>()?;
+    intervals.sort_unstable();
+    // Source fragments can partition one bounded silence differently from
+    // the written rests. Prove the complete contiguous interval on both sides.
+    let mut component: Vec<(i64, i64, usize)> = Vec::new();
+    for (start, end, voice) in intervals {
+        if let Some((_, previous_end, previous_voice)) = component.last_mut() {
+            if start < *previous_end {
+                return None;
+            }
+            if start == *previous_end && voice == *previous_voice {
+                *previous_end = end;
+                continue;
+            }
+        }
+        component.push((start, end, voice));
+    }
+    let &(start, end, voice) = component.iter()
+        .find(|&&(start, end, _)| start <= selected.0 && selected.0 < selected.1 && selected.1 <= end)?;
+    let mut covering = written.iter().copied()
+        .filter(|&(left, right, _)| left < end && start < right).collect::<Vec<_>>();
+    covering.sort_unstable();
+    let mut cursor = start;
+    let mut found = false;
+    for (left, right, visible) in covering {
+        if !visible || left != cursor || right <= left || right > end {
+            return None;
+        }
+        found |= (left, right) == selected;
+        cursor = right;
+    }
+    (found && cursor == end).then_some((start, end, voice))
+}
+
+fn plain_companion_rest(fragment: &str) -> bool {
+    final_chord_note_fragment_is_visible(fragment)
+        && roxmltree::Document::parse(fragment).ok().is_some_and(|document| {
+            let note = document.root_element();
+            note.has_tag_name("note")
+                && note.children().filter(roxmltree::Node::is_element).all(|child| {
+                    matches!(child.tag_name().name(), "duration" | "voice" | "type" | "dot" | "staff")
+                        || (child.has_tag_name("rest") && child.attributes().len() == 0)
+                })
+                && note.children().filter(|child| child.has_tag_name("rest")).count() == 1
+        })
+}
+
+pub(super) fn verify_companion_rest_exchange(
+    before: &str,
+    after: &str,
+    before_measures: &[FinalChordBindingMeasure],
+    after_measures: &[FinalChordBindingMeasure],
+    edits: &[PrimaryBeamVoicePartitionBoundEdit],
+) -> io::Result<()> {
+    for edit in edits.iter().filter(|edit| edit.companion_rest.is_some()) {
+        let old = bound_scalar_note(before, before_measures, edit)
+            .ok_or_else(|| invalid_alignment("companion rest has no before occurrence"))?;
+        if primary_beam_voice_partition_voice_text_range(before, old.range.clone())?
+            != (edit.voice_text_start, edit.voice_text_end)
+        {
+            return Err(invalid_alignment("companion rest has a stale voice range"));
+        }
+        let prefix = &before[old.range.start..edit.voice_text_start];
+        let suffix = &before[edit.voice_text_end..old.range.end];
+        let mut matching = after_measures.iter().filter(|m| m.measure == edit.measure)
+            .flat_map(|m| &m.notes).filter(|note|
+                note.rest_like && !note.chord_member && note.onset == old.onset
+                    && note.duration == old.duration && note.staff == old.staff
+                    && after.get(note.range.clone())
+                        .and_then(|fragment| fragment.strip_prefix(prefix))
+                        .and_then(|rest| rest.strip_suffix(suffix))
+                        == Some(edit.target_label.as_str()));
+        if matching.next().is_none() || matching.next().is_some() {
+            return Err(invalid_alignment("companion rest did not retain its exact staff and interval"));
+        }
+    }
+    Ok(())
 }
 
 fn occupancy_conflicts(
@@ -1071,19 +1392,10 @@ fn new_batch_conflicts(
                 "original beam alignment scalar precondition changed",
             ));
         }
-        let note = measures
-            .iter()
-            .find(|m| m.measure == edit.measure)
-            .and_then(|m| {
-                m.notes
-                    .iter()
-                    .filter(|n| !n.rest_like && n.pitch_midi.is_some())
-                    .nth(edit.pitched_ordinal)
-            })
-            .ok_or_else(|| {
+        let note = bound_scalar_note(source, measures, edit).ok_or_else(|| {
                 io::Error::new(
                     io::ErrorKind::InvalidData,
-                    "original beam scalar has no exact pitched occurrence",
+                    "original beam scalar has no exact note or rest",
                 )
             })?;
         if primary_beam_voice_partition_voice_text_range(source, note.range.clone())?
@@ -2073,6 +2385,7 @@ mod tests {
                     PrimaryBeamVoicePartitionBoundEdit {
                         measure: parsed[0].measure,
                         pitched_ordinal: ordinal,
+                        companion_rest: None,
                         voice_text_start: start,
                         voice_text_end: end,
                         expected_old_label: note.voice.clone(),
@@ -2517,10 +2830,177 @@ mod tests {
         PrimaryBeamVoicePartitionBoundEdit {
             measure: measure.measure,
             pitched_ordinal: 0,
+            companion_rest: None,
             voice_text_start: start,
             voice_text_end: end,
             expected_old_label: note.voice.clone(),
             target_label: target.to_owned(),
+        }
+    }
+
+    #[test]
+    fn bounded_source_gap_accepts_different_complete_rest_partitions() {
+        let make_gap = |start, duration, seed_voice| crate::midi_seed::SourceVoiceGap {
+            measure: 0,
+            divisions: 12,
+            start,
+            duration,
+            staff: 1,
+            seed_voice,
+            above_lower_staff: false,
+        };
+        for offset in [0, 7, 19] {
+            let written = [(offset, offset + 3, true), (offset + 3, offset + 9, true)];
+            let selected = (offset, offset + 3);
+            let expected = Some((offset, offset + 9, 7));
+            let source = [make_gap(offset, 9, 7)];
+            assert_eq!(original_gap_partition(source.iter(), &written, selected), expected);
+
+            let fragmented = [make_gap(offset + 4, 5, 7), make_gap(offset, 4, 7)];
+            assert_eq!(original_gap_partition(fragmented.iter(), &written, selected), expected);
+            assert_eq!(original_gap_partition(source.iter(), &written, (offset + 3, offset + 9)), expected);
+            assert_eq!(original_gap_partition(source.iter(), &written[..1], selected), None);
+            let overlap = [written[0], (offset + 2, offset + 9, true)];
+            assert_eq!(original_gap_partition(source.iter(), &overlap, selected), None);
+            let hidden = [written[0], (offset + 3, offset + 9, false)];
+            assert_eq!(original_gap_partition(source.iter(), &hidden, selected), None);
+            let different_line = [make_gap(offset, 4, 7), make_gap(offset + 4, 5, 8)];
+            assert_eq!(original_gap_partition(different_line.iter(), &written, selected), None);
+        }
+    }
+
+    #[test]
+    fn rest_companion_preserves_exact_time_and_presentation_role() {
+        for scope in [2, 41] {
+            let score = format!(
+                r#"<score-partwise><part id="P"><measure number="{scope}">
+              <attributes><divisions>8</divisions></attributes>
+              <note><pitch><step>A</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><staff>1</staff></note>
+              <note><pitch><step>E</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><staff>1</staff></note>
+              <backup><duration>4</duration></backup>
+              <note><rest/><duration>4</duration><voice>3</voice><type>eighth</type><staff>1</staff></note>
+              <note><rest/><duration>2</duration><voice>3</voice><type>16th</type><staff>1</staff></note>
+              <note><pitch><step>G</step><octave>4</octave></pitch><duration>4</duration><voice>3</voice><staff>1</staff></note>
+              <note><pitch><step>F</step><octave>4</octave></pitch><duration>4</duration><voice>4</voice><staff>1</staff></note>
+            </measure></part></score-partwise>"#
+            );
+            let xml = score.as_str();
+            let measures = final_chord_parse_binding_measures(xml).unwrap();
+            let mut voices = FrozenSerializedVoicePlan::default();
+            for (channel, label, role) in [
+                (1, "1", SerializedVoicePresentationRole::UpperPrimary),
+                (2, "3", SerializedVoicePresentationRole::UpperSecondary),
+                (3, "4", SerializedVoicePresentationRole::UpperSecondary),
+            ] {
+                voices.channel_to_label.insert(channel, label.to_owned());
+                voices.label_to_role.insert(label.to_owned(), role);
+            }
+            let edits: Vec<_> = measures[0].notes[..2]
+                .iter()
+                .enumerate()
+                .map(|(ordinal, note)| {
+                    let (start, end) =
+                        primary_beam_voice_partition_voice_text_range(xml, note.range.clone())
+                            .unwrap();
+                    PrimaryBeamVoicePartitionBoundEdit {
+                        measure: measures[0].measure,
+                        pitched_ordinal: ordinal,
+                        companion_rest: None,
+                        voice_text_start: start,
+                        voice_text_end: end,
+                        expected_old_label: "1".to_owned(),
+                        target_label: "3".to_owned(),
+                    }
+                })
+                .collect();
+            let baseline = batch_occupancy_baseline(xml, &measures).unwrap();
+            let continuation = || RestContinuation {
+                interval: OriginalRestInterval {
+                    start: 0,
+                    end: 6,
+                    seed_voice: 3,
+                    measure_ordinal: 0,
+                },
+                label: "4",
+            };
+            let classify = |changed: &[PrimaryBeamVoicePartitionBoundEdit]| {
+                let (collisions, _) =
+                    new_batch_conflicts(xml, &measures, &baseline, changed).unwrap();
+                exact_companion_rests(
+                    (xml, &measures),
+                    (xml, &measures),
+                    &voices,
+                    changed,
+                    &collisions,
+                    |_measure, _rest| Some(continuation()),
+                )
+                .unwrap()
+            };
+            assert!(classify(&edits[..1]).is_none());
+            let rests = classify(&edits).unwrap();
+            assert_eq!(rests.len(), 2);
+            assert!(rests.iter().all(|rest| rest.target_label == "4"));
+            let mut batch = edits;
+            batch.extend(rests);
+            assert!(
+                new_batch_conflicts(xml, &measures, &baseline, &batch)
+                    .unwrap()
+                    .0
+                    .is_empty()
+            );
+            let source_gap = crate::midi_seed::SourceVoiceGap {
+                measure: 0,
+                divisions: 8,
+                start: 0,
+                duration: 6,
+                staff: 1,
+                seed_voice: 3,
+                above_lower_staff: false,
+            };
+            let other_gap = crate::midi_seed::SourceVoiceGap {
+                start: 12,
+                ..source_gap.clone()
+            };
+            voices.bind_source_voice_gaps(vec![source_gap.clone(), other_gap.clone()]);
+            carry_companion_gaps(&mut voices, &batch);
+            assert_eq!(
+                &*voices.source_voice_gaps,
+                &[(3, source_gap), (2, other_gap)]
+            );
+            let mut after = xml.to_owned();
+            for edit in batch.iter().rev() {
+                after.replace_range(
+                    edit.voice_text_start..edit.voice_text_end,
+                    &edit.target_label,
+                );
+            }
+            let observed = final_chord_parse_binding_measures(&after).unwrap();
+            verify_companion_rest_exchange(xml, &after, &measures, &observed, &batch).unwrap();
+            let altered = after.replace("<type>eighth</type>", "<type>quarter</type>");
+            let observed = final_chord_parse_binding_measures(&altered).unwrap();
+            assert!(
+                verify_companion_rest_exchange(xml, &altered, &measures, &observed, &batch)
+                    .is_err()
+            );
+
+            voices.label_to_role.insert(
+                "4".to_owned(),
+                SerializedVoicePresentationRole::UpperPrimary,
+            );
+            let pitched = &batch[..2];
+            let (collisions, _) = new_batch_conflicts(xml, &measures, &baseline, pitched).unwrap();
+            for has_continuation in [false, true] {
+                let result = exact_companion_rests(
+                    (xml, &measures),
+                    (xml, &measures),
+                    &voices,
+                    pitched,
+                    &collisions,
+                    |_measure, _rest| has_continuation.then(continuation),
+                )
+                .unwrap();
+                assert_eq!(result.is_some(), has_continuation);
+            }
         }
     }
 
@@ -2683,7 +3163,7 @@ mod tests {
         let parsed=final_chord_parse_binding_measures(&xml).unwrap();
         let chord=&parsed[0].notes[1];
         let (start,end)=primary_beam_voice_partition_voice_text_range(&xml,chord.range.clone()).unwrap();
-        let edit=PrimaryBeamVoicePartitionBoundEdit { measure:synthetic_measure,pitched_ordinal:1,voice_text_start:start,voice_text_end:end,expected_old_label:"1".to_owned(),target_label:"17".to_owned() };
+        let edit=PrimaryBeamVoicePartitionBoundEdit { measure:synthetic_measure,pitched_ordinal:1,companion_rest:None,voice_text_start:start,voice_text_end:end,expected_old_label:"1".to_owned(),target_label:"17".to_owned() };
         assert!(validate_batch_occupancy(&xml,&[edit]).is_err());
         }
     }

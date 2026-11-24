@@ -447,6 +447,11 @@ fn run_render_pdf_source_selection_stage(
             pdf_source_path,
             &source.pdf_out,
             final_pdf_source_commit,
+            phrase_preview.slur_paint_plan(),
+        );
+        anyhow::ensure!(
+            phrase_preview.slur_paint_plan().is_none() || matches!(render.status, RenderStatus::Written),
+            "PhraseSlurPaint: renderer did not finish the bound PDF export"
         );
         anyhow::ensure!(phrase_preview.matches_pdf(&render, pdf_source_path, &source.pdf_out),
             "PhraseSlurClearance: final PDF renderer differs from the geometric preview");

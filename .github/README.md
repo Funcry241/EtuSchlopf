@@ -17,16 +17,16 @@ Der Ergebnisordner liegt neben der MIDI. EtuSchlopf arbeitet dort mit Kopien der
 
 ## Notenbilder
 
-Die Galerie enthält alle 15 PDFs aus dem abgenommenen Windows-Lauf r1994. [Alle Notenbilder r1994](../docs/examples/README.md#notenbilder) · [Musikquellen](../docs/examples/README.md#quellen-und-rechte)
+Die Galerie enthält alle 15 PDFs aus dem abgenommenen Windows-Lauf r1998. [Alle Notenbilder r1998](../docs/examples/README.md#notenbilder) · [Musikquellen](../docs/examples/README.md#quellen-und-rechte)
 
 | Bach · Fuge c-Moll BWV 847 | Chopin · Etüde E-Dur op. 10 Nr. 3 | Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15 |
 | --- | --- | --- |
-| [![Bach, Fuge c-Moll, r1994](../docs/images/bwv847-fuge-r1994-ausschnitt.png)](../docs/examples/bwv847-fuge-r1994.pdf) | [![Chopin, Etüde E-Dur, r1994](../docs/images/chopin-op10-no3-p01-r1994-ausschnitt.png)](../docs/examples/chopin-op10-no3-p01-r1994.pdf) | [![Schubert, Deutscher Tanz, r1994](../docs/images/schubert-d783-no15-p18-r1994-ausschnitt.png)](../docs/examples/schubert-d783-no15-p18-r1994.pdf) |
+| [![Bach, Fuge c-Moll, r1998](../docs/images/bwv847-fuge-r1998-ausschnitt.png)](../docs/examples/bwv847-fuge-r1998.pdf) | [![Chopin, Etüde E-Dur, r1998](../docs/images/chopin-op10-no3-p01-r1998-ausschnitt.png)](../docs/examples/chopin-op10-no3-p01-r1998.pdf) | [![Schubert, Deutscher Tanz, r1998](../docs/images/schubert-d783-no15-p18-r1998-ausschnitt.png)](../docs/examples/schubert-d783-no15-p18-r1998.pdf) |
 
 ## Stand auf main
 
-**r1994 / 0.10.1839** setzt alle 15 Stücke auf insgesamt 59 PDF-Seiten.
-[Windows-Abnahme r1994](../docs/evidence/r1994/README.md) · [Mathematik in EtuSchlopf](../docs/MATHEMATIK.md)
+**r1998 / 0.10.1839** setzt alle 15 Stücke auf insgesamt 59 PDF-Seiten.
+[Windows-Abnahme r1998](../docs/evidence/r1998/README.md) · [Mathematik in EtuSchlopf](../docs/MATHEMATIK.md)
 
 EtuSchlopf ist experimentell. Bleiben Einsätze oder Taktgrenzen einer frei gespielten Aufnahme mehrdeutig, kann EtuSchlopf den Lauf abbrechen. Chopins Ballade op. 38 wird separat als Stresstest geführt. [Ballade op. 38](../docs/examples/chopin-op38-p01.md)
 

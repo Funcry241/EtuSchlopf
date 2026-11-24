@@ -1,0 +1,69 @@
+--- a/src/engraving/rendering/score/tdraw.cpp
++++ b/src/engraving/rendering/score/tdraw.cpp
+@@ -20,6 +20,15 @@
+  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+  */
+ #include "tdraw.h"
++
++// Satzfix modification (2026-11-23): optional slur contours for PDF export.
++// This modification is distributed under the GNU General Public License, version 3.
++
++#include "etuschlopf_slur_paint_plan.h"
++
++#include <algorithm>
++#include <cstdio>
++#include "dom/page.h"
+
+ #include "defer.h"
+
+@@ -2685,7 +2694,49 @@
+         break;
+     }
+     painter->setPen(pen);
+-    painter->drawPath(item->ldata()->path());
++    const auto& originalPath = item->ldata()->path();
++    static const auto etuschlopfPlan = etuschlopf::SlurPaintPlan::load();
++    bool replaced = false;
++    if (opt.isPrinting && !MScore::svgPrinting && !etuschlopfPlan.empty()
++        && item->slurTie()->styleType() == SlurStyleType::Solid
++        && item->system() && item->system()->page() && originalPath.elementCount() == 7) {
++        using ElementType = muse::draw::PainterPath::ElementType;
++        const std::array expected{ ElementType::MoveToElement, ElementType::CurveToElement,
++                                   ElementType::CurveToDataElement, ElementType::CurveToDataElement,
++                                   ElementType::CurveToElement, ElementType::CurveToDataElement,
++                                   ElementType::CurveToDataElement };
++        const auto origin = item->pagePos();
++        etuschlopf::SlurRibbon before{};
++        bool supported = true;
++        for (std::size_t i = 0; i < before.size(); ++i) {
++            const auto element = originalPath.elementAt(i);
++            supported &= element.type == expected[i];
++            before[i] = { element.x + origin.x(), element.y + origin.y() };
++        }
++        const auto& pages = item->score()->pages();
++        const auto page = std::find(pages.cbegin(), pages.cend(), item->system()->page());
++        if (supported && before.front() == before.back() && page != pages.cend()) {
++            const auto index = static_cast<std::size_t>(page - pages.cbegin());
++            if (const auto selected = etuschlopfPlan.find(index, before)) {
++                std::array<PointF, 7> p;
++                for (std::size_t i = 0; i < p.size(); ++i) {
++                    const auto& point = selected->edit.after[i];
++                    p[i] = PointF(point[0] - origin.x(), point[1] - origin.y());
++                }
++                muse::draw::PainterPath path;
++                path.setFillRule(originalPath.fillRule());
++                path.moveTo(p[0]);
++                path.cubicTo(p[1], p[2], p[3]);
++                path.cubicTo(p[4], p[5], p[6]);
++                painter->drawPath(path);
++                std::fprintf(stderr, "ETUSCHLOPF_SLUR_PATH_V1 %zu\n", selected->index);
++                replaced = true;
++            }
++        }
++    }
++    if (!replaced) {
++        painter->drawPath(originalPath);
++    }
+
+     painter->restore();
+ }

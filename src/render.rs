@@ -473,6 +473,59 @@ pub(crate) struct PhraseSvgPreview {
     directory: Option<PathBuf>,
     serial: usize,
     pub(crate) adopted: bool,
+    slur_paint_plan: Option<SlurPaintPlan>,
+}
+
+const SLUR_PAINT_PLAN_ENV: &str = "ETUSCHLOPF_SLUR_PAINT_PLAN";
+
+fn slur_paint_enabled() -> bool {
+    std::env::var("ETUSCHLOPF_SLUR_PAINT").as_deref() == Ok("1")
+        && std::env::var_os("ETUSCHLOPF_PDF_RENDERER").is_some()
+}
+
+pub(super) struct SlurPaintPlan {
+    payload: String,
+    source: String,
+    count: usize,
+    renderer: (String, String, String),
+}
+
+impl SlurPaintPlan {
+    fn renderer_matches(&self, executable: &str) -> bool {
+        self.renderer.0 == executable && renderer_executable_identity(executable) == self.renderer.2
+    }
+
+    fn receipt_matches(&self, stderr: &str) -> bool {
+        let mut rows = stderr.lines()
+            .filter_map(|line| line.strip_prefix("ETUSCHLOPF_SLUR_PATH_V1 "))
+            .map(|row| row.parse::<usize>().ok())
+            .collect::<Option<Vec<_>>>();
+        rows.as_mut().is_some_and(|rows| {
+            rows.sort_unstable();
+            rows.iter().copied().eq(0..self.count)
+        })
+    }
+}
+
+#[cfg(test)]
+mod slur_paint_receipt_tests {
+    use super::*;
+
+    #[test]
+    fn every_planned_path_must_be_reported_exactly_once() {
+        let plan = SlurPaintPlan {
+            payload: String::new(),
+            source: String::new(),
+            count: 2,
+            renderer: (String::new(), String::new(), String::new()),
+        };
+        let prefix = "ETUSCHLOPF_SLUR_PATH_V1 ";
+        assert!(plan.receipt_matches(&format!("{prefix}1\n{prefix}0\n")));
+        assert!(!plan.receipt_matches(&format!("{prefix}0\n")));
+        assert!(!plan.receipt_matches(&format!("{prefix}1\n{prefix}1\n")));
+        assert!(!plan.receipt_matches(&format!("{prefix}0\n{prefix}00x\n")));
+        assert!(!plan.receipt_matches(&format!("{prefix}1\n{prefix}2\n")));
+    }
 }
 
 impl PhraseSvgPreview {
@@ -535,6 +588,32 @@ impl PhraseSvgPreview {
         Some(pages.into_values().collect())
     }
 
+    pub(crate) fn wants_slur_paint(&self) -> bool {
+        slur_paint_enabled()
+    }
+
+    pub(crate) fn set_slur_paint_plan(&mut self, source: &str, plan: &str, count: usize) -> Option<()> {
+        let renderer = self.renderer.clone()?;
+        let configured = std::env::var("ETUSCHLOPF_PDF_RENDERER").ok()?;
+        let explicit = validate_renderer_executable(
+            &strip_optional_quotes(&configured), "ETUSCHLOPF_PDF_RENDERER",
+        )?;
+        if renderer.0 != explicit {
+            return None;
+        }
+        self.slur_paint_plan = Some(SlurPaintPlan {
+            payload: plan.to_owned(),
+            source: source.to_owned(),
+            count,
+            renderer,
+        });
+        Some(())
+    }
+
+    pub(super) fn slur_paint_plan(&self) -> Option<&SlurPaintPlan> {
+        self.slur_paint_plan.as_ref()
+    }
+
     pub(super) fn matches_pdf(&self, render: &RenderResult, input: &Path, output: &Path) -> bool {
         if !self.adopted {
             return true;
@@ -562,10 +641,11 @@ fn load_musicxml_bytes_for_renderer_guard(path: &Path) -> Option<Vec<u8>> {
     fs::read(path).ok()
 }
 
-pub fn render_pdf_if_possible(
+pub(super) fn render_pdf_if_possible(
     input_musicxml: &Path,
     output_pdf: &Path,
     final_commit: &final_pdf_source_commit::FinalPdfSourceCommit,
+    slur_plan: Option<&SlurPaintPlan>,
 ) -> RenderResult {
     let shadow_partial_renderable = final_commit.permits_shadow_renderer(input_musicxml)
         && super::persisted_schema_validation::shadow_renderer_paths_outside_products(input_musicxml, output_pdf);
@@ -609,7 +689,14 @@ pub fn render_pdf_if_possible(
         };
 
     let before_renderer = load_musicxml_bytes_for_renderer_guard(input_musicxml);
-    let mut rendered = render_finalized_pdf_if_possible(input_musicxml, output_pdf);
+    if slur_plan.is_some_and(|plan| before_renderer.as_deref() != Some(plan.source.as_bytes())) {
+        return RenderResult {
+            status: RenderStatus::RendererFailed,
+            message: "PhraseSlurPaint: source bytes changed after the geometric preview".to_owned(),
+            probe_identity: None,
+        };
+    }
+    let mut rendered = render_finalized_pdf_if_possible(input_musicxml, output_pdf, slur_plan);
     let after_renderer = load_musicxml_bytes_for_renderer_guard(input_musicxml);
     let renderer_musicxml_unchanged =
         before_renderer.is_some() && before_renderer == after_renderer;
@@ -631,7 +718,9 @@ pub fn render_pdf_if_possible(
     rendered
 }
 
-fn render_finalized_pdf_if_possible(input_musicxml: &Path, output_pdf: &Path) -> RenderResult {
+fn render_finalized_pdf_if_possible(
+    input_musicxml: &Path, output_pdf: &Path, slur_plan: Option<&SlurPaintPlan>,
+) -> RenderResult {
     let candidates = discover_renderer_candidates();
     let mut attempts = Vec::new();
     let mut found_candidates = 0usize;
@@ -649,8 +738,12 @@ fn render_finalized_pdf_if_possible(input_musicxml: &Path, output_pdf: &Path) ->
         let Some(executable) = validate_renderer_executable(&strip_optional_quotes(&candidate.executable), candidate.source) else {
             continue;
         };
+        if slur_plan.is_some_and(|plan| !plan.renderer_matches(&executable)) {
+            attempts.push("PhraseSlurPaint: renderer does not match the bound preview".to_owned());
+            continue;
+        }
         found_candidates += 1;
-        match try_render_with_candidate(&executable, candidate.source, &input_abs, &output_abs) {
+        match try_render_with_candidate(&executable, candidate.source, &input_abs, &output_abs, slur_plan) {
             RenderAttempt::Success {
                 command_label,
                 command_text,
@@ -1407,11 +1500,18 @@ fn try_render_with_candidate(
     source: &str,
     input_musicxml: &Path,
     output_pdf: &Path,
+    slur_plan: Option<&SlurPaintPlan>,
 ) -> RenderAttempt {
     // Die Render-Quelle wird unverändert an MuseScore übergeben.
     // Vorzeichnungen dürfen nicht beim Renderer-Aufruf aus einem festen
     // Zwei-Kreuze-Sonderfall entstehen; ihre Autorität liegt in der finalen XML.
     let mut variants = render_command_variants(input_musicxml, output_pdf);
+    if let Some(plan) = slur_plan {
+        variants.retain(|variant| variant.label == plan.renderer.1);
+        if variants.len() != 1 {
+            return RenderAttempt::Failed(vec!["PhraseSlurPaint: bound renderer command unavailable".to_owned()]);
+        }
+    }
     let total_variants = variants.len();
     let run_local_shadow_hint =
         take_run_local_shadow_renderer_winning_command(executable, output_pdf);
@@ -1437,8 +1537,18 @@ fn try_render_with_candidate(
     for variant in variants {
         fallback_timing.variants_attempted += 1;
         let command_text = format_command(executable, &variant.args);
-        match run_renderer_command(executable, &variant.args, None) {
+        match run_renderer_command_with_plan(executable, &variant.args, None, slur_plan) {
             Ok(run) => {
+                if let Some(plan) = slur_plan {
+                    if run.code != Some(0) || !plan.receipt_matches(&run.stderr) {
+                        let _ = fs::remove_file(output_pdf);
+                        return RenderAttempt::Failed(vec![format!(
+                            "PhraseSlurPaint: expected {} unique PDF path receipts from the bound renderer",
+                            plan.count
+                        )]);
+                    }
+                    println!("ETUSCHLOPF: PhraseSlurPaint: {} verified drawing receipts", plan.count);
+                }
                 let output_immediately_after_process = pdf_output_snapshot_v994(output_pdf);
                 let output_present_at_process_end = output_immediately_after_process.exists
                     && output_immediately_after_process.is_file
@@ -1567,8 +1677,20 @@ fn run_renderer_command(
     args: &[String],
     current_dir: Option<&Path>,
 ) -> std::io::Result<CommandRun> {
+    run_renderer_command_with_plan(executable, args, current_dir, None)
+}
+
+fn run_renderer_command_with_plan(
+    executable: &str,
+    args: &[String],
+    current_dir: Option<&Path>,
+    slur_plan: Option<&SlurPaintPlan>,
+) -> std::io::Result<CommandRun> {
     let mut command = Command::new(executable);
-    command.args(args);
+    command.args(args).env_remove(SLUR_PAINT_PLAN_ENV);
+    if let Some(plan) = slur_plan {
+        command.env(SLUR_PAINT_PLAN_ENV, &plan.payload);
+    }
     if let Some(dir) = current_dir {
         command.current_dir(dir);
     }

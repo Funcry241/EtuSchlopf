@@ -2,9 +2,15 @@
 // Accept the flat, absolute-coordinate vector format we can verify completely.
 use roxmltree::{Document, Node};
 
-const FLATNESS: f64 = 0.06;
-// SVG rounds coordinates on the page to six significant digits.
-const ROUNDING: f64 = 0.16;
+#[path = "phrase_paint_geometry.rs"]
+pub(super) mod paint;
+
+const FLATNESS: f64 = 1.0 / 128.0;
+const GRID: f64 = 4096.0;
+// Euclidean allowance for snapping a vertex and evaluating the subdivision.
+const CONTOUR_ERROR: f64 = FLATNESS + 1.0 / GRID + 0.000_001;
+// Reserve for the renderer's rounded preview coordinates.
+const PREVIEW_RESERVE: f64 = 0.16;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Point {
@@ -20,9 +26,21 @@ impl Point {
         }
     }
 
-    fn distance_squared(self, other: Self) -> f64 {
-        (self.x - other.x).powi(2) + (self.y - other.y).powi(2)
+    fn grid(self) -> Option<GridPoint> {
+        let x = (self.x * GRID).round();
+        let y = (self.y * GRID).round();
+        let coordinates = f64::from(i32::MIN)..=f64::from(i32::MAX);
+        (coordinates.contains(&x) && coordinates.contains(&y)).then(|| GridPoint {
+            x: i64::from(x as i32),
+            y: i64::from(y as i32),
+        })
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct GridPoint {
+    x: i64,
+    y: i64,
 }
 
 #[derive(Clone, Copy)]
@@ -106,10 +124,14 @@ struct Shape {
     class: String,
     paint: Vec<(String, String)>,
     commands: Vec<Command>,
-    contours: Vec<Vec<Point>>,
+    contours: Vec<Vec<GridPoint>>,
     bounds: Bounds,
+    stroke_scale: [f64; 2],
+    half_stroke_width: f64,
     radius: f64,
+    round_inner_radius: Option<f64>,
     filled: bool,
+    even_odd: bool,
 }
 
 impl Shape {
@@ -139,7 +161,7 @@ impl Shape {
         }) {
             return None;
         }
-        let filled = node.attribute("fill") != Some("none")
+        let mut filled = node.attribute("fill") != Some("none")
             && node.has_tag_name(("http://www.w3.org/2000/svg", "path"));
         let width = match node.attribute("stroke") {
             None | Some("none") => 0.0,
@@ -148,6 +170,11 @@ impl Shape {
         if width < 0.0 {
             return None;
         }
+        let even_odd = match node.attribute("fill-rule") {
+            Some("evenodd") => true,
+            Some("nonzero") | None => false,
+            _ => return None,
+        };
         let [sx, sy, tx, ty] = if let Some(transform) = node.attribute("transform") {
             let values = transform
                 .strip_prefix("matrix(")?
@@ -193,21 +220,87 @@ impl Shape {
                     x: p.x * sx + tx,
                     y: p.y * sy + ty,
                 };
+                p.grid()?;
             }
         }
-        let contours = contours(&commands, filled)?;
-        let bounds = Bounds::from_points(
-            contours.iter().flatten().copied(),
-            half_stroke_width + FLATNESS,
-        )?;
+        let cap = match node.attribute("stroke-linecap") {
+            None | Some("butt" | "round") => 1.0,
+            Some("square") => 1.5,
+            _ => return None,
+        };
+        let join = match node.attribute("stroke-linejoin") {
+            Some("round" | "bevel") => 1.0,
+            None | Some("miter") if commands.len() > 2 => {
+                let limit = node
+                    .attribute("stroke-miterlimit")
+                    .map_or(Some(4.0), number)?;
+                if limit < 1.0 {
+                    return None;
+                }
+                limit * 2.0
+            }
+            None | Some("miter") => 1.0,
+            _ => return None,
+        };
+        let radius = half_stroke_width * f64::max(cap, join);
+        let closed = matches!(commands.first(), Some(Command::Move(p)) if commands.last().and_then(|c| c.points().last()) == Some(p));
+        let round_inner_radius = ((!filled || closed)
+            && node.attribute("stroke-linecap") == Some("round")
+            && node.attribute("stroke-linejoin") == Some("round")
+            && node.attribute("stroke-dasharray").is_none())
+        .then(|| half_stroke_width * (sx.min(sy) / sx.max(sy)));
+        let bounds =
+            Bounds::from_points(commands.iter().flat_map(Command::points).copied(), radius)?;
+        // Axis-aligned butt strokes are rectangles. Their caps stop at the
+        // given endpoints, which matters when a stem just touches a bow.
+        let (contours, stroke_expansion) = if !filled
+            && width > 0.0
+            && matches!(node.attribute("stroke-linecap"), None | Some("butt"))
+            && node.attribute("stroke-dasharray").is_none()
+            && let [Command::Move(a), Command::Line(b)] = commands.as_slice()
+            && ((a.x == b.x) != (a.y == b.y))
+        {
+            let dx = if a.x == b.x { width * sx * 0.5 } else { 0.0 };
+            let dy = if a.y == b.y { width * sy * 0.5 } else { 0.0 };
+            let left = a.x.min(b.x) - dx;
+            let right = a.x.max(b.x) + dx;
+            let top = a.y.min(b.y) - dy;
+            let bottom = a.y.max(b.y) + dy;
+            let rectangle = [
+                Point { x: left, y: top },
+                Point { x: right, y: top },
+                Point {
+                    x: right,
+                    y: bottom,
+                },
+                Point { x: left, y: bottom },
+                Point { x: left, y: top },
+            ];
+            filled = true;
+            (
+                vec![
+                    rectangle
+                        .into_iter()
+                        .map(Point::grid)
+                        .collect::<Option<_>>()?,
+                ],
+                None,
+            )
+        } else {
+            (contours(&commands, filled)?, Some(radius))
+        };
         Some(Self {
             class,
             paint,
             commands,
             contours,
             bounds,
-            radius: half_stroke_width,
+            stroke_scale: [width * sx, width * sy],
+            half_stroke_width,
+            radius: stroke_expansion.unwrap_or_default(),
+            round_inner_radius,
             filled,
+            even_odd,
         })
     }
 
@@ -226,8 +319,8 @@ impl Shape {
         }
         let offset = |p: &Point| p.y - (start.y + (end.y - start.y) * ((p.x - start.x) / width));
         match (offset(first), offset(second)) {
-            (a, b) if a < -ROUNDING && b < -ROUNDING => Some(Side::Above),
-            (a, b) if a > ROUNDING && b > ROUNDING => Some(Side::Below),
+            (a, b) if a < -PREVIEW_RESERVE && b < -PREVIEW_RESERVE => Some(Side::Above),
+            (a, b) if a > PREVIEW_RESERVE && b > PREVIEW_RESERVE => Some(Side::Below),
             _ => None,
         }
     }
@@ -241,26 +334,15 @@ impl Shape {
         )
     }
 
-    fn vertical_translation(&self, other: &Self) -> Option<f64> {
-        if self.class != other.class
-            || self.paint != other.paint
-            || self.radius != other.radius
-            || self.commands.len() != other.commands.len()
-        {
-            return None;
-        }
-        let dy = other.commands.first()?.points().first()?.y
-            - self.commands.first()?.points().first()?.y;
-        self.commands
-            .iter()
-            .zip(&other.commands)
-            .all(|(a, b)| {
-                std::mem::discriminant(a) == std::mem::discriminant(b)
-                    && a.points().iter().zip(b.points()).all(|(p, q)| {
-                        (p.x - q.x).abs() <= ROUNDING && (p.y + dy - q.y).abs() <= ROUNDING
-                    })
-            })
-            .then_some(dy)
+    fn stroke_width(&self) -> f64 {
+        self.stroke_scale[0].max(self.stroke_scale[1])
+    }
+
+    fn same_ink(&self, other: &Self) -> bool {
+        self.class == other.class
+            && self.commands == other.commands
+            && self.paint == other.paint
+            && self.stroke_scale == other.stroke_scale
     }
 
     fn extent(&self) -> Option<(Point, Point)> {
@@ -293,17 +375,6 @@ impl Page {
             .map(Shape::read)
             .collect::<Option<Vec<_>>>()?;
         Some(Self { format, shapes })
-    }
-
-    pub(super) fn same_ink(&self, other: &Self) -> bool {
-        self.format == other.format
-            && self.shapes.len() == other.shapes.len()
-            && self.shapes.iter().zip(&other.shapes).all(|(a, b)| {
-                a.class == b.class
-                    && a.commands == b.commands
-                    && a.paint == b.paint
-                    && a.radius == b.radius
-            })
     }
 
     pub(super) fn system_count(&self, staff_count: usize) -> Option<usize> {
@@ -373,26 +444,18 @@ fn read_path(text: &str) -> Option<Vec<Command>> {
     Some(commands)
 }
 
-fn point_segment_distance_squared(p: Point, a: Point, b: Point) -> f64 {
-    let dx = b.x - a.x;
-    let dy = b.y - a.y;
-    let length = a.distance_squared(b);
-    if length == 0.0 {
-        return p.distance_squared(a);
-    }
-    let t = (((p.x - a.x) * dx + (p.y - a.y) * dy) / length).clamp(0.0, 1.0);
-    p.distance_squared(Point {
-        x: a.x + t * dx,
-        y: a.y + t * dy,
-    })
-}
-
-fn flatten(out: &mut Vec<Point>, curve: [Point; 4], depth: u8) -> Option<()> {
+fn flatten(out: &mut Vec<GridPoint>, curve: [Point; 4], depth: u8) -> Option<()> {
     let [a, b, c, d] = curve;
-    if point_segment_distance_squared(b, a, d).max(point_segment_distance_squared(c, a, d))
-        <= FLATNESS * FLATNESS
-    {
-        out.push(d);
+    // Degree-elevate the chord to compare corresponding points at the same t.
+    // The norm of a convex combination of the control-point differences is
+    // bounded by the largest norm among them.
+    let error = |p: Point, fraction: f64| {
+        let x = p.x - (a.x + (d.x - a.x) * fraction);
+        let y = p.y - (a.y + (d.y - a.y) * fraction);
+        x * x + y * y
+    };
+    if error(b, 1.0 / 3.0).max(error(c, 2.0 / 3.0)) <= FLATNESS * FLATNESS {
+        out.push(d.grid()?);
         return Some(());
     }
     if depth >= 18 {
@@ -408,81 +471,170 @@ fn flatten(out: &mut Vec<Point>, curve: [Point; 4], depth: u8) -> Option<()> {
     flatten(out, [center, right, cd, d], depth + 1)
 }
 
-fn contours(commands: &[Command], filled: bool) -> Option<Vec<Vec<Point>>> {
-    let mut contours = Vec::<Vec<Point>>::new();
+fn contours(commands: &[Command], filled: bool) -> Option<Vec<Vec<GridPoint>>> {
+    let mut contours = Vec::<Vec<GridPoint>>::new();
+    let mut start = None;
     for command in commands {
-        match *command {
-            Command::Move(p) => contours.push(vec![p]),
-            Command::Line(p) => contours.last_mut()?.push(p),
+        let p = match *command {
+            Command::Move(p) => {
+                contours.push(vec![p.grid()?]);
+                p
+            }
+            Command::Line(p) => {
+                contours.last_mut()?.push(p.grid()?);
+                p
+            }
             Command::Cubic([b, c, d]) => {
-                let contour = contours.last_mut()?;
-                let a = *contour.last()?;
-                flatten(contour, [a, b, c, d], 0)?;
+                flatten(contours.last_mut()?, [start?, b, c, d], 0)?;
+                d
             }
-        }
+        };
+        start = Some(p);
     }
-    if filled {
-        for contour in &mut contours {
-            if contour.first() != contour.last() {
-                contour.push(*contour.first()?);
-            }
+    for contour in &mut contours {
+        if contour.len() < 2 {
+            return None;
+        }
+        if filled && contour.first() != contour.last() {
+            contour.push(contour[0]);
         }
     }
     Some(contours)
 }
 
-fn orient(a: Point, b: Point, c: Point) -> f64 {
-    (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+fn orient(a: GridPoint, b: GridPoint, c: GridPoint) -> i128 {
+    i128::from(b.x - a.x) * i128::from(c.y - a.y) - i128::from(b.y - a.y) * i128::from(c.x - a.x)
 }
 
-fn segments_close(a: &[Point], b: &[Point], distance: f64) -> bool {
+// Differences and single products of signed grid coordinates fit in i128.
+// Refuse an indeterminate comparison if a squared cross product overflows.
+fn point_near_segment(
+    p: GridPoint,
+    a: GridPoint,
+    b: GridPoint,
+    limit_squared: i128,
+) -> Option<bool> {
+    let dx = i128::from(b.x - a.x);
+    let dy = i128::from(b.y - a.y);
+    let nx = i128::from(p.x - a.x);
+    let ny = i128::from(p.y - a.y);
+    let length = dx * dx + dy * dy;
+    let dot = nx * dx + ny * dy;
+    if dot <= 0 {
+        Some(nx * nx + ny * ny <= limit_squared)
+    } else if dot >= length {
+        Some((nx - dx).pow(2) + (ny - dy).pow(2) <= limit_squared)
+    } else {
+        match (
+            (dx * ny - dy * nx).checked_pow(2),
+            limit_squared.checked_mul(length),
+        ) {
+            (Some(a), Some(b)) => Some(a <= b),
+            (Some(_), None) => Some(true),
+            (None, Some(_)) => Some(false),
+            (None, None) => None,
+        }
+    }
+}
+
+fn segments_close(a: &[GridPoint], b: &[GridPoint], limit: i64) -> bool {
     let [p, q] = [a[0], a[1]];
     let [r, s] = [b[0], b[1]];
-    let Some(ab) = Bounds::from_points([p, q].into_iter(), 0.0) else {
-        return true;
+    let overlap = |p: i64, q: i64, r: i64, s: i64| {
+        p.min(q) <= r.max(s) + limit && r.min(s) <= p.max(q) + limit
     };
-    let Some(bb) = Bounds::from_points([r, s].into_iter(), 0.0) else {
-        return true;
-    };
-    if !ab.overlaps(bb, distance) {
+    if !overlap(p.x, q.x, r.x, s.x) || !overlap(p.y, q.y, r.y, s.y) {
         return false;
     }
-    if orient(p, q, r) * orient(p, q, s) < 0.0 && orient(r, s, p) * orient(r, s, q) < 0.0 {
+    let opposite = |a: i128, b: i128| a != 0 && b != 0 && a.signum() != b.signum();
+    if opposite(orient(p, q, r), orient(p, q, s)) && opposite(orient(r, s, p), orient(r, s, q)) {
         return true;
     }
-    let threshold = distance * distance;
-    point_segment_distance_squared(p, r, s)
-        .min(point_segment_distance_squared(q, r, s))
-        .min(point_segment_distance_squared(r, p, q))
-        .min(point_segment_distance_squared(s, p, q))
-        <= threshold
+    let squared = i128::from(limit).pow(2);
+    point_near_segment(p, r, s, squared).unwrap_or(true)
+        || point_near_segment(q, r, s, squared).unwrap_or(true)
+        || point_near_segment(r, p, q, squared).unwrap_or(true)
+        || point_near_segment(s, p, q, squared).unwrap_or(true)
 }
 
-fn contains(shape: &Shape, p: Point) -> bool {
-    shape.filled
-        && shape
-            .contours
+fn edges(shape: &Shape) -> impl Iterator<Item = &[GridPoint]> {
+    shape.contours.iter().flat_map(|contour| contour.windows(2))
+}
+
+fn contains(shape: &Shape, p: GridPoint) -> bool {
+    if !shape.filled {
+        return false;
+    }
+    let winding = edges(shape)
+        .map(|edge| {
+            let [a, b] = [edge[0], edge[1]];
+            if a.y <= p.y && p.y < b.y && orient(a, b, p) > 0 {
+                1_i64
+            } else if b.y <= p.y && p.y < a.y && orient(a, b, p) < 0 {
+                -1
+            } else {
+                0
+            }
+        })
+        .sum::<i64>();
+    if shape.even_odd {
+        winding % 2 != 0
+    } else {
+        winding != 0
+    }
+}
+
+fn possible_contact(a: &Shape, b: &Shape, minimum: f64) -> bool {
+    let allowance = minimum + 2.0 * CONTOUR_ERROR + PREVIEW_RESERVE;
+    if !a.bounds.overlaps(b.bounds, allowance) {
+        return false;
+    }
+    let distance = a.radius + b.radius + allowance;
+    if distance * GRID >= f64::from(i32::MAX) {
+        return true;
+    }
+    let limit = (distance * GRID).ceil() as i64;
+    a.contours.iter().any(|c| contains(b, c[0]))
+        || b.contours.iter().any(|c| contains(a, c[0]))
+        || edges(a).any(|edge| edges(b).any(|other| segments_close(edge, other, limit)))
+}
+
+fn witnessed_contact(a: &Shape, b: &Shape) -> bool {
+    if !a.bounds.overlaps(b.bounds, 0.0) {
+        return false;
+    }
+    // A sample strictly inside the other contour by more than the total
+    // approximation error is a witness of contact for the original paths.
+    let witness = |a: &Shape, b: &Shape| {
+        if !a.filled && a.round_inner_radius.unwrap_or_default() == 0.0 {
+            return false;
+        }
+        let error = 2.0 * CONTOUR_ERROR + PREVIEW_RESERVE + 2.0 / GRID;
+        let inset = (error * GRID).ceil() as i128;
+        let pen = ((b.round_inner_radius.unwrap_or_default() - error) * GRID)
+            .clamp(0.0, f64::from(i32::MAX))
+            .floor() as i128;
+        let midpoints = edges(a).map(|edge| GridPoint {
+            x: (edge[0].x + edge[1].x) / 2,
+            y: (edge[0].y + edge[1].y) / 2,
+        });
+        a.contours
             .iter()
-            .flat_map(|c| c.windows(2))
-            .filter(|edge| {
-                let [a, b] = [edge[0], edge[1]];
-                (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x
+            .flatten()
+            .copied()
+            .chain(midpoints)
+            .any(|p| {
+                (contains(b, p)
+                    && !edges(b).any(|edge| {
+                        point_near_segment(p, edge[0], edge[1], inset.pow(2)).unwrap_or(true)
+                    }))
+                    || (pen > 0
+                        && edges(b).any(|edge| {
+                            point_near_segment(p, edge[0], edge[1], pen.pow(2)).unwrap_or(false)
+                        }))
             })
-            .count()
-            % 2
-            == 1
-}
-
-fn contact(a: &Shape, b: &Shape, tolerance: f64) -> bool {
-    a.bounds.overlaps(b.bounds, tolerance)
-        && (a.contours.iter().any(|c| contains(b, c[0]))
-            || b.contours.iter().any(|c| contains(a, c[0]))
-            || a.contours.iter().flat_map(|c| c.windows(2)).any(|edge| {
-                b.contours
-                    .iter()
-                    .flat_map(|c| c.windows(2))
-                    .any(|other| segments_close(edge, other, a.radius + b.radius + tolerance))
-            }))
+    };
+    witness(a, b) || witness(b, a)
 }
 
 // A tagging export must preserve every drawing, including order. The only
@@ -505,7 +657,7 @@ pub(super) fn marked_segments(
         }
         let boundaries = a.systems(staves)?;
         for (i, (a, b)) in a.shapes.iter().zip(&b.shapes).enumerate() {
-            if a.class != b.class || a.commands != b.commands || a.radius != b.radius {
+            if a.class != b.class || a.commands != b.commands || a.stroke_scale != b.stroke_scale {
                 return None;
             }
             let colors = b
@@ -541,12 +693,13 @@ pub(super) fn marked_segments(
             if top != bottom {
                 return None;
             }
-            segments.push((p, i));
+            segments.push(((p, top), (p, i)));
             observed.push((p, top));
         }
     }
     observed.sort_unstable();
-    (observed == systems).then_some(segments)
+    segments.sort_unstable();
+    (observed == systems).then(|| segments.into_iter().map(|(_, segment)| segment).collect())
 }
 
 pub(super) fn side(pages: &[Page], segments: &[(usize, usize)]) -> Option<Side> {
@@ -558,7 +711,7 @@ pub(super) fn side(pages: &[Page], segments: &[(usize, usize)]) -> Option<Side> 
         .then_some(side)
 }
 
-pub(super) fn contacts(pages: &[Page], segments: &[(usize, usize)], tolerance: f64) -> usize {
+pub(super) fn contacts(pages: &[Page], segments: &[(usize, usize)]) -> usize {
     segments
         .iter()
         .map(|&(p, i)| {
@@ -566,40 +719,27 @@ pub(super) fn contacts(pages: &[Page], segments: &[(usize, usize)], tolerance: f
             shapes
                 .iter()
                 .enumerate()
-                .filter(|(j, s)| *j != i && !s.guide() && contact(&shapes[i], s, tolerance))
+                .filter(|(j, s)| *j != i && !s.guide() && witnessed_contact(&shapes[i], s))
                 .count()
         })
         .sum()
 }
 
-pub(super) fn stable_contacts(pages: &[Page], segments: &[(usize, usize)]) -> bool {
-    // Agreement beyond the contour approximation envelope.
-    let inner = contacts(pages, segments, 0.0);
-    inner > 0 && inner == contacts(pages, segments, FLATNESS * 2.0 + ROUNDING)
-}
-
 pub(super) fn clear(pages: &[Page], segments: &[(usize, usize)]) -> bool {
-    contacts(pages, segments, FLATNESS * 2.0 + ROUNDING) == 0
-}
-
-fn unchanged_guide(a: &Shape, b: &Shape) -> bool {
-    if a.vertical_translation(b).is_some() {
-        return true;
-    }
-    if a.class == "Bracket" && b.class == a.class && a.paint == b.paint {
-        return a.commands.iter().zip(&b.commands).all(|(x, y)| {
-            std::mem::discriminant(x) == std::mem::discriminant(y)
-                && x.points()
-                    .iter()
-                    .zip(y.points())
-                    .all(|(p, q)| (p.x - q.x).abs() <= ROUNDING)
-        }) && a.commands.len() == b.commands.len();
-    }
-    if a.class != "BarLine" || b.class != a.class || a.paint != b.paint {
-        return false;
-    }
-    matches!((a.extent(), b.extent()), (Some((p,q)), Some((r,s)))
-        if p.x == q.x && p.x == r.x && r.x == s.x && (p.y - q.y) * (r.y - s.y) > 0.0)
+    segments.iter().all(|&(p, i)| {
+        let shapes = &pages[p].shapes;
+        let minimum = shapes
+            .iter()
+            .filter(|shape| shape.class == "StaffLines")
+            .map(|shape| shape.stroke_width())
+            .max_by(f64::total_cmp);
+        minimum.is_some_and(|minimum| {
+            minimum > 0.0
+                && shapes.iter().enumerate().all(|(j, other)| {
+                    i == j || other.guide() || !possible_contact(&shapes[i], other, minimum)
+                })
+        })
+    })
 }
 
 pub(super) fn neighborhood_preserved(
@@ -608,45 +748,32 @@ pub(super) fn neighborhood_preserved(
     before_segments: &[(usize, usize)],
     after_segments: &[(usize, usize)],
 ) -> bool {
-    if before.len() != after.len() || before_segments != after_segments {
-        return false;
-    }
-    for (page, (a, b)) in before.iter().zip(after).enumerate() {
-        if a.format != b.format || a.shapes.len() != b.shapes.len() {
-            return false;
-        }
-        let mut independent_ink: Vec<(&Shape, f64)> = Vec::new();
-        for (index, (x, y)) in a.shapes.iter().zip(&b.shapes).enumerate() {
-            if before_segments.contains(&(page, index)) {
-                continue;
-            }
-            if x.guide() {
-                if !unchanged_guide(x, y) {
-                    return false;
-                }
-            } else {
-                let Some(dy) = x.vertical_translation(y) else {
-                    return false;
-                };
-                independent_ink.push((y, dy));
-            }
-        }
-        // Only relative movement can affect contacts. If two shapes move
-        // relative to one another, require clear ink after the move. This also
-        // rejects changing the strength of a pre-existing shared contact.
-        for (index, &(y, dy)) in independent_ink.iter().enumerate() {
-            if independent_ink[index + 1..]
-                .iter()
-                .any(|&(other, other_dy)| {
-                    (dy - other_dy).abs() > ROUNDING * 2.0
-                        && contact(y, other, FLATNESS * 2.0 + ROUNDING)
-                })
-            {
-                return false;
-            }
-        }
-    }
-    true
+    before.len() == after.len()
+        && before_segments == after_segments
+        && before.iter().zip(after).enumerate().all(|(page, (a, b))| {
+            a.format == b.format
+                && a.shapes.len() == b.shapes.len()
+                && a.shapes
+                    .iter()
+                    .zip(&b.shapes)
+                    .enumerate()
+                    .all(|(index, (x, y))| {
+                        before_segments.contains(&(page, index)) || x.same_ink(y)
+                    })
+        })
+}
+
+pub(super) fn planned_segments_match(
+    candidate: &[Page],
+    combined: &[Page],
+    segments: &[(usize, usize)],
+) -> bool {
+    segments.iter().all(|&(page, index)| {
+        combined
+            .get(page)
+            .and_then(|p| p.shapes.get(index))
+            .is_some_and(|shape| candidate[page].shapes[index].same_ink(shape))
+    })
 }
 
 #[cfg(test)]
@@ -675,7 +802,7 @@ mod tests {
         let baseline = [render(DOWN, "#000", 63, 77)];
         let tagged = [render(DOWN, MARK, 63, 77)];
         let segments = marked_segments(&baseline, &tagged, MARK, 1, &[(0, 0)]).unwrap();
-        assert!(stable_contacts(&baseline, &segments));
+        assert!(contacts(&baseline, &segments) > 0);
         assert!(side(&baseline, &segments) == Some(Side::Below));
 
         let free = [render(UP, "#000", 63, 77)];
@@ -706,5 +833,60 @@ mod tests {
 
         let moved = [render(DOWN, MARK, 63, 78), render(DOWN, MARK, 63, 77)];
         assert!(marked_segments(&baseline, &moved, MARK, 1, &expected).is_none());
+    }
+
+    #[test]
+    fn clearance_uses_filled_ink_and_staff_line_width() {
+        let render = |y: f64, stroke: f64| {
+            Page::read(&format!(
+                r#"<svg xmlns="http://www.w3.org/2000/svg">
+                <polyline class="StaffLines" fill="none" stroke="black"
+                    stroke-width="{stroke}" points="0,0 40,0"/>
+                <path class="SlurSegment" d="M10,10 L20,10 L20,11 L10,11 L10,10"/>
+                <path class="Beam" d="M10,{y} L20,{y} L20,20 L10,20 L10,{y}"/>
+                </svg>"#,
+            ))
+            .unwrap()
+        };
+        assert_eq!(contacts(&[render(11.1, 1.0)], &[(0, 1)]), 0);
+        assert!(!clear(&[render(11.1, 1.0)], &[(0, 1)]));
+        assert!(clear(&[render(12.5, 1.0)], &[(0, 1)]));
+        assert!(!clear(&[render(12.5, 2.0)], &[(0, 1)]));
+        assert_eq!(contacts(&[render(10.5, 1.0)], &[(0, 1)]), 1);
+    }
+
+    #[test]
+    fn combined_preview_checks_selected_ink_and_unrelated_shapes() {
+        let page = |first: usize, second: usize, note: usize| {
+            Page::read(&format!(
+                r#"<svg xmlns="http://www.w3.org/2000/svg">
+                <path class="SlurSegment" d="M0,{first} L3,1 L7,1 L0,{first}"/>
+                <path class="SlurSegment" d="M0,{second} L3,9 L7,9 L0,{second}"/>
+                <path class="Note" d="M1,{note} L4,5 L3,6 L1,{note}"/>
+                </svg>"#,
+            ))
+            .unwrap()
+        };
+        let before = [page(1, 9, 5)];
+        let first = [page(2, 9, 5)];
+        let second = [page(1, 8, 5)];
+        let combined = [page(2, 8, 5)];
+        let segments = [(0, 0), (0, 1)];
+        assert!(neighborhood_preserved(
+            &before, &combined, &segments, &segments
+        ));
+        assert!(planned_segments_match(&first, &combined, &[(0, 0)]));
+        assert!(planned_segments_match(&second, &combined, &[(0, 1)]));
+        assert!(!planned_segments_match(
+            &second,
+            &[page(2, 7, 5)],
+            &[(0, 1)]
+        ));
+        assert!(!neighborhood_preserved(
+            &before,
+            &[page(2, 8, 6)],
+            &segments,
+            &segments
+        ));
     }
 }

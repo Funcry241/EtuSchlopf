@@ -8,10 +8,19 @@ use std::collections::BTreeMap;
 
 const MARKER: &str = "#2173C5";
 const COLOR_ATTRIBUTE: &str = " color=\"#2173C5\"";
+const ANCHOR_COLORS: [&str; 2] = ["#b93270", "#528329"];
+const ANCHOR_ATTRIBUTES: [&str; 2] = [" color=\"#b93270\"", " color=\"#528329\""];
+
+fn note_marker(source: &str, note: Node<'_, '_>) -> Option<usize> {
+    let at = note.range().start;
+    (note.attribute("color").is_none() && source.get(at..)?.starts_with("<note"))
+        .then_some(at + "<note".len())
+}
 
 struct Trial {
     insert_at: usize,
     systems: Vec<(usize, usize)>,
+    anchors: Option<[usize; 2]>,
 }
 
 struct Course {
@@ -84,14 +93,23 @@ fn course(source: &str) -> Option<Course> {
                             && source.get(slur.range())?.ends_with("/>");
                         let insert = eligible.then_some(slur.range().end - 2);
                         if open
-                            .insert(number, (staff, voice, systems.len() - 1, insert))
+                            .insert(
+                                number,
+                                (
+                                    staff,
+                                    voice,
+                                    systems.len() - 1,
+                                    insert,
+                                    note_marker(source, note),
+                                ),
+                            )
                             .is_some()
                         {
                             return None;
                         }
                     }
                     Some("stop") => {
-                        let (start_staff, start_voice, start_system, insert) =
+                        let (start_staff, start_voice, start_system, insert, start_note) =
                             open.remove(number)?;
                         if let Some(insert_at) = insert
                             && start_staff == staff
@@ -102,6 +120,9 @@ fn course(source: &str) -> Option<Course> {
                             trials.push(Trial {
                                 insert_at,
                                 systems: systems[start_system..].to_vec(),
+                                anchors: start_note
+                                    .zip(note_marker(source, note))
+                                    .map(|(a, b)| [a, b]),
                             });
                         }
                     }
@@ -123,19 +144,16 @@ fn render_pages(
     counts: &[usize],
     staves: usize,
 ) -> Option<Vec<Page>> {
-    let svg = preview.render(xml, |path, source| {
-        super::super::write_renderer_feasibility_shadow_candidate_authorized(path, source).ok()
-    })?;
-    if svg.len() != counts.len() {
-        return None;
-    }
-    svg.iter()
-        .zip(counts)
-        .map(|(svg, &count)| {
-            let page = Page::read(svg)?;
-            (page.system_count(staves)? == count).then_some(page)
-        })
-        .collect()
+    paint_pages(
+        &mut |source| {
+            preview.render(source, |path, xml| {
+                super::super::write_renderer_feasibility_shadow_candidate_authorized(path, xml).ok()
+            })
+        },
+        xml,
+        counts,
+        staves,
+    )
 }
 
 fn variant<'a>(source: &'a str, edits: &[(usize, &'a str)]) -> Option<String> {
@@ -151,7 +169,8 @@ fn variant<'a>(source: &'a str, edits: &[(usize, &'a str)]) -> Option<String> {
 
 struct Proposal {
     edit: (usize, &'static str),
-    changed_pages: BTreeMap<usize, Page>,
+    candidate: Vec<Page>,
+    segments: Vec<(usize, usize)>,
 }
 
 fn measure_trial(
@@ -172,7 +191,8 @@ fn measure_trial(
     };
     let tagged = render(preview, None, COLOR_ATTRIBUTE)?;
     let segments = geometry::marked_segments(baseline, &tagged, MARKER, staves, &trial.systems)?;
-    if !geometry::stable_contacts(baseline, &segments) {
+    let baseline_contacts = geometry::contacts(baseline, &segments);
+    if baseline_contacts == 0 {
         return None;
     }
     let side = geometry::side(baseline, &segments)?.opposite();
@@ -180,40 +200,18 @@ fn measure_trial(
     let tagged = render(preview, Some(side), COLOR_ATTRIBUTE)?;
     let candidate_segments =
         geometry::marked_segments(&candidate, &tagged, MARKER, staves, &trial.systems)?;
-    let remaining = geometry::contacts(&candidate, &candidate_segments, 0.0);
-    let clear = geometry::side(&candidate, &candidate_segments) == Some(side)
-        && geometry::clear(&candidate, &candidate_segments)
-        && geometry::neighborhood_preserved(baseline, &candidate, &segments, &candidate_segments);
+    let clearance = geometry::side(&candidate, &candidate_segments) == Some(side)
+        && geometry::clear(&candidate, &candidate_segments);
+    let neighborhood =
+        geometry::neighborhood_preserved(baseline, &candidate, &segments, &candidate_segments);
     eprintln!(
-        "PhraseSlurClearance: segments={}; baseline_contacts={}; candidate_contacts={remaining}; clearance={clear}",
-        segments.len(),
-        geometry::contacts(baseline, &segments, 0.0)
+        "PhraseSlurClearance: segments={}; baseline_contacts={baseline_contacts}; clearance={clearance}; neighborhood={neighborhood}",
+        segments.len()
     );
-    clear.then(|| Proposal {
+    (clearance && neighborhood).then_some(Proposal {
         edit: (trial.insert_at, side.attribute()),
-        changed_pages: candidate
-            .into_iter()
-            .enumerate()
-            .filter(|(index, page)| !page.same_ink(&baseline[*index]))
-            .collect(),
-    })
-}
-
-fn independent_proposals(proposals: &[Proposal]) -> impl Iterator<Item = &Proposal> {
-    // A page is a vertical layout unit. A change in its drawing can affect
-    // the measured clearance of any other proposal changing the same page.
-    let mut page_users = BTreeMap::new();
-    for proposal in proposals {
-        for page in proposal.changed_pages.keys() {
-            *page_users.entry(page).or_insert(0) += 1;
-        }
-    }
-    proposals.iter().filter(move |proposal| {
-        !proposal.changed_pages.is_empty()
-            && proposal
-                .changed_pages
-                .keys()
-                .all(|page| page_users[page] == 1)
+        candidate,
+        segments,
     })
 }
 
@@ -221,6 +219,17 @@ pub(super) fn placement(
     source: &str,
     preview: &mut PhraseSvgPreview,
 ) -> Option<Vec<(usize, &'static str)>> {
+    if preview.wants_slur_paint() {
+        if let Some((plan, count)) = paint_plan(source, |xml| {
+            preview.render(xml, |path, bytes| {
+                super::super::write_renderer_feasibility_shadow_candidate_authorized(path, bytes)
+                    .ok()
+            })
+        }) {
+            let _ = preview.set_slur_paint_plan(source, &plan, count);
+        }
+        return None;
+    }
     if !source.contains("<slur ")
         || source
             .to_ascii_lowercase()
@@ -241,58 +250,132 @@ pub(super) fn placement(
         .into_iter()
         .filter_map(|trial| measure_trial(source, preview, trial, &baseline, &page_systems, staves))
         .collect::<Vec<_>>();
-    let independent = independent_proposals(&proposals).collect::<Vec<_>>();
-    let mut edits = independent
+    let mut edits = proposals
         .iter()
         .map(|proposal| proposal.edit)
         .collect::<Vec<_>>();
     edits.sort_unstable();
     if edits.len() > 1 {
-        // Show that the single final plan realizes each independent decision
-        // exactly, with all unaffected pages equal to the baseline.
+        // Shared pages are allowed. The final combined preview must keep all
+        // other ink and realize every selected shape at its verified position.
         let combined = render_pages(preview, &variant(source, &edits)?, &page_systems, staves)?;
-        let verified = combined.iter().enumerate().all(|(index, observed)| {
-            let expected = independent
+        let segments = proposals
+            .iter()
+            .flat_map(|p| p.segments.iter().copied())
+            .collect::<Vec<_>>();
+        if !geometry::neighborhood_preserved(&baseline, &combined, &segments, &segments)
+            || !geometry::clear(&combined, &segments)
+            || !proposals
                 .iter()
-                .find_map(|p| p.changed_pages.get(&index))
-                .unwrap_or(&baseline[index]);
-            observed.same_ink(expected)
-        });
-        if !verified {
+                .all(|p| geometry::planned_segments_match(&p.candidate, &combined, &p.segments))
+        {
             return None;
         }
     }
     (!edits.is_empty()).then_some(edits)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+fn paint_pages(
+    export: &mut impl FnMut(&str) -> Option<Vec<String>>,
+    xml: &str,
+    counts: &[usize],
+    staves: usize,
+) -> Option<Vec<Page>> {
+    let pages = export(xml)?;
+    if pages.len() != counts.len() {
+        return None;
+    }
+    pages
+        .iter()
+        .zip(counts)
+        .map(|(page, &count)| {
+            let page = Page::read(page)?;
+            (page.system_count(staves)? == count).then_some(page)
+        })
+        .collect()
+}
 
-    fn proposal(at: usize, page: usize) -> Proposal {
-        let shape = Page::read(r#"<svg xmlns="http://www.w3.org/2000/svg"><path class="Note" d="M1,1 L2,1 L2,2 L1,1"/></svg>"#).unwrap();
-        Proposal {
-            edit: (at, Side::Above.attribute()),
-            changed_pages: BTreeMap::from([(page, shape)]),
+pub(super) fn paint_plan(
+    source: &str,
+    mut export: impl FnMut(&str) -> Option<Vec<String>>,
+) -> Option<(String, usize)> {
+    let lower = source.to_ascii_lowercase();
+    if !source.contains("<slur ")
+        || lower.contains(&MARKER.to_ascii_lowercase())
+        || ANCHOR_COLORS.iter().any(|color| lower.contains(color))
+    {
+        return None;
+    }
+    let Course {
+        staves,
+        page_systems,
+        trials,
+    } = course(source)?;
+    if trials.is_empty() {
+        return None;
+    }
+    let mut render = |xml: &str| paint_pages(&mut export, xml, &page_systems, staves);
+    let baseline = render(source)?;
+    let mut result = Vec::new();
+    for trial in trials {
+        let attempt = (|| {
+            let notes = trial.anchors?;
+            let trial_xml = |side: &str, tagged: bool, anchors: bool| {
+                let mut edits = vec![(trial.insert_at, side)];
+                if tagged {
+                    edits.push((trial.insert_at, COLOR_ATTRIBUTE));
+                }
+                if anchors {
+                    edits.extend(notes.into_iter().zip(ANCHOR_ATTRIBUTES));
+                }
+                edits.sort_by_key(|&(at, _)| at);
+                variant(source, &edits)
+            };
+            let tagged = render(&trial_xml("", true, false)?)?;
+            let old =
+                geometry::marked_segments(&baseline, &tagged, MARKER, staves, &trial.systems)?;
+            if geometry::contacts(&baseline, &old) == 0 {
+                return None;
+            }
+            let side = geometry::side(&baseline, &old)?.opposite().attribute();
+            let alternate = render(&trial_xml(side, false, false)?)?;
+            let alternate_tagged = render(&trial_xml(side, true, false)?)?;
+            let alternate_segments = geometry::marked_segments(
+                &alternate,
+                &alternate_tagged,
+                MARKER,
+                staves,
+                &trial.systems,
+            )?;
+            let baseline_anchors = render(&trial_xml("", true, true)?)?;
+            let alternate_anchors = render(&trial_xml(side, true, true)?)?;
+            geometry::paint::choose(
+                geometry::paint::PaintPreview {
+                    baseline: &baseline,
+                    alternate: &alternate,
+                    baseline_anchors: &baseline_anchors,
+                    alternate_anchors: &alternate_anchors,
+                },
+                &old,
+                &alternate_segments,
+                &trial.systems,
+                staves,
+                ANCHOR_COLORS,
+            )
+        })();
+        result.extend(attempt.into_iter().flatten());
+    }
+    if result.is_empty() || !geometry::paint::compatible(&baseline, &result) {
+        return None;
+    }
+    use std::fmt::Write;
+    let mut plan = String::from("etuschlopf-slur-paint-v1\n");
+    for edit in &result {
+        write!(plan, "{}", edit.page).ok()?;
+        for point in edit.before.into_iter().chain(edit.after) {
+            write!(plan, " {} {}", point[0], point[1]).ok()?;
         }
+        plan.push('\n');
     }
-
-    #[test]
-    fn duplication_keeps_independent_trials_and_refuses_only_shared_pages() {
-        let independent = [proposal(2, 0), proposal(4, 1)];
-        let edits = independent_proposals(&independent)
-            .map(|p| p.edit)
-            .collect::<Vec<_>>();
-        assert_eq!(
-            edits,
-            [(2, Side::Above.attribute()), (4, Side::Above.attribute())]
-        );
-        let conflict = [proposal(2, 0), proposal(4, 1), proposal(7, 1)];
-        assert_eq!(
-            independent_proposals(&conflict)
-                .map(|p| p.edit)
-                .collect::<Vec<_>>(),
-            [(2, Side::Above.attribute())]
-        );
-    }
+    Some((plan, result.len()))
 }

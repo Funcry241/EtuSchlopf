@@ -2414,6 +2414,7 @@ pub(crate) fn primary_beam_voice_partition_renderer_cohorts(
 pub(crate) struct PrimaryBeamVoicePartitionBoundEdit {
     measure: usize,
     pitched_ordinal: usize,
+    companion_rest: Option<original_beam_voice_alignment::CompanionRest>,
     voice_text_start: usize,
     voice_text_end: usize,
     expected_old_label: String,
@@ -2641,11 +2642,18 @@ pub(crate) fn rebind_primary_beam_voice_partition_plan_to_current_xml(
         edits.push(PrimaryBeamVoicePartitionBoundEdit {
             measure: occurrence.measure,
             pitched_ordinal: occurrence.pitched_ordinal,
+            companion_rest: None,
             voice_text_start,
             voice_text_end,
             expected_old_label: old_label,
             target_label: target_label.to_string(),
         });
+    }
+
+    for prepared in plan.edits.iter().filter(|edit| edit.companion_rest.is_some()) {
+        edits.push(original_beam_voice_alignment::rebind_companion_rest(
+            source_xml, &measures, prepared,
+        )?);
     }
 
     edits.sort_by_key(|edit| (edit.voice_text_start, edit.voice_text_end));
@@ -10353,6 +10361,7 @@ pub(crate) fn bind_primary_beam_voice_partition_plan(
                 edits.push(PrimaryBeamVoicePartitionBoundEdit {
                     measure: witness.measure,
                     pitched_ordinal: witness.pitched_ordinal,
+                    companion_rest: None,
                     voice_text_start,
                     voice_text_end,
                     expected_old_label: old_label,
@@ -10443,6 +10452,7 @@ pub(crate) fn transport_final_pdf_source_occurrence_continuation_through_primary
     let allowed = plan
         .edits
         .iter()
+        .filter(|edit| edit.companion_rest.is_none())
         .map(|edit| {
             (
                 (edit.measure, edit.pitched_ordinal),
@@ -10511,12 +10521,15 @@ pub(crate) fn transport_final_pdf_source_occurrence_continuation_through_primary
             changed = changed.saturating_add(1);
         }
     }
-    if changed != plan.edits.len() {
+    if changed != allowed.len() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "PrimaryBeamVoicePartition persisted voice-delta cardinality disagrees with bound plan",
         ));
     }
+    original_beam_voice_alignment::verify_companion_rest_exchange(
+        observed_source_xml, target_xml, &before_measures, &after_measures, &plan.edits,
+    )?;
 
     let mut receipt = source.receipt.clone();
     if !plan.bridge_alignment_proofs.is_empty() {
