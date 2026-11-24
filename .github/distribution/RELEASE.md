@@ -4,4 +4,4 @@ Der [Windows-Download r1994](https://github.com/Funcry241/EtuSchlopf/releases/ta
 enthält die portable x64-EXE, das Quellpaket, das Startbeispiel und die SHA-256-Prüfsummen.
 Die EXE benötigt für die PDF-Ausgabe eine MuseScore-Installation.
 
-[Einstieg](../README.md#dein-erstes-stück) · [Notenbilder](../../docs/examples/README.md#notenbilder) · [Windows-Prüfbeleg](../../docs/evidence/r1994/README.md)
+[Einstieg](../README.md#dein-erstes-stück) · [Notenbilder](../../docs/examples/README.md#notenbilder) · [Windows-Prüfbeleg](../../docs/evidence/r1998/README.md)

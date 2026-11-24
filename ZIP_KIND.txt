@@ -1,6 +1,6 @@
 kind=EtuSchlopfTake
 version=0.10.1839
-revision=r1994
-name=PdfStreamLaenge
-parent_revision=r1992
-change_class=AuditOnly
+revision=r1998
+name=BalkenPausenStimme
+parent_revision=r1997
+change_class=MusicMutation

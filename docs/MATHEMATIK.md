@@ -1,6 +1,6 @@
 # Mathematik in EtuSchlopf
 
-**Wie lange soll eine gespielte Note im Notenbild stehen?** EtuSchlopf leitet die Dauer einer frei gespielten Klaviernote aus den Einsätzen, der Artikulation und den gleichzeitig laufenden Stimmen ab. Beim Vergleich mit einer Druckvorlage lassen sich Einsatz, Tonhöhe und geschriebene Dauer einzeln prüfen. Die folgenden Formeln beschreiben diese Entscheidungen und die Grenzen der Auswertung. [Aktuelle Referenzen](examples/README.md#aktuelle-referenzen) · [Aktueller Windows-Prüfbeleg](evidence/r1994/README.md)
+**Wie lange soll eine gespielte Note im Notenbild stehen?** EtuSchlopf leitet die Dauer einer frei gespielten Klaviernote aus den Einsätzen, der Artikulation und den gleichzeitig laufenden Stimmen ab. Beim Vergleich mit einer Druckvorlage lassen sich Einsatz, Tonhöhe und geschriebene Dauer einzeln prüfen. Die folgenden Formeln beschreiben diese Entscheidungen und die Grenzen der Auswertung. [Aktuelle Referenzen](examples/README.md#aktuelle-referenzen) · [Aktueller Windows-Prüfbeleg](evidence/r1998/README.md)
 
 Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die Kapitelnummer, etwa [Kapitel 3.2 · Folgeeinsatz oder Akkordende](#kapitel-3-2). Bestehende Kapitel behalten ihre Nummer.
 
@@ -60,7 +60,7 @@ Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die
 | --- | --- |
 | Wie gelangt eine frei gespielte Note in den gedruckten Takt? | [Kapitel 3 · Vom Anschlag zur geschriebenen Dauer](#kapitel-3) |
 | Welche Zusammenhänge beschreibt das Modell für Stimmen, Register und Seiten? | [Kapitel 4 · Verfahrensfamilien](#kapitel-4) und [Kapitel 6 · Formeln](#kapitel-6) |
-| Was wurde mit welchen Stücken geprüft? | [Kapitel 9 · Korpusprüfung](#kapitel-9) · [Windows-Vollkorpus r1994](evidence/r1994/README.md) |
+| Was wurde mit welchen Stücken geprüft? | [Kapitel 9 · Korpusprüfung](#kapitel-9) · [Windows-Vollkorpus r1998](evidence/r1998/README.md) |
 | Woran ließe sich als Nächstes arbeiten? | [Kapitel 10 · Nächste mathematische Vorhaben](#kapitel-10) |
 
 <a name="kapitel-1"></a>
@@ -314,6 +314,14 @@ Die maximale Überlappung ist damit die minimale Farbzahl **dieses Graphen**. Da
 Für die Mengen verbundener ursprünglicher Primärbalkenpaare im Referenzmaster $R$ und im Vergleichsmaster $V$ zählt jedes identifizierte Notenpaar einzeln. Quellnote, Anschlag, Fragment und der Ausgabebeleg identifizieren seine beiden Endpunkte auch bei einer Änderung der Stimmnummer.
 
 Eine unveränderte Anzahl von Verbindungen kann verdecken, dass einzelne Balkenpaare verloren gingen. Der Planer prüft deshalb die gebundene Paarmenge.<a name="beleg-6-3-balken"></a><sup><a href="#quelle-beams">[47]</a></sup> Ein Stimmenwechsel erfüllt den Erhalt genau dann, wenn alle ursprünglichen Verbindungen in der Ausgabe vorkommen, also $R\subseteq V$.
+
+**Balkenverbindung bei vollständigen Pausen.** Blockiert eine sichtbare Pause die technische Stimmzuordnung eines bereits verbundenen Balkens, prüft EtuSchlopf das gesamte ursprüngliche Schweigeintervall $I=[a,b)$. Die Quelllücken $G_i$ und die sichtbaren notierten Pausen $P_j$ müssen jeweils eine lückenlose und überlappungsfreie Zerlegung desselben Intervalls bilden.
+
+```math
+I = \bigsqcup_i G_i = \bigsqcup_j P_j.
+```
+
+Die Zerlegungen dürfen unterschiedliche innere Grenzen haben. Am rechten Rand $b$ bindet ein belegter Einsatz die Fortsetzung derselben musikalischen Linie. Ihr technischer Kanal muss auf $I$ frei sein und beide Balkengrenzen wahren. EtuSchlopf prüft die Balkenzuordnung und alle zugehörigen Pausen gemeinsam und übernimmt ihre technischen Stimmenzuordnungen als einen Satz von Änderungen. [Herleitung und Voraussetzungen](selector_derivation_contract_original_beam_companion_rest_partition.md)
 
 <a name="kapitel-6-4"></a>
 <a name="welche-stimmfortsetzung-ist-erzwungen"></a>
@@ -653,7 +661,7 @@ Zwei zeitlich gebundene Noten können im selben Ausgabekanal liegen, wenn eine z
 
 ## 9 Korpusprüfung und Grenzen
 
-Der veröffentlichte Windows-Stand r1994 erzeugt aus MIDI und WAV 15 Partituren mit 59 PDF-Seiten. Die Galerie enthält die Originalausgaben dieses Laufs. Der Windows-Lauf prüft die Ausführung und den PDF-Export. Ein musikalischer Vergleich mit einer Referenz bewertet zusätzlich Tonhöhe, Einsatz, geschriebene Dauer und sichtbare Notation. [Windows-Prüfbeleg](evidence/r1994/README.md) · [Notenbilder](examples/README.md#notenbilder)
+Der unter Windows abgenommene Stand r1998 erzeugt aus MIDI und WAV 15 Partituren mit 59 PDF-Seiten. Die Galerie enthält die Originalausgaben dieses Laufs. Der Windows-Lauf prüft die Ausführung und den PDF-Export. Ein musikalischer Vergleich mit einer Referenz bewertet zusätzlich Tonhöhe, Einsatz, geschriebene Dauer und sichtbare Notation. [Windows-Prüfbeleg](evidence/r1998/README.md) · [Notenbilder](examples/README.md#notenbilder)
 
 <a name="kapitel-9-1"></a>
 

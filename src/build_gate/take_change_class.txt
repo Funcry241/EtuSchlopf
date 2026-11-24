@@ -1,8 +1,9 @@
 schema_version=1
-change_class=AuditOnly
+change_class=MusicMutation
 from_version=0.10.1839
 to_version=0.10.1839
-reason=PdfStreamLaengeAufrufer
-change=modified|ZIP_KIND.txt|fnv64:ee70d3ac877975a7
-change=modified|src/audit_only/renderer_page_clearance.rs|fnv64:cb07dac84b728061
-change=modified|src/audit_only/renderer_system_break_readback.rs|fnv64:681e84cf697c95a4
+reason=BalkenPausenStimme
+change=modified|ZIP_KIND.txt|fnv64:35eae38ba5ea2fad
+change=modified|src/structural_write_authority/original_beam_voice_alignment.rs|fnv64:94810cc0c9370e15
+change=modified|src/structural_write_authority/serialization_plan.rs|fnv64:2ea1bc15eb0a4d1b
+change=added|docs/selector_derivation_contract_original_beam_companion_rest_partition.md|fnv64:2f7a519d045c5c3a

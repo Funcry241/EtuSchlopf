@@ -875,7 +875,7 @@ None)?;
                 "PrimaryBeamVoicePartition baseline lost committed shadow source"
             })?
             .to_string();
-        let shadow_render = render_pdf_if_possible(&shadow_musicxml, &shadow_pdf, &shadow_commit);
+        let shadow_render = render_pdf_if_possible(&shadow_musicxml, &shadow_pdf, &shadow_commit, None);
         if !matches!(shadow_render.status, RenderStatus::Written) {
             anyhow::bail!(
                 "PrimaryBeamVoicePartition baseline shadow renderer not GREEN: {}",
@@ -1294,6 +1294,7 @@ primary_beam_voice_partition_plan.as_ref())?,
                     shadow_musicxml,
                     &shadow_pdf,
                     &shadow_commit,
+                    None,
                 );
                 eprintln!(
                     "ETUSCHLOPF: RendererFeasibilityRound: Project={:?} | Round={} | Phase=renderer_returned | Status={:?} | Message={:?} | ProjectionOnly=true | Authority=none",

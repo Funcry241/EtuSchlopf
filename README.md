@@ -10,11 +10,11 @@ für die Weiterbearbeitung und einen Laufbericht.
 
 ## Stand der Notenausgabe
 
-Der veröffentlichte Windows-Stand **r1994 / 0.10.1839** erzeugt 15 Partituren
+Der unter Windows abgenommene Stand **r1998 / 0.10.1839** erzeugt 15 Partituren
 mit zusammen 59 PDF-Seiten. Die Galerie zeigt die Original-PDFs dieses Laufs.
 
 [Windows-Download r1994](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1994-windows-preview) ·
-[Windows-Abnahme](docs/evidence/r1994/README.md)
+[Windows-Abnahme](docs/evidence/r1998/README.md)
 
 <a name="dein-erstes-stück"></a>
 
