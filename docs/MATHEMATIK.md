@@ -45,6 +45,7 @@ Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die
   - [10.2 Stimme und Hand über eine Passage](#kapitel-10-2)
   - [10.3 Lesbare Seitenfüllung](#kapitel-10-3)
   - [10.4 Rechenzeit im gemeinsamen Registerplan](#kapitel-10-4)
+  - [10.5 Pausenhöhe und Seitenlage](#kapitel-10-5)
 - [11 Herkunft und Eigenanteil](#kapitel-11)
 - [12 Quellen](#kapitel-12)
   - [12.1 Mathematische und algorithmische Grundlagen](#kapitel-12-1)
@@ -322,6 +323,8 @@ I = \bigsqcup_i G_i = \bigsqcup_j P_j.
 ```
 
 Die Zerlegungen dürfen unterschiedliche innere Grenzen haben. Am rechten Rand $b$ bindet ein belegter Einsatz die Fortsetzung derselben musikalischen Linie. Ihr technischer Kanal muss auf $I$ frei sein und beide Balkengrenzen wahren. EtuSchlopf prüft die Balkenzuordnung und alle zugehörigen Pausen gemeinsam und übernimmt ihre technischen Stimmenzuordnungen als einen Satz von Änderungen. [Herleitung und Voraussetzungen](selector_derivation_contract_original_beam_companion_rest_partition.md)
+
+**Abgenommen in r1998.** Der Windows-Vollkorpus bestätigt die Korrektur der Balkenverbindung in der Bach-Fuge BWV 847. Die vier Änderungen im Render-MusicXML betreffen die technischen Stimmenzuordnungen von zwei Noten und zwei Pausen. [Windows-Prüfbeleg](evidence/r1998/README.md)
 
 <a name="kapitel-6-4"></a>
 <a name="welche-stimmfortsetzung-ist-erzwungen"></a>
@@ -715,6 +718,24 @@ Welche Zustände lassen sich zusammenfassen, wenn sie für alle noch erreichbare
 Das bestehende Planungsmodell beschreibt [Kapitel 6.10](#kapitel-6-10). Für die Zustandszusammenfassung ist Bellmans Bedingung maßgeblich: Ein gespeicherter Zustand muss alles enthalten, was die Bewertung der Fortsetzung beeinflusst.<a name="beleg-10-4-zustand"></a><sup><a href="#quelle-bellman">[12]</a></sup>
 
 **Gegenprobe.** Gegen die vollständige Suche denselben Kurs und dieselbe Gleichstandsentscheidung nachweisen. Laufzeit und aufgesuchte Zustände mit identischen Eingaben vergleichen.
+
+<a name="kapitel-10-5"></a>
+
+### 10.5 Pausenhöhe und Seitenlage
+
+Wie nah kann eine Pause an ihrer Stimme stehen, ohne benachbarte Zeichen zu bedrängen? Der geplante Ansatz prüft Höhe und Seitenlage gemeinsam. Zulässige Positionen wahren den Bezug zum rhythmischen Einsatz und zur Stimme sowie den Mindestabstand zu den relevanten Zeichen. Unter diesen Positionen hat die kleinste Abweichung von der Zielhöhe Vorrang. Die Zielhöhe soll sich aus der gebundenen musikalischen Stimme ergeben. Bei Gleichstand hat die bisherige Lage Vorrang, sofern sie zulässig ist. Pausen mit gemeinsamen Platzkonflikten bilden eine gemeinsame Auswahl.
+
+#### Konservative Abstandsmessung
+
+Umschließen $B(P)$ und $B(H)$ die gezeichnete Pause $P$ und ein Nachbarzeichen $H$ vollständig, liefert ihr kleinster Abstand eine Untergrenze.
+
+```math
+d(B(P),B(H)) \le d(P,H).
+```
+
+In der synthetischen Probe mit MuseScore 4.7.5 ergab die Vektorauswertung bei der angehobenen Pause im freien Fall eine Untergrenze von 0,65 Notenlinienabständen. Im engen Gegenfall berührte dieselbe Anhebung den Nachbarnotenkopf. Der probeweise Mindestabstand betrug 0,50 Notenlinienabstände.
+
+**Offen ist die Umsetzung im Renderer.** Für einen vollständigen Nachweis muss der Renderer die berechnete Position übernehmen und dabei Zeitpunkt, Dauer und Stimme der Pause sowie die Positionen der übrigen Zeichen wahren. Das endgültige PDF dient zur Kontrolle der Position und des Konturabstands. [Konturprüfung bei Phrasierungsbögen](#kapitel-6-17)
 
 <a name="kapitel-11"></a>
 <a name="herkunft-und-eigenanteil"></a>
