@@ -13,7 +13,7 @@ für die Weiterbearbeitung und einen Laufbericht.
 Der unter Windows abgenommene Stand **r2005 / 0.10.1839** erzeugt 15 Partituren
 mit zusammen 59 PDF-Seiten. Die Galerie zeigt die Original-PDFs dieses Laufs.
 
-[Windows-Download r1998](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r1998-windows-preview) ·
+[Windows-Download r2005](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r2005-windows-preview) ·
 [Windows-Abnahme](docs/evidence/r2005/README.md)
 
 <a name="dein-erstes-stück"></a>
