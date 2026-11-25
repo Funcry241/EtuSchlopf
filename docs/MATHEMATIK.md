@@ -1,6 +1,6 @@
 # Mathematik in EtuSchlopf
 
-**Wie lange soll eine gespielte Note im Notenbild stehen?** EtuSchlopf leitet die Dauer einer frei gespielten Klaviernote aus den Einsätzen, der Artikulation und den gleichzeitig laufenden Stimmen ab. Beim Vergleich mit einer Druckvorlage lassen sich Einsatz, Tonhöhe und geschriebene Dauer einzeln prüfen. Die folgenden Formeln beschreiben diese Entscheidungen und die Grenzen der Auswertung. [Aktuelle Referenzen](examples/README.md#aktuelle-referenzen) · [Aktueller Windows-Prüfbeleg](evidence/r1998/README.md)
+**Wie lange soll eine gespielte Note im Notenbild stehen?** EtuSchlopf leitet die Dauer einer frei gespielten Klaviernote aus den Einsätzen, der Artikulation und den gleichzeitig laufenden Stimmen ab. Beim Vergleich mit einer Druckvorlage lassen sich Einsatz, Tonhöhe und geschriebene Dauer einzeln prüfen. Die folgenden Formeln beschreiben diese Entscheidungen und die Grenzen der Auswertung. [Aktuelle Referenzen](examples/README.md#aktuelle-referenzen) · [Aktueller Windows-Prüfbeleg](evidence/r2005/README.md)
 
 Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die Kapitelnummer, etwa [Kapitel 3.2 · Folgeeinsatz oder Akkordende](#kapitel-3-2). Bestehende Kapitel behalten ihre Nummer.
 
@@ -61,7 +61,7 @@ Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die
 | --- | --- |
 | Wie gelangt eine frei gespielte Note in den gedruckten Takt? | [Kapitel 3 · Vom Anschlag zur geschriebenen Dauer](#kapitel-3) |
 | Welche Zusammenhänge beschreibt das Modell für Stimmen, Register und Seiten? | [Kapitel 4 · Verfahrensfamilien](#kapitel-4) und [Kapitel 6 · Formeln](#kapitel-6) |
-| Was wurde mit welchen Stücken geprüft? | [Kapitel 9 · Korpusprüfung](#kapitel-9) · [Windows-Vollkorpus r1998](evidence/r1998/README.md) |
+| Was wurde mit welchen Stücken geprüft? | [Kapitel 9 · Korpusprüfung](#kapitel-9) · [Windows-Vollkorpus r2005](evidence/r2005/README.md) |
 | Woran ließe sich als Nächstes arbeiten? | [Kapitel 10 · Nächste mathematische Vorhaben](#kapitel-10) |
 
 <a name="kapitel-1"></a>
@@ -664,7 +664,7 @@ Zwei zeitlich gebundene Noten können im selben Ausgabekanal liegen, wenn eine z
 
 ## 9 Korpusprüfung und Grenzen
 
-Der unter Windows abgenommene Stand r1998 erzeugt aus MIDI und WAV 15 Partituren mit 59 PDF-Seiten. Die Galerie enthält die Originalausgaben dieses Laufs. Der Windows-Lauf prüft die Ausführung und den PDF-Export. Ein musikalischer Vergleich mit einer Referenz bewertet zusätzlich Tonhöhe, Einsatz, geschriebene Dauer und sichtbare Notation. [Windows-Prüfbeleg](evidence/r1998/README.md) · [Notenbilder](examples/README.md#notenbilder)
+Der unter Windows abgenommene Stand r2005 erzeugt aus MIDI und WAV 15 Partituren mit 59 PDF-Seiten. Die Galerie enthält die Originalausgaben dieses Laufs. Der Windows-Lauf prüft die Ausführung und den PDF-Export. Ein musikalischer Vergleich mit einer Referenz bewertet zusätzlich Tonhöhe, Einsatz, geschriebene Dauer und sichtbare Notation. [Windows-Prüfbeleg](evidence/r2005/README.md) · [Notenbilder](examples/README.md#notenbilder)
 
 <a name="kapitel-9-1"></a>
 
@@ -723,19 +723,22 @@ Das bestehende Planungsmodell beschreibt [Kapitel 6.10](#kapitel-6-10). Für die
 
 ### 10.5 Pausenhöhe und Seitenlage
 
-Wie nah kann eine Pause an ihrer Stimme stehen, ohne benachbarte Zeichen zu bedrängen? Der geplante Ansatz prüft Höhe und Seitenlage gemeinsam. Zulässige Positionen wahren den Bezug zum rhythmischen Einsatz und zur Stimme sowie den Mindestabstand zu den relevanten Zeichen. Unter diesen Positionen hat die kleinste Abweichung von der Zielhöhe Vorrang. Die Zielhöhe soll sich aus der gebundenen musikalischen Stimme ergeben. Bei Gleichstand hat die bisherige Lage Vorrang, sofern sie zulässig ist. Pausen mit gemeinsamen Platzkonflikten bilden eine gemeinsame Auswahl.
+**Abgenommen in r2005.** Bei einer kurzen sichtbaren Basspause bestimmt EtuSchlopf die Zielhöhe aus den gezeichneten Notenköpfen unmittelbar davor und danach. Beide Noten müssen zu derselben Stimme gehören, zeitlich an die Pause anschließen und bis auf die Rundungstoleranz dieselbe Höhe aufweisen. Aus den Höhen $y_{-}$ und $y_{+}$ bildet EtuSchlopf die Zielhöhe $y_* = (y_{-} + y_{+})/2$.
+
+EtuSchlopf prüft bis zu fünf nahe vertikale Versuchslagen. Unter den gerenderten Lagen, die den Abstandstest bestehen und die Pause der Zielhöhe nachweislich näher bringen, minimiert es zuerst $|y-y_*|$ und dann die Verschiebung $|y-y_0|$ gegenüber der Ausgangshöhe $y_0$. Die horizontale Position bleibt bis auf die Rundungstoleranz erhalten.
 
 #### Konservative Abstandsmessung
 
-Umschließen $B(P)$ und $B(H)$ die gezeichnete Pause $P$ und ein Nachbarzeichen $H$ vollständig, liefert ihr kleinster Abstand eine Untergrenze.
+Umschließen $B(P)$ und $B(H)$ die gezeichnete Pause $P$ und ein Nachbarzeichen $H$ vollständig, liefert der Abstand der Rechtecke eine Untergrenze für den Abstand der Zeichen. Mit dem Notenlinienabstand $s$ und der Reserve $arepsilon$ je Zeichen lautet die Bedingung
 
 ```math
-d(B(P),B(H)) \le d(P,H).
+d(B(P),B(H)) le d(P,H),qquad
+min_H rac{max(0,d(B(P),B(H))-2arepsilon)}{s} ge 0{,}50 .
 ```
 
-In der synthetischen Probe mit MuseScore 4.7.5 ergab die Vektorauswertung bei der angehobenen Pause im freien Fall eine Untergrenze von 0,65 Notenlinienabständen. Im engen Gegenfall berührte dieselbe Anhebung den Nachbarnotenkopf. Der probeweise Mindestabstand betrug 0,50 Notenlinienabstände.
+Die Nachbarzeichen schließen weitere Pausen ein. Notenlinien dienen als Führungsgeometrie und dürfen die Pause kreuzen. Ein gemeinsamer Render prüft alle vorgesehenen Bewegungen, ihren Abstand zu den übrigen Zeichen und die Stabilität der übrigen Geometrie. Bei fehlendem Nachweis bleibt die bisherige Lage erhalten.
 
-**Offen ist die Umsetzung im Renderer.** Für einen vollständigen Nachweis muss der Renderer die berechnete Position übernehmen und dabei Zeitpunkt, Dauer und Stimme der Pause sowie die Positionen der übrigen Zeichen wahren. Das endgültige PDF dient zur Kontrolle der Position und des Konturabstands. [Konturprüfung bei Phrasierungsbögen](#kapitel-6-17)
+Im Windows-Vollkorpus änderten sich zwölf Pausenpositionen in drei Partituren. Alle Master-MusicXML-Dateien sind bytegleich. Im Vergleich mit r2002 blieben 55 von 59 PDF-Seiten bei 144 dpi pixelgleich. Die gemeinsame Wahl von seitlichen Positionen und Zielhöhen bei unterschiedlich hohen Nachbarn bleibt offen. [Windows-Prüfbeleg](evidence/r2005/README.md) · [Platzierungsregel](../src/structural_write_authority/rest_svg_placement.rs) · [Abstandsmessung](../src/structural_write_authority/rest_svg_geometry.rs)
 
 <a name="kapitel-11"></a>
 <a name="herkunft-und-eigenanteil"></a>

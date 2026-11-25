@@ -1,5 +1,4 @@
-#[path = "phrase_svg_geometry.rs"]
-mod geometry;
+use crate::pipeline::svg_notation_geometry as geometry;
 
 use crate::pipeline::PhraseSvgPreview;
 use geometry::{Page, Side};

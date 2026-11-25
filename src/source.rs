@@ -30,6 +30,10 @@ const OUTPUT_SUFFIX_PDF: &str = ".pdf";
 const OUTPUT_SUFFIX_REPORT: &str = ".result.txt";
 const OUTPUT_SUFFIX_RENDER_MUSICXML: &str = ".render.musicxml";
 
+const WAV_EXTENSIONS: &[&str] = &["wav"];
+const MIDI_EXTENSIONS: &[&str] = &["mid", "midi"];
+const SCORE_EXTENSIONS: &[&str] = &["musicxml", "xml", "mxl"];
+
 #[derive(Debug, Clone)]
 pub struct SourcePlan {
     pub input_label: String,
@@ -49,7 +53,7 @@ pub fn resolve_source_plan(
 ) -> anyhow::Result<SourcePlan> {
     let input = raw_input.ok_or_else(|| anyhow!("Projektname fehlt. Einzelaufruf: run.cmd \"Etüde Nr. 6\". Ordner-Batch: run.cmd --all"))?;
 
-    if is_score_path(input) {
+    if has_extension(input, SCORE_EXTENSIONS) {
         return Err(anyhow!(
             "MusicXML/MXL ist kein gültiger Input mehr. Nutze den Projektaufruf, z. B. run.cmd \"Etüde Nr. 6\", oder starte run.cmd --all für alle passenden WAV/MIDI-Paare. Gleichnamige .wav- und .mid-Dateien sind die vollständigen Projekteingänge."
         ));
@@ -60,17 +64,15 @@ pub fn resolve_source_plan(
     // argument. The launcher uses that same identity for its existing backup set.
     let input_label = input.file_name().and_then(|name| name.to_str()).unwrap_or(&project_name).trim().to_string();
     let output_stem = project_file_stem(&input_label);
-    let expected_wav = if input.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| ext.eq_ignore_ascii_case("wav")) {
+    let expected_wav = if has_extension(input, WAV_EXTENSIONS) {
         input.to_path_buf()
     } else {
-        resolve_member(&dir, &project_name, &["wav"], "WAV")?
+        resolve_member(&dir, &project_name, WAV_EXTENSIONS, "WAV")?
     };
-    let explicit_midi = input.extension().and_then(|ext| ext.to_str())
-        .is_some_and(|ext| matches!(ext.to_ascii_lowercase().as_str(), "mid" | "midi"));
-    let expected_midi = if explicit_midi {
+    let expected_midi = if has_extension(input, MIDI_EXTENSIONS) {
         input.to_path_buf()
     } else {
-        resolve_member(&dir, &project_name, &["mid", "midi"], "MIDI")?
+        resolve_member(&dir, &project_name, MIDI_EXTENSIONS, "MIDI")?
     };
 
     // v0.1.50: StrictPromptFilenames. Alle Standardausgaben verwenden exakt
@@ -93,10 +95,14 @@ pub fn resolve_source_plan(
     })
 }
 
-fn is_score_path(path: &Path) -> bool {
+fn has_extension(path: &Path, extensions: &[&str]) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| matches!(ext.to_ascii_lowercase().as_str(), "musicxml" | "xml" | "mxl"))
+        .is_some_and(|ext| extensions.iter().any(|candidate| ext.eq_ignore_ascii_case(candidate)))
+}
+
+fn is_midi_or_wav_path(path: &Path) -> bool {
+    has_extension(path, MIDI_EXTENSIONS) || has_extension(path, WAV_EXTENSIONS)
 }
 
 fn split_project_input(input: &Path) -> anyhow::Result<(PathBuf, String)> {
@@ -110,9 +116,7 @@ fn split_project_input(input: &Path) -> anyhow::Result<(PathBuf, String)> {
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .ok_or_else(|| anyhow!("Projektname fehlt. Einzelaufruf: run.cmd \"Etüde Nr. 6\". Ordner-Batch: run.cmd --all"))?;
-    let name = if input.extension().and_then(|ext| ext.to_str())
-        .is_some_and(|ext| matches!(ext.to_ascii_lowercase().as_str(), "mid" | "midi" | "wav"))
-    {
+    let name = if is_midi_or_wav_path(input) {
         input.file_stem().and_then(|stem| stem.to_str()).unwrap_or(name).trim()
     } else {
         name
@@ -156,9 +160,7 @@ fn resolve_member(dir: &Path, stem: &str, extensions: &[&str], kind: &str) -> an
                 if !path.file_stem().and_then(|value| value.to_str()).is_some_and(|name| if cfg!(windows) { name.eq_ignore_ascii_case(stem) } else { name == stem }) {
                     continue;
                 }
-                if path.extension().and_then(|ext| ext.to_str())
-                    .is_some_and(|ext| extensions.iter().any(|candidate| ext.eq_ignore_ascii_case(candidate)))
-                {
+                if has_extension(&path, extensions) {
                     found.push(path);
                 }
             }
@@ -191,9 +193,7 @@ pub fn validate_file_targets(inputs: &[PathBuf], outputs: &[PathBuf]) -> anyhow:
     }
     let mut destinations = Vec::<PathBuf>::new();
     for output in outputs {
-        if output.extension().and_then(|ext| ext.to_str())
-            .is_some_and(|ext| matches!(ext.to_ascii_lowercase().as_str(), "mid" | "midi" | "wav"))
-        {
+        if is_midi_or_wav_path(output) {
             return Err(anyhow!("Ausgabe darf keine MIDI-/WAV-Eingabe ersetzen: {}. Bitte einen eigenen Ausgabepfad verwenden.", output.display()));
         }
         let parent = output.parent().filter(|path| !path.as_os_str().is_empty()).unwrap_or(Path::new("."));

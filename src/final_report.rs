@@ -541,8 +541,7 @@ impl CompactedReport {
     }
 
     pub fn finalize_for_renderer_outcome(self, expected: RendererOutcomeExpectation) -> Result<FinalizedReport> {
-        validate_required_contract(&self.document, expected)?;
-        let mut text = self.document.render();
+        let mut text = render_validated_report(&self.document, expected)?;
         let access = SscObservationReadAccess { _private: () };
         crate::ssc_shadow_report::append_ssc_shadow_observation(&access, &mut text);
         crate::ssc_shadow_measurement::append_ssc_shadow_measurement(&access, &mut text);
@@ -561,7 +560,10 @@ impl FinalizedReport {
     }
 }
 
-fn validate_required_contract(document: &ReportDocument, expected: RendererOutcomeExpectation) -> Result<()> {
+fn render_validated_report(
+    document: &ReportDocument,
+    expected: RendererOutcomeExpectation,
+) -> Result<String> {
     for section in REQUIRED_FINAL_REPORT_SECTIONS {
         let occurrences = document.section_count(section);
         if occurrences != 1 {
@@ -589,7 +591,7 @@ fn validate_required_contract(document: &ReportDocument, expected: RendererOutco
         );
     }
 
-    Ok(())
+    Ok(report)
 }
 
 #[cfg(test)]

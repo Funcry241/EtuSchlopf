@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::fmt::{Display, Write};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -1311,84 +1312,57 @@ fn natural_project_key(value: &str) -> (u64, String) {
     (number, lower)
 }
 
+fn push_json_field(
+    out: &mut String,
+    indent: Option<usize>,
+    key: &str,
+    value: impl Display,
+    comma: bool,
+) {
+    let (space, newline) = if let Some(indent) = indent {
+        out.push_str(&"  ".repeat(indent));
+        (" ", "\n")
+    } else {
+        ("", "")
+    };
+    let separator = if comma { "," } else { "" };
+    let _ = write!(out, "\"{key}\":{space}{value}{separator}{newline}");
+}
+
 fn push_string(out: &mut String, indent: usize, key: &str, value: &str, comma: bool) {
-    out.push_str(&"  ".repeat(indent));
-    out.push('"');
-    out.push_str(key);
-    out.push_str("\": \"");
-    out.push_str(&json_escape(value));
-    out.push('"');
-    if comma { out.push(','); }
-    out.push('\n');
+    push_json_field(out, Some(indent), key, format_args!("\"{}\"", json_escape(value)), comma);
 }
 
 fn push_number(out: &mut String, indent: usize, key: &str, value: u64, comma: bool) {
-    out.push_str(&"  ".repeat(indent));
-    out.push('"');
-    out.push_str(key);
-    out.push_str("\": ");
-    out.push_str(&value.to_string());
-    if comma { out.push(','); }
-    out.push('\n');
+    push_json_field(out, Some(indent), key, value, comma);
 }
 
 fn push_bool(out: &mut String, indent: usize, key: &str, value: bool, comma: bool) {
-    out.push_str(&"  ".repeat(indent));
-    out.push('"');
-    out.push_str(key);
-    out.push_str("\": ");
-    out.push_str(if value { "true" } else { "false" });
-    if comma { out.push(','); }
-    out.push('\n');
+    push_json_field(out, Some(indent), key, value, comma);
 }
 
 fn push_null(out: &mut String, indent: usize, key: &str, comma: bool) {
-    out.push_str(&"  ".repeat(indent));
-    out.push('"');
-    out.push_str(key);
-    out.push_str("\": null");
-    if comma { out.push(','); }
-    out.push('\n');
+    push_json_field(out, Some(indent), key, "null", comma);
 }
 
 fn inline_string(out: &mut String, key: &str, value: &str, comma: bool) {
-    out.push('"');
-    out.push_str(key);
-    out.push_str("\":\"");
-    out.push_str(&json_escape(value));
-    out.push('"');
-    if comma { out.push(','); }
+    push_json_field(out, None, key, format_args!("\"{}\"", json_escape(value)), comma);
 }
 
 fn inline_number(out: &mut String, key: &str, value: u64, comma: bool) {
-    out.push('"');
-    out.push_str(key);
-    out.push_str("\":");
-    out.push_str(&value.to_string());
-    if comma { out.push(','); }
+    push_json_field(out, None, key, value, comma);
 }
 
 fn inline_signed_number(out: &mut String, key: &str, value: i32, comma: bool) {
-    out.push('"');
-    out.push_str(key);
-    out.push_str("\":");
-    out.push_str(&value.to_string());
-    if comma { out.push(','); }
+    push_json_field(out, None, key, value, comma);
 }
 
 fn inline_bool(out: &mut String, key: &str, value: bool, comma: bool) {
-    out.push('"');
-    out.push_str(key);
-    out.push_str("\":");
-    out.push_str(if value { "true" } else { "false" });
-    if comma { out.push(','); }
+    push_json_field(out, None, key, value, comma);
 }
 
 fn inline_null(out: &mut String, key: &str, comma: bool) {
-    out.push('"');
-    out.push_str(key);
-    out.push_str("\":null");
-    if comma { out.push(','); }
+    push_json_field(out, None, key, "null", comma);
 }
 
 pub fn json_escape(value: &str) -> String {

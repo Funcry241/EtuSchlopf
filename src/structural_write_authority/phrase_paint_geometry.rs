@@ -3,7 +3,7 @@ use super::*;
 const GRID_STEPS: i32 = 64;
 
 #[derive(Clone, Copy)]
-pub(in super::super) struct PaintSegment {
+pub(crate) struct PaintSegment {
     pub page: usize,
     pub before: [[f64; 2]; 7],
     pub after: [[f64; 2]; 7],
@@ -213,14 +213,14 @@ fn test_shape(seg: &TrialSegment<'_>, a: i32, b: i32) -> Option<Shape> {
     Some(candidate)
 }
 
-pub(in super::super) struct PaintPreview<'a> {
+pub(crate) struct PaintPreview<'a> {
     pub baseline: &'a [Page],
     pub alternate: &'a [Page],
     pub baseline_anchors: &'a [Page],
     pub alternate_anchors: &'a [Page],
 }
 
-pub(in super::super) fn choose(
+pub(crate) fn choose(
     preview: PaintPreview<'_>,
     old: &[(usize, usize)],
     alt: &[(usize, usize)],
@@ -373,7 +373,7 @@ pub(in super::super) fn choose(
     None
 }
 
-pub(in super::super) fn compatible(pages: &[Page], edits: &[PaintSegment]) -> bool {
+pub(crate) fn compatible(pages: &[Page], edits: &[PaintSegment]) -> bool {
     let shapes = edits
         .iter()
         .map(|edit| {

@@ -1,0 +1,15 @@
+9300e57ca0f0507bc73915bf277fdb0e85cd6e08dd094ac6aca971558488c82a  ../../examples/bwv847-fuge-r2005.pdf
+a33052287d417d3b2cf5231dd336ade67ce76684394b14349db122dc850da625  ../../examples/chopin-op10-no3-p01-r2005.pdf
+fad120166da7e62475bc222dcc97b6794e64f20a143a2dc9547179700d526007  ../../examples/chopin-op10-no3-p02-r2005.pdf
+326dc67030f9aee3b909780526e7e54faaeeeba9c03fd15788d5720ac216d3f8  ../../examples/mozart-k331-p01-r2005.pdf
+fa90841f8cd7d7e3229775c65dea1dd93291acd10828726de4b3def6d309df87  ../../examples/schubert-d783-no15-p18-r2005.pdf
+773d031d88f8f17bb2e73196739bc5626ce9bc0979bad42fd87d5a6ddd335ed8  ../../examples/etude-1-r2005.pdf
+93fc3e1a5f2b3892b54c37df68d3fbcb428ca6dfe0b7747e434067059c998074  ../../examples/etude-2-r2005.pdf
+816aef7adfc243902d126dc2d44b0b24615b63f30a3028ea3b2b6be438da7d44  ../../examples/etude-3-r2005.pdf
+b0c185a92788b0fa3dfdbedc63ffed23d53f91941c6f7c49f279c189855d63d0  ../../examples/etude-4-r2005.pdf
+402610eee99a44291680e0bdaf125c143d147eb8e3e4cb68d1b726ce0f54de51  ../../examples/etude-5-r2005.pdf
+17718a7f5cccbe7c08de0986f5ceb2f39b8e151400c880b203c7e239c79925a2  ../../examples/etude-6-r2005.pdf
+b3a28b1ef66e11b6649faa2ffd48f6e567c05183822d0a8dd8a6b396c04338fa  ../../examples/etude-7-r2005.pdf
+05ba579333a4a8febb51b644b8e725f43f2398661cb3bdcdddf77b91ea88e037  ../../examples/etude-8-r2005.pdf
+e991947b9a17e03ec45d884489e0ad4013151f06e8f82d17f000b1ce9e0e7dbb  ../../examples/etude-9-r2005.pdf
+196287f93bae8e0c0c9404316250abc32c159e8da2fe8f1a54f515daeb421106  ../../examples/etude-10-r2005.pdf
