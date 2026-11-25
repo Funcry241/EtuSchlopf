@@ -299,6 +299,15 @@ fn run_render_pdf_source_selection_stage(
         }
     }
 
+    if pdf_render_requested && render_xml_selected_for_pdf {
+        let placed = rest_svg_placement::adopt(
+            render_state, &mut phrase_preview,
+        )?;
+        if placed > 0 {
+            console_progress(format!("Pausenhöhen im gemeinsamen Render bestätigt: {placed}"));
+        }
+    }
+
     crate::registernotation::reader_policy::observe_master_adoption(master_state);
     crate::registernotation::reader_policy::observe_render_adoption(render_state);
 

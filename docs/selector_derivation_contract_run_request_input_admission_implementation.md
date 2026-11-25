@@ -70,3 +70,16 @@ all prior inputs and outputs. Build, canonical Strict Clippy, full all-target
 tests and the actual incoming gates are required before delivery. Real corpus
 and native Windows acceptance remain separate evidence and are never inferred
 from synthetic tests or from the parent run.
+
+## Gemeinsame Endungsprüfung in r2001
+
+`src/source.rs` vergleicht die letzte Dateiendung für Projektauflösung,
+Dateisuche und Ausgabeschutz nach denselben ASCII-Regeln. Die Reihenfolge
+für die MIDI-Ersatzendung bleibt `.mid` vor `.midi`. Mehrdeutige
+Dateitreffer lösen weiterhin einen Fehler aus. Die Auflösung behält den
+Dateinamen aus dem Aufruf für die Ausgaben bei. Die Dateiinhaltsprüfung
+und die Schutzprüfung für Eingabe- und Ausgabepfade laufen wie bisher.
+
+Synthetische Vergleiche prüfen Eingabe- und Ausgabepfade sowie die
+Fehlermeldungen bei verschiedenen Schreibweisen, mehrdeutigen Treffern
+und geschützten Ausgaben.

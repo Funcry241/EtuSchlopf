@@ -3,7 +3,7 @@
 use roxmltree::{Document, Node};
 
 #[path = "phrase_paint_geometry.rs"]
-pub(super) mod paint;
+pub(crate) mod paint;
 
 const FLATNESS: f64 = 1.0 / 128.0;
 const GRID: f64 = 4096.0;
@@ -83,20 +83,20 @@ impl Bounds {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-pub(super) enum Side {
+pub(crate) enum Side {
     Above,
     Below,
 }
 
 impl Side {
-    pub(super) fn opposite(self) -> Self {
+    pub(crate) fn opposite(self) -> Self {
         match self {
             Self::Above => Self::Below,
             Self::Below => Self::Above,
         }
     }
 
-    pub(super) fn attribute(self) -> &'static str {
+    pub(crate) fn attribute(self) -> &'static str {
         match self {
             Self::Above => " placement=\"above\"",
             Self::Below => " placement=\"below\"",
@@ -353,13 +353,13 @@ impl Shape {
     }
 }
 
-pub(super) struct Page {
+pub(crate) struct Page {
     format: Vec<(String, String)>,
     shapes: Vec<Shape>,
 }
 
 impl Page {
-    pub(super) fn read(svg: &str) -> Option<Self> {
+    pub(crate) fn read(svg: &str) -> Option<Self> {
         let doc = Document::parse(svg).ok()?;
         let root = doc.root_element();
         if !root.has_tag_name(("http://www.w3.org/2000/svg", "svg")) {
@@ -377,7 +377,7 @@ impl Page {
         Some(Self { format, shapes })
     }
 
-    pub(super) fn system_count(&self, staff_count: usize) -> Option<usize> {
+    pub(crate) fn system_count(&self, staff_count: usize) -> Option<usize> {
         Some(self.systems(staff_count)?.len() + 1)
     }
 
@@ -639,7 +639,7 @@ fn witnessed_contact(a: &Shape, b: &Shape) -> bool {
 
 // A tagging export must preserve every drawing, including order. The only
 // permitted differences are the two paint attributes of the tagged slur.
-pub(super) fn marked_segments(
+pub(crate) fn marked_segments(
     baseline: &[Page],
     tagged: &[Page],
     color: &str,
@@ -702,7 +702,7 @@ pub(super) fn marked_segments(
     (observed == systems).then(|| segments.into_iter().map(|(_, segment)| segment).collect())
 }
 
-pub(super) fn side(pages: &[Page], segments: &[(usize, usize)]) -> Option<Side> {
+pub(crate) fn side(pages: &[Page], segments: &[(usize, usize)]) -> Option<Side> {
     let &(p, i) = segments.first()?;
     let side = pages[p].shapes[i].side()?;
     segments
@@ -711,7 +711,7 @@ pub(super) fn side(pages: &[Page], segments: &[(usize, usize)]) -> Option<Side> 
         .then_some(side)
 }
 
-pub(super) fn contacts(pages: &[Page], segments: &[(usize, usize)]) -> usize {
+pub(crate) fn contacts(pages: &[Page], segments: &[(usize, usize)]) -> usize {
     segments
         .iter()
         .map(|&(p, i)| {
@@ -725,7 +725,7 @@ pub(super) fn contacts(pages: &[Page], segments: &[(usize, usize)]) -> usize {
         .sum()
 }
 
-pub(super) fn clear(pages: &[Page], segments: &[(usize, usize)]) -> bool {
+pub(crate) fn clear(pages: &[Page], segments: &[(usize, usize)]) -> bool {
     segments.iter().all(|&(p, i)| {
         let shapes = &pages[p].shapes;
         let minimum = shapes
@@ -742,7 +742,7 @@ pub(super) fn clear(pages: &[Page], segments: &[(usize, usize)]) -> bool {
     })
 }
 
-pub(super) fn neighborhood_preserved(
+pub(crate) fn neighborhood_preserved(
     before: &[Page],
     after: &[Page],
     before_segments: &[(usize, usize)],
@@ -763,7 +763,7 @@ pub(super) fn neighborhood_preserved(
         })
 }
 
-pub(super) fn planned_segments_match(
+pub(crate) fn planned_segments_match(
     candidate: &[Page],
     combined: &[Page],
     segments: &[(usize, usize)],
@@ -890,3 +890,6 @@ mod tests {
         ));
     }
 }
+
+#[path = "rest_svg_geometry.rs"]
+pub(crate) mod rests;

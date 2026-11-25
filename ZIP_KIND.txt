@@ -1,6 +1,6 @@
 kind=EtuSchlopfTake
 version=0.10.1839
-revision=r1998
-name=BalkenPausenStimme
-parent_revision=r1997
+revision=r2005
+name=PausenhoehenExportKorrektur
+parent_revision=r2003
 change_class=MusicMutation

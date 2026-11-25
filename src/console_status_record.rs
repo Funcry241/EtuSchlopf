@@ -184,27 +184,29 @@ impl StatusRecord {
         let line = line.strip_suffix('\n').unwrap_or(line);
         let line = line.strip_suffix('\r').unwrap_or(line);
         let body = line.strip_prefix(RECORD_PREFIX)?;
-        let fields = body.split("; ").collect::<Vec<_>>();
-        let value = |index: usize, key: &str| -> Option<&str> {
-            fields.get(index)?.strip_prefix(key)?.strip_prefix('=')
-        };
-        let session = decode_value(value(0, "session")?)?;
-        let source = decode_value(value(1, "source")?)?;
-        let project = decode_value(value(2, "project")?)?;
-        let event = match value(3, "event")? {
-            "stage" if fields.len() == 5 => StatusEvent::Stage(stage_from_wire(value(4, "stage")?)?),
-            "finished" if fields.len() == 6 => {
-                let ms = value(5, "ms")?;
+        let mut fields = body.split("; ");
+        let mut value = |prefix| fields.next()?.strip_prefix(prefix);
+        let session = decode_value(value("session=")?)?;
+        let source = decode_value(value("source=")?)?;
+        let project = decode_value(value("project=")?)?;
+        let event = match value("event=")? {
+            "stage" => StatusEvent::Stage(stage_from_wire(value("stage=")?)?),
+            "finished" => {
+                let outcome = outcome_from_wire(value("outcome=")?)?;
+                let ms = value("ms=")?;
                 if ms.is_empty() || !ms.bytes().all(|byte| byte.is_ascii_digit()) {
                     return None;
                 }
                 StatusEvent::Finished {
-                    outcome: outcome_from_wire(value(4, "outcome")?)?,
+                    outcome,
                     elapsed_ms: ms.parse().ok()?,
                 }
             }
             _ => return None,
         };
+        if fields.next().is_some() {
+            return None;
+        }
         Some(Self {
             session,
             source,
@@ -371,6 +373,7 @@ mod tests {
             "ETUSCHLOPF-STATUS v1: session=s; source=p; project=x; event=finished; outcome=ok; ms=+5",
             "ETUSCHLOPF-STATUS v1: session=s; source=p; project=x; event=finished; outcome=maybe; ms=5",
             "ETUSCHLOPF-STATUS v1: session=s; source=p; project=x; event=finished; outcome=ok; ms=99999999999999999999",
+            "ETUSCHLOPF-STATUS v1: session=s; source=p; project=x; event=finished; outcome=ok; ms=5; extra=1",
             "  ETUSCHLOPF-STATUS v1: session=s; source=p; project=x; event=stage; stage=arrangement_solver",
             "OriginalBeamOriginCensus: group=x; ETUSCHLOPF-STATUS v1: session=s",
         ] {
