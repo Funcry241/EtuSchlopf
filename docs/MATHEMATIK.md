@@ -729,11 +729,10 @@ EtuSchlopf prüft bis zu fünf nahe vertikale Versuchslagen. Unter den gerendert
 
 #### Konservative Abstandsmessung
 
-Umschließen $B(P)$ und $B(H)$ die gezeichnete Pause $P$ und ein Nachbarzeichen $H$ vollständig, liefert der Abstand der Rechtecke eine Untergrenze für den Abstand der Zeichen. Mit dem Notenlinienabstand $s$ und der Reserve $arepsilon$ je Zeichen lautet die Bedingung
+Umschließen $B(P)$ und $B(H)$ die gezeichnete Pause $P$ und ein Nachbarzeichen $H$ vollständig, liefert der Abstand der Rechtecke eine Untergrenze für den Abstand der Zeichen. Mit dem Notenlinienabstand $s$ und der Reserve $\varepsilon$ je Zeichen lautet die Bedingung
 
 ```math
-d(B(P),B(H)) le d(P,H),qquad
-min_H rac{max(0,d(B(P),B(H))-2arepsilon)}{s} ge 0{,}50 .
+d\bigl(B(P),B(H)\bigr) \le d(P,H),\qquad \min_H \frac{\max\bigl(0,d(B(P),B(H))-2\varepsilon\bigr)}{s} \ge 0{,}50.
 ```
 
 Die Nachbarzeichen schließen weitere Pausen ein. Notenlinien dienen als Führungsgeometrie und dürfen die Pause kreuzen. Ein gemeinsamer Render prüft alle vorgesehenen Bewegungen, ihren Abstand zu den übrigen Zeichen und die Stabilität der übrigen Geometrie. Bei fehlendem Nachweis bleibt die bisherige Lage erhalten.
