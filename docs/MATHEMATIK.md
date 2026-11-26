@@ -1,6 +1,6 @@
 # Mathematik in EtuSchlopf
 
-**Wie lange soll eine gespielte Note im Notenbild stehen?** EtuSchlopf leitet die Dauer einer frei gespielten Klaviernote aus den Einsätzen, der Artikulation und den gleichzeitig laufenden Stimmen ab. Beim Vergleich mit einer Druckvorlage lassen sich Einsatz, Tonhöhe und geschriebene Dauer einzeln prüfen. Die folgenden Formeln beschreiben diese Entscheidungen und die Grenzen der Auswertung. [Aktuelle Referenzen](examples/README.md#aktuelle-referenzen) · [Aktueller Windows-Prüfbeleg](evidence/r2005/README.md)
+**Wie lange soll eine gespielte Note im Notenbild stehen?** EtuSchlopf leitet die Dauer einer frei gespielten Klaviernote aus den Einsätzen, der Artikulation und den gleichzeitig laufenden Stimmen ab. Beim Vergleich mit einer Druckvorlage lassen sich Einsatz, Tonhöhe und geschriebene Dauer einzeln prüfen. Die folgenden Formeln beschreiben diese Entscheidungen und die Grenzen der Auswertung. [Aktuelle Referenzen](examples/README.md#aktuelle-referenzen) · [Aktueller Windows-Prüfbeleg](evidence/r2014/README.md)
 
 Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die Kapitelnummer, etwa [Kapitel 3.2 · Folgeeinsatz oder Akkordende](#kapitel-3-2). Bestehende Kapitel behalten ihre Nummer.
 
@@ -62,7 +62,7 @@ Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die
 | --- | --- |
 | Wie gelangt eine frei gespielte Note in den gedruckten Takt? | [Kapitel 3 · Vom Anschlag zur geschriebenen Dauer](#kapitel-3) |
 | Welche Zusammenhänge beschreibt das Modell für Stimmen, Register und Seiten? | [Kapitel 4 · Verfahrensfamilien](#kapitel-4) und [Kapitel 6 · Formeln](#kapitel-6) |
-| Was wurde mit welchen Stücken geprüft? | [Kapitel 9 · Korpusprüfung](#kapitel-9) · [Windows-Vollkorpus r2005](evidence/r2005/README.md) |
+| Was wurde mit welchen Stücken geprüft? | [Kapitel 9 · Korpusprüfung](#kapitel-9) · [Windows-Vollkorpus r2014](evidence/r2014/README.md) |
 | Woran ließe sich als Nächstes arbeiten? | [Kapitel 10 · Nächste mathematische Vorhaben](#kapitel-10) |
 
 <a name="kapitel-1"></a>
@@ -165,6 +165,10 @@ Gibt es mehrere zulässige Vorschläge, kann nur ein Vorschlag gewinnen, der min
 Die Wahl begründet die Fehlerbehebung. Der [Übergangsnachweis aus Kapitel 2.1](#kapitel-2-1) bindet die Erhaltung an den exakten Vor- und Nachzustand. Belege für einzelne Änderungen genügen dafür erst, wenn sie auch die gemeinsame Wirkung belegen.
 
 Für die geometrische Prüfung werden Ausgangsfassung und ein gemeinsamer Vorschlag verglichen. Geprüft werden alle Zeichen mit veränderter Geometrie und ihre relevanten Paare. Der Vergleich verlangt eine eindeutige Zuordnung, eine vorab festgelegte Koordinatentoleranz und einen Mindestabstand je geprüfter Paarklasse. Der reguläre PDF-Render bestätigt die tatsächlich ausgewählte Fassung, auch wenn nur ein Teil der vorgeschlagenen Gruppen übernommen wird. Fehlt diese Bestätigung, ist nur eine bereits für die Ausgabe belegte Ausgangsfassung als Rückfall zulässig. Die Prüfung löst keine weitere Auswahl aus.
+
+**Prüfstand r2014.** In synthetischen MuseScore-Ausgaben sind Halsstriche und Haltebögen bis zu ihren gezeichneten PDF-Konturen gebunden. Eine eigene Probe ordnet 24 Notenköpfe den Konturen ihrer eingebetteten PDF-Glyphen zu. Der synthetische Trockenlauf prüft Entscheidungen für unabhängige und gekoppelte Gruppen. Er verlangt einen eigenen Beleg für den Erhalt eines unklaren Befunds und prüft den Rückfall auf die belegte Ausgangsfassung, wenn der Schlussbeleg abweicht. [PDF-Nachweis und Trockenlauf](final_stem_pdf_evidence_r2014.md)
+
+Für die produktive Halskorrektur fehlen noch musikalisch begründete Mindestabstände für Hals–Kopf und Hals–Bogen. Die Zeichen und ihre betroffenen Paare müssen auch bei geteilten Zeichen und über mehrere Seiten hinweg eindeutig zugeordnet sein. Der Nachweis muss die tatsächlich ausgegebene Teilfassung nach dem endgültigen Layout erfassen. [Reparaturbereich für Haltebogenketten](final_stem_tie_chain_repair_scope.md)
 
 <a name="kapitel-2-2"></a>
 <a name="schlöpfchen-formel-die-angestrebte-seitenfüllung"></a>
@@ -719,7 +723,7 @@ Zwei zeitlich gebundene Noten können im selben Ausgabekanal liegen, wenn eine z
 
 ## 9 Korpusprüfung und Grenzen
 
-Der unter Windows abgenommene Stand r2005 erzeugt aus MIDI und WAV 15 Partituren mit 59 PDF-Seiten. Die Galerie enthält die Originalausgaben dieses Laufs. Der Windows-Lauf prüft die Ausführung und den PDF-Export. Ein musikalischer Vergleich mit einer Referenz bewertet zusätzlich Tonhöhe, Einsatz, geschriebene Dauer und sichtbare Notation. [Windows-Prüfbeleg](evidence/r2005/README.md) · [Notenbilder](examples/README.md#notenbilder)
+Der unter Windows abgenommene Stand r2014 erzeugt aus MIDI und WAV 15 Partituren mit 58 PDF-Seiten. Die Galerie enthält die Original-PDFs dieses Laufs und die jeweils verwendete MusicXML. Der Windows-Lauf prüft die Ausführung und den PDF-Export. Ein musikalischer Vergleich mit einer Referenz bewertet zusätzlich Tonhöhe, Einsatz, geschriebene Dauer und sichtbare Notation. [Windows-Prüfbeleg](evidence/r2014/README.md) · [Notenbilder](examples/README.md#notenbilder)
 
 <a name="kapitel-9-1"></a>
 

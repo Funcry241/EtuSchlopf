@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Klavier</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+      <note color="#002401" id="anchor-note-1"><pitch><step>F</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice><type>quarter</type><stem color="#004601">up</stem><staff>1</staff></note><note color="#002402" id="anchor-note-2"><pitch><step>A</step><octave>4</octave></pitch><duration>12</duration><tie type="start" /><voice>1</voice><type>half</type><dot /><stem color="#004602">up</stem><staff>1</staff><notations><tied type="start" color="#006802" id="anchor-tie-2" /></notations></note>
+      <backup><duration>16</duration></backup>
+      <note color="#002403" id="anchor-note-3"><pitch><step>D</step><octave>5</octave></pitch><duration>4</duration><voice>2</voice><type>quarter</type><stem color="#004603">down</stem><staff>1</staff></note><note color="#002404" id="anchor-note-4"><pitch><step>G</step><octave>5</octave></pitch><duration>4</duration><voice>2</voice><type>quarter</type><stem color="#004604">down</stem><staff>1</staff></note><note color="#002405" id="anchor-note-5"><pitch><step>F</step><octave>5</octave></pitch><duration>4</duration><voice>2</voice><type>quarter</type><stem color="#004605">down</stem><staff>1</staff></note><note color="#002406" id="anchor-note-6"><pitch><step>F</step><octave>5</octave></pitch><duration>4</duration><voice>2</voice><type>quarter</type><stem color="#004606">down</stem><staff>1</staff></note>
+    </measure>
+    <measure number="2">
+      <note color="#002407" id="anchor-note-7"><pitch><step>A</step><octave>4</octave></pitch><duration>8</duration><tie type="stop" /><voice>1</voice><type>half</type><stem color="#004607">up</stem><staff>1</staff><notations><tied type="stop" color="#006807" id="anchor-tie-7" /></notations></note><note color="#002408" id="anchor-note-8"><pitch><step>G</step><octave>4</octave></pitch><duration>8</duration><voice>1</voice><type>half</type><stem color="#004608">up</stem><staff>1</staff></note>
+      <backup><duration>16</duration></backup>
+      <note color="#002409" id="anchor-note-9"><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><voice>2</voice><type>quarter</type><stem color="#004609">down</stem><staff>1</staff></note><note color="#00240A" id="anchor-note-10"><pitch><step>D</step><octave>5</octave></pitch><duration>4</duration><voice>2</voice><type>quarter</type><stem color="#00460A">down</stem><staff>1</staff></note><note color="#00240B" id="anchor-note-11"><pitch><step>E</step><octave>5</octave></pitch><duration>4</duration><voice>2</voice><type>quarter</type><stem color="#00460B">down</stem><staff>1</staff></note><note color="#00240C" id="anchor-note-12"><pitch><step>F</step><octave>5</octave></pitch><duration>4</duration><voice>2</voice><type>quarter</type><stem color="#00460C">down</stem><staff>1</staff></note>
+    </measure>
+  </part>
+</score-partwise>
