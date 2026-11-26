@@ -106,9 +106,11 @@ Ein ausführbarer Teilkern ist die Entscheidung über die Einstufung **eines** �
 A(e)=[p(e)=1]\land[m(e)+d(e)+i(e)=0].
 ```
 
-$p$ zählt erlaubende Einstufungen, $m,d,i$ zählen fehlende, doppelte und ungültige Belege. Die Zähler sind keine Wahrscheinlichkeiten. Der Kern steht in `adoption_decision` in [ssc_evidence_proof.rs](../src/ssc_evidence_proof.rs). Er ist allein noch keine vollständige Freigabeformel.
+$p$ zählt die erlaubende Einstufung `Permit` des einen Änderungsbelegs. Sie verlangt einen Beleg im Geltungsbereich der Prüfung, eine nachgewiesene Invariante und die nachgewiesene Einhaltung der festgelegten Änderungshülle. $m,d,i$ zählen fehlende, doppelte und ungültige Belege. Die Zähler drücken Prüfergebnisse aus. [`adoption_decision` und Containment-Prüfung](../src/ssc_evidence_proof.rs#L1530-L1661)
 
-Die Zusammenstellung verlangt außerdem die zuständige Authority, die Herkunft des Belegs, den gebundenen Vor- und Nachzustand, die jeweils erforderlichen Erhaltungsbedingungen und den Schutz gegen unzulässige Wiederverwendung. Die konkreten Prüfungen und ihre Zuständigkeit bleiben in den ausführbaren Verträgen. Master und Render besitzen getrennte Herkunftsketten. Vor- und Nachbedingungen haben eine formale Tradition bei Floyd und Hoare.<a name="beleg-2-1-bedingungen"></a><sup><a href="#quelle-hoare">[16]</a></sup> Für die getrennte Prüfung eines mitgelieferten Belegs bietet Neculas *Proof-Carrying Code* einen Vergleich.<a name="beleg-2-1-pruefung"></a><sup><a href="#quelle-necula">[17]</a></sup>
+Der Gesamtbeleg verlangt außerdem die zuständige Authority, die Herkunft des Belegs, den gebundenen Vor- und Nachzustand, die jeweils erforderlichen Erhaltungsbedingungen und den Schutz gegen unzulässige Wiederverwendung. Die ausführbaren Verträge bestimmen die konkreten Prüfungen und ihre Zuständigkeit. Master und Render besitzen getrennte Herkunftsketten. Vor- und Nachbedingungen haben eine formale Tradition bei Floyd und Hoare.<a name="beleg-2-1-bedingungen"></a><sup><a href="#quelle-hoare">[16]</a></sup> Für die getrennte Prüfung eines mitgelieferten Belegs bietet Neculas *Proof-Carrying Code* einen Vergleich.<a name="beleg-2-1-pruefung"></a><sup><a href="#quelle-necula">[17]</a></sup>
+
+Die SchlopfFormel fasst den Zulässigkeitsnachweis zusammen. SSC erfasst die Notwendigkeit eines Eingriffs als Messgröße. Die fachliche Begründung für die Auswahl liefert die SchlopfKopfFormel. [Kapitel 2.1a](#kapitel-2-1a)
 
 **Grenze:** Eine zulässige Transformation ist damit nicht automatisch musikalisch gut. Ein Fingerprint ersetzt keine Ereignisidentität und kein musikalisches Qualitätsurteil.
 
@@ -128,7 +130,7 @@ Jede Regel legt vorab offen, welche Merkmale, Beziehungen, Kontextgrenzen und Sc
 
 **Befund und Schwere.** Ein Befund $k=(r,E)$ bezeichnet eine Regel an bestimmten Notationselementen $E$. Zwischen Vor- und Nachzustand werden dieselben Elemente über ihre Provenienz gebunden. Diese Bindung bildet den tatsächlichen Übergang ab. Die strukturelle Entsprechung $\psi$ vergleicht dagegen verschiedene Situationen. Bei fehlender Bindung bleibt die Elementidentität unklar.
 
-Für jeden Befund hat die Regel eine vorab festgelegte Schwereskala. Null bedeutet erfüllt, ein positiver Wert bezeichnet einen Verstoß. Das Zeichen $?$ steht für einen unklaren Befund und hat keinen Zahlenwert.
+Für jeden Befund hat die Regel eine vorab festgelegte Schwereskala. Null bedeutet erfüllt, ein positiver Wert bezeichnet einen Verstoß. Für einen Befund mit genau zwei entscheidbaren Zuständen genügt die Skala $\{0,1\}$. Das Zeichen $?$ steht für einen unklaren Befund. Zwei solche Befunde brauchen einen eigenen Erhaltungsnachweis. Eine Minderung wie $5\to4$ zählt als Erhalt eines weiterhin vorhandenen Verstoßes. Ein belegter Zielverstoß ist erst bei Schwere null beseitigt.
 
 | Vorher | Nachher | Wirkung |
 |---|---|---|
@@ -141,7 +143,9 @@ Für jeden Befund hat die Regel eine vorab festgelegte Schwereskala. Null bedeut
 | Unklar | Erfüllt | Bei eindeutiger Bindung zulässig, ohne belegte Beseitigung. |
 | Unklar | Verletzt | Der Vorschlag scheidet aus. |
 
-Sei $H$ die Menge der betroffenen harten Befunde und $Z$ die Menge der Zielbefunde aus der festgelegten Fehlerklasse. Für die erste Halsregel gelangt ein Vorschlag nur dann in die Auswahl, wenn er die Erhaltungsbedingungen erfüllt und der folgende Nachweis gelingt.
+**Betroffene Befunde.** Für eine Konfliktgruppe $G$ sei $M_G$ die Menge ihrer gebundenen Zeichen. $\Delta$ umfasst alle Zeichen und Segmente, die sich im Übergang für die Prüfung ändern. Dazu zählen Auftreten und Wegfall, Seitenwechsel, Geometrie, Prüfrolle und Anschlusszugehörigkeit. $B(k)$ bezeichnet die gebundenen Elemente, von denen ein Befund $k$ nach seiner Regel abhängt. Das umfasst auch Elemente, aus denen sich die Rolle oder der erlaubte Anschluss ergibt. Zeichenabhängige harte Befunde gehören zur Prüfung, wenn $B(k)\cap(M_G\cup\Delta)\ne\emptyset$. Änderungen von übergreifenden Prüfbedingungen wie Maßstab oder Sichtbarkeit werden im jeweils betroffenen Bereich berücksichtigt.
+
+Sei $H$ die Menge dieser betroffenen harten Befunde und $Z$ die Menge der Zielbefunde aus der festgelegten Fehlerklasse. Für die erste Halsregel gelangt ein Vorschlag nur dann in die Auswahl, wenn er die Erhaltungsbedingungen erfüllt und der folgende Nachweis gelingt.
 
 ```math
 \bigl(\forall k\in H:\ \mathrm{Nichtverschlechterung}(k;x_0,x)\bigr)
@@ -149,9 +153,11 @@ Sei $H$ die Menge der betroffenen harten Befunde und $Z$ die Menge der Zielbefun
 \bigl(\exists k\in Z:\ \sigma_{x_0}(k)>0\ \land\ \sigma_x(k)=0\bigr).
 ```
 
-$\sigma_x(k)$ bezeichnet die Schwere in Fassung $x$. Die beiden Werte eines beseitigten Zielbefunds müssen belegt sein. Die Nichtverschlechterung folgt aus der Übergangstabelle. Erlaubte Abwägungen bei weichen Kosten werden je Regel vorab begründet.
+$\sigma_x(k)$ bezeichnet die Schwere in Fassung $x$. Die beiden Werte eines beseitigten Zielbefunds müssen am tatsächlichen Vor- und Nachzustand belegt sein. Bei der Halsregel wird die Richtung jedes geänderten Halses im Schlussrender bestätigt. Mindestens ein Zielhals muss zuvor nachweislich falsch ausgerichtet gewesen sein. Die Übergangstabelle verlangt die Nichtverschlechterung jedes betroffenen harten Befunds für sich. Für die erste Halsregel gibt es keine weichen Abwägungen. Bei anderen Regeln braucht jede weiche Abwägung eine vorab festgelegte Begründung für die zulässige Kombination und Priorität der Kosten.
 
-**Auswahl je Konfliktgruppe.** Fachlich gekoppelte Änderungen werden gemeinsam entschieden. Auch eine relevante Wechselwirkung mit Zeichen außerhalb der Planergruppe kann zwei Änderungen koppeln. Getrennte Entscheidungen sind zulässig, wenn die relevanten Befunde der einen Gruppe von der Wahl in der anderen unabhängig sind. Ein Vergleich der Ausgangsfassung mit dem Gesamtvorschlag allein belegt diese Unabhängigkeit noch nicht.
+**Auswahl je Konfliktgruppe.** Die Knoten des Kopplungsgraphen sind die geplanten Änderungsgruppen. Eine Kante verbindet Gruppen mit gemeinsamer Planungsabhängigkeit oder möglichem gemeinsamem Einfluss auf einen Befund, etwa über ein Zeichenpaar, einen Anschluss oder eine Layoutverschiebung. Das kann auch ein Zeichen außerhalb beider Gruppen betreffen. Unsichere mögliche Wechselwirkungen zählen als Kanten. Die Zusammenhangskomponenten werden jeweils gemeinsam entschieden.
+
+Für getrennte Entscheidungen braucht es einen eigenen Nachweis, dass Kandidaten und Befunde einer Komponente bei Hinzunahme oder Weglassen der übrigen zulässigen Komponenten gleich bleiben. Der Schlussrender bestätigt den tatsächlich gewählten Übergang. Eine synthetische Gegenprobe prüft den Fall, dass zwei gegenläufige Bewegungen sich im Gesamtvorschlag aufheben und erst in einer Teilfassung sichtbar werden.
 
 Gibt es mehrere zulässige Vorschläge, kann nur ein Vorschlag gewinnen, der mindestens dieselben Zielbefunde beseitigt wie jeder andere. Bei gleicher Menge entscheiden die vorab erlaubten weichen Abwägungen, danach die Zahl der geänderten Notationseinheiten. Bei der Halsregel sind das die rhythmischen Einheiten mit geänderter Halsrichtung. Bleibt ein Gleichstand oder sind die Vorschläge fachlich unvergleichbar, gilt die Ausgangsfassung.
 
@@ -162,13 +168,44 @@ Gibt es mehrere zulässige Vorschläge, kann nur ein Vorschlag gewinnen, der min
 =\mathrm{Wahl}_r(x_0,x)\land\mathrm{Beleg}(x_0,x)\land\mathrm{Render}(x_0,x).
 ```
 
-Die Wahl begründet die Fehlerbehebung. Der [Übergangsnachweis aus Kapitel 2.1](#kapitel-2-1) bindet die Erhaltung an den exakten Vor- und Nachzustand. Belege für einzelne Änderungen genügen dafür erst, wenn sie auch die gemeinsame Wirkung belegen.
+Die Wahl begründet die Fehlerbehebung. Wird eine Teilmenge $S$ der Gruppen übernommen, gilt der Gesamtbeleg für den exakten Übergang $x_0\to x_S$ und erfasst die gemeinsame Wirkung. $A(e)$ prüft die Einstufung eines gebundenen Einzelbelegs nach Kapitel 2.1. Der Gesamtbeleg umfasst alle Erhaltungs- und Herkunftsbedingungen für die tatsächlich ausgegebene Teilfassung. [Übergangsnachweis](#kapitel-2-1)
 
-Für die geometrische Prüfung werden Ausgangsfassung und ein gemeinsamer Vorschlag verglichen. Geprüft werden alle Zeichen mit veränderter Geometrie und ihre relevanten Paare. Der Vergleich verlangt eine eindeutige Zuordnung, eine vorab festgelegte Koordinatentoleranz und einen Mindestabstand je geprüfter Paarklasse. Der reguläre PDF-Render bestätigt die tatsächlich ausgewählte Fassung, auch wenn nur ein Teil der vorgeschlagenen Gruppen übernommen wird. Fehlt diese Bestätigung, ist nur eine bereits für die Ausgabe belegte Ausgangsfassung als Rückfall zulässig. Die Prüfung löst keine weitere Auswahl aus.
+<a name="abstandserhalt"></a>
+
+**Abstandserhalt.** Für jedes gebundene Zeichenpaar der Klasse $c$ liefern die Messung und ihre Reserve ein vergleichbares Intervall $[L,U]$ für den Abstand. Maßstab und musikalisch begründeter Mindestabstand $m_c$ werden je Paarklasse vor der Auswertung festgelegt. Der Mindestabstand ist bei $L\ge m_c$ erfüllt und bei $U<m_c$ verletzt. Im übrigen Bereich bleibt der Befund unklar. Bei unklarer Zeichenbindung bleibt auch die Abstandsaussage offen.
+
+Für den bekannten Abstandsbereich ist das Defizit $s_c(d)=\max(0,m_c-d)$. Eine robuste Abschätzung der Nichtverschlechterung vergleicht das größtmögliche neue mit dem kleinstmöglichen alten Defizit:
+
+```math
+\max(0,m_c-L_{\mathrm{neu}})\le\max(0,m_c-U_{\mathrm{alt}})
+\quad\Longleftrightarrow\quad
+L_{\mathrm{neu}}\ge\min(m_c,U_{\mathrm{alt}}).
+```
+
+Die Übergangstabelle gilt zusätzlich. Sie verweigert den Übergang von belegt verletzt zu unklar auch bei belegt größerem Abstand. Der übliche Abstand der Zeichenflächen ist bei Berührung und Überdeckung null. Wenn beide Fassungen eine Überdeckung zulassen, verlangt der Erhalt nachgewiesen unveränderte gebundene Konturen oder einen gesondert qualifizierten Schwerevergleich.
+
+<a name="vollstaendigkeit-paarermittlung"></a>
+
+**Vollständigkeit der Paarermittlung.** Je Fassung braucht der Nachweis ein vollständiges Inventar der sichtbaren Zeichen und Segmente auf den betroffenen Seiten. Dazu gehören die Ursprungs- und Zielseite eines verschobenen Zeichens. Ein möglicherweise relevantes Segment ohne sichere Zuordnung macht die Prüfung der betroffenen Gruppe unklar. Der Nachweis erfasst auch ungeplante Geometrie-, Rollen- und Anschlussänderungen.
+
+$Q_0$ und $Q_1$ enthalten je Fassung alle Paare verschiedener Zeichen auf derselben Seite, wenn mindestens eines der Zeichen zu $M_G$ oder $\Delta$ gehört. Die gebundenen Paaridentitäten werden über beide Zustände vereinigt. Für die ermittelte Prüfmenge $\widehat P\subseteq Q$ mit $Q=Q_0\cup Q_1$ gilt
+
+```math
+\text{Vollständig}(x_0,x)=
+\text{Inventare belegt}(x_0,x)
+\land\text{Änderungen erfasst}(x_0,x)
+\land\bigl[\forall q\in Q\setminus\widehat P:\ \text{Ausschluss belegt}(q)\bigr].
+```
+
+Ein Ausschluss muss in jeder relevanten Fassung tragen. Er kann auf einem deklarierten Rollenpaar ohne Prüfpflicht, einem für den betrachteten Kontakt belegten erlaubten Anschluss oder einer konservativen Abstandsschranke beruhen. Enthält diese Schranke bereits die Messreserve, genügt $L_{\text{Hülle}}\ge m_c$. Eine leere Prüfmenge ist zulässig, wenn die Inventare und alle Ausschlüsse belegt sind. Eine unabhängige erschöpfende Suche über vollständige synthetische Inventare prüft die Paarermittlung. Die Vollständigkeit des Inventars bleibt ein eigener Nachweis.
+
+**Schlussrender.** Die Ausgangsfassung und der gemeinsame Vorschlag liefern die erste geometrische Prüfung. Das regulär ausgegebene PDF durchläuft dieselbe Zeichenbindung und Paarprüfung für die tatsächlich gewählte Fassung, auch bei einer Teilfassung. Der Renderbeleg setzt die nachgewiesene Vollständigkeit voraus. Fehlt dem gewählten Übergang ein Nachweis, dient die bereits für die Ausgabe belegte Ausgangsfassung als Rückfall. Die Prüfung beendet die Auswahl.
+
+**Idempotenz.** Sei $T_r$ die Übernahmefunktion für Regel $r$. Bei gleichem Kontext und Renderprofil soll $T_r(T_r(x_0))=T_r(x_0)$ für den gebundenen Notationszustand und die normalisierte Rendergeometrie gelten. Angenommene Ketten dürfen beim zweiten Lauf keinen weiteren Korrekturvorschlag auslösen. Eine Probe mit zuvor abgewiesenen Gruppen prüft, ob die gesamte ausgegebene Fassung ein Fixpunkt bleibt.
 
 **Prüfstand r2014.** In synthetischen MuseScore-Ausgaben sind Halsstriche und Haltebögen bis zu ihren gezeichneten PDF-Konturen gebunden. Eine eigene Probe ordnet 24 Notenköpfe den Konturen ihrer eingebetteten PDF-Glyphen zu. Der synthetische Trockenlauf prüft Entscheidungen für unabhängige und gekoppelte Gruppen. Er verlangt einen eigenen Beleg für den Erhalt eines unklaren Befunds und prüft den Rückfall auf die belegte Ausgangsfassung, wenn der Schlussbeleg abweicht. [PDF-Nachweis und Trockenlauf](final_stem_pdf_evidence_r2014.md)
 
-Für die produktive Halskorrektur fehlen noch musikalisch begründete Mindestabstände für Hals–Kopf und Hals–Bogen. Die Zeichen und ihre betroffenen Paare müssen auch bei geteilten Zeichen und über mehrere Seiten hinweg eindeutig zugeordnet sein. Der Nachweis muss die tatsächlich ausgegebene Teilfassung nach dem endgültigen Layout erfassen. [Reparaturbereich für Haltebogenketten](final_stem_tie_chain_repair_scope.md)
+Im r2014-Trockenlauf stammen Paarlisten und Kopplungen aus synthetischen Vorgaben. Für die produktive Übernahme stehen die Rollendefinitionen und musikalisch begründeten Mindestabstände für Hals–Kopf und Hals–Haltebogen, die vollständige Paarermittlung einschließlich mehrseitiger und geteilter Zeichen sowie die hergeleitete Kopplung noch aus. Dazu kommen die Bestätigung aller geänderten Hälse, der Fixpunkttest und der Gesamt- und Renderbeleg für die tatsächlich ausgegebene Teilfassung nach dem endgültigen Layout. [Reparaturbereich für Haltebogenketten](final_stem_tie_chain_repair_scope.md)
 
 <a name="kapitel-2-2"></a>
 <a name="schlöpfchen-formel-die-angestrebte-seitenfüllung"></a>
