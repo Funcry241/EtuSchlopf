@@ -116,20 +116,55 @@ Die Zusammenstellung verlangt außerdem die zuständige Authority, die Herkunft 
 
 ### 2.1a SchlopfKopfFormel für allgemeine Notationsentscheidungen
 
-**Entwurf.** Die SchlopfKopfFormel legt fest, welche Informationen eine Notationsentscheidung beeinflussen dürfen. Ihr erster Anwendungsfall sind Notenhälse.
+**Entwurf.** Die SchlopfKopfFormel bestimmt, ob eine Fassung geändert werden soll und welcher Vorschlag fachlich begründet ist. Ihr erster Anwendungsfall sind Notenhälse.
 
-Sei $s$ ein Notationszustand und $\pi(s)$ sein für die Entscheidung relevanter Kontext. Die Auswahl $D$ bezeichnet eine relative Anweisung für die jeweils entsprechenden Notationselemente. Es gilt
+**Kontext und Entsprechung.** Für eine Regel $r$ ist $\pi_r(s)$ der für die Entscheidung relevante Kontext im Notationszustand $s$. Erhält eine Bijektion $\psi$ zwischen zwei Situationen alle deklarierten Merkmale und Beziehungen, überträgt sie auch die Anweisung auf die entsprechenden Elemente.
 
 ```math
-D(s)=d\bigl(\pi(s)\bigr),\qquad
-\pi(s)=\pi(t)\ \Longrightarrow\ D(s)=D(t).
+D_r(s)=d_r\bigl(\pi_r(s)\bigr),\qquad D_r(t)=\psi_*\bigl(D_r(s)\bigr).
 ```
 
-In $\pi$ gehen ausschließlich Merkmale ein, deren Einfluss sich aus einer allgemein formulierten Notensatzregel begründen lässt. Die Regel gilt unabhängig von Etüde, Stück und konkretem Takt. Ausgeschlossen sind direkte Kennungen wie Stückname, Dateiname und absolute Taktnummer. Der Ausschluss gilt ebenso für die indirekte Wiedererkennung einer Stelle über musikalische Fingerabdrücke. Dazu zählen auf eine Fundstelle zugeschnittene Ton- oder Intervallfolgen, rhythmische Muster, Stimmenlagen, deren Kombinationen und entsprechend gewählte Schwellenwerte. Eine Position innerhalb des Takts zählt nur, wenn die allgemeine Regel ihre metrische Bedeutung braucht.
+Jede Regel legt vorab offen, welche Merkmale, Beziehungen, Kontextgrenzen und Schwellenwerte sie für die Entscheidung braucht. Sie begründet diese Angaben aus dem Notensatz. Das gilt für die Erzeugung der Vorschläge, ihre Auswahl und die fachliche Übernahmeprüfung. Stückname, Dateiname und absolute Taktnummer bleiben ausgeschlossen, ebenso indirekte musikalische Fingerabdrücke wie eigens auf eine Fundstelle zugeschnittene Tonfolgen, Rhythmen, Stimmenlagen oder deren Kombinationen. Synthetische Proben prüfen die gleiche Entscheidung in verschieden gebauten Situationen und einen möglichst gleichen Gegenfall ohne den Auslöser.
 
-Die Gleichung allein garantiert die Allgemeingültigkeit nicht. Dafür braucht jedes verwendete Merkmal eine fachliche Begründung. Synthetische Prüfpaare variieren Tonhöhen, Rhythmen und Lage, soweit der fachliche Konflikt gleich bleibt. Ein musikalisch ähnliches Gegenbeispiel ohne diesen Konflikt darf die Änderung nicht auslösen.
+**Befund und Schwere.** Ein Befund $k=(r,E)$ bezeichnet eine Regel an bestimmten Notationselementen $E$. Zwischen Vor- und Nachzustand werden dieselben Elemente über ihre Provenienz gebunden. Diese Bindung bildet den tatsächlichen Übergang ab. Die strukturelle Entsprechung $\psi$ vergleicht dagegen verschiedene Situationen. Bei fehlender Bindung bleibt die Elementidentität unklar.
 
-Die Auswahl liefert die Ausgangsfassung oder einen Änderungsvorschlag. Ein Vorschlag wird einmal im gemeinsamen Render geprüft und nur nach bestandener Prüfung und mit dem nach [Kapitel 2.1 erforderlichen Übergangsnachweis](#kapitel-2-1) übernommen. Fehlt ein Nachweis, gilt die Ausgangsfassung. Die Prüfung löst keine Neuberechnung oder weitere Auswahl aus.
+Für jeden Befund hat die Regel eine vorab festgelegte Schwereskala. Null bedeutet erfüllt, ein positiver Wert bezeichnet einen Verstoß. Das Zeichen $?$ steht für einen unklaren Befund und hat keinen Zahlenwert.
+
+| Vorher | Nachher | Wirkung |
+|---|---|---|
+| Verletzt | Erfüllt | Belegte Beseitigung |
+| Erfüllt | Erfüllt | Erfüllt geblieben |
+| Verletzt | Dieselbe oder eine geringere positive Schwere | Zulässiger Erhalt oder Minderung |
+| Erfüllt oder verletzt | Höhere Schwere | Neuer oder verschärfter Verstoß. Der Vorschlag scheidet aus. |
+| Erfüllt oder verletzt | Unklar | Der Vorschlag scheidet aus. |
+| Unklar | Unklar | Zulässig mit eigenem Beleg der Nichtverschlechterung, etwa bei nachweislich unveränderter Geometrie. |
+| Unklar | Erfüllt | Bei eindeutiger Bindung zulässig, ohne belegte Beseitigung. |
+| Unklar | Verletzt | Der Vorschlag scheidet aus. |
+
+Sei $H$ die Menge der betroffenen harten Befunde und $Z$ die Menge der Zielbefunde aus der festgelegten Fehlerklasse. Für die erste Halsregel gelangt ein Vorschlag nur dann in die Auswahl, wenn er die Erhaltungsbedingungen erfüllt und der folgende Nachweis gelingt.
+
+```math
+\bigl(\forall k\in H:\ \mathrm{Nichtverschlechterung}(k;x_0,x)\bigr)
+\land
+\bigl(\exists k\in Z:\ \sigma_{x_0}(k)>0\ \land\ \sigma_x(k)=0\bigr).
+```
+
+$\sigma_x(k)$ bezeichnet die Schwere in Fassung $x$. Die beiden Werte eines beseitigten Zielbefunds müssen belegt sein. Die Nichtverschlechterung folgt aus der Übergangstabelle. Erlaubte Abwägungen bei weichen Kosten werden je Regel vorab begründet.
+
+**Auswahl je Konfliktgruppe.** Fachlich gekoppelte Änderungen werden gemeinsam entschieden. Auch eine relevante Wechselwirkung mit Zeichen außerhalb der Planergruppe kann zwei Änderungen koppeln. Getrennte Entscheidungen sind zulässig, wenn die relevanten Befunde der einen Gruppe von der Wahl in der anderen unabhängig sind. Ein Vergleich der Ausgangsfassung mit dem Gesamtvorschlag allein belegt diese Unabhängigkeit noch nicht.
+
+Gibt es mehrere zulässige Vorschläge, kann nur ein Vorschlag gewinnen, der mindestens dieselben Zielbefunde beseitigt wie jeder andere. Bei gleicher Menge entscheiden die vorab erlaubten weichen Abwägungen, danach die Zahl der geänderten Notationseinheiten. Bei der Halsregel sind das die rhythmischen Einheiten mit geänderter Halsrichtung. Bleibt ein Gleichstand oder sind die Vorschläge fachlich unvergleichbar, gilt die Ausgangsfassung.
+
+**Drei Nachweise für die Übernahme.** Für die tatsächlich ausgegebene Fassung $x$ gilt gegenüber der Ausgangsfassung $x_0$
+
+```math
+\mathrm{Freigabe}_r(x_0,x)
+=\mathrm{Wahl}_r(x_0,x)\land\mathrm{Beleg}(x_0,x)\land\mathrm{Render}(x_0,x).
+```
+
+Die Wahl begründet die Fehlerbehebung. Der [Übergangsnachweis aus Kapitel 2.1](#kapitel-2-1) bindet die Erhaltung an den exakten Vor- und Nachzustand. Belege für einzelne Änderungen genügen dafür erst, wenn sie auch die gemeinsame Wirkung belegen.
+
+Für die geometrische Prüfung werden Ausgangsfassung und ein gemeinsamer Vorschlag verglichen. Geprüft werden alle Zeichen mit veränderter Geometrie und ihre relevanten Paare. Der Vergleich verlangt eine eindeutige Zuordnung, eine vorab festgelegte Koordinatentoleranz und einen Mindestabstand je geprüfter Paarklasse. Der reguläre PDF-Render bestätigt die tatsächlich ausgewählte Fassung, auch wenn nur ein Teil der vorgeschlagenen Gruppen übernommen wird. Fehlt diese Bestätigung, ist nur eine bereits für die Ausgabe belegte Ausgangsfassung als Rückfall zulässig. Die Prüfung löst keine weitere Auswahl aus.
 
 <a name="kapitel-2-2"></a>
 <a name="schlöpfchen-formel-die-angestrebte-seitenfüllung"></a>
