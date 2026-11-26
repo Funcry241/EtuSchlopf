@@ -2,7 +2,7 @@
 
 EtuSchlopf **0.10.1839 r2014** verarbeitete alle 15 Projekte des Windows-Vollkorpus mit Exitcode 0. Die Notenausgabe umfasst 58 PDF-Seiten. Build und Clippy Strict meldeten Exitcode 0. Clippy Strict meldete null Warnungen. Die Strict-Tests meldeten 3.200 bestanden, null fehlgeschlagen und sieben übersprungen. [Notenbilder](../../examples/README.md#notenbilder) · [PDF-Quellen](score-source.tsv) · [Prüfsummen](score-sha256.txt)
 
-Die beobachtenden Proben zu Kopf, Hals und Haltebogen und ihre Reichweite sind gesondert dokumentiert. [PDF-Nachweis](../../final_stem_pdf_evidence_r2014.md)
+Der PDF-Prüfbeleg beschreibt die beobachtenden Proben zu Kopf, Hals und Haltebogen. Seine Einleitung nennt die Windows-Abnahme des Elternstands r2013. Die Prüfsummen unten gehören zum angenommenen r2014. Der Stand der noch offenen produktiven Nachweise steht bei der SchlopfKopfFormel und im Halsketten-Reparaturbereich. [PDF-Nachweis](../../final_stem_pdf_evidence_r2014.md) · [SchlopfKopfFormel](../../MATHEMATIK.md#kapitel-2-1a) · [Reparaturbereich](../../final_stem_tie_chain_repair_scope.md)
 
 | Geprüftes Paket | SHA-256 |
 | --- | --- |
