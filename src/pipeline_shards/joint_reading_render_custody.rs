@@ -58,6 +58,8 @@ impl JointReadingOwnerInput {
                 .and_then(|note| note.pitch.as_ref()).ok_or_else(|| anyhow!("Original Render head lost its source binding"))?;
             let pitch = note.pitch.as_ref().ok_or_else(|| anyhow!("Original Render head was restified"))?;
             anyhow::ensure!(old.midi == pitch.midi, "Original Render head changed sounding pitch");
+            anyhow::ensure!(fragment.is_grace == head.grace_host.is_some(),
+                "Original Render head changed its received grace role");
             let mut next = head.clone();
             next.source_span = range; next.measure = *ordinals.get(&note.note_start).ok_or_else(|| anyhow!("Render head has no structural measure"))?;
             next.onset = fragment.onset; next.duration = fragment.duration; next.staff = fragment.staff.clone();

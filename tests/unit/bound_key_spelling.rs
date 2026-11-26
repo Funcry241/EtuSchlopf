@@ -73,6 +73,7 @@
         let mut material = JointReadingOwnerInput {
             source: std::sync::Arc::from(xml.as_str()),
             heads: original.iter().enumerate().map(|(index, note)| JointReadingOwnerHead {
+                grace_host: None,
                 source_event_id: MaterialSourceEventId(index / 2),
                 attack_id: SoundingAttackId(index / 2),
                 measure: 1, onset: note.start, duration: 24, staff: note.staff.clone(),

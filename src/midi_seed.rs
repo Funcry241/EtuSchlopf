@@ -6,6 +6,7 @@
 use crate::midi::MidiKeySignature;
 use crate::midi::notation_time::{NotationEventKind, NotationTimePlan, PreparedPerformanceTiming, WrittenHoldProposal, read_midi_with_notation};
 use crate::midi::source_time::{MetricMeasure, MetricTimeline, supported_notation_meter};
+use crate::model::key_spelling;
 use crate::pipeline_profile::{base_solver_profiles, CandidateProfile};
 use crate::source_selection::{
     bind_productive_source_selection_plan,
@@ -1474,14 +1475,18 @@ impl MidiSeedRhythmicCourses {
         Ok(())
     }
 
-    fn seal_emission(&mut self, xml: &str) -> anyhow::Result<()> {
+    fn seal_emission(
+        &mut self,
+        xml: &str,
+        opening_key_signature: Option<MidiKeySignature>,
+    ) -> anyhow::Result<()> {
         if self.emission_snapshot.is_some() {
             return Err(anyhow!("Rhythmic seed already emitted"));
         }
         self.validate_occurrences(xml)?;
         if !self.bound_written_sections.is_empty() {
             bound_duration::verify_written_intervals(
-                xml, &self.metric, &self.planned, &self.bound_written_sections,
+                xml, &self.metric, &self.planned, &self.bound_written_sections, opening_key_signature,
             )?;
         }
         self.emission_snapshot = Some(xml.to_owned());
@@ -3641,6 +3646,7 @@ fn build_musicxml(
                 staff: 1,
                 voice: "1",
                 stem: "up",
+                opening_key_signature,
                 measure_ordinal: idx.saturating_add(1),
                 raw_note_index: &mut raw_note_index,
                 serialized_source_identity_rows: &mut serialized_source_identity_rows,
@@ -3656,6 +3662,7 @@ fn build_musicxml(
                 staff: 2,
                 voice: "2",
                 stem: "down",
+                opening_key_signature,
                 measure_ordinal: idx.saturating_add(1),
                 raw_note_index: &mut raw_note_index,
                 serialized_source_identity_rows: &mut serialized_source_identity_rows,
@@ -3667,7 +3674,7 @@ fn build_musicxml(
     }
 
     xml.push_str("  </part>\n</score-partwise>\n");
-    rhythmic_courses.seal_emission(&xml)?;
+    rhythmic_courses.seal_emission(&xml, opening_key_signature)?;
     Ok((
         xml,
         measure_raw_note_counts,
@@ -3679,6 +3686,7 @@ struct MidiSeedStaffVoiceSerialization<'a> {
     staff: u8,
     voice: &'a str,
     stem: &'a str,
+    opening_key_signature: Option<MidiKeySignature>,
     measure_ordinal: usize,
     raw_note_index: &'a mut usize,
     serialized_source_identity_rows: &'a mut Vec<MidiSeedSerializedSourceIdentityRow>,
@@ -3695,6 +3703,7 @@ fn append_staff_voice(
         staff,
         voice,
         stem,
+        opening_key_signature,
         measure_ordinal,
         raw_note_index,
         serialized_source_identity_rows,
@@ -3747,7 +3756,9 @@ fn append_staff_voice(
                 } else {
                     stem
                 };
-                append_note(xml, midi, duration, staff, voice, written_stem, &occurrence);
+                // Every fragment of the MIDI attack starts with the same spelling.
+                let pitch = written_seed_pitch(midi, opening_key_signature);
+                append_note(xml, pitch, duration, staff, voice, written_stem, &occurrence);
             }
             (None, None) => append_rest(xml, duration, staff, voice),
             _ => return Err(anyhow!("Inconsistent planned rhythmic occurrence")),
@@ -3789,8 +3800,15 @@ fn append_rest(xml: &mut String, duration: i64, staff: u8, voice: &str) {
     xml.push_str("      </note>\n");
 }
 
-fn append_note(xml: &mut String, midi: i32, duration: i64, staff: u8, voice: &str, stem: &str, occurrence: &PlannedSeedOccurrence) {
-    let (step, alter, octave) = midi_to_pitch(midi);
+fn append_note(
+    xml: &mut String,
+    (step, alter, octave): (&str, i32, i32),
+    duration: i64,
+    staff: u8,
+    voice: &str,
+    stem: &str,
+    occurrence: &PlannedSeedOccurrence,
+) {
     xml.push_str("      <note>\n");
     if duration == 0 { xml.push_str("        <grace slash=\"yes\"/>\n"); }
     if occurrence.chord {
@@ -3843,6 +3861,14 @@ pub fn type_and_dots_for_duration(duration: i64) -> (&'static str, usize) {
         d if d >= 12 => ("32nd", 0),
         _ => ("64th", 0),
     }
+}
+
+fn written_seed_pitch(
+    midi: i32,
+    key: Option<MidiKeySignature>,
+) -> (&'static str, i32, i32) {
+    key.and_then(|key| key_spelling::diatonic_pitch(i32::from(key.fifths), midi))
+        .unwrap_or_else(|| midi_to_pitch(midi))
 }
 
 fn midi_to_pitch(midi: i32) -> (&'static str, i32, i32) {

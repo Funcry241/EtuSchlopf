@@ -93,6 +93,7 @@ pub enum AdapterGroupKind {
     PrimaryBeam,
     Chord,
     TiedAttack,
+    Grace,
 }
 
 #[derive(Clone, Debug)]
@@ -207,7 +208,9 @@ struct ObservedNote {
     raw_onset: i64,
     at: Q,
     staff: String,
+    voice: String,
     pitched: bool,
+    grace: bool,
     after: Q,
 }
 
@@ -361,22 +364,29 @@ fn observe(source: &str) -> Result<Observed, String> {
                 }
                 "note" => {
                     let d = divisions.ok_or("note before divisions")?;
-                    if n.children().any(|c| c.has_tag_name("grace")) {
-                        return Err("grace note needs a separate ordering proof".into());
-                    }
-                    let raw: i64 = child_text(n, "duration").and_then(|v| v.parse().ok()).ok_or("note duration")?;
-                    if raw <= 0 {
+                    let grace = n.children().any(|c| c.has_tag_name("grace"));
+                    let chord = n.children().any(|c| c.has_tag_name("chord"));
+                    let duration = child_text(n, "duration").map(str::parse::<i64>)
+                        .transpose().map_err(|_| "note duration")?;
+                    let raw = if grace {
+                        if chord || duration.is_some_and(|duration| duration != 0) {
+                            return Err("grace chord or nonzero written grace duration".into());
+                        }
+                        0
+                    } else {
+                        duration.ok_or("note duration")?
+                    };
+                    if !grace && raw <= 0 {
                         return Err("nonpositive rhythmic duration".into());
                     }
                     let q = Q::new(i128::from(raw), d).ok_or("duration")?;
-                    let chord = n.children().any(|c| c.has_tag_name("chord"));
                     let (at_local, raw_local) = if chord {
                         last_head.ok_or("chord member without head")?
                     } else {
                         (cursor, raw_cursor)
                     };
                     if !chord {
-                        last_head = Some((cursor, raw_cursor));
+                        last_head = (!grace).then_some((cursor, raw_cursor));
                     }
                     let staff = child_text(n, "staff").unwrap_or("1").to_string();
                     out.notes.insert(pos, ObservedNote {
@@ -386,7 +396,9 @@ fn observe(source: &str) -> Result<Observed, String> {
                         raw_onset: raw_local,
                         at: base.add(at_local).ok_or("overflow")?,
                         staff,
+                        voice: child_text(n, "voice").unwrap_or("1").to_string(),
                         pitched: n.children().any(|c| c.has_tag_name("pitch")),
+                        grace,
                         after: base.add(if chord { cursor } else { cursor.add(q).ok_or("overflow")? }).ok_or("overflow")?,
                     });
                     any_note = true;
@@ -408,7 +420,101 @@ fn observe(source: &str) -> Result<Observed, String> {
         base = base.add(extent).ok_or("overflow")?;
     }
     out.end = base;
+    for note in out.notes.values().filter(|note| note.grace) {
+        if !note.pitched || out.events.iter().any(|event|
+            event.staff == note.staff
+                && event.at == note.at
+                && event.pos > note.span.start)
+        {
+            return Err("unbound grace or register boundary after a same-time grace head".into());
+        }
+    }
     Ok(out)
+}
+
+fn bound_grace_staves(
+    observed: &Observed,
+    heads: &[AdapterHead],
+    groups: &[AdapterGroup],
+) -> Result<BTreeSet<String>, AdapterError> {
+    let mut bound = BTreeSet::new();
+    let mut fixed = BTreeSet::new();
+    for group in groups.iter().filter(|group| group.kind == AdapterGroupKind::Grace) {
+        // The group indices have already been checked against the original head table.
+        let (host, grace) = group.members.split_last().expect("validated nonempty group");
+        let host = &observed.notes[&heads[*host].span.start];
+        let members = grace.iter().map(|&index| heads[index].span.start).collect::<Vec<_>>();
+        if host.grace || members.last().is_none_or(|&last| last >= host.span.start)
+            || members.windows(2).any(|pair| pair[0] >= pair[1])
+        {
+            return Err(AdapterError::Binding("Grace group disagrees with received note order".into()));
+        }
+        let before_host = observed.notes.range(members[0]..host.span.start)
+            .filter(|(_, note)| note.staff == host.staff && note.voice == host.voice)
+            .map(|(&position, _)| position);
+        if !before_host.eq(members.iter().copied()) || members.into_iter().any(|position| {
+            let note = &observed.notes[&position];
+            !note.grace || note.at != host.at || !bound.insert(position)
+        }) {
+            return Err(AdapterError::Binding("Grace group has ambiguous time, lane or coverage".into()));
+        }
+        fixed.insert(host.staff.clone());
+    }
+    if observed.notes.iter().any(|(position, note)| note.grace && !bound.contains(position)) {
+        return Err(AdapterError::Binding("Grace note has no carried principal attack".into()));
+    }
+    Ok(fixed)
+}
+
+#[derive(PartialEq, Eq)]
+struct GraceOrder {
+    at: Q,
+    staff: String,
+    voice: String,
+    grace_pitch: i32,
+    host_pitch: i32,
+}
+
+fn ordered_graces(source: &str, observed: &Observed) -> Result<Vec<GraceOrder>, AdapterError> {
+    let pitch = |note: &ObservedNote| {
+        let doc = roxmltree::Document::parse(&source[note.span.clone()]).ok()?;
+        let written = doc.root_element().children().find(|node| node.has_tag_name("pitch"))?;
+        let step = crate::model::key_spelling::natural_pitch_class(child_text(written, "step")?)?;
+        let alter = child_text(written, "alter").unwrap_or("0").parse::<i32>().ok()?;
+        let octave = child_text(written, "octave")?.parse::<i32>().ok()?;
+        octave.checked_add(1)?.checked_mul(12)?.checked_add(step)?.checked_add(alter)
+    };
+    observed.notes.values().filter(|note| note.grace).map(|grace| {
+        // This only verifies an already admitted group in the output. Source
+        // identities and admission come from the original notation plan.
+        let host = observed.notes.range(grace.span.end..).map(|(_, note)| note)
+            .find(|note| note.staff == grace.staff && note.voice == grace.voice && !note.grace)
+            .filter(|note| note.at == grace.at && note.measure == grace.measure)
+            .ok_or_else(|| AdapterError::Binding("Grace layout lost its principal attack".into()))?;
+        let (Some(grace_pitch), Some(host_pitch)) = (pitch(grace), pitch(host)) else {
+            return Err(AdapterError::Binding("Grace layout lost a sounding pitch".into()));
+        };
+        Ok(GraceOrder { at: grace.at, staff: grace.staff.clone(), voice: grace.voice.clone(),
+            grace_pitch, host_pitch })
+    }).collect()
+}
+
+pub(crate) fn verify_fixed_grace_staves(before: &str, after: &str) -> Result<(), AdapterError> {
+    let before_observed = observe(before).map_err(AdapterError::Binding)?;
+    let after_observed = observe(after).map_err(AdapterError::Binding)?;
+    let before_order = ordered_graces(before, &before_observed)?;
+    if before_order != ordered_graces(after, &after_observed)? {
+        return Err(AdapterError::Binding("Written grace order changed".into()));
+    }
+    let fixed: BTreeSet<_> = before_order.iter().map(|grace| &grace.staff).collect();
+    let register = |document: &Observed| {
+        document.events.iter().filter(|event| fixed.contains(&event.staff))
+            .map(|event| (event.staff.clone(), event.at, event.kind)).collect::<Vec<_>>()
+    };
+    if register(&before_observed) != register(&after_observed) {
+        return Err(AdapterError::Binding("Register changed on a fixed grace staff".into()));
+    }
+    Ok(())
 }
 
 impl Observed {
@@ -536,6 +642,7 @@ pub fn propose(
             return Err(AdapterError::Binding(format!("group {gi}: chord members differ in onset")));
         }
     }
+    let fixed_grace_staves = bound_grace_staves(&observed, heads, groups)?;
 
     // A carried tie continuation must belong to a carried tie group; otherwise the
     // tie obligation of that fragment is not bound and nothing may be decided.
@@ -562,6 +669,8 @@ pub fn propose(
     for staff in staves {
         let verdict = if coupled.contains(&staff) {
             StaffVerdict::Unknown { reason: "cross-staff group dependency is not closed".into() }
+        } else if fixed_grace_staves.contains(&staff) {
+            StaffVerdict::Unknown { reason: "Register fixed on staff with a bound grace group".into() }
         } else if let Some(r) = observed.unsupported.get(&staff) {
             StaffVerdict::Unknown { reason: format!("unsupported register markup: {r}") }
         } else {

@@ -23,6 +23,7 @@ pub(crate) mod original_beam_diagnostics;
 pub mod destructive_carrier_effect_inventory;
 pub(crate) mod destructive_edit_attribution;
 pub mod renderer_system_break_readback;
+pub(crate) mod engraving_native_export_proof;
 pub mod phrase_boundary_evidence;
 pub(crate) mod source_event_causal_ledger;
 pub(crate) mod source_selection_full_causal_audit_shadow_plan;

@@ -5,6 +5,9 @@ use roxmltree::{Document, Node};
 #[path = "phrase_paint_geometry.rs"]
 pub(crate) mod paint;
 
+#[path = "../audit_only/engraving_collision.rs"]
+pub(crate) mod collision_observation;
+
 const FLATNESS: f64 = 1.0 / 128.0;
 const GRID: f64 = 4096.0;
 // Euclidean allowance for snapping a vertex and evaluating the subdivision.
@@ -379,6 +382,40 @@ impl Page {
 
     pub(crate) fn system_count(&self, staff_count: usize) -> Option<usize> {
         Some(self.systems(staff_count)?.len() + 1)
+    }
+
+    /// Stroke endpoints and width in PDF points, ordered along the axis.
+    pub(crate) fn native_export_stroke_anchors(&self) -> Option<Vec<[f64; 5]>> {
+        let attribute = |name: &str| {
+            self.format.iter().find(|(key, _)| key == name).map(|(_, value)| value.as_str())
+        };
+        let dimensions = attribute("viewBox")?.split_ascii_whitespace()
+            .map(number).collect::<Option<Vec<_>>>()?;
+        let [0.0, 0.0, width, height] = dimensions.as_slice() else { return None };
+        if *width <= 0.0 || *height <= 0.0 {
+            return None;
+        }
+        let points_per_mm = 72.0 / 25.4;
+        let sx = number(attribute("width")?.strip_suffix("mm")?)? * points_per_mm / width;
+        let sy = number(attribute("height")?.strip_suffix("mm")?)? * points_per_mm / height;
+        if sx <= 0.0 || sy <= 0.0 {
+            return None;
+        }
+        self.shapes.iter().filter(|shape| matches!(shape.class.as_str(), "Stem" | "StaffLines"))
+            .map(|shape| {
+                let (a, b) = shape.extent()?;
+                let vertical = shape.class == "Stem";
+                if (vertical && (a.x != b.x || a.y == b.y))
+                    || (!vertical && (a.y != b.y || a.x == b.x))
+                    || shape.stroke_scale[0] <= 0.0
+                    || shape.stroke_scale[0] != shape.stroke_scale[1]
+                    || shape.paint.iter().any(|(name, _)| name == "stroke-dasharray")
+                {
+                    return None;
+                }
+                let (lo, hi) = if (a.x, a.y) <= (b.x, b.y) { (a, b) } else { (b, a) };
+                Some([lo.x * sx, lo.y * sy, hi.x * sx, hi.y * sy, shape.stroke_scale[0] * (sx * sy).sqrt()])
+            }).collect()
     }
 
     fn systems(&self, staff_count: usize) -> Option<Vec<f64>> {

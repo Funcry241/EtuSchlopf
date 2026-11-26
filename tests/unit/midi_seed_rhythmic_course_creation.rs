@@ -39,6 +39,53 @@ fn leading_silence_and_measure_splits_keep_created_course() {
 }
 
 #[test]
+fn opening_key_spells_a_held_attack_consistently() {
+    let notes = [
+        MidiSeedNote { midi: 42, len: 960, ..note(0, 192, 2) },
+        MidiSeedNote { midi: 54, len: 960, ..note(1, 192, 2) },
+    ];
+    let metric = MidiSeedRhythmicCourses::create_primary_presentations(&[], 3, MEASURE_DIVISIONS)
+        .unwrap().metric;
+    let voices = BTreeMap::from([
+        (0, SourceVoice { staff: 2, voice: 2, opposite_stem: false }),
+        (1, SourceVoice { staff: 2, voice: 2, opposite_stem: false }),
+    ]);
+    for (key, expected_spelling) in [
+        (Some(MidiKeySignature { fifths: -5, minor: false }), ("G", -1)),
+        (Some(MidiKeySignature { fifths: 4, minor: false }), ("F", 1)),
+        (None, ("F", 1)),
+    ] {
+        let mut plan = MidiSeedRhythmicCourses::create_metric_presentations(
+            &notes, &metric, Some(&voices), false,
+        ).unwrap();
+        let (xml, _, attacks) = build_musicxml("Synthetic", &notes, 3, &mut plan, key).unwrap();
+        plan.validate_seed_binding(&xml).unwrap();
+        assert_eq!(attacks.len(), notes.len());
+
+        let score = crate::musicxml::parse_musicxml(&xml).unwrap();
+        let written = score.parts[0].measures.iter().flat_map(|measure| &measure.events)
+            .filter_map(|event| event.pitch.as_ref().map(|pitch| (pitch, event)));
+        for (midi, octave) in [(42, 2), (54, 3)] {
+            let hold = written.clone().filter(|(pitch, _)| pitch.midi == midi)
+                .map(|(pitch, event)| {
+                    assert_eq!((pitch.step.as_str(), pitch.alter), expected_spelling);
+                    assert_eq!(pitch.octave, octave);
+                    (event.duration, event.tie_stop)
+                }).collect::<Vec<_>>();
+            assert_eq!(hold, [(192, false), (384, true), (384, true)]);
+        }
+    }
+}
+
+#[test]
+fn opening_key_spelling_can_cross_the_octave_boundary() {
+    assert_eq!(key_spelling::diatonic_pitch(7, 72), Some(("B", 1, 4)));
+    assert_eq!(key_spelling::diatonic_pitch(-7, 71), Some(("C", -1, 5)));
+    let e_major = Some(MidiKeySignature { fifths: 4, minor: false });
+    assert_eq!(written_seed_pitch(79, e_major), ("G", 0, 5));
+}
+
+#[test]
 fn coincident_sources_keep_distinct_creation_and_membership() {
     let (_, plan) = emitted(&[note(31, 0, 1), note(32, 0, 1)], 1);
     let sources = plan.occurrences.iter().filter(|o| o.source.is_some()).collect::<Vec<_>>();
@@ -120,12 +167,12 @@ fn writer_labels_do_not_issue_or_select_a_course_role() {
     let mut raw = 0;
     for (staff, voice) in [(1, "separate_upper_channel"), (2, "41")] {
         append_staff_voice(&mut xml, &mut [], 0, MidiSeedStaffVoiceSerialization {
-            staff, voice, stem: "up", measure_ordinal: 1,
+            staff, voice, stem: "up", opening_key_signature: None, measure_ordinal: 1,
             raw_note_index: &mut raw, serialized_source_identity_rows: &mut rows,
             rhythmic_courses: &mut plan,
         }).unwrap();
     }
-    plan.seal_emission(&xml).unwrap();
+    plan.seal_emission(&xml, None).unwrap();
     plan.validate_seed_binding(&xml).unwrap();
     assert_eq!(original_ids, plan.courses.iter().map(|c| c.creation).collect::<Vec<_>>());
     assert!(plan.courses.iter().all(|c| c.presentation == SeedCoursePresentation::Primary));
@@ -1017,7 +1064,7 @@ fn declared_seed_preserves_intervals_grace_and_independent_copies() {
     let _cleanup = Cleanup(directory.clone());
     let path = directory.join("written.mid");
     let intervals = [(71, 0, 72), (69, 0, 48), (72, 24, 24), (73, 96, 24), (76, 330, 480)];
-    let mut track = Vec::new();
+    let mut track = vec![0, 255, 89, 2, 252, 0];
     let mut map = Vec::new();
     let mut source_tick = 0;
     let mut source = 0;
@@ -1067,8 +1114,18 @@ fn declared_seed_preserves_intervals_grace_and_independent_copies() {
     let first = shifted.iter_mut().find(|part| part.source == Some(0)).unwrap();
     first.interval = 6..78;
     assert!(bound_duration::validate_partition(&plan.sources, &shifted).is_err());
+    let key = Some(MidiKeySignature { fifths: -4, minor: false });
     let changed = xml.replacen("<duration>72</duration>", "<duration>48</duration>", 1);
     assert!(bound_duration::verify_written_intervals(
-        &changed, &plan.metric, &plan.planned, &plan.bound_written_sections,
+        &changed, &plan.metric, &plan.planned, &plan.bound_written_sections, key,
+    ).is_err());
+    let changed = xml.replacen(
+        "<step>D</step>\n          <alter>-1</alter>",
+        "<step>C</step>\n          <alter>1</alter>",
+        1,
+    );
+    assert_ne!(xml, changed);
+    assert!(bound_duration::verify_written_intervals(
+        &changed, &plan.metric, &plan.planned, &plan.bound_written_sections, key,
     ).is_err());
 }

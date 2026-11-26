@@ -160,6 +160,7 @@ struct RenderPdfSourceSelectionStageInputs<'a> {
 struct RendererCoverageProjection {
     expectation: crate::final_report::RendererOutcomeExpectation,
     message: Option<String>,
+    engraving_collision_diagnostic: Option<String>,
 }
 
 struct RenderPdfSourceSelectionStageOutcome {
@@ -405,7 +406,7 @@ fn run_render_pdf_source_selection_stage(
     }
 
     let mut pdf_actual_pages: Option<usize> = None;
-    let silent_voice_coverage_projection_message = if pdf_render_requested {
+    let (silent_voice_coverage_projection_message, engraving_collision_diagnostic) = if pdf_render_requested {
         if render_xml_selected_for_pdf {
             console_artifact_line(
                 ConsoleArtifactLine::PostRenderXml,
@@ -480,10 +481,16 @@ fn run_render_pdf_source_selection_stage(
                 "PageBalance: geometric gain not retained by final consumed representation");
             eprintln!("ETUSCHLOPF: RendererFixedPageBalance: Phase=final_confirmed | SameBoundConsumer=true | PhysicalGainRetained=true");
         }
-        let projection_message = render.message.clone();
-        Some(projection_message)
+        let engraving_collision_readback = render::engraving_collision_readback::observe(
+            &selected_final_notation_xml_before_renderer,
+            pdf_source_path,
+            &source.pdf_out,
+            &render,
+            phrase_preview.slur_paint_plan().is_some(),
+        );
+        (Some(render.message), Some(engraving_collision_readback))
     } else {
-        None
+        (None, None)
     };
 
     if pdf_render_requested && crate::registernotation::reader_policy::final_pdf_observation_required(&selected_final_notation_xml_before_renderer) {
@@ -548,6 +555,7 @@ fn run_render_pdf_source_selection_stage(
         silent_voice_coverage_projection_message: RendererCoverageProjection {
             expectation: renderer_outcome_expectation,
             message: silent_voice_coverage_projection_message,
+            engraving_collision_diagnostic,
         },
         render_write_pdf_source_adoption_truth_gate_audit,
         render_write_pdf_source_adoption_truth_gate_blocks_release,

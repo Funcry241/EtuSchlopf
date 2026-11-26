@@ -78,7 +78,7 @@ fn score(measures: &[String]) -> String {
     format!("<score-partwise><part-list><score-part id=\"P1\"/></part-list><part id=\"P1\">{body}</part></score-partwise>")
 }
 /// Fixture-side carried heads: span, structural measure, raw local onset, staff,
-/// visibility, sounding spelling. Grace notes are skipped like unsupported input.
+/// visibility and sounding spelling.
 fn carried(xml: &str) -> Vec<AdapterHead> {
     let doc = roxmltree::Document::parse(xml).unwrap();
     let part = doc.root_element().children().find(|n| n.has_tag_name("part")).unwrap();
@@ -506,6 +506,78 @@ fn unsupported_clef_and_grace_are_not_guessed() {
 }
 
 #[test]
+fn carried_grace_group_keeps_its_staff_fixed_and_independent_bass_solvable() {
+    let mut first = n('B', 4, 0, 1);
+    first.grace = true;
+    let mut second = n('C', 5, 0, 1);
+    second.grace = true;
+    let body = plain_bar(['D', 'E', 'F', 'G'], ['C', 'D', 'E', 'F']);
+    let no_grace = score(&[head_attrs(DIV, 4, 4, "F") + &body]);
+    let xml = score(&[head_attrs(DIV, 4, 4, "F") + &note_xml(&first) + &note_xml(&second) + &body]);
+    let groups = [AdapterGroup { kind: AdapterGroupKind::Grace, members: vec![0, 1, 2] }];
+    let proposal = propose(&xml, &carried(&xml), &groups, &caps_all(&xml), None).unwrap();
+    assert!(unknown(&proposal, "1").contains("bound grace"));
+    let (_, anchors, lower) = solved(&proposal, "2");
+    let baseline = propose(&no_grace, &carried(&no_grace), &[], &caps_all(&no_grace), None).unwrap();
+    let (_, baseline_anchors, baseline_lower) = solved(&baseline, "2");
+    assert_eq!(anchors.iter().map(|a| a.at).collect::<Vec<_>>(),
+        baseline_anchors.iter().map(|a| a.at).collect::<Vec<_>>());
+    assert_eq!(lower.selected, baseline_lower.selected);
+    assert_eq!(lower.selected_cost, baseline_lower.selected_cost);
+
+    let initial = head_attrs(DIV, 4, 4, "F").replace("<staves>2</staves>", "<staves>3</staves>")
+        .replace("</attributes>", "<clef number=\"3\"><sign>G</sign><line>2</line></clef></attributes>");
+    let mut extra = n('E', 5, 0, 3);
+    extra.grace = true;
+    let duplicate = score(&[initial + &note_xml(&first) + &note_xml(&second) + &body
+        + &backup(4 * DIV) + &note_xml(&extra) + &note_xml(&n('F', 5, 4 * DIV, 3))]);
+    let duplicate_heads = carried(&duplicate);
+    let end = duplicate_heads.len();
+    let mut duplicated_groups = groups.to_vec();
+    duplicated_groups.push(AdapterGroup { kind: AdapterGroupKind::Grace, members: vec![end - 2, end - 1] });
+    let duplicated = propose(&duplicate, &duplicate_heads, &duplicated_groups, &caps_all(&duplicate), None).unwrap();
+    let (_, _, duplicated_lower) = solved(&duplicated, "2");
+    assert_eq!(duplicated_lower.selected, lower.selected);
+    assert_eq!(duplicated_lower.selected_cost, lower.selected_cost);
+
+    let wrong_order = [AdapterGroup { kind: AdapterGroupKind::Grace, members: vec![1, 0, 2] }];
+    assert!(propose(&xml, &carried(&xml), &wrong_order, &caps_all(&xml), None).is_err());
+    let reversed = score(&[head_attrs(DIV, 4, 4, "F") + &note_xml(&second) + &note_xml(&first) + &body]);
+    assert!(verify_fixed_grace_staves(&xml, &reversed).is_err());
+}
+
+#[test]
+fn register_boundary_cannot_cut_a_grace_group_at_the_same_notated_time() {
+    let mut grace = n('B', 4, 0, 1);
+    grace.grace = true;
+    let body = plain_bar(['C', 'D', 'E', 'F'], ['C', 'D', 'E', 'F']);
+    let line = shift("down", 8, 1, None);
+    let before_group = score(&[head_attrs(DIV, 4, 4, "F") + &line + &note_xml(&grace) + &body]);
+    let inside_group = score(&[head_attrs(DIV, 4, 4, "F") + &note_xml(&grace) + &line + &body]);
+    let groups = [AdapterGroup { kind: AdapterGroupKind::Grace, members: vec![0, 1] }];
+    assert!(propose(&before_group, &carried(&before_group), &groups, &caps_all(&before_group), None).is_ok());
+    assert!(verify_fixed_grace_staves(&before_group, &inside_group).is_err());
+    assert!(propose(&inside_group, &carried(&inside_group), &groups, &caps_all(&inside_group), None).is_err());
+}
+
+#[test]
+fn fixed_bass_clef_allows_only_admissible_octave_improvements() {
+    let mut grace = n('B', 4, 0, 1);
+    grace.grace = true;
+    for (bass, expected) in [(n('C', 3, 4 * DIV, 2), st(5)), (n('C', 5, 4 * DIV, 2), st(6))] {
+        let xml = score(&[head_attrs(DIV, 4, 4, "F") + &note_xml(&grace)
+            + &note_xml(&n('C', 5, 4 * DIV, 1)) + &backup(4 * DIV)
+            + &shift("down", 8, 2, None) + &note_xml(&bass) + &shift("stop", 8, 2, None)]);
+        let group = [AdapterGroup { kind: AdapterGroupKind::Grace, members: vec![0, 1] }];
+        let mut capabilities = caps_all(&xml);
+        capabilities.staves.insert("2".into(), cap(vec![st(5), st(6)], &xml));
+        let proposal = propose(&xml, &carried(&xml), &group, &capabilities, None).unwrap();
+        let (_, _, lower) = solved(&proposal, "2");
+        assert_eq!(lower.selected, [expected]);
+    }
+}
+
+#[test]
 fn primary_beam_allows_octave_but_not_clef_change_inside_by_default() {
     // Quarter, then a beamed pair on beats 2-3, then a quarter.
     let upper = note_xml(&n('C', 5, DIV, 1)) + &note_xml(&n('D', 5, DIV, 1)) + &note_xml(&n('E', 5, DIV, 1)) + &note_xml(&n('F', 5, DIV, 1));
@@ -692,6 +764,7 @@ fn unremovable_original_clef_is_a_hard_layer_constraint() {
 /// Synthetic owner input: fixture IDs are assigned here, never by product XML traversal.
 fn fixture_owner_input(xml: &str) -> crate::pipeline::JointReadingOwnerInput {
     let heads = carried(xml).into_iter().enumerate().map(|(i, h)| crate::pipeline::JointReadingOwnerHead {
+        grace_host: None,
         source_event_id: crate::pipeline::MaterialSourceEventId(i),
         attack_id: crate::pipeline::SoundingAttackId(i), measure: h.measure,
         onset: h.onset, duration: 1, staff: h.staff, visible: h.visible,
