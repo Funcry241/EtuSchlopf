@@ -1,6 +1,6 @@
 # Wegweiser durch die Dokumentation
 
-Der abgenommene Windows-Vollkorpus **r2005** umfasst 15 Stücke und 59 PDF-Seiten. [Notenbilder r2005](examples/README.md#notenbilder) · [Windows-Abnahme r2005](evidence/r2005/README.md)
+Der abgenommene Windows-Vollkorpus **r2014** umfasst 15 Stücke und 58 PDF-Seiten. [Notenbilder r2014](examples/README.md#notenbilder) · [Windows-Abnahme r2014](evidence/r2014/README.md)
 
 | Aufgabe | Einstieg |
 | --- | --- |
@@ -13,5 +13,5 @@ Der abgenommene Windows-Vollkorpus **r2005** umfasst 15 Stücke und 59 PDF-Seite
 | Umgang miteinander und Moderation | [Verhaltenskodex](CODE_OF_CONDUCT.md) |
 | Bedienhürden und bekannte Grenzen | [Barrierefreiheit](ACCESSIBILITY.md) |
 | Welche Mathematik wo genutzt wird und was das Notenbild ändert | [Mathematik in EtuSchlopf · Kapitelübersicht](MATHEMATIK.md) |
-| Aktuellen Quellstand und Windows-Abnahme prüfen | [Abnahme r2005](evidence/r2005/README.md) |
+| Windows-Abnahme und Ausgabedateien prüfen | [Abnahme r2014](evidence/r2014/README.md) |
 | Lizenzen und Fremdkomponenten | [Fremdlizenzhinweise](THIRD_PARTY_NOTICES.md) und [Musikquellen](examples/README.md#quellen-und-rechte) |
