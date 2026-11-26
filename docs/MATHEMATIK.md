@@ -8,8 +8,9 @@ Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die
 <summary>Inhaltsverzeichnis mit allen Kapiteln</summary>
 
 - [1 Wie die Aussagen zu lesen sind](#kapitel-1)
-- [2 Die drei Projektbegriffe](#kapitel-2)
+- [2 Projektbegriffe](#kapitel-2)
   - [2.1 SchlopfFormel für belegte Übergänge](#kapitel-2-1)
+  - [2.1a SchlopfKopfFormel für allgemeine Notationsentscheidungen](#kapitel-2-1a)
   - [2.2 Schlöpfchen-Formel für die Seitenfüllung](#kapitel-2-2)
   - [2.3 Symbolische Spielformel für Hand und Finger](#kapitel-2-3)
 - [3 Vom Anschlag zur geschriebenen Dauer](#kapitel-3)
@@ -89,7 +90,7 @@ Hochgestellte Ziffern führen von einer Aussage zu ihrer Fundstelle in [Kapitel 
 <a name="kapitel-2"></a>
 <a name="die-drei-projektbegriffe"></a>
 
-## 2 Die drei Projektbegriffe
+## 2 Projektbegriffe
 
 <a name="kapitel-2-1"></a>
 <a name="schlopfformel-herkunft-zuständigkeit-und-übergangsnachweis"></a>
@@ -110,6 +111,25 @@ $p$ zählt erlaubende Einstufungen, $m,d,i$ zählen fehlende, doppelte und ungü
 Die Zusammenstellung verlangt außerdem die zuständige Authority, die Herkunft des Belegs, den gebundenen Vor- und Nachzustand, die jeweils erforderlichen Erhaltungsbedingungen und den Schutz gegen unzulässige Wiederverwendung. Die konkreten Prüfungen und ihre Zuständigkeit bleiben in den ausführbaren Verträgen. Master und Render besitzen getrennte Herkunftsketten. Vor- und Nachbedingungen haben eine formale Tradition bei Floyd und Hoare.<a name="beleg-2-1-bedingungen"></a><sup><a href="#quelle-hoare">[16]</a></sup> Für die getrennte Prüfung eines mitgelieferten Belegs bietet Neculas *Proof-Carrying Code* einen Vergleich.<a name="beleg-2-1-pruefung"></a><sup><a href="#quelle-necula">[17]</a></sup>
 
 **Grenze:** Eine zulässige Transformation ist damit nicht automatisch musikalisch gut. Ein Fingerprint ersetzt keine Ereignisidentität und kein musikalisches Qualitätsurteil.
+
+<a name="kapitel-2-1a"></a>
+
+### 2.1a SchlopfKopfFormel für allgemeine Notationsentscheidungen
+
+**Entwurf.** Die SchlopfKopfFormel legt fest, welche Informationen eine Notationsentscheidung beeinflussen dürfen. Ihr erster Anwendungsfall sind Notenhälse.
+
+Sei $s$ ein Notationszustand und $\pi(s)$ sein für die Entscheidung relevanter Kontext. Die Auswahl $D$ bezeichnet eine relative Anweisung für die jeweils entsprechenden Notationselemente. Es gilt
+
+```math
+D(s)=d\bigl(\pi(s)\bigr),\qquad
+\pi(s)=\pi(t)\ \Longrightarrow\ D(s)=D(t).
+```
+
+In $\pi$ gehen ausschließlich Merkmale ein, deren Einfluss sich aus einer allgemein formulierten Notensatzregel begründen lässt. Die Regel gilt unabhängig von Etüde, Stück und konkretem Takt. Ausgeschlossen sind direkte Kennungen wie Stückname, Dateiname und absolute Taktnummer. Der Ausschluss gilt ebenso für die indirekte Wiedererkennung einer Stelle über musikalische Fingerabdrücke. Dazu zählen auf eine Fundstelle zugeschnittene Ton- oder Intervallfolgen, rhythmische Muster, Stimmenlagen, deren Kombinationen und entsprechend gewählte Schwellenwerte. Eine Position innerhalb des Takts zählt nur, wenn die allgemeine Regel ihre metrische Bedeutung braucht.
+
+Die Gleichung allein garantiert die Allgemeingültigkeit nicht. Dafür braucht jedes verwendete Merkmal eine fachliche Begründung. Synthetische Prüfpaare variieren Tonhöhen, Rhythmen und Lage, soweit der fachliche Konflikt gleich bleibt. Ein musikalisch ähnliches Gegenbeispiel ohne diesen Konflikt darf die Änderung nicht auslösen.
+
+Die Auswahl liefert die Ausgangsfassung oder einen Änderungsvorschlag. Ein Vorschlag wird einmal im gemeinsamen Render geprüft und nur nach bestandener Prüfung und mit dem nach [Kapitel 2.1 erforderlichen Übergangsnachweis](#kapitel-2-1) übernommen. Fehlt ein Nachweis, gilt die Ausgangsfassung. Die Prüfung löst keine Neuberechnung oder weitere Auswahl aus.
 
 <a name="kapitel-2-2"></a>
 <a name="schlöpfchen-formel-die-angestrebte-seitenfüllung"></a>
@@ -746,7 +766,7 @@ Im Windows-Vollkorpus änderten sich zwölf Pausenpositionen in drei Partituren.
 
 Standardverfahren bleiben Standardverfahren: dynamische Programmierung, lexikografische Ordnung, Intervallgraphen, Färbung, Nichtdominanz, rationale Arithmetik, quadratische Kosten, Spektralrekurrenzen, Deskriptivstatistik und Hashfunktionen wurden nicht für EtuSchlopf erfunden.
 
-Unser Eigenanteil liegt in den musikalischen Modellen, dem Zusammenspiel der Bedingungen, den gebundenen Owner-Übergängen und den gewählten Prioritäten. Die drei Projektbegriffe benennen solche Zusammenstellungen. Weder deren wissenschaftliche Neuheit noch die Behauptung „so gibt es das sonst nirgends“ ist hier nachgewiesen.
+Unser Eigenanteil liegt in den musikalischen Modellen, dem Zusammenspiel der Bedingungen, den gebundenen Owner-Übergängen und den gewählten Prioritäten. Die Projektbegriffe benennen solche Zusammenstellungen. Weder deren wissenschaftliche Neuheit noch die Behauptung „so gibt es das sonst nirgends“ ist hier nachgewiesen.
 
 Die Quellenziffern führen zum jeweiligen Beitrag. So lässt sich etwa die optimale Zuordnung in [Kapitel 3.2](#kapitel-3-2) bis zu den Arbeiten von Kuhn und Munkres zurückverfolgen.<a name="beleg-11-eigenanteil"></a><sup><a href="#quelle-zuordnung">[4]</a></sup> Die dort verlinkte Implementierung zeigt, wie EtuSchlopf gespielte Dauer, Abstand der Einsätze und Tonhöhenabstand in der Zuordnung bewertet.
 
