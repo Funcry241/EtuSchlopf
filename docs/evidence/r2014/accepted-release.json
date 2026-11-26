@@ -1,0 +1,10 @@
+{
+  "revision": "r2014",
+  "version": "0.10.1839",
+  "accepted_take_sha256": "688e2b20cc48bafe83dafc710aa3c37ded240ba32c5d598e201f31361447b4b3",
+  "native_snapshot_sha256": "2833ab8a1333c29051b6ec156a3a147313e65d0aa50dad72bd0a375209c94854",
+  "inventory_sha256": "dcad83dfc7051524d5890d2cd73e68c9ed7ba3d48cba9c1d336653da01ea284b",
+  "native_documents_sha256": "ce6d3ad64af6ce4fb89f245ff14285d4fae949167d45836426a0f7a7a7ec0902",
+  "cargo_lock_sha256": "a0178cc691bf26f99e83af20498711117ccb557bccc6d0827e6d5b1c204a6884",
+  "source_file_count": 2271
+}

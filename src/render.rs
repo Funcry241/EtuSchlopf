@@ -344,6 +344,9 @@ mod silent_voice_visible_measure_coverage_render_writer;
 pub(crate) use silent_voice_visible_measure_coverage_render_writer::SameLaneRawSpliceExactMint;
 #[path = "structural_write_authority/final_pdf_source_commit.rs"]
 pub(super) mod final_pdf_source_commit;
+
+#[path = "audit_only/engraving_collision_readback.rs"]
+pub(in crate::pipeline) mod engraving_collision_readback;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderStatus {
     Written,

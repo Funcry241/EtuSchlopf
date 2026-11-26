@@ -25,6 +25,7 @@ pub(crate) struct JointReadingOwnerGroup {
 #[derive(Debug, Clone)]
 pub(crate) struct JointReadingOwnerHead {
     source_event_id: MaterialSourceEventId,
+    grace_host: Option<MaterialSourceEventId>,
     attack_id: SoundingAttackId,
     pub(crate) measure: usize,
     pub(crate) onset: i64,
@@ -139,12 +140,17 @@ impl JointReadingOwnerInput {
         let mut by_start = BTreeMap::new();
         for (note, fragment) in notes.iter().zip(&observed) {
             let Some(pitch) = &note.pitch else { continue; };
-            anyhow::ensure!(!fragment.is_grace && fragment.duration > 0,
-                "Joint reading source has unsupported zero-time pitched fragments");
             let original_source = by_origin.remove(&(note.note_start, note.note_end))
                 .ok_or_else(|| anyhow!("Joint reading pitched container has no received source occurrence"))?;
             let (source_event_id, attack_id) = *retained.get(&original_source)
                 .ok_or_else(|| anyhow!("Joint reading original source has no retained attack identity"))?;
+            use crate::midi::notation_time::NotationEventKind;
+            let grace_host = match candidate.midi_seed_stats.notation_time.event(original_source)?.kind {
+                NotationEventKind::Grace { host } if fragment.is_grace && fragment.duration == 0 =>
+                    Some(MaterialSourceEventId(host)),
+                NotationEventKind::Regular if !fragment.is_grace && fragment.duration > 0 => None,
+                _ => anyhow::bail!("Joint reading fragment disagrees with its received grace or rhythmic role"),
+            };
             let (step, octave) = if let Some(plan) = by_spelling.get(&note.note_start) {
                 anyhow::ensure!(plan.note_end == note.note_end,
                     "Joint reading spelling plan belongs to another note container");
@@ -156,7 +162,7 @@ impl JointReadingOwnerInput {
                 .ok_or_else(|| anyhow!("Joint reading diatonic position overflow"))?;
             anyhow::ensure!(by_start.insert(note.note_start, heads.len()).is_none(),
                 "Joint reading source note container is ambiguous");
-            heads.push(JointReadingOwnerHead { source_event_id, attack_id,
+            heads.push(JointReadingOwnerHead { source_event_id, grace_host, attack_id,
                 measure: *measure_ordinals.get(&note.note_start)
                     .ok_or_else(|| anyhow!("Joint reading note has no structural measure"))?,
                 onset: fragment.onset, duration: fragment.duration,
@@ -347,15 +353,43 @@ impl JointReadingOwnerInput {
             diatonic: head.diatonic,
             continuation: head.continuation,
         }).collect::<Vec<_>>();
-        let groups = self.groups.iter().map(|group| c3_adapter::AdapterGroup {
+        let mut groups = self.groups.iter().map(|group| c3_adapter::AdapterGroup {
             kind: group.c3_kind(),
             members: group.members.clone(),
         }).collect::<Vec<_>>();
+        groups.extend(self.bound_grace_groups()?);
         let mut proposal = c3_adapter::propose(&self.source, &heads, &groups, capabilities, expansion_limit)?;
         for (staff, reason) in &self.unknown_groups {
             proposal.staves.insert(staff.clone(), c3_adapter::StaffVerdict::Unknown { reason: reason.clone() });
         }
         Ok(proposal)
+    }
+
+    fn bound_grace_groups(&self) -> Result<Vec<c3_adapter::AdapterGroup>, c3_adapter::AdapterError> {
+        let mut by_source = BTreeMap::<_, Vec<_>>::new();
+        let mut by_host = BTreeMap::<_, Vec<_>>::new();
+        for (index, head) in self.heads.iter().enumerate() {
+            if let Some(host) = head.grace_host {
+                by_host.entry(host).or_default().push(index);
+            } else if !head.continuation {
+                by_source.entry(head.source_event_id).or_default().push(index);
+            }
+        }
+        by_host.into_iter().map(|(host, mut members)| {
+            let Some([host]) = by_source.get(&host).map(Vec::as_slice) else {
+                return Err(c3_adapter::AdapterError::Binding(
+                    "Grace group has no unique carried principal attack".into()));
+            };
+            members.sort_by_key(|&index| self.heads[index].source_event_id);
+            if members.windows(2).any(|pair|
+                self.heads[pair[0]].source_event_id == self.heads[pair[1]].source_event_id)
+            {
+                return Err(c3_adapter::AdapterError::Binding(
+                    "Grace group carries one source more than once".into()));
+            }
+            members.push(*host);
+            Ok(c3_adapter::AdapterGroup { kind: c3_adapter::AdapterGroupKind::Grace, members })
+        }).collect()
     }
 }
 
@@ -369,12 +403,26 @@ fn observe_joint_capabilities(
     let clock = c3_adapter::observe_clock(source).map_err(|error| anyhow!("C3 writer clock: {error:?}"))?;
     let octave = observe_joint_octave_anchors(source)?;
     let clef = crate::structural_write_authority::RustigClefSurfaceDecision::observe_joint_boundaries(source);
+    let incumbent_courses = if clef.is_none() && input.heads.iter().any(|head| head.grace_host.is_some()) {
+        c3_adapter::read_register_courses(source).map_err(|error| anyhow!("C3 fixed clef: {error:?}"))?
+    } else {
+        BTreeMap::new()
+    };
     let mut capabilities = c3_adapter::Capabilities::new(source);
     for (staff, (start, incumbent)) in &clock.entries {
         // These are the actual physical domains of the existing owners. E024
         // writes the lower clef; the octave creator supports all five displays.
-        let states = match staff.as_str() { "1" => 0..5, "2" => 0..10, _ => continue };
-        if staff == "2" && clef.is_none() { continue; }
+        let states = match staff.as_str() {
+            "1" => 0..5,
+            "2" if clef.is_some() => 0..10,
+            "2" if incumbent_courses.get(staff).is_some_and(|course|
+                course.iter().all(|(_, state)| state.index() / 5 == incumbent.index() / 5)) => {
+                // Only octave boundaries have writer evidence in this domain.
+                let first = incumbent.index() / 5 * 5;
+                first..first + 5
+            }
+            _ => continue,
+        };
         let writable = states.map(c3_course::State::new).collect::<Result<Vec<_>, _>>()
             .map_err(|error| anyhow!("C3 materialization states: {error:?}"))?;
         let mut boundaries = BTreeMap::<c3_adapter::Q, c3_adapter::BoundaryCapability>::new();
@@ -406,7 +454,7 @@ fn observe_joint_capabilities(
                 && (state.index() % 5 == 0 || at_start.octave_start)).collect();
         let exit_octave_stop = boundaries.get(&clock.end).is_some_and(|boundary| boundary.octave_stop);
         capabilities.staves.insert(staff.clone(), c3_adapter::StaffCapability {
-            evidence: "original E024 normalizer and octave creator's visible begin/end anchors".to_owned(),
+            evidence: "original octave creator's visible anchors and supported clef domain".to_owned(),
             writable, boundaries, entry, fixed_clefs, exit_octave_stop,
             clef_change_inside_primary_beam: true, clef_change_inside_tie: false,
             octave_change_inside_primary_beam: true, octave_change_inside_tie: false,

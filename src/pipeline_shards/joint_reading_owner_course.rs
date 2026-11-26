@@ -153,8 +153,13 @@ fn prepare_joint_clef_write(input:&JointReadingOwnerInput,proposal:&c3_adapter::
         return crate::structural_write_authority::RustigClefSurfaceDecision::prepare_joint_course(&octave.post,&[]).map_err(|e|anyhow!("{e}"));
     };
     let source=input.bound_source();let clock=c3_adapter::observe_clock(source).map_err(|e|anyhow!("{e:?}"))?;
-    let owner=crate::structural_write_authority::RustigClefSurfaceDecision::observe_joint_boundaries(source)
-        .ok_or_else(||anyhow!("Missing original E024 capability"))?;
+    let Some(owner) = crate::structural_write_authority::RustigClefSurfaceDecision::observe_joint_boundaries(source) else {
+        anyhow::ensure!(solved.outcome.selected.iter().zip(&solved.domain.layers).all(|(selected, layer)|
+            selected.index() / 5 == layer.incumbent.index() / 5),
+            "Missing original E024 capability for a changed clef");
+        return crate::structural_write_authority::RustigClefSurfaceDecision::prepare_joint_course(&octave.post, &[])
+            .map_err(|error| anyhow!("{error}"));
+    };
     let doc=roxmltree::Document::parse(source)?;
     let nodes=doc.descendants().filter(|node|node.is_element()).map(|node|(node.range().start,node)).collect::<BTreeMap<_,_>>();
     let mut layers=Vec::new();
@@ -331,6 +336,10 @@ impl JointReadingCandidate for SolverCandidate {
 }
 
 fn joint_verify_prepared_course(input:&JointReadingOwnerInput,proposal:&c3_adapter::C3Proposal,post:&str)->anyhow::Result<()> {
+    if input.heads().iter().any(|head| head.grace_host.is_some()) {
+        c3_adapter::verify_fixed_grace_staves(input.bound_source(), post)
+            .map_err(|error| anyhow!("Prepared grace readback: {error:?}"))?;
+    }
     let courses=c3_adapter::read_register_courses(post).map_err(|error|anyhow!("{error:?}"))?;
     let mut identities=BTreeSet::new();
     for head in &input.heads {
@@ -391,6 +400,10 @@ fn validate_joint_reading_final_artifacts(master:&Path,render:&Path)->anyhow::Re
         ("Render",render,&accepted.render,&accepted.render_inputs,&accepted.render_proposal)]{
         let actual=std::fs::read_to_string(path)?;
         validate_joint_tonal_closure(input,&actual,label=="Render")?;
+        if input.heads().iter().any(|head| head.grace_host.is_some()) {
+            c3_adapter::verify_fixed_grace_staves(prepared, &actual)
+                .map_err(|error| anyhow!("{label} final grace readback: {error:?}"))?;
+        }
         let expected=c3_adapter::read_register_courses(prepared).map_err(|error|anyhow!("{error:?}"))?;
         let observed=c3_adapter::read_register_courses(&actual).map_err(|error|anyhow!("{error:?}"))?;
         for (staff,verdict) in &proposal.staves {

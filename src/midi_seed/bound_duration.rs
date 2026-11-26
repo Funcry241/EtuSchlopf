@@ -1,6 +1,6 @@
 use super::{
-    DIVISIONS, MetricTimeline, MidiSeedNote, NotationEventKind, NotationTimePlan,
-    PlannedSeedOccurrence, SeedPrimaryCourse, midi_to_pitch, type_and_dots_for_duration,
+    DIVISIONS, MetricTimeline, MidiKeySignature, MidiSeedNote, NotationEventKind, NotationTimePlan,
+    PlannedSeedOccurrence, SeedPrimaryCourse, type_and_dots_for_duration, written_seed_pitch,
 };
 use crate::midi::source_time::WRITTEN_NOTE_VALUES;
 use anyhow::{Context, Result, anyhow, ensure};
@@ -285,6 +285,7 @@ pub(super) fn verify_written_intervals(
     metric: &MetricTimeline,
     planned: &[PlannedSeedOccurrence],
     bound_sections: &BTreeSet<(usize, u8)>,
+    opening_key_signature: Option<MidiKeySignature>,
 ) -> Result<()> {
     let document = roxmltree::Document::parse(xml)?;
     let mut fragments = planned.iter();
@@ -342,7 +343,7 @@ pub(super) fn verify_written_intervals(
                     .any(|child| child.has_tag_name("tie") && child.attribute("type") == Some(kind))
             };
             let pitch_matches = if let Some(midi) = fragment.pitch {
-                let (step, alter, octave) = midi_to_pitch(midi);
+                let (step, alter, octave) = written_seed_pitch(midi, opening_key_signature);
                 let pitch = node.children().find(|child| child.has_tag_name("pitch"));
                 let field = |tag| {
                     pitch

@@ -1740,6 +1740,14 @@ fn append_repair_loop_invocation_evidence_body(
             );
         },
     )?;
+    if let Some(diagnostic) = &silent_voice_coverage_projection_message.engraving_collision_diagnostic {
+        text.project_owned_section(
+            "engraving_collision_readback",
+            "ENGRAVING-COLLISION-READBACK",
+            "----------------------------",
+            |out| out.push_str(diagnostic),
+        )?;
+    }
     let original_beam_diagnostics_body =
         crate::audit_only::original_beam_diagnostics::report_body();
     // One formatted diagnostic emission; the per-project result is the durable copy.

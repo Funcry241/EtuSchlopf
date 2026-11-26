@@ -3362,3 +3362,7 @@ fn synthetic_geometry_score(bodies: &[&str]) -> String {
 
 
 include!("renderer_page_clearance.rs");
+
+#[cfg(test)]
+#[path = "renderer_pdf_source_anchor_audit.rs"]
+pub(crate) mod pdf_source_anchor_audit;

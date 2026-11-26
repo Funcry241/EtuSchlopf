@@ -1,5 +1,6 @@
 // v0.10.726 real crate-root module split from the old score grouping.
 // No behavior change: original module body, visibility and call paths are preserved.
+pub(crate) mod key_spelling;
 pub(crate) mod metric_rest_notation;
 
     use serde::Serialize;

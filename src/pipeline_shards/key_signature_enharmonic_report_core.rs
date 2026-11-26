@@ -12,6 +12,11 @@
 // respelled; sounding pitch, onset, duration, staff and voice stay
 // invariant.
 
+use crate::model::key_spelling::{
+    diatonic_spelling as functional_key_diatonic_spelling, natural_pitch_class,
+    signature_alter as scorewide_signature_default_alter,
+};
+
 #[derive(Debug, Clone)]
 struct KeySignatureEnharmonicSpellingRenderWriteAudit {
     source_label: String,
@@ -499,7 +504,7 @@ fn chromatic_passing_spelling(
     let step = STEPS[target.rem_euclid(7) as usize];
     let octave = i32::try_from(target.div_euclid(7)).ok()?;
     let alter = i64::from(middle.midi) - (i64::from(octave) + 1) * 12
-        - i64::from(functional_step_pitch_class(step));
+        - i64::from(natural_pitch_class(step)?);
     (step != middle.step && (-1..=1).contains(&alter)).then_some((step, alter as i32, octave))
 }
 
@@ -1133,41 +1138,15 @@ fn functional_measure_ordinal(note: &AtomicNote) -> usize {
     note.measure.parse::<usize>().unwrap_or(usize::MAX)
 }
 
-fn functional_key_diatonic_spelling(
-    fifths: i32,
-    pitch_class: i32,
-) -> Option<(&'static str, i32)> {
-    const STEPS: [&str; 7] = ["C", "D", "E", "F", "G", "A", "B"];
-    STEPS.iter().copied().find_map(|step| {
-        let alter = scorewide_signature_default_alter(fifths, step);
-        ((functional_step_pitch_class(step) + alter).rem_euclid(12)
-            == pitch_class.rem_euclid(12))
-        .then_some((step, alter))
-    })
-}
-
 fn functional_respelling_octave(
     midi: i32,
     step: &str,
     alter: i32,
     current_octave: i32,
 ) -> Option<i32> {
-    (current_octave - 1..=current_octave + 1).find(|octave| {
-        (octave + 1) * 12 + functional_step_pitch_class(step) + alter == midi
-    })
-}
-
-fn functional_step_pitch_class(step: &str) -> i32 {
-    match step {
-        "C" => 0,
-        "D" => 2,
-        "E" => 4,
-        "F" => 5,
-        "G" => 7,
-        "A" => 9,
-        "B" => 11,
-        _ => -100,
-    }
+    let natural = natural_pitch_class(step)?;
+    (current_octave - 1..=current_octave + 1)
+        .find(|octave| (octave + 1) * 12 + natural + alter == midi)
 }
 
 fn functional_note_pitch_candidate(
@@ -1914,28 +1893,6 @@ fn scorewide_signature_accidental_cost(notes: &[&AtomicNote], fifths: i32) -> us
         }
     }
     cost
-}
-
-fn scorewide_signature_default_alter(fifths: i32, step: &str) -> i32 {
-    const SHARP_ORDER: [&str; 7] = ["F", "C", "G", "D", "A", "E", "B"];
-    const FLAT_ORDER: [&str; 7] = ["B", "E", "A", "D", "G", "C", "F"];
-    if fifths > 0
-        && SHARP_ORDER
-            .iter()
-            .take(fifths.min(7) as usize)
-            .any(|candidate| *candidate == step)
-    {
-        1
-    } else if fifths < 0
-        && FLAT_ORDER
-            .iter()
-            .take((-fifths).min(7) as usize)
-            .any(|candidate| *candidate == step)
-    {
-        -1
-    } else {
-        0
-    }
 }
 
 #[derive(Debug, Clone)]
