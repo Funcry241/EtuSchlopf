@@ -98,13 +98,17 @@ fn evaluate_arrangement_variant(
     detail.enter(4);
     let _origin = crate::audit_only::panic_origin_observation::enter("ArrangementVariant/PolishAndLayout", &arrangement.xml, Some(&layout.xml));
     if let Some(courses) = &arrangement.stats.rhythmic_courses {
-        let polished_courses = courses.continue_representation(&polish.xml, &polish.rhythmic_transport)?;
+        let polished_courses = courses
+            .continue_representation(&polish.xml, &polish.rhythmic_transport)
+            .context("ArrangementVariant/NotationPolish: original representation transport")?;
         let layout_courses = if polish.xml == layout.xml
             && layout.rhythmic_transport.is_identity_for(&layout.xml)
         {
             polished_courses
         } else {
-            polished_courses.continue_representation(&layout.xml, &layout.rhythmic_transport)?
+            polished_courses
+                .continue_representation(&layout.xml, &layout.rhythmic_transport)
+                .context("ArrangementVariant/PianistLayout: original representation transport")?
         };
         arrangement.stats.owned_rhythm = Some(std::sync::Arc::new(
             crate::arrangement::OwnedRhythmicContinuation::receive(&layout_courses, &layout.xml)?));

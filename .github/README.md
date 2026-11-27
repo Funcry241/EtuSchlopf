@@ -17,16 +17,16 @@ Der Ergebnisordner liegt neben der MIDI. EtuSchlopf arbeitet dort mit Kopien der
 
 ## Notenbilder
 
-Die Galerie enthält alle 15 PDFs aus dem abgenommenen Windows-Lauf r2014. [Alle Notenbilder r2014](../docs/examples/README.md#notenbilder) · [Musikquellen](../docs/examples/README.md#quellen-und-rechte)
+Die Galerie enthält alle 15 PDFs aus dem abgenommenen Windows-Lauf r2020. [Alle Notenbilder r2020](../docs/examples/README.md#notenbilder) · [Musikquellen](../docs/examples/README.md#quellen-und-rechte)
 
 | Bach · Fuge c-Moll BWV 847 | Chopin · Etüde E-Dur op. 10 Nr. 3 | Schubert · Deutscher Tanz As-Dur D. 783 Nr. 15 |
 | --- | --- | --- |
-| [![Bach, Fuge c-Moll, r2014](../docs/images/bwv847-fuge-r2014-ausschnitt.png)](../docs/examples/bwv847-fuge-r2014.pdf) | [![Chopin, Etüde E-Dur, r2014](../docs/images/chopin-op10-no3-p01-r2014-ausschnitt.png)](../docs/examples/chopin-op10-no3-p01-r2014.pdf) | [![Schubert, Deutscher Tanz, r2014](../docs/images/schubert-d783-no15-p18-r2014-ausschnitt.png)](../docs/examples/schubert-d783-no15-p18-r2014.pdf) |
+| [![Bach, Fuge c-Moll, r2020](../docs/images/bwv847-fuge-r2020-ausschnitt.png)](../docs/examples/bwv847-fuge-r2020.pdf) | [![Chopin, Etüde E-Dur, r2020](../docs/images/chopin-op10-no3-p01-r2020-ausschnitt.png)](../docs/examples/chopin-op10-no3-p01-r2020.pdf) | [![Schubert, Deutscher Tanz, r2020](../docs/images/schubert-d783-no15-p18-r2020-ausschnitt.png)](../docs/examples/schubert-d783-no15-p18-r2020.pdf) |
 
 ## Stand auf main
 
-**r2014 / 0.10.1839** setzt alle 15 Stücke auf insgesamt 58 PDF-Seiten.
-[Windows-Abnahme r2014](../docs/evidence/r2014/README.md) · [Mathematik in EtuSchlopf](../docs/MATHEMATIK.md)
+**r2020 / 0.10.1839** setzt alle 15 Stücke auf insgesamt 58 PDF-Seiten.
+[Windows-Abnahme r2020](../docs/evidence/r2020/README.md) · [Mathematik in EtuSchlopf](../docs/MATHEMATIK.md) · [Halsnachweis](../docs/MATHEMATIK.md#kapitel-6-18)
 
 EtuSchlopf ist experimentell. Bleiben Einsätze oder Taktgrenzen einer frei gespielten Aufnahme mehrdeutig, kann EtuSchlopf den Lauf abbrechen. Chopins Ballade op. 38 wird separat als Stresstest geführt. [Ballade op. 38](../docs/examples/chopin-op38-p01.md)
 

@@ -1,5 +1,5 @@
 //! Owner-recorded representation operations. These carry locations, never mint origins.
-use anyhow::{ensure, Result};
+use anyhow::{Context, ensure, Result};
 use std::ops::Range;
 
 /// Read-only context from the existing PRESERVING projection. Never supplies
@@ -138,7 +138,10 @@ impl RepresentationStep {
         }
         expected.push_str(self.before.get(cursor..)
             .ok_or_else(|| anyhow::anyhow!("Invalid representation tail"))?);
-        ensure!(expected == self.after, "Owner operations do not reproduce the representation");
+        ensure!(expected == self.after,
+            "Owner operations do not reproduce the representation; operations={}; {}",
+            self.edits.len(),
+            crate::audit_only::panic_origin_observation::difference_evidence(&expected, &self.after));
         Ok(())
     }
 
@@ -405,9 +408,9 @@ impl RhythmicRepresentationTransport {
         let mut state = before;
         let mut carried = ranges;
         ensure!(!self.steps.is_empty(), "Missing actual representation operations");
-        for step in &self.steps {
+        for (index, step) in self.steps.iter().enumerate() {
             ensure!(state == step.before, "Foreign representation pre-state");
-            step.validate()?;
+            step.validate().with_context(|| format!("Original representation step {}", index + 1))?;
             let prefix = step.operation_prefixes();
             carried = carried.into_iter().map(|range| step.carry_indexed(range, &prefix)).collect::<Result<_>>()?;
             state = &step.after;

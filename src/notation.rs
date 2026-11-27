@@ -271,6 +271,27 @@ mod final_stem_direction;
         project_stem_directions(xml, &final_stem_direction::plan_countervoice_stem_directions(xml))
     }
 
+    pub(crate) fn tied_stem_plan_counts(
+        xml: &str,
+        chains: &[Vec<std::ops::Range<usize>>],
+    ) -> (usize, usize) {
+        let groups = final_stem_direction::plan_tied_stem_chains(xml, chains);
+        (groups.len(), groups.iter().map(Vec::len).sum())
+    }
+
+    #[cfg(test)]
+    pub(super) fn project_tied_stem_chain_probe(
+        xml: &str,
+        chains: &[Vec<std::ops::Range<usize>>],
+    ) -> anyhow::Result<Option<String>> {
+        let groups = final_stem_direction::plan_tied_stem_chains(xml, chains);
+        let mut edits: Vec<_> = groups.into_iter().flatten().collect();
+        edits.sort_unstable_by_key(|edit| edit.0);
+        anyhow::ensure!(edits.windows(2).all(|pair| pair[0].1 <= pair[1].0),
+            "Overlapping stem edits in the independent render probe");
+        project_stem_directions(xml, &edits).map(|projected| projected.map(|(xml, _)| xml))
+    }
+
     fn project_stem_directions(
         xml: &str, stems: &[final_stem_direction::StemEdit],
     ) -> anyhow::Result<Option<(String, PreservingTransformationReceipt)>> {

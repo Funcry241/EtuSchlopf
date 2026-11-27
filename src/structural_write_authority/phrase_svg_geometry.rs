@@ -8,6 +8,10 @@ pub(crate) mod paint;
 #[path = "../audit_only/engraving_collision.rs"]
 pub(crate) mod collision_observation;
 
+#[cfg(test)]
+#[path = "../audit_only/engraving_stem_transition_audit.rs"]
+mod stem_transition;
+
 const FLATNESS: f64 = 1.0 / 128.0;
 const GRID: f64 = 4096.0;
 // Euclidean allowance for snapping a vertex and evaluating the subdivision.
