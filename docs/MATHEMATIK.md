@@ -304,6 +304,8 @@ Die passenden Partner mit eigenem Folgeeinsatz müssen sich über das geschriebe
 
 Bei Gleichheit bleibt der Gegenplan im Toleranzbereich. Die Prüfung verlangt mindestens einen vollständigen Plan mit der Kante. Eine leere Gegenklasse zählt als unzulässig, sobald ihr Ausschluss vollständig belegt ist. Bei einer abgebrochenen Prüfung bleibt der Befund offen. Als Prüfparameter stehen eine Variation der Gewichte um jeweils $\pm25\,\%$ und ein vorab festzulegender Abstand $\delta\ge0$ zur Diskussion. Ein Profil mit zu kleinem Abstand widerlegt die Bedingung bereits. Ein positiver Befund braucht eine Schranke über den ganzen Profilbereich. [Vollständige Gegenpläne und Bindungszeugen](#kapitel-6-4)
 
+<a name="eckenzertifikat-a1"></a>
+
 **Eckenzertifikat für A1.** Bilden $k$ unabhängig variierte Gewichte einen Quader $W$, bleiben die zulässigen Planmengen über $W$ fest und sind die Kosten jedes Plans affin in den Gewichten, genügt folgender Nachweis. Wähle einen festen zulässigen Plan $p^\ast$ mit der Kante $i\to j$ und berechne an jeder der $2^k$ Ecken $v$ die minimalen Gegenplankosten $F_-(v)$. Mit den Kosten $C(p^\ast,w)$ des festen Plans gilt
 
 ```math
@@ -313,6 +315,10 @@ F_-(w)-F_+(w)\ge F_-(w)-C(p^\ast,w)\ge
 
 Die erste Schranke folgt aus $F_+(w)\le C(p^\ast,w)$. Die zweite folgt aus der Konkavität von $F_--C(p^\ast,\cdot)$ als Minimum affiner Funktionen. Liegt die untere Schranke strikt über $\delta$, ist A1 für ganz $W$ belegt. Andernfalls bleibt der Befund mit diesem Zertifikat offen. Ein Profil mit nachgewiesenem Abstand $F_-(w)-F_+(w)\le\delta$ entscheidet ihn negativ. Die Differenz der beiden profilabhängigen Optima ist im Allgemeinen weder konkav noch konvex. Ihre Eckwerte allein tragen deshalb keinen Beleg für den ganzen Quader.
 
+**Gegenprobe.** Auf $[15,25]^2$ gelten $F_+(w)=\min(20w_1,22w_2)$ und $F_-(w)=10w_1+11w_2$. Die Differenz $F_--F_+$ beträgt an den Ecken $(15,15)$, $(15,25)$, $(25,15)$ und $(25,25)$ jeweils $15$, $125$, $85$ und $25$. Im Inneren bei $(22,20)$ kosten beide Optima $440$. Damit scheitert A1 bereits für $\delta=0$. [Synthetische Modellprobe](../tests/rollenplan_mathe.rs)
+
+**Positiver Nachweis.** Auf $[3,5]^5$ betragen die beiden Gegenplankosten abzüglich der Kosten des festen Plans $p^\ast$ jeweils $w_1+w_5$ und $2w_2+w_3+w_5$. Das Minimum über alle Ecken beträgt $6$. Für $\delta=5$ besteht das Zertifikat. Bei $\delta=6$ erreicht es nur Gleichheit. [Synthetische Modellprobe](../tests/rollenplan_mathe.rs)
+
 **A2 · Überhang.** Für Einsatzzeiten $t_i,t_j$ und Tastenloslasszeit $r_i$ in der Aufführungszeit verlangt das Modell
 
 ```math
@@ -321,7 +327,7 @@ Die erste Schranke folgt aus $F_+(w)\le C(p^\ast,w)$. Die zweite folgt aus der K
 
 $j^+$ ist der unabhängig gebundene übernächste Einsatz derselben Linie. $\kappa=\tfrac12$ ist ein vorläufiger Prüfparameter. **A3 · Vorlauf.** Für drei vorangehende, unabhängig gebundene Übergänge bleibt der jeweilige Überhanganteil höchstens $\kappa$. **A4 · Wiederanschlag.** Zwischen $t_i$ und $t_j$ erfolgt kein neuer Anschlag derselben Taste.
 
-Der neue Notenwert ist der Rasterabstand $q_j-q_i$. Er muss exakt darstellbar, positiv und kleiner als $d_0(i)$ sein. Sind alle Bedingungen belegt, liefert 3.2a die Dauer für die nachfolgende Halsgruppenprüfung. Bei offenem oder negativem Befund gilt der Ausgangswert. Die gemessene Tastenloslasszeit bleibt als Quellbeobachtung erhalten. [Halsgruppenprüfung](#kapitel-6-19)
+Der neue Notenwert ist der Rasterabstand $q_j-q_i$. Er muss exakt darstellbar, positiv und kleiner als $d_0(i)$ sein. Sind A1 bis A4 und diese Bedingungen an den Notenwert belegt, liefert 3.2a die verkürzte Dauer für die nachfolgende Halsgruppenprüfung. Bei offenem oder negativem Befund gilt der Ausgangswert. Die gemessene Tastenloslasszeit bleibt als Quellbeobachtung erhalten. [Halsgruppenprüfung](#kapitel-6-19)
 
 **Synthetische Gegenprobe.** Zwei Fassungen haben denselben Einsatzabstand, Tastenüberhang und drei belegte vorangehende Übergänge. In einer Fassung setzt der neue Anschlag dieselbe Linie fort. In der anderen gehört er nachweislich zu einer zweiten Linie über dem gehaltenen Ton. Die Verkürzung braucht die belegte Fortsetzung der ersten Fassung.
 
@@ -711,6 +717,10 @@ B(m)=16m+m^2\quad\text{Byte}.
 
 Bei der Metrumsuche berechnet EtuSchlopf feste Sprungkosten einmal pro Phasenmodell. Die Reihenfolge gleichwertiger Kandidaten bleibt erhalten. [Äquivalenzvertrag](selector_derivation_contract_performance_trace_equivalence.md)
 
+<a name="r2022-zeitanalyse"></a>
+
+**Zeitanalyse für Schlüssel- und Oktavkurse.** Seit r2022 verwenden die Notenprüfung und die beiden Grenzplanungen dieselbe erfolgreiche Zeitanalyse für den bytegleichen Part. Der aus einem Kandidaten erzeugte Part erhält eine eigene Analyse. Beide Kurse verwenden ihre jeweiligen Grenzmengen und dieselbe Kostenordnung wie zuvor. Für einen Akkordkopf $h$ ergibt sich das sichtbare Ende als $\max_{n\in S(h)} t_{\mathrm{Ende}}(n)$ über seine sichtbaren Noten $S(h)$. EtuSchlopf berechnet dieses Maximum einmal je Kopf und ruft es bei der Überlappungsprüfung an seiner Quellposition ab. [Vertrag zur Zeitanalyse](selector_derivation_contract_reuse_bound_temporal_clef_observations_r1655.md#r2022-clef-and-octave-course-evaluation) · [Korpusvergleich r2022](#kapitel-9)
+
 <a name="kapitel-6-15"></a>
 <a name="speicherplanung-für-den-korpus"></a>
 
@@ -819,7 +829,7 @@ Der vorausgehende Dauernachweis verwendet unabhängig aus den Quellereignissen g
 
 **Gruppenbeleg.** Zuerst begrenzen die harten satzfachlichen Bedingungen die Menge der zulässigen Änderungen. Der tatsächliche Vorher-Nachher-Render muss belegen, dass ein harter Zielbefund verschwindet und jeder übrige betroffene harte Befund einzeln erhalten bleibt oder sich verbessert. Eine geringere Zahl von Hälsen oder Fähnchen ist nur aussagekräftig, wenn die zugehörige Satzpflicht unabhängig belegt ist.
 
-Für den vollständigen zulässigen Plan $p$ gilt zusätzlich die vorab festgelegte fachliche Zielfunktionsordnung. Schreibe $J(p)\prec J(q)$, wenn $p$ fachlich strikt besser abschneidet als $q$. Eine Änderung kommt nur infrage, wenn $J(p)\prec J(q)$ für jeden zulässigen Gegenplan $q$ gilt. Die Ausgangsfassung gehört ausdrücklich zu den Gegenplänen. Bei fachlich gleichwertigen oder unvergleichbaren Plänen und bei unvollständigem Nachweis gilt die Ausgangsfassung. Der Mitlauf liefert Kandidaten für die Prüfung. [SchlopfKopfFormel](#kapitel-2-1a)
+Für den vollständigen zulässigen Plan $p$ gilt zusätzlich die vorab festgelegte fachliche Zielfunktionsordnung. Die Prüfung bindet Kandidat und Ausgangsfassung mit ihren fachlichen Kosten und Befunden an die aktuelle Tabelle vollständiger zulässiger Pläne. Fehlt für einen der beiden der passende Tabelleneintrag, bleibt die Ausgangsfassung. Schreibe $J(p)\prec J(q)$, wenn $p$ fachlich strikt besser abschneidet als $q$. Eine Änderung kommt nur infrage, wenn $J(p)\prec J(q)$ für jeden zulässigen Gegenplan $q$ gilt. Die Ausgangsfassung gehört ausdrücklich zu den Gegenplänen. Bei fachlich gleichwertigen oder unvergleichbaren Plänen und bei unvollständigem Nachweis gilt die Ausgangsfassung. Der Mitlauf liefert Kandidaten für die Prüfung. [SchlopfKopfFormel](#kapitel-2-1a)
 
 **Rolle und Spur.** Die Linie bezeichnet den musikalischen Zusammenhang. Die Rolle beschreibt seine Darstellung im jeweiligen System. Eine technische Spur speichert die Rolle im Ausgabeprofil. Die Schreibquittung bindet jedes Quellvorkommen an genau ein Nachvorkommen mit gleichem Einsatz, gleicher Dauer und gleicher Tonhöhe. Bei weiter geltenden Halteketten hält sie die Zuordnung der Fragmente fest. Sie weist ausdrücklich aus, welche Gruppen, Rollen und Spuren sich ändern. Ein geprüftes Renderergebnis bestätigt die tatsächlich gelesene Spur und die Lage der betroffenen Zeichen.
 
@@ -861,7 +871,9 @@ Zwei zeitlich gebundene Noten können im selben Ausgabekanal liegen, wenn eine z
 
 ## 9 Korpusprüfung und Grenzen
 
-Der unter Windows abgenommene Stand r2022 erzeugt aus MIDI und WAV 15 Partituren mit 58 PDF-Seiten. Die Galerie enthält die Original-PDFs dieses Laufs und die jeweils verwendete MusicXML. Die PDF-Quellen sind bytegleich zur r2020-Galerie. Alle 58 Seiten sind im Vergleich mit dieser Galerie bei 300 dpi pixelgleich. [Windows-Prüfbeleg](evidence/r2022/README.md) · [Notenbilder](examples/README.md#notenbilder)
+Der unter Windows abgenommene Stand r2022 erzeugt aus MIDI und WAV 15 Partituren mit 58 PDF-Seiten. Die Galerie enthält die Original-PDFs dieses Laufs und die jeweils verwendete MusicXML. Die 15 als PDF-Quelle verwendeten MusicXML-Dateien sind bytegleich zur r2020-Galerie. Alle 58 Seiten sind im Vergleich mit dieser Galerie bei 300 dpi pixelgleich. [Windows-Prüfbeleg](evidence/r2022/README.md) · [Notenbilder](examples/README.md#notenbilder)
+
+Gegenüber r2021 sind alle 30 Master- und Render-MusicXML-Dateien bytegleich und alle 58 PDF-Seiten bei 144 dpi pixelgleich. Bei gleicher Windows-Parallelisierung sank die Gesamtlaufzeit von 11:58 auf 10:41 Minuten. Die Summe der gemessenen Laufzeiten der Oktavbewertung über alle 15 Projekte sank von 313,076 auf 171,731 Sekunden, also um 45,1 %. [Zeitanalyse für Schlüssel- und Oktavkurse](#r2022-zeitanalyse) · [Messwerte der Windows-Abnahme](evidence/r2022/README.md)
 
 Der Windows-Lauf prüft die Ausführung und den PDF-Export. Ein musikalischer Vergleich mit einer Referenz bewertet zusätzlich Tonhöhe, Einsatz, geschriebene Dauer und sichtbare Notation. Für die Halskorrektur gilt der gesonderte Vorschau- und Übernahmenachweis. [Halsnachweis](#kapitel-6-18)
 
