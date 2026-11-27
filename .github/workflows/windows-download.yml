@@ -13,7 +13,7 @@ on:
       - 'docs/THIRD_PARTY_NOTICES.md'
       - 'docs/licenses/**'
       - 'docs/normative_sources/musicxml/**'
-      - 'docs/evidence/r2014/**'
+      - 'docs/evidence/r2020/**'
       - '.gitattributes'
       - '.github/distribution/**'
       - '!.github/distribution/RELEASE.md'
@@ -24,7 +24,8 @@ concurrency:
   group: windows-download-${{ github.ref }}
   cancel-in-progress: false
 env:
-  RELEASE_TAG: v0.10.1839-r2014-windows-preview
+  RELEASE_REVISION: r2020
+  RELEASE_TAG: v0.10.1839-r2020-windows-preview
 jobs:
   # A push to main only needs the ten-minute Windows build while the preview
   # release is still missing. Manual runs always build.
@@ -58,31 +59,31 @@ jobs:
     env:
       RUSTFLAGS: '-C target-feature=+crt-static'
       CARGO_INCREMENTAL: '0'
-      ETU_BUILD_ROOT: D:\etu-r2014-build
+      ETU_BUILD_ROOT: D:\etu-r2020-build
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: public
           persist-credentials: false
-      - name: Verify and reconstruct the accepted r2014 source
+      - name: Verify and reconstruct the accepted source
         run: |
-          python .github/distribution/prepare-r2014-source.py . $env:ETU_BUILD_ROOT "$env:RUNNER_TEMP/etuschlopf-source"
-          if ($LASTEXITCODE -ne 0) { throw 'Native r2014 source preparation failed' }
+          python .github/distribution/prepare-accepted-source.py . $env:ETU_BUILD_ROOT "$env:RUNNER_TEMP/etuschlopf-source" --revision $env:RELEASE_REVISION
+          if ($LASTEXITCODE -ne 0) { throw 'Native source preparation failed' }
       - name: Install Rust toolchain
         run: |
           rustup toolchain install 1.98.0 --profile minimal
           if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain installation failed' }
-      # The engine comes only from the checksum-verified r2014 inventory, so its
+      # The engine comes only from the checksum-verified accepted inventory, so its
       # binary is keyed on that inventory, the preparation script and the toolchain.
       - name: Restore accepted engine from cache
         id: engine-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: D:\etu-r2014-build\target\strict\etuschlopf.exe
-          key: etu-r2014-engine-v1-${{ runner.os }}-${{ runner.arch }}-rust1.98.0-strict-crtstatic-${{ hashFiles('public/docs/evidence/r2014/accepted-release.json', 'public/docs/evidence/r2014/accepted-source.tsv', 'public/docs/evidence/r2014/native-documents.zip', 'public/.github/distribution/prepare-r2014-source.py') }}
+          path: D:\etu-r2020-build\target\strict\etuschlopf.exe
+          key: etu-r2020-engine-v1-${{ runner.os }}-${{ runner.arch }}-rust1.98.0-strict-crtstatic-${{ hashFiles('public/docs/evidence/r2020/accepted-release.json', 'public/docs/evidence/r2020/accepted-source.tsv', 'public/docs/evidence/r2020/native-documents.zip', 'public/.github/distribution/prepare-accepted-source.py') }}
       - name: Build accepted engine
         if: steps.engine-cache.outputs.cache-hit != 'true'
-        working-directory: D:\etu-r2014-build
+        working-directory: D:\etu-r2020-build
         run: |
           $jobs = [Environment]::ProcessorCount
           cargo +1.98.0 build --locked --profile strict --bin etuschlopf --jobs $jobs --color never
@@ -91,7 +92,7 @@ jobs:
         if: steps.engine-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: D:\etu-r2014-build\target\strict\etuschlopf.exe
+          path: D:\etu-r2020-build\target\strict\etuschlopf.exe
           key: ${{ steps.engine-cache.outputs.cache-primary-key }}
       - name: Bundle runtime data and licences
         run: |
@@ -113,10 +114,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Distribution tests failed' }
           cargo +1.98.0 build --locked --manifest-path .github/distribution/Cargo.toml --release
           if ($LASTEXITCODE -ne 0) { throw 'Distribution build failed' }
-          Copy-Item .github/distribution/target/release/etuschlopf_windows_download.exe dist/EtuSchlopf-Windows-x64-r2014.exe
+          Copy-Item .github/distribution/target/release/etuschlopf_windows_download.exe "dist/EtuSchlopf-Windows-x64-${env:RELEASE_REVISION}.exe"
       - name: Test packaged EXE without developer PATH
         run: |
-          $exe = (Resolve-Path dist/EtuSchlopf-Windows-x64-r2014.exe).Path
+          $exe = (Resolve-Path "dist/EtuSchlopf-Windows-x64-${env:RELEASE_REVISION}.exe").Path
           $originalPath = $env:PATH
           try {
             $env:PATH = "$env:windir\System32;$env:windir"
@@ -128,17 +129,18 @@ jobs:
           } finally { $env:PATH = $originalPath }
       - name: Verify isolated runtime and safe rejection
         run: |
-          ./.github/distribution/smoke.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64-r2014.exe).Path
+          ./.github/distribution/smoke.ps1 -Exe (Resolve-Path "dist/EtuSchlopf-Windows-x64-${env:RELEASE_REVISION}.exe").Path
       - name: Render the start example with the packaged EXE
         run: |
-          ./.github/distribution/start-example.ps1 -Exe (Resolve-Path dist/EtuSchlopf-Windows-x64-r2014.exe).Path -Output dist/EtuSchlopf-Beispiel-r2014.zip
+          $exe = (Resolve-Path "dist/EtuSchlopf-Windows-x64-${env:RELEASE_REVISION}.exe").Path
+          ./.github/distribution/start-example.ps1 -Exe $exe -Output "dist/EtuSchlopf-Beispiel-${env:RELEASE_REVISION}.zip"
       - name: Hash Windows downloads
         env:
           ENGINE_CACHE_HIT: ${{ steps.engine-cache.outputs.cache-hit == 'true' }}
         run: |
-          $accepted = Get-Content -Raw docs/evidence/r2014/accepted-release.json | ConvertFrom-Json
-          @("revision=r2014", "public_commit=$env:GITHUB_SHA", "workflow=$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID", "accepted_take_sha256=$($accepted.accepted_take_sha256)", "native_snapshot_sha256=$($accepted.native_snapshot_sha256)", "inventory_sha256=$($accepted.inventory_sha256)", "engine_cache_hit=$env:ENGINE_CACHE_HIT") | Set-Content -Encoding ascii dist/runtime-provenance.txt
-          $sums = foreach ($name in @('EtuSchlopf-Windows-x64-r2014.exe', 'EtuSchlopf-r2014-source.zip', 'EtuSchlopf-Beispiel-r2014.zip', 'runtime-provenance.txt')) {
+          $accepted = Get-Content -Raw "docs/evidence/$env:RELEASE_REVISION/accepted-release.json" | ConvertFrom-Json
+          @("revision=$($accepted.revision)", "public_commit=$env:GITHUB_SHA", "workflow=$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID", "accepted_take_sha256=$($accepted.accepted_take_sha256)", "native_snapshot_sha256=$($accepted.native_snapshot_sha256)", "inventory_sha256=$($accepted.inventory_sha256)", "engine_cache_hit=$env:ENGINE_CACHE_HIT") | Set-Content -Encoding ascii dist/runtime-provenance.txt
+          $sums = foreach ($name in @("EtuSchlopf-Windows-x64-${env:RELEASE_REVISION}.exe", "EtuSchlopf-${env:RELEASE_REVISION}-source.zip", "EtuSchlopf-Beispiel-${env:RELEASE_REVISION}.zip", 'runtime-provenance.txt')) {
             $hash = (Get-FileHash -Algorithm SHA256 "dist/$name").Hash.ToLowerInvariant()
             "$hash  $name"
           }
@@ -170,7 +172,7 @@ jobs:
           fi
           gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name EtuSchlopf-Windows-x64 --dir dist
           (cd dist && sha256sum --check SHA256SUMS.txt)
-          notes="Die portable x64-EXE enthält EtuSchlopf 0.10.1839 r2014. Das Startbeispiel enthält MIDI, WAV und das mit dieser EXE erzeugte PDF. Das Quellarchiv enthält die geprüfte Cargo.lock. Die PDF-Ausgabe verwendet MuseScore. Die EXE ist unsigniert. [Windows-Abnahme r2014]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/evidence/r2014/README.md) · [Windows-Build]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
-          gh release create "$tag" dist/EtuSchlopf-Windows-x64-r2014.exe dist/EtuSchlopf-r2014-source.zip dist/EtuSchlopf-Beispiel-r2014.zip dist/runtime-provenance.txt dist/SHA256SUMS.txt \
+          notes="Die portable x64-EXE enthält EtuSchlopf 0.10.1839 $RELEASE_REVISION. Der Windows-Vollkorpus bestätigt 15 Partituren auf 58 Seiten. Die Mathe-Seite beschreibt die geometrische Prüfung der Halsvorschläge. Für ihre produktive Übernahme steht der Schlussbeleg aus. Das Startbeispiel enthält MIDI, WAV und das mit dieser EXE erzeugte PDF. Das Quellarchiv enthält die geprüfte Cargo.lock. Die PDF-Ausgabe verwendet MuseScore. Die EXE ist unsigniert. [Mathe-Seite]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/MATHEMATIK.md) · [Windows-Abnahme $RELEASE_REVISION]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/evidence/$RELEASE_REVISION/README.md) · [Windows-Build]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+          gh release create "$tag" "dist/EtuSchlopf-Windows-x64-$RELEASE_REVISION.exe" "dist/EtuSchlopf-$RELEASE_REVISION-source.zip" "dist/EtuSchlopf-Beispiel-$RELEASE_REVISION.zip" dist/runtime-provenance.txt dist/SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-            --title "EtuSchlopf r2014 Windows x64" --notes "$notes"
+            --title "EtuSchlopf $RELEASE_REVISION Windows x64" --notes "$notes"
