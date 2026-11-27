@@ -26,3 +26,23 @@ NonCausalContextExcluded: project identity, printed measure, staff or voice labe
 
 Only evaluation and reuse of the original evidence change. Native acceptance
 compares all Master, Render and PDF outputs with the accepted parent.
+
+## r2022 clef and octave course evaluation
+
+The course evaluator shares a successful temporal observation among the
+surface scan, pitch scan and original and expanded boundary solvers for the
+same immutable part. The projected part obtains its own observation. The
+original and expanded courses keep their respective boundary sets, and the
+same cost comparison determines which course to retain.
+
+The visible end of a chord head is the maximum end of its visible members.
+One lookup by the original head byte replaces rescanning the visible notes
+for each head. Overlap detection still traverses heads in musical onset and
+source order. A longer hidden member contributes no end to this check.
+
+When the existing serial beam fallback runs, its prepared note ranges and
+octave boundaries belong to the exact lexical part. It starts at the same
+scope boundary and still inspects closures serialized beyond the next octave
+boundary. Outside, interior and unresolved prefix retain their original
+meanings. The synthetic coverage checks separate parts, visible and hidden
+chord members, unsupported timing, and unchanged beam and tie obligations.

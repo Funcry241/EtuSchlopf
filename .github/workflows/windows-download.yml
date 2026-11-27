@@ -13,7 +13,7 @@ on:
       - 'docs/THIRD_PARTY_NOTICES.md'
       - 'docs/licenses/**'
       - 'docs/normative_sources/musicxml/**'
-      - 'docs/evidence/r2020/**'
+      - 'docs/evidence/r2022/**'
       - '.gitattributes'
       - '.github/distribution/**'
       - '!.github/distribution/RELEASE.md'
@@ -24,8 +24,8 @@ concurrency:
   group: windows-download-${{ github.ref }}
   cancel-in-progress: false
 env:
-  RELEASE_REVISION: r2020
-  RELEASE_TAG: v0.10.1839-r2020-windows-preview
+  RELEASE_REVISION: r2022
+  RELEASE_TAG: v0.10.1839-r2022-windows-preview
 jobs:
   # A push to main only needs the ten-minute Windows build while the preview
   # release is still missing. Manual runs always build.
@@ -59,7 +59,7 @@ jobs:
     env:
       RUSTFLAGS: '-C target-feature=+crt-static'
       CARGO_INCREMENTAL: '0'
-      ETU_BUILD_ROOT: D:\etu-r2020-build
+      ETU_BUILD_ROOT: D:\etu-r2022-build
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -79,11 +79,11 @@ jobs:
         id: engine-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: D:\etu-r2020-build\target\strict\etuschlopf.exe
-          key: etu-r2020-engine-v1-${{ runner.os }}-${{ runner.arch }}-rust1.98.0-strict-crtstatic-${{ hashFiles('public/docs/evidence/r2020/accepted-release.json', 'public/docs/evidence/r2020/accepted-source.tsv', 'public/docs/evidence/r2020/native-documents.zip', 'public/.github/distribution/prepare-accepted-source.py') }}
+          path: D:\etu-r2022-build\target\strict\etuschlopf.exe
+          key: etu-r2022-engine-v1-${{ runner.os }}-${{ runner.arch }}-rust1.98.0-strict-crtstatic-${{ hashFiles('public/docs/evidence/r2022/accepted-release.json', 'public/docs/evidence/r2022/accepted-source.tsv', 'public/docs/evidence/r2022/native-documents.zip', 'public/.github/distribution/prepare-accepted-source.py') }}
       - name: Build accepted engine
         if: steps.engine-cache.outputs.cache-hit != 'true'
-        working-directory: D:\etu-r2020-build
+        working-directory: D:\etu-r2022-build
         run: |
           $jobs = [Environment]::ProcessorCount
           cargo +1.98.0 build --locked --profile strict --bin etuschlopf --jobs $jobs --color never
@@ -92,7 +92,7 @@ jobs:
         if: steps.engine-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: D:\etu-r2020-build\target\strict\etuschlopf.exe
+          path: D:\etu-r2022-build\target\strict\etuschlopf.exe
           key: ${{ steps.engine-cache.outputs.cache-primary-key }}
       - name: Bundle runtime data and licences
         run: |
@@ -172,7 +172,7 @@ jobs:
           fi
           gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name EtuSchlopf-Windows-x64 --dir dist
           (cd dist && sha256sum --check SHA256SUMS.txt)
-          notes="Die portable x64-EXE enthält EtuSchlopf 0.10.1839 $RELEASE_REVISION. Der Windows-Vollkorpus bestätigt 15 Partituren auf 58 Seiten. Die Mathe-Seite beschreibt die geometrische Prüfung der Halsvorschläge. Für ihre produktive Übernahme steht der Schlussbeleg aus. Das Startbeispiel enthält MIDI, WAV und das mit dieser EXE erzeugte PDF. Das Quellarchiv enthält die geprüfte Cargo.lock. Die PDF-Ausgabe verwendet MuseScore. Die EXE ist unsigniert. [Mathe-Seite]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/MATHEMATIK.md) · [Windows-Abnahme $RELEASE_REVISION]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/evidence/$RELEASE_REVISION/README.md) · [Windows-Build]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+          notes="Die portable x64-EXE enthält EtuSchlopf 0.10.1839 $RELEASE_REVISION. Der Windows-Vollkorpus bestätigt 15 Partituren auf 58 Seiten. Die Oktavbewertung verwendet die vorhandene Zeitanalyse wieder. Im Vergleich zu r2021 sind alle 30 MusicXML-Dateien bytegleich und alle 58 PDF-Seiten bei 144 dpi pixelgleich. Das Startbeispiel enthält MIDI, WAV und das mit dieser EXE erzeugte PDF. Das Quellarchiv enthält die geprüfte Cargo.lock. Die PDF-Ausgabe verwendet MuseScore. Die EXE ist unsigniert. [Mathe-Seite]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/MATHEMATIK.md) · [Windows-Abnahme $RELEASE_REVISION]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/evidence/$RELEASE_REVISION/README.md) · [Windows-Build]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
           gh release create "$tag" "dist/EtuSchlopf-Windows-x64-$RELEASE_REVISION.exe" "dist/EtuSchlopf-$RELEASE_REVISION-source.zip" "dist/EtuSchlopf-Beispiel-$RELEASE_REVISION.zip" dist/runtime-provenance.txt dist/SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "EtuSchlopf $RELEASE_REVISION Windows x64" --notes "$notes"

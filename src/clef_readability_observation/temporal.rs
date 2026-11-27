@@ -292,18 +292,21 @@ impl TemporalPart {
         }
         // Representation order is not voice chronology. Detect actual overlap
         // in musical time; the pitch scanner traverses the same ordered heads.
-        let mut heads = result.notes.iter()
-            .filter(|note| note.visible && note.start == note.head)
-            .collect::<Vec<_>>();
+        let mut heads = Vec::new();
+        let mut ends_by_head = BTreeMap::<usize, i128>::new();
+        for note in result.notes.iter().filter(|note| note.visible) {
+            ends_by_head
+                .entry(note.head)
+                .and_modify(|end| *end = (*end).max(note.end))
+                .or_insert(note.end);
+            if note.start == note.head {
+                heads.push(note);
+            }
+        }
         heads.sort_by_key(|note| (note.at, note.start));
         let mut voice_ends = BTreeMap::<&str, i128>::new();
         for note in heads {
-            let end = result
-                .notes
-                .iter()
-                .filter(|member| member.visible && member.head == note.head)
-                .map(|member| member.end)
-                .max()?;
+            let end = *ends_by_head.get(&note.head)?;
             if voice_ends
                 .insert(&note.voice, end)
                 .is_some_and(|previous| previous > note.at)

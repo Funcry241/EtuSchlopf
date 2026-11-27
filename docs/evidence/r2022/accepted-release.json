@@ -1,0 +1,10 @@
+{
+  "revision": "r2022",
+  "version": "0.10.1839",
+  "accepted_take_sha256": "750a5ad375a810faea56cf6a0fa6798309625d90e1d89ff49db1209c64834b8a",
+  "native_snapshot_sha256": "8b0d85bc4cadc953b2f224d088cafefd9fe4f896409de2f03f56c9cdb5416c58",
+  "inventory_sha256": "08d555ba4cb562fac97e69f9d8bcad3f681fb804b484d05b0b19573c619f45a1",
+  "native_documents_sha256": "ce6d3ad64af6ce4fb89f245ff14285d4fae949167d45836426a0f7a7a7ec0902",
+  "cargo_lock_sha256": "a0178cc691bf26f99e83af20498711117ccb557bccc6d0827e6d5b1c204a6884",
+  "source_file_count": 2288
+}

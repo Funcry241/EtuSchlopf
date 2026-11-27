@@ -2176,7 +2176,12 @@ impl TransformationReceipt {
         match self {
             Self::Block(receipt) => crate::ssc_evidence_proof::record_block_commit(&SSC_ORIGIN_ACCESS, receipt, domain),
             Self::Exact(receipt) => crate::ssc_evidence_proof::record_exact_commit(&SSC_ORIGIN_ACCESS, receipt, domain),
-            Self::Preserving(receipt) => crate::ssc_evidence_proof::record_preserving_commit(&SSC_ORIGIN_ACCESS, receipt, domain),
+            Self::Preserving(mut receipt) => {
+                // Adoption and layout observation have already used the owner transports.
+                receipt.recorded_representation = None;
+                receipt.verified_variant_output = None;
+                crate::ssc_evidence_proof::record_preserving_commit(&SSC_ORIGIN_ACCESS, receipt, domain);
+            },
             Self::Additive(receipt) => crate::ssc_evidence_proof::record_additive_commit(&SSC_ORIGIN_ACCESS, receipt, domain),
         }
         event

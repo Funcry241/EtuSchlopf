@@ -541,23 +541,26 @@ pub(super) fn derive_clef_readability_primary_course_plan(xml: &str) -> RustigCl
     let mut insertions = Vec::new();
     for (part_index, (part_start, part_end)) in score_part_ranges(xml).into_iter().enumerate() {
         let part = &xml[part_start..part_end];
-        if TemporalPart::observe(part).is_none() {
+        let Some(temporal) = TemporalPart::observe(part) else {
             let line = format!("ClefTemporalContext: Part={}; Status=unsupported; NewCourse=none; BaselineValidation=parent_guards_only; Authority=none\n", part_index + 1);
             let _ = std::io::Write::write_all(&mut std::io::stderr().lock(), line.as_bytes());
             continue;
-        }
-        let Some(surfaces) = scan_lower_clef_surfaces(part) else {
+        };
+        let Some(surfaces) = scan_lower_clef_surfaces_with_time(part, Some(&temporal)) else {
             continue;
         };
         if surfaces.is_empty() {
             continue;
         }
         let mut observations = Vec::new();
-        let pitches = scan_lower_pitches(part, Some(&mut observations));
+        let boundaries = beam_boundary::observe(part);
+        let pitches = scan_lower_pitches_with_prepared_time(
+            part, Some(&mut observations), &boundaries, Some(&temporal),
+        );
         if pitches.iter().any(|note| note.at < surfaces[0].at) {
             continue;
         }
-        let solution = solve_readability_course(part, &surfaces, &pitches);
+        let solution = solve_readability_course(part, &surfaces, &pitches, &temporal, &boundaries);
         let trace = beam_anchor_planner_input_trace(
             xml, part, part_index + 1, &observations, &pitches, solution.as_ref(),
         );
@@ -618,12 +621,13 @@ pub(crate) fn joint_lower_course_measurements(xml: &str) -> BTreeMap<String, cra
     for node in document.root_element().children().filter(|n| n.has_tag_name("part")) {
         let Some(id) = node.attribute("id") else { continue; };
         let part = &xml[node.range()];
-        if TemporalPart::observe(part).is_none() { continue; }
-        let Some(surfaces) = scan_lower_clef_surfaces(part) else { continue; };
-        let pitches = scan_lower_pitches(part, None);
+        let Some(temporal) = TemporalPart::observe(part) else { continue; };
+        let Some(surfaces) = scan_lower_clef_surfaces_with_time(part, Some(&temporal)) else { continue; };
+        let boundaries = beam_boundary::observe(part);
+        let pitches = scan_lower_pitches_with_prepared_time(part, None, &boundaries, Some(&temporal));
         let Some(first) = surfaces.first() else { continue; };
         if pitches.iter().any(|pitch| pitch.at < first.at) { continue; }
-        let Some(solution) = solve_readability_course(part, &surfaces, &pitches) else { continue; };
+        let Some(solution) = solve_readability_course(part, &surfaces, &pitches, &temporal, &boundaries) else { continue; };
         let mut removals = surfaces.iter().zip(&solution.retained)
             .filter_map(|(surface, keep)| (!keep).then_some((surface.start, surface.end))).collect::<Vec<_>>();
         let mut insertions = solution.insertions.clone();
@@ -648,16 +652,19 @@ pub(crate) fn joint_lower_course_measurements(xml: &str) -> BTreeMap<String, cra
         if raw_note_fragments(&projected) != raw_note_fragments(part)
             || lower_clef_surface_inside_open_tie(&projected)
             || lower_clef_surface_inside_primary_beam_group(&projected) { continue; }
-        let Some(projected_surfaces) = scan_lower_clef_surfaces(&projected) else { continue; };
-        let projected_pitches = scan_lower_pitches(&projected, None);
-        let Some(projected_cost) = score_readability_course(&projected, &projected_surfaces, &projected_pitches,
+        let Some(projected_time) = TemporalPart::observe(&projected) else { continue; };
+        let Some(projected_surfaces) = scan_lower_clef_surfaces_with_time(&projected, Some(&projected_time)) else { continue; };
+        let projected_boundaries = beam_boundary::observe(&projected);
+        let projected_pitches = scan_lower_pitches_with_prepared_time(
+            &projected, None, &projected_boundaries, Some(&projected_time),
+        );
+        let Some(projected_cost) = score_readability_course(Some(&projected_time), &projected_surfaces, &projected_pitches,
             &vec![true; projected_surfaces.len()]) else { continue; };
         if projected_cost != solution.cost || projected_pitches.len() != pitches.len() { continue; }
-        let Some(temporal) = TemporalPart::observe(&projected) else { continue; };
         let course = projected_surfaces.iter().map(|surface| (surface.at, surface.kind)).collect::<Vec<_>>();
         result.insert(id.to_owned(), crate::registernotation::JointLowerCourseCost {
             total: projected_cost.total(), pressure: projected_cost.ledger_pressure,
-            transitions: projected_cost.clef_transitions, octave_changes: temporal.mapping_change_count(),
+            transitions: projected_cost.clef_transitions, octave_changes: projected_time.mapping_change_count(),
             octave_reminders: node.descendants().filter(|n| n.has_tag_name("direction")
                 && n.children().any(|c| c.has_tag_name("staff") && c.text() == Some("2"))
                 && n.descendants().any(|c| c.has_tag_name("octave-shift") && c.attribute("type") == Some("continue"))).count(),
@@ -704,7 +711,8 @@ fn beam_anchor_planner_input_trace(
         out.push_str(&format!("BeamAnchorPlannerContext: {binding}; {row}\n"));
     }
     let boundaries = beam_boundary::observe(part);
-    let candidates = collect_readability_course_candidates(part, pitches, &boundaries);
+    let temporal = TemporalPart::observe(part);
+    let candidates = collect_readability_course_candidates(part, pitches, &boundaries, temporal.as_ref());
     out.push_str(&format!(
         "BeamAnchorPlannerCandidates: {binding}; PositionScope=part_local_bytes; Candidates={candidates:?}; Authority=none\n",
     ));
@@ -857,9 +865,10 @@ pub fn derive_clef_readability_shadow_course_audit(
         audit.parts_observed += 1;
         let part = &xml[part_start..part_end];
         let mut observations = Vec::new();
-        let pitches = scan_lower_pitches_with_beam_audit(part, Some(&mut observations));
+        let pitches = scan_lower_pitches(part, Some(&mut observations));
         append_beam_anchor_rows(part, part_index + 1, &observations, &mut audit.beam_anchor_rows);
-        let Some(surfaces) = scan_lower_clef_surfaces(part) else {
+        let Some(temporal) = TemporalPart::observe(part) else { continue; };
+        let Some(surfaces) = scan_lower_clef_surfaces_with_time(part, Some(&temporal)) else {
             continue;
         };
         if surfaces.is_empty() {
@@ -868,7 +877,8 @@ pub fn derive_clef_readability_shadow_course_audit(
         if pitches.iter().any(|note| note.at < surfaces[0].at) {
             continue;
         }
-        let Some(solution) = solve_readability_course(part, &surfaces, &pitches) else {
+        let boundaries = beam_boundary::observe(part);
+        let Some(solution) = solve_readability_course(part, &surfaces, &pitches, &temporal, &boundaries) else {
             continue;
         };
         let retained = solution.retained;
@@ -876,7 +886,7 @@ pub fn derive_clef_readability_shadow_course_audit(
         let readability_cost = solution.cost;
         let source_retained = vec![true; surfaces.len()];
         let Some(source_cost) =
-            score_readability_course(part, &surfaces, &pitches, &source_retained)
+            score_readability_course(Some(&temporal), &surfaces, &pitches, &source_retained)
         else {
             continue;
         };
@@ -918,7 +928,7 @@ pub fn derive_clef_readability_shadow_course_audit(
             part_index: part_index + 1,
             source_course: projected_course(&surfaces, &source_retained),
             readability_course: projected_readability_course(
-                part,
+                &temporal,
                 &surfaces,
                 &retained,
                 &insertions,
@@ -1031,15 +1041,19 @@ fn solve_readability_course(
     part: &str,
     surfaces: &[SurfaceEvent],
     pitches: &[PitchedEvent],
+    temporal: &TemporalPart,
+    boundaries: &BTreeSet<usize>,
 ) -> Option<ClefReadabilityCourseSolution> {
     let original_boundaries = BTreeSet::new();
-    let original_pitches = scan_lower_pitches_with_boundary_policy(part, None, &original_boundaries);
-    let baseline = solve_readability_course_with_boundaries(part, surfaces, &original_pitches, &original_boundaries)?;
-    let boundaries = beam_boundary::observe(part);
+    let original_pitches =
+        scan_lower_pitches_with_prepared_time(part, None, &original_boundaries, Some(temporal));
+    let baseline = solve_readability_course_with_boundaries(
+        part, surfaces, &original_pitches, &original_boundaries, temporal,
+    )?;
     if boundaries.is_empty() {
         return Some(baseline);
     }
-    let expanded = solve_readability_course_with_boundaries(part, surfaces, pitches, &boundaries);
+    let expanded = solve_readability_course_with_boundaries(part, surfaces, pitches, boundaries, temporal);
     match expanded {
         Some(expanded) if expanded.cost.total() < baseline.cost.total() => Some(expanded),
         _ => Some(baseline),
@@ -1050,11 +1064,13 @@ fn collect_readability_course_candidates(
     part: &str,
     pitches: &[PitchedEvent],
     boundaries: &BTreeSet<usize>,
+    temporal: Option<&TemporalPart>,
 ) -> Vec<ClefReadabilityTransitionCandidate> {
     let attacks = collect_lower_staff_attacks(pitches);
     let mut candidates = collect_readability_transition_candidates(&attacks);
     if !boundaries.is_empty() {
-        let original = scan_lower_pitches_with_boundary_policy(part, None, &BTreeSet::new());
+        let original =
+            scan_lower_pitches_with_prepared_time(part, None, &BTreeSet::new(), temporal);
         for candidate in collect_readability_transition_candidates(&collect_lower_staff_attacks(&original)) {
             if !candidates.iter().any(|present| present.start == candidate.start && present.kind == candidate.kind) {
                 candidates.push(candidate);
@@ -1070,10 +1086,11 @@ fn solve_readability_course_with_boundaries(
     surfaces: &[SurfaceEvent],
     pitches: &[PitchedEvent],
     boundaries: &BTreeSet<usize>,
+    temporal: &TemporalPart,
 ) -> Option<ClefReadabilityCourseSolution> {
     let first = surfaces.first()?;
-    let temporal = TemporalPart::observe(part)?;
-    let candidates = collect_readability_course_candidates(part, pitches, boundaries);
+    let candidates = collect_readability_course_candidates(part, pitches, boundaries, Some(temporal));
+    let serial_guard = std::cell::OnceCell::new();
     let mut timeline = Vec::with_capacity(surfaces.len().saturating_sub(1) + candidates.len());
     for (index, event) in surfaces.iter().enumerate().skip(1) {
         timeline.push((event.at, 0u8, ClefReadabilityTimelineEvent::Surface(index)));
@@ -1121,7 +1138,10 @@ fn solve_readability_course_with_boundaries(
                     event.visible && temporal.tie_open(event.start);
                 let beam_open_at_surface = event.visible && match temporal.beam_inside(event.start) {
                     Some(true) => !boundaries.contains(&event.start),
-                    None => lower_primary_beam_serial_position(part, event.start) == PrimaryBeamPosition::Interior,
+                    None => {
+                        let guard = serial_guard.get_or_init(|| ClefGuardTime::new(part));
+                        lower_primary_beam_serial_position(guard, event.start) == PrimaryBeamPosition::Interior
+                    }
                     Some(false) => false,
                 };
                 let octave_shift_boundary_surface = event.visible
@@ -1383,12 +1403,11 @@ fn retain_best_readability(
 }
 
 fn projected_readability_course(
-    part: &str,
+    temporal: &TemporalPart,
     surfaces: &[SurfaceEvent],
     retained: &[bool],
     insertions: &[(usize, ClefKind)],
 ) -> String {
-    let temporal = TemporalPart::observe(part);
     let mut events = surfaces
         .iter()
         .zip(retained.iter())
@@ -1397,7 +1416,7 @@ fn projected_readability_course(
     events.extend(
         insertions
             .iter()
-            .map(|(start, kind)| (temporal.as_ref().and_then(|time| time.at(*start)).unwrap_or(i128::MAX), 1u8, *kind)),
+            .map(|(start, kind)| (temporal.at(*start).unwrap_or(i128::MAX), 1u8, *kind)),
     );
     events.sort_by_key(|(start, rank, _)| (*start, *rank));
     let labels = events
@@ -1417,12 +1436,12 @@ fn projected_readability_course(
 }
 
 fn score_readability_course(
-    part: &str,
+    temporal: Option<&TemporalPart>,
     surfaces: &[SurfaceEvent],
     pitches: &[PitchedEvent],
     retained: &[bool],
 ) -> Option<ClefReadabilityCost> {
-    let _temporal = TemporalPart::observe(part)?;
+    temporal?;
     if surfaces.is_empty() || surfaces.len() != retained.len() || !retained[0] {
         return None;
     }
@@ -2036,15 +2055,21 @@ enum PrimaryBeamPosition {
 }
 
 /// Cache each temporal observation only for the exact source bytes borrowed
-/// by this guard. The serial predicates remain the unsupported-input fallback.
+/// by this guard. Prepare the lexical beam inputs only for a serial fallback.
 struct ClefGuardTime<'a> {
     source: &'a str,
-    parts: Vec<ClefGuardPart>,
+    parts: Vec<ClefGuardPart<'a>>,
 }
 
-struct ClefGuardPart {
+struct ClefGuardPart<'a> {
     range: std::ops::Range<usize>,
     temporal: std::cell::OnceCell<Option<TemporalPart>>,
+    serial_beam: std::cell::OnceCell<SerialPrimaryBeamInput<'a>>,
+}
+
+struct SerialPrimaryBeamInput<'a> {
+    boundaries: Vec<(usize, i64)>,
+    notes: Vec<(usize, usize, &'a str)>,
 }
 
 impl<'a> ClefGuardTime<'a> {
@@ -2053,6 +2078,7 @@ impl<'a> ClefGuardTime<'a> {
             .map(|(start, end)| ClefGuardPart {
                 range: start..end,
                 temporal: std::cell::OnceCell::new(),
+                serial_beam: std::cell::OnceCell::new(),
             }).collect();
         Self { source, parts }
     }
@@ -2081,8 +2107,8 @@ impl<'a> ClefGuardTime<'a> {
         match self.at(position).map(|(time, local)| time.beam_inside(local)) {
             Some(Some(true)) => !boundaries.contains(&position),
             Some(Some(false)) => false,
-            Some(None) => lower_primary_beam_serial_position(self.source, position) == PrimaryBeamPosition::Interior,
-            None => lower_primary_beam_serial_position(self.source, position) == PrimaryBeamPosition::Interior
+            Some(None) => lower_primary_beam_serial_position(self, position) == PrimaryBeamPosition::Interior,
+            None => lower_primary_beam_serial_position(self, position) == PrimaryBeamPosition::Interior
                 && !boundaries.contains(&position),
         }
     }
@@ -2092,7 +2118,7 @@ impl<'a> ClefGuardTime<'a> {
             Some(Some(false)) => true,
             Some(Some(true)) => boundaries.contains(&position),
             Some(None) => false,
-            None => lower_primary_beam_serial_position(self.source, position) == PrimaryBeamPosition::Outside
+            None => lower_primary_beam_serial_position(self, position) == PrimaryBeamPosition::Outside
                 || boundaries.contains(&position),
         }
     }
@@ -2121,42 +2147,43 @@ fn lower_primary_beam_position(xml: &str, position: usize) -> PrimaryBeamPositio
         Some(Some(true)) => PrimaryBeamPosition::Interior,
         Some(Some(false)) => PrimaryBeamPosition::Outside,
         Some(None) => {
-            if lower_primary_beam_serial_position(xml, position) == PrimaryBeamPosition::Interior {
+            if lower_primary_beam_serial_position(&guard, position) == PrimaryBeamPosition::Interior {
                 PrimaryBeamPosition::Interior
             } else {
                 PrimaryBeamPosition::UnresolvedPrefix
             }
         }
-        None => lower_primary_beam_serial_position(xml, position),
+        None => lower_primary_beam_serial_position(&guard, position),
     }
 }
 
-fn lower_primary_beam_serial_position(xml: &str, position: usize) -> PrimaryBeamPosition {
+fn lower_primary_beam_serial_position(guard: &ClefGuardTime<'_>, position: usize) -> PrimaryBeamPosition {
     #[derive(Debug, Clone, Copy)]
     struct OpenBeam {
         start: usize,
         touches_lower: bool,
     }
 
-    let Some((part_start, part_end)) = score_part_ranges(xml)
-        .into_iter()
-        .find(|&(start, end)| start <= position && position < end)
-    else {
+    let Some(part) = guard.parts.iter().find(|part| part.range.contains(&position)) else {
         return PrimaryBeamPosition::Outside;
     };
-    let xml = &xml[part_start..part_end];
-    let position = position - part_start;
-    let boundaries = scan_octave_events(xml);
+    let position = position - part.range.start;
+    let input = part.serial_beam.get_or_init(|| {
+        let source = &guard.source[part.range.clone()];
+        SerialPrimaryBeamInput {
+            boundaries: scan_octave_events(source),
+            notes: note_ranges(source),
+        }
+    });
+    let boundaries = &input.boundaries;
     let first_future_boundary = boundaries.partition_point(|&(start, _)| start < position);
     let scope_start = first_future_boundary.checked_sub(1).map_or(0, |index| boundaries[index].0);
     let scope_end = boundaries.get(first_future_boundary).map(|&(start, _)| start);
     let mut passed_future_boundary = false;
     let mut unresolved_prefix = false;
     let mut open = BTreeMap::<String, OpenBeam>::new();
-    for (start, end, note) in note_ranges(xml) {
-        if start < scope_start {
-            continue;
-        }
+    let first_note = input.notes.partition_point(|&(start, _, _)| start < scope_start);
+    for &(start, end, note) in &input.notes[first_note..] {
         // Preserve a proven old-scope interior even if its end is serialized
         // beyond a later boundary. An unclosed prefix is not an interior proof.
         if !passed_future_boundary && scope_end.is_some_and(|boundary| start >= boundary) {
@@ -3190,7 +3217,10 @@ mod tests {
             candidate.start == unsafe_start && candidate.kind == ClefKind::Treble
         }));
 
-        let solution = super::solve_readability_course(&xml, &surfaces, &pitches).unwrap();
+        let temporal = super::TemporalPart::observe(&xml).unwrap();
+        let solution = super::solve_readability_course(
+            &xml, &surfaces, &pitches, &temporal, &super::beam_boundary::observe(&xml),
+        ).unwrap();
         assert!(!solution.insertions.iter().any(|(start, _)| {
             *start == unsafe_start
                 || (super::lower_primary_beam_group_contains_position(&xml, *start)
@@ -3407,6 +3437,25 @@ mod joint_boundary_reuse_tests {
         assert!(guard.at(at).is_none());
         assert_eq!(guard.tie_open(at), lower_tie_serial_open_at_position(&unsupported, at));
         assert!(matches!(guard.parts[0].temporal.get(), Some(None)));
+
+        let notes = note_ranges(&unsupported);
+        assert!(guard.parts.iter().all(|part| part.serial_beam.get().is_none()));
+        assert_eq!(
+            super::lower_primary_beam_serial_position(&guard, notes[0].0),
+            super::PrimaryBeamPosition::Outside,
+        );
+        let first = guard.parts[0].serial_beam.get().unwrap();
+        assert!(guard.parts[1].serial_beam.get().is_none());
+        assert_eq!(
+            super::lower_primary_beam_serial_position(&guard, notes[1].0),
+            super::PrimaryBeamPosition::Outside,
+        );
+        assert!(std::ptr::eq(first, guard.parts[0].serial_beam.get().unwrap()));
+        assert_eq!(
+            super::lower_primary_beam_serial_position(&guard, notes[2].0),
+            super::PrimaryBeamPosition::Outside,
+        );
+        assert!(!std::ptr::eq(first, guard.parts[1].serial_beam.get().unwrap()));
     }
 
     #[test]

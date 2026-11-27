@@ -332,9 +332,11 @@ mod tests {
                 assert!(!super::super::lower_clef_surface_inside_primary_beam_group(&post));
                 let old=super::super::scan_lower_pitches_with_boundary_policy(&xml,None,&BTreeSet::new());
                 let surfaces=super::super::scan_lower_clef_surfaces(&xml).unwrap();
-                let baseline=super::super::solve_readability_course_with_boundaries(&xml,&surfaces,&old,&BTreeSet::new()).unwrap();
+                let time = super::super::TemporalPart::observe(&xml).unwrap();
+                let baseline=super::super::solve_readability_course_with_boundaries(&xml,&surfaces,&old,&BTreeSet::new(),&time).unwrap();
                 let pitches=super::super::scan_lower_pitches(&xml,None);
-                let selected=super::super::solve_readability_course(&xml,&surfaces,&pitches).unwrap();
+                let boundaries = super::observe(&xml);
+                let selected=super::super::solve_readability_course(&xml,&surfaces,&pitches,&time,&boundaries).unwrap();
                 assert!(selected.cost.total()<baseline.cost.total());
             }
         }

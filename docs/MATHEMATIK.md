@@ -1,6 +1,6 @@
 # Mathematik in EtuSchlopf
 
-**Wie lange soll eine gespielte Note im Notenbild stehen?** EtuSchlopf leitet die Dauer einer frei gespielten Klaviernote aus den Einsätzen, der Artikulation und den gleichzeitig laufenden Stimmen ab. Beim Vergleich mit einer Druckvorlage lassen sich Einsatz, Tonhöhe und geschriebene Dauer einzeln prüfen. Die folgenden Formeln beschreiben diese Entscheidungen und die Grenzen der Auswertung. [Aktuelle Referenzen](examples/README.md#aktuelle-referenzen) · [Aktueller Windows-Prüfbeleg](evidence/r2020/README.md)
+**Wie lange soll eine gespielte Note im Notenbild stehen?** EtuSchlopf leitet die Dauer einer frei gespielten Klaviernote aus den Einsätzen, der Artikulation und den gleichzeitig laufenden Stimmen ab. Beim Vergleich mit einer Druckvorlage lassen sich Einsatz, Tonhöhe und geschriebene Dauer einzeln prüfen. Die folgenden Formeln beschreiben diese Entscheidungen und die Grenzen der Auswertung. [Aktuelle Referenzen](examples/README.md#aktuelle-referenzen) · [Aktueller Windows-Prüfbeleg](evidence/r2022/README.md)
 
 Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die Kapitelnummer, etwa [Kapitel 3.2 · Folgeeinsatz oder Akkordende](#kapitel-3-2). Bestehende Kapitel behalten ihre Nummer.
 
@@ -65,7 +65,7 @@ Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die
 | --- | --- |
 | Wie gelangt eine frei gespielte Note in den gedruckten Takt? | [Kapitel 3 · Vom Anschlag zur geschriebenen Dauer](#kapitel-3) |
 | Welche Zusammenhänge beschreibt das Modell für Stimmen, Register und Seiten? | [Kapitel 4 · Verfahrensfamilien](#kapitel-4) und [Kapitel 6 · Formeln](#kapitel-6) |
-| Was wurde mit welchen Stücken geprüft? | [Kapitel 9 · Korpusprüfung](#kapitel-9) · [Windows-Vollkorpus r2020](evidence/r2020/README.md) |
+| Was wurde mit welchen Stücken geprüft? | [Kapitel 9 · Korpusprüfung](#kapitel-9) · [Windows-Vollkorpus r2022](evidence/r2022/README.md) |
 | Woran ließe sich als Nächstes arbeiten? | [Kapitel 10 · Nächste mathematische Vorhaben](#kapitel-10) |
 
 <a name="kapitel-1"></a>
@@ -827,7 +827,7 @@ Für den vollständigen zulässigen Plan $p$ gilt zusätzlich die vorab festgele
 
 **Gegenproben.** Ein strikter Mitlauf lässt weiterhin einen Plan mit getrennten Hälsen zu. Ein einzelner abweichender Notenwert kann die Rangfolge zweier vorgeschlagener Gruppen umkehren. Ein Gleichstand lässt den Befund offen. Die vierte Probe prüft die Dauer vor der Gruppenbildung bei gleichem Tastenüberhang und unterschiedlicher Linienbindung. [Vier synthetische Modellproben](../tests/rollenplan_mathe.rs) · [Gleicher Überhang und andere Linie](#kapitel-3-2a)
 
-**Lokaler Befund an Chopin p02.** Bei getrennter Prüfung der Stimmnummerntausche $1\leftrightarrow3$ im oberen und $2\leftrightarrow4$ im unteren System änderte MuseScore 4.7.5 unter Linux die Zuordnung zu Spuren. Oben änderten sich die Seite des Bindebogens bei Takt 5 und 6 sowie die Pausenlage in Takt 9. Unten rückten vier Pausen in den Bereich des Basssystems. Das Fähnchen am A blieb in beiden Proben sichtbar. Die Probe belegt die Spurwirkung für diese Fassungen und dieses Rendererprofil. Die gemeinsame Halsgruppe von Cis und A bleibt offen. [Notenbild und Ausgabedaten r2020](examples/README.md#notenbilder)
+**Lokaler Befund an Chopin p02.** Bei getrennter Prüfung der Stimmnummerntausche $1\leftrightarrow3$ im oberen und $2\leftrightarrow4$ im unteren System änderte MuseScore 4.7.5 unter Linux die Zuordnung zu Spuren. Oben änderten sich die Seite des Bindebogens bei Takt 5 und 6 sowie die Pausenlage in Takt 9. Unten rückten vier Pausen in den Bereich des Basssystems. Das Fähnchen am A blieb in beiden Proben sichtbar. Die Probe belegt die Spurwirkung für diese Fassungen und dieses Rendererprofil. Die gemeinsame Halsgruppe von Cis und A bleibt offen. [Render-MusicXML r2020](examples/chopin-op10-no3-p02-r2020.render.musicxml) · [PDF r2020](examples/chopin-op10-no3-p02-r2020.pdf)
 
 **Wiederholungsmessung am Schattenpfad.** Zwei Läufe mit dem unveränderten r2020-Quellstand und derselben Einspielung lieferten am selben Checkpoint-58-Schattenpunkt bytegleiche Render-MusicXML. MuseScore 4.7.5 ordnete in beiden Schattenfassungen alle 469 sichtbaren Notenköpfe eindeutig ihren Spuren zu. Die Rücklesetabellen waren bytegleich und wiesen je Notensystem vier technische Spuren aus. Die beiden zweiseitigen Schatten-PDFs waren bei 300 dpi pixelgleich. Ihre Dateiprüfsummen unterschieden sich. Der erste Lauf erzeugte den Schattenexport und brach bei der späteren XSD-Prüfung ab. Die Wiederholung mit den Laufzeit-Schemata endete mit Exitcode 0. Der Vergleich belegt die Wiederholbarkeit des vorhandenen r2020-Schattenpfads auf derselben Verarbeitungsstufe. Die neue Halsgruppenentscheidung bleibt ein Entwurf. [Schattenpfad](../src/pipeline_shards/pipeline_orchestrator_metric_final_notation_stage.rs#L810)
 
@@ -861,7 +861,7 @@ Zwei zeitlich gebundene Noten können im selben Ausgabekanal liegen, wenn eine z
 
 ## 9 Korpusprüfung und Grenzen
 
-Der unter Windows abgenommene Audit-Stand r2020 erzeugt aus MIDI und WAV 15 Partituren mit 58 PDF-Seiten. Die Galerie enthält die Original-PDFs dieses Laufs und die jeweils verwendete MusicXML. Verglichen mit der zuvor veröffentlichten Galerie sind die zugehörigen MusicXML-Quellen bytegleich. Alle 58 Seiten stimmen in Zeichengeometrie und im Pixelvergleich bei 300 dpi überein. [Windows-Prüfbeleg](evidence/r2020/README.md) · [Notenbilder](examples/README.md#notenbilder)
+Der unter Windows abgenommene Stand r2022 erzeugt aus MIDI und WAV 15 Partituren mit 58 PDF-Seiten. Die Galerie enthält die Original-PDFs dieses Laufs und die jeweils verwendete MusicXML. Die PDF-Quellen sind bytegleich zur r2020-Galerie. Alle 58 Seiten sind im Vergleich mit dieser Galerie bei 300 dpi pixelgleich. [Windows-Prüfbeleg](evidence/r2022/README.md) · [Notenbilder](examples/README.md#notenbilder)
 
 Der Windows-Lauf prüft die Ausführung und den PDF-Export. Ein musikalischer Vergleich mit einer Referenz bewertet zusätzlich Tonhöhe, Einsatz, geschriebene Dauer und sichtbare Notation. Für die Halskorrektur gilt der gesonderte Vorschau- und Übernahmenachweis. [Halsnachweis](#kapitel-6-18)
 
