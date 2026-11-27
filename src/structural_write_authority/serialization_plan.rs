@@ -1,5 +1,7 @@
 #[path = "cross_bar_source_sustain.rs"]
 mod cross_bar_source_sustain;
+#[path = "written_stem_tie_chains.rs"]
+mod written_stem_tie_chains;
 #[path = "ordered_received_beam_readback.rs"]
 mod ordered_received_beam_readback;
 #[path = "primary_beam_pair_readback.rs"]
@@ -10878,7 +10880,7 @@ pub(crate) fn transport_final_pdf_source_occurrence_continuation_through_horizon
     voice_plan: &FrozenSerializedVoicePlan,
     render_omissions: Option<&std::collections::BTreeSet<RenderPrunedFinalChordOmissionKey>>,
 ) -> io::Result<FinalPdfSourceOccurrenceContinuation> {
-    transport_final_pdf_source_occurrence_continuation_through_pitched_topology_neutral_write(
+    let bound = transport_final_pdf_source_occurrence_continuation_through_pitched_topology_neutral_write(
         source,
         observed_source_xml,
         target_xml,
@@ -10886,7 +10888,12 @@ pub(crate) fn transport_final_pdf_source_occurrence_continuation_through_horizon
         voice_plan,
         render_omissions,
         "authorized horizontal-layout materialization",
-    )
+    )?;
+    if let Ok(chains) = bound.authenticated_tie_stem_chains() {
+        let (groups, stems) = crate::pipeline::tied_stem_plan_counts(bound.xml(), &chains);
+        eprintln!("EngravingTiedStemPlan: stage=post_layout; chains={}; groups={groups}; stems={stems}; authority=none", chains.len());
+    }
+    Ok(bound)
 }
 
 pub(crate) fn transport_final_pdf_source_occurrence_continuation_through_committed_cross_staff_beam_projection(

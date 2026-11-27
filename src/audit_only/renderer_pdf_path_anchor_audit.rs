@@ -15,9 +15,51 @@ const BLACK: Rgb = [0.0; 3];
 pub(super) struct InkPage {
     pub(super) ties: Vec<Contour>,
     pub(super) strokes: Vec<Contour>,
+    pub(super) fills: Vec<FilledPath>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct FilledPath {
+    /// Conservative unclipped bounds, including the point reserve.
+    pub(super) bounds: [f64; 4],
+    pub(super) rgb: Rgb,
+    /// Convex, nondegenerate outline with enough room inside the active clip.
+    pub(super) quadrilateral: Option<[Point; 4]>,
+    /// Zero-based order among geometry and text paint operations on the page.
+    pub(super) order: usize,
+    points: Vec<Point>,
+    clip: [f64; 4],
+    even_odd: bool,
+}
+
+/// One qualified glyph show in stream order, before device-specific painting.
+pub(super) struct TextInk {
+    pub(super) font: String,
+    pub(super) cid: u16,
+    pub(super) fill: Rgb,
+    pub(super) marked_actual_text: bool,
+    frame: Frame,
+    clip: View,
+    page_height: f64,
+}
+
+impl TextInk {
+    /// Convert normalized em coordinates to physical page points (y down).
+    pub(super) fn transform(&self, x: f64, y: f64) -> Point {
+        self.frame.point(x, y, self.page_height)
+    }
+
+    /// The caller supplies every transformed outline control point.
+    pub(super) fn proves_unclipped(&self, points: &[Point], margin: f64) -> Result<()> {
+        ensure!(
+            self.clip.contains(View::around(points, margin)?),
+            "PDF glyph contour is not proven unclipped"
+        );
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub(super) struct Contour {
     pub(super) points: Vec<Point>,
     pub(super) width: f64,
@@ -25,6 +67,12 @@ pub(super) struct Contour {
     pub(super) fill: Option<Rgb>,
     cap: f64,
     join: f64,
+}
+
+impl Contour {
+    pub(super) fn is_butt_stroke(&self) -> bool {
+        self.fill.is_none() && self.points.len() == 2 && self.cap == 0.0
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -132,6 +180,57 @@ impl Frame {
     }
 }
 
+struct TextLine<'a> {
+    frame: Frame,
+    font: Option<(&'a str, f64)>,
+    glyph_shown: bool,
+}
+
+impl TextLine<'_> {
+    fn fresh() -> Self {
+        Self {
+            frame: Frame::IDENTITY,
+            font: None,
+            glyph_shown: false,
+        }
+    }
+
+    fn set_frame(&mut self, frame: Frame) {
+        self.frame = frame;
+        self.glyph_shown = false;
+    }
+
+    fn show(
+        &mut self,
+        code: &str,
+        paint: Paint,
+        page_height: f64,
+        marked_actual_text: bool,
+    ) -> Result<TextInk> {
+        ensure!(
+            code.len() == 6 && !self.glyph_shown,
+            "unproved PDF single-glyph position or text advance"
+        );
+        let Some((font, size)) = self.font else {
+            bail!("PDF glyph has no bound font")
+        };
+        let frame = paint
+            .frame
+            .multiply([self.frame.x, 0.0, 0.0, self.frame.y, self.frame.dx, self.frame.dy])?
+            .multiply([size, 0.0, 0.0, size, 0.0, 0.0])?;
+        self.glyph_shown = true;
+        Ok(TextInk {
+            font: font.to_owned(),
+            cid: u16::from_str_radix(&code[1..5], 16)?,
+            fill: paint.fill,
+            marked_actual_text,
+            frame,
+            clip: paint.clip,
+            page_height,
+        })
+    }
+}
+
 #[derive(Clone, Copy)]
 struct Paint {
     frame: Frame,
@@ -185,6 +284,36 @@ fn is_delimiter(c: u8) -> bool {
     b"()<>[]{}/%".contains(&c)
 }
 
+fn trim_pdf_start(stream: &str) -> &str {
+    stream.trim_start_matches(|c: char| c.is_ascii() && is_pdf_space(c as u8))
+}
+
+fn actual_text_dictionary_len(stream: &str) -> Result<usize> {
+    let property = trim_pdf_start(&stream[2..]);
+    let value = property
+        .strip_prefix("/ActualText")
+        .ok_or_else(|| anyhow::anyhow!("unsupported PDF marked-content property"))?;
+    let value = trim_pdf_start(value);
+    let rest = if let Some(hex) = value.strip_prefix('<') {
+        let (digits, rest) = hex
+            .split_once('>')
+            .ok_or_else(|| anyhow::anyhow!("open PDF ActualText hex string"))?;
+        ensure!(
+            digits.bytes().all(|c| c.is_ascii_hexdigit() || is_pdf_space(c)),
+            "invalid PDF ActualText hex string"
+        );
+        rest
+    } else {
+        value
+            .strip_prefix("()")
+            .ok_or_else(|| anyhow::anyhow!("unsupported PDF ActualText value"))?
+    };
+    let rest = trim_pdf_start(rest)
+        .strip_prefix(">>")
+        .ok_or_else(|| anyhow::anyhow!("unsupported PDF marked-content dictionary"))?;
+    Ok(stream.len() - rest.len())
+}
+
 struct Operations<'a> {
     stream: &'a str,
 }
@@ -199,9 +328,7 @@ impl<'a> Operations<'a> {
     fn next(&mut self) -> Result<Option<(&'a str, Vec<&'a str>)>> {
         let mut args = Vec::with_capacity(6);
         loop {
-            self.stream = self
-                .stream
-                .trim_start_matches(|c: char| c.is_ascii() && is_pdf_space(c as u8));
+            self.stream = trim_pdf_start(self.stream);
             let Some(first) = self.stream.as_bytes().first().copied() else {
                 ensure!(args.is_empty(), "PDF operands without operator");
                 return Ok(None);
@@ -212,6 +339,7 @@ impl<'a> Operations<'a> {
                     self.stream = &self.stream[end..];
                     continue;
                 }
+                b'<' if self.stream.starts_with("<<") => actual_text_dictionary_len(self.stream)?,
                 b'<' => {
                     let end = self
                         .stream
@@ -336,12 +464,86 @@ fn top_first(a: Point, b: Point) -> [Point; 2] {
     if a.1 <= b.1 { [a, b] } else { [b, a] }
 }
 
+fn is_convex_quadrilateral(points: [Point; 4], margin: f64) -> bool {
+    let turns = [0, 1, 2, 3].map(|i| {
+        let (a, b, c) = (points[i], points[(i + 1) % 4], points[(i + 2) % 4]);
+        let (ux, uy) = (b.0 - a.0, b.1 - a.1);
+        let (vx, vy) = (c.0 - b.0, c.1 - b.1);
+        let cross = ux.mul_add(vy, -uy * vx);
+        // With margin at each vertex, each edge can vary by twice margin.
+        // A smaller turn has no proven sign within the point reserve.
+        let cross_margin = 2.0 * margin * (ux.hypot(uy) + vx.hypot(vy) + 2.0 * margin);
+        (cross, cross_margin)
+    });
+    turns.iter().all(|&(turn, reserve)| turn > reserve)
+        || turns.iter().all(|&(turn, reserve)| turn < -reserve)
+}
+
+fn filled_path(
+    path: &[Segment],
+    paint: Paint,
+    margin: f64,
+    order: usize,
+    even_odd: bool,
+) -> Result<Option<FilledPath>> {
+    let mut points = Vec::new();
+    for segment in path {
+        match segment {
+            Segment::Start(point) | Segment::Line(point) => points.push(*point),
+            Segment::Close => {}
+            Segment::Cubic(_) => bail!("unclassified PDF cubic fill"),
+        }
+    }
+    if points.is_empty() {
+        return Ok(None);
+    }
+    if points.len() > 1 && points.last() == points.first() {
+        points.pop();
+    }
+    let bounds = View::around(&points, margin)?;
+    let quadrilateral = <[Point; 4]>::try_from(points.as_slice())
+        .ok()
+        .filter(|points| paint.clip.contains(bounds) && is_convex_quadrilateral(*points, margin));
+    Ok(Some(FilledPath {
+        bounds: bounds.0,
+        rgb: paint.fill,
+        quadrilateral,
+        order,
+        points,
+        clip: paint.clip.0,
+        even_odd,
+    }))
+}
+
 pub(super) fn read_ink(
     content: &[u8],
     page_width_pt: f64,
     page_height_pt: f64,
     qualified_state: &str,
     margin_pt: f64,
+) -> Result<InkPage> {
+    read_ink_impl(content, page_width_pt, page_height_pt, qualified_state, margin_pt, None)
+}
+
+pub(super) fn read_head_text(
+    content: &[u8],
+    page_width_pt: f64,
+    page_height_pt: f64,
+    qualified_state: &str,
+    margin_pt: f64,
+) -> Result<Vec<TextInk>> {
+    let mut glyphs = Vec::new();
+    read_ink_impl(content, page_width_pt, page_height_pt, qualified_state, margin_pt, Some(&mut glyphs))?;
+    Ok(glyphs)
+}
+
+fn read_ink_impl(
+    content: &[u8],
+    page_width_pt: f64,
+    page_height_pt: f64,
+    qualified_state: &str,
+    margin_pt: f64,
+    mut glyphs: Option<&mut Vec<TextInk>>,
 ) -> Result<InkPage> {
     ensure!(
         page_width_pt > 0.0
@@ -367,9 +569,13 @@ pub(super) fn read_ink(
     let mut page = InkPage {
         ties: Vec::new(),
         strokes: Vec::new(),
+        fills: Vec::new(),
     };
+    let mut paint_order = 0;
     let mut pending_clip = false;
     let mut text = false;
+    let mut marked_text = false;
+    let mut text_line = TextLine::fresh();
     let mut operations = Operations::new(content)?;
     while let Some((op, args)) = operations.next()? {
         ensure!(
@@ -377,11 +583,11 @@ pub(super) fn read_ink(
             "unsupported PDF clipping sequence"
         );
         ensure!(
-            !text || matches!(op, "Tf" | "Tm" | "Td" | "Tj" | "ET"),
+            !text || matches!(op, "Tf" | "Tm" | "Td" | "Tj" | "BDC" | "EMC" | "ET"),
             "unsupported PDF operation inside text"
         );
         ensure!(
-            path.is_empty() || matches!(op, "l" | "c" | "h" | "W*" | "S" | "B*" | "f*" | "n"),
+            path.is_empty() || matches!(op, "l" | "c" | "h" | "W*" | "S" | "B*" | "f" | "F" | "f*" | "n"),
             "unsupported PDF operation inside a path"
         );
         match op {
@@ -472,7 +678,7 @@ pub(super) fn read_ink(
                 paint.clip = paint.clip.intersect(rectangle(&path)?)?;
                 pending_clip = true;
             }
-            "S" | "B*" | "f*" | "n" => {
+            "S" | "B*" | "f" | "F" | "f*" | "n" => {
                 numbers::<0>(&args)?;
                 if op == "B*" {
                     let [
@@ -509,19 +715,41 @@ pub(super) fn read_ink(
                         None,
                         margin_pt,
                     )?);
-                } else {
+                } else if op == "n" {
                     ensure!(
                         path.iter().all(|s| !matches!(s, Segment::Cubic(_))),
                         "unclassified PDF cubic path"
                     );
+                } else if let Some(fill) = filled_path(&path, paint, margin_pt, paint_order, op == "f*")? {
+                    page.fills.push(fill);
+                }
+                if op != "n" {
+                    paint_order += 1;
                 }
                 pending_clip = false;
                 path.clear();
             }
             "BT" | "ET" => {
                 numbers::<0>(&args)?;
-                ensure!((op == "ET") == text, "unbalanced PDF text state");
+                ensure!((op == "ET") == text && !marked_text, "unbalanced PDF text state");
                 text = !text;
+                text_line = TextLine::fresh();
+            }
+            "BDC" => {
+                let ["/Span", dictionary] = args.as_slice() else {
+                    bail!("unsupported PDF marked-content operands");
+                };
+                ensure!(
+                    text && !marked_text && dictionary.starts_with("<<"),
+                    "unsupported PDF marked-content scope"
+                );
+                // ActualText replaces extracted text. Its glyph shows still paint.
+                marked_text = true;
+            }
+            "EMC" => {
+                numbers::<0>(&args)?;
+                ensure!(text && marked_text, "unbalanced PDF marked-content scope");
+                marked_text = false;
             }
             "Tf" | "Tm" | "Td" | "Tj" => {
                 ensure!(text, "PDF text operation outside text");
@@ -530,25 +758,36 @@ pub(super) fn read_ink(
                         let [font, size] = args.as_slice() else {
                             bail!("invalid PDF font selection");
                         };
-                        ensure!(
-                            font.starts_with('/') && pdf_number(size)? > 0.0,
-                            "invalid PDF font selection"
-                        );
+                        let size = pdf_number(size)?;
+                        ensure!(font.starts_with('/') && size > 0.0, "invalid PDF font selection");
+                        text_line.font = Some((font, size));
                     }
                     "Tm" => {
-                        numbers::<6>(&args)?;
+                        let operands = numbers::<6>(&args)?;
+                        if glyphs.is_some() {
+                            text_line.set_frame(Frame::IDENTITY.multiply(operands)?);
+                        }
                     }
                     "Td" => {
-                        numbers::<2>(&args)?;
+                        let [x, y] = numbers::<2>(&args)?;
+                        if glyphs.is_some() {
+                            text_line.set_frame(text_line.frame.multiply([1.0, 0.0, 0.0, 1.0, x, y])?);
+                        }
                     }
                     _ => {
                         let [code] = args.as_slice() else {
                             bail!("invalid PDF glyph code");
                         };
                         ensure!(
-                            code.starts_with('<') && (code.len() - 2).is_multiple_of(4),
+                            code.starts_with('<')
+                                && !code.starts_with("<<")
+                                && (code.len() - 2).is_multiple_of(4),
                             "invalid PDF glyph code"
                         );
+                        if let Some(output) = glyphs.as_deref_mut() {
+                            output.push(text_line.show(code, paint, page_height_pt, marked_text)?);
+                        }
+                        paint_order += 1;
                     }
                 }
             }
@@ -556,7 +795,7 @@ pub(super) fn read_ink(
         }
     }
     ensure!(
-        stack.is_empty() && path.is_empty() && !pending_clip && !text,
+        stack.is_empty() && path.is_empty() && !pending_clip && !text && !marked_text,
         "open PDF state at page end"
     );
     Ok(page)
@@ -724,18 +963,34 @@ pub(super) fn svg_ties(svg: &str) -> Result<Vec<Contour>> {
     Ok(ties)
 }
 
-pub(super) fn svg_stems(svg: &str) -> Result<Vec<Contour>> {
+pub(super) fn svg_vertical_strokes(svg: &str) -> Result<(Vec<Contour>, Vec<usize>)> {
+    let (vertical, stems, _) = svg_strokes_by_role(svg, true)?;
+    Ok((vertical, stems))
+}
+
+pub(super) fn svg_stroke_roles(svg: &str) -> Result<(Vec<Contour>, Vec<usize>, Vec<Contour>)> {
+    svg_strokes_by_role(svg, false)
+}
+
+fn svg_strokes_by_role(svg: &str, require_known_polylines: bool) -> Result<(Vec<Contour>, Vec<usize>, Vec<Contour>)> {
     let doc = Document::parse(svg)?;
     let root = doc.root_element();
     let (sx, sy) = physically_scaled_svg(root)?;
+    let mut strokes = Vec::new();
     let mut stems = Vec::new();
-    for node in root
-        .descendants()
-        .filter(|node| node.attribute("class") == Some("Stem"))
-    {
+    let mut staff_lines = Vec::new();
+    for node in root.descendants().filter(|node| {
+        (require_known_polylines && node.has_tag_name("polyline"))
+            || matches!(
+                node.attribute("class"),
+                Some("Stem" | "BarLine" | "StaffLines")
+            )
+    }) {
+        let kind = node.attribute("class");
         ensure!(
             node.parent() == Some(root)
                 && node.has_tag_name(("http://www.w3.org/2000/svg", "polyline"))
+                && matches!(kind, Some("Stem" | "BarLine" | "StaffLines"))
                 && node.attributes().all(|a| a.namespace().is_none()
                     && matches!(
                         a.name(),
@@ -743,33 +998,50 @@ pub(super) fn svg_stems(svg: &str) -> Result<Vec<Contour>> {
                     ))
                 && node.attribute("stroke-linejoin") == Some("bevel")
                 && node.attribute("fill") == Some("none"),
-            "unsupported SVG stem paint style"
+            "unsupported SVG stroke paint style"
         );
         let required = |key| {
             node.attribute(key)
-                .ok_or_else(|| anyhow::anyhow!("missing SVG stem attribute {key}"))
+                .ok_or_else(|| anyhow::anyhow!("missing SVG stroke attribute {key}"))
         };
         let coordinates = required("points")?
             .split(|c: char| c == ',' || c.is_ascii_whitespace())
             .filter(|v| !v.is_empty())
             .collect::<Vec<_>>();
         let [a, b, c, d] = numbers(&coordinates)?;
-        ensure!(a == c && b != d, "unsupported SVG stem direction");
+        ensure!(
+            if kind == Some("StaffLines") {
+                a != c && b == d
+            } else {
+                a == c && b != d
+            },
+            "unsupported SVG stroke orientation"
+        );
         let points = top_first((a * sx, b * sy), (c * sx, d * sy)).to_vec();
         View::around(&points, 0.0)?;
         let width = pdf_number(required("stroke-width")?)? * sx;
-        ensure!(width.is_finite() && width > 0.0, "invalid SVG stem width");
+        ensure!(width.is_finite() && width > 0.0, "invalid SVG stroke width");
         let stroke = svg_rgb(required("stroke")?)?;
-        stems.push(Contour {
+        // MuseScore may join adjacent staff lines in SVG while drawing each
+        // measure's portion separately in the PDF. Neither is a stem.
+        let contour = Contour {
             points,
             width,
             stroke,
             fill: None,
             cap: 0.0,
             join: 2.0,
-        });
+        };
+        if kind == Some("StaffLines") {
+            staff_lines.push(contour);
+        } else {
+            if kind == Some("Stem") {
+                stems.push(strokes.len());
+            }
+            strokes.push(contour);
+        }
     }
-    Ok(stems)
+    Ok((strokes, stems, staff_lines))
 }
 
 fn matches_contour(expected: &Contour, actual: &Contour, margin: f64) -> bool {
@@ -839,6 +1111,40 @@ mod tests {
     }
 
     #[test]
+    fn filled_paths_retain_paint_order_and_only_certify_unclipped_convex_quadrilaterals() {
+        let content = "q /CSp cs
+            0 0 m 200 0 l 200 200 l 0 200 l h W* n
+            1 1 1 scn 0 0 m 200 0 l 200 200 l 0 200 l h f*
+            0 0 0 scn 25 28 m 30 30 l 30 31 l 25 29 l 25 28 l h f*
+            BT /F12 331 Tf 1 0 0 -1 0 0 Tm 0 0 Td <0001> Tj ET
+            35 35 m 45 36 l 45 37 l 35 36 l f
+            20 20 m 30 30 l 20 30 l 30 20 l F
+            25 30 m 32 30 l 26 40 l f*
+            Q";
+        let ink = read(content).unwrap();
+        let [paper, closed, implicit, crossed, triangle] = ink.fills.as_slice() else {
+            panic!("wrong fill inventory")
+        };
+        assert_eq!(paper.rgb, [1.0; 3]);
+        assert_eq!(paper.order, 0);
+        assert!(paper.quadrilateral.is_none());
+        assert_eq!(paper.clip, [0.0, 0.0, 200.0, 200.0]);
+        assert!(paper.even_odd);
+        assert_eq!(closed.rgb, BLACK);
+        assert_eq!(closed.order, 1);
+        assert_eq!(closed.bounds, [25.0 - RESERVE, 169.0 - RESERVE, 30.0 + RESERVE, 172.0 + RESERVE]);
+        assert_eq!(closed.quadrilateral, Some([(25.0, 172.0), (30.0, 170.0), (30.0, 169.0), (25.0, 171.0)]));
+        assert_eq!(closed.points, closed.quadrilateral.unwrap());
+        assert_eq!(implicit.order, 3);
+        assert!(implicit.quadrilateral.is_some());
+        assert!(!implicit.even_odd);
+        assert!(crossed.quadrilateral.is_none());
+        assert_eq!(triangle.bounds, [25.0 - RESERVE, 160.0 - RESERVE, 32.0 + RESERVE, 170.0 + RESERVE]);
+        assert!(triangle.quadrilateral.is_none());
+        assert!(read(&content.replace("32 30 l", "32 30 29 32 28 35 c")).is_err());
+    }
+
+    #[test]
     fn pdf_contour_rejects_mutations_despite_same_endpoints_and_envelope() {
         let genuine = read(PAGE).unwrap();
         let moved = read(&PAGE.replace("1600 775 1200 775", "1600 800 1200 800")).unwrap();
@@ -890,9 +1196,99 @@ mod tests {
         assert_eq!(colored_ink.ties[0].fill, Some(color));
         bind_contours(&plain.ties, &colored_ink.ties, RESERVE).unwrap();
         assert_eq!(plain.strokes[0].points[0], (120.0, 60.0));
+        assert!(plain.strokes[0].is_butt_stroke());
+        assert!(!plain.ties[0].is_butt_stroke());
         assert!(same_except_rgb(PAGE.as_bytes(), PAGE.replace("8 w", "9 w").as_bytes()).is_err());
         assert!(
             same_except_rgb(PAGE.as_bytes(), PAGE.replace("<0001>", "<0002>").as_bytes()).is_err()
         );
+    }
+
+    #[test]
+    fn positioned_text_binds_the_cid_font_paint_transform_and_clip() {
+        let text = "q /CSp cs 0.2 0.1 0.3 scn
+            0.05 0 0 -0.06 0 200 cm
+            0 0 m 3000 0 l 3000 3100 l 0 3100 l h W* n
+            BT /F12 331 Tf 1 0 0 -1 800 1200 Tm 200 -100 Td <001F> Tj
+            /F13 100 Tf 100 40 Td <0002> Tj ET Q";
+        let ink = read_head_text(text.as_bytes(), 200.0, 200.0, PROFILE, RESERVE).unwrap();
+        let [first, second] = ink.as_slice() else { panic!("expected both positioned glyphs") };
+        assert_eq!((&*first.font, first.cid, first.fill), ("/F12", 31, [0.2, 0.1, 0.3]));
+        assert_eq!((&*second.font, second.cid), ("/F13", 2));
+        let close = |actual: Point, expected: Point| {
+            assert!((actual.0 - expected.0).abs() < 1e-9);
+            assert!((actual.1 - expected.1).abs() < 1e-9);
+        };
+        close(first.transform(0.0, 0.0), (50.0, 78.0));
+        close(first.transform(1.0, 1.0), (66.55, 58.14));
+        close(second.transform(0.0, 0.0), (55.0, 75.6));
+        assert!(first.proves_unclipped(&[first.transform(0.0, 0.0)], RESERVE).is_ok());
+        assert!(first.proves_unclipped(&[first.transform(10.0, 0.0)], RESERVE).is_err());
+    }
+
+    #[test]
+    fn actual_text_metadata_preserves_each_positioned_show() {
+        let content = "BT /F12 25 Tf 1 0 0 -1 40 70 Tm 8 0 Td <0001> Tj
+            1 0 0 -1 40 70 Tm /Span << /ActualText <> >> BDC 12 0 Td <0001> Tj EMC ET";
+        let unmarked = content.replace("/Span << /ActualText <> >> BDC ", "").replace(" EMC", "");
+        let control = read_head_text(unmarked.as_bytes(), 200.0, 200.0, PROFILE, RESERVE).unwrap();
+
+        for rendering in [
+            content.to_owned(),
+            content.replace("<> >>", "() >>"),
+            content.replace("<< /ActualText <> >>", "<</ActualText<FE FF 26 69>>>")
+        ] {
+            let observed = read_head_text(rendering.as_bytes(), 200.0, 200.0, PROFILE, RESERVE).unwrap();
+            assert_eq!(observed.len(), 2);
+            for (actual, plain) in observed.iter().zip(&control) {
+                assert_eq!(
+                    (&actual.font, actual.cid, actual.fill),
+                    (&plain.font, plain.cid, plain.fill)
+                );
+                assert_eq!(actual.transform(0.4, 0.8), plain.transform(0.4, 0.8));
+            }
+            assert!(!observed[0].marked_actual_text);
+            assert!(observed[1].marked_actual_text);
+            assert_eq!(observed[0].transform(0.0, 0.0), (48.0, 130.0));
+            assert_eq!(observed[1].transform(0.0, 0.0), (52.0, 130.0));
+            assert!(same_except_rgb(rendering.as_bytes(), unmarked.as_bytes()).is_err());
+        }
+    }
+
+    #[test]
+    fn unsupported_actual_text_scopes_do_not_hide_unproved_geometry() {
+        let begin = "/Span << /ActualText <> >> BDC";
+        let valid = format!("BT /F1 25 Tf {begin} <0001> Tj EMC ET");
+        for invalid in [
+            valid.replace("EMC ", ""),
+            valid.replace("EMC", "EMC EMC"),
+            valid.replace(begin, &format!("{begin} {begin}")),
+            valid.replace("/Span", "/OC"),
+            valid.replace("/ActualText <>", "/ActualText <> /OC 1"),
+            valid.replace("/ActualText <>", "/ActualText <x>"),
+            valid.replace("<0001> Tj", "<< /ActualText <> >> Tj"),
+            valid.replace("<0001> Tj", "3 Tr <0001> Tj"),
+            format!("{begin} BT /F1 25 Tf <0001> Tj ET EMC"),
+        ] {
+            assert!(read(&invalid).is_err(), "{invalid}");
+            assert!(
+                read_head_text(invalid.as_bytes(), 200.0, 200.0, PROFILE, RESERVE).is_err(),
+                "{invalid}"
+            );
+        }
+    }
+
+    #[test]
+    fn glyph_readback_rejects_unproved_text_positions() {
+        let cases = [
+            PAGE.replace("<0001> Tj", "<00010002> Tj"),
+            PAGE.replace("<0001> Tj", "<0001> Tj <0002> Tj"),
+            PAGE.replace("/F12 331 Tf", ""),
+            PAGE.replace("1 0 0 -1 0 0 Tm", "1 0.25 0 -1 0 0 Tm"),
+        ];
+        for case in cases {
+            assert!(read(&case).is_ok(), "path probe must remain unchanged");
+            assert!(read_head_text(case.as_bytes(), 200.0, 200.0, PROFILE, RESERVE).is_err());
+        }
     }
 }

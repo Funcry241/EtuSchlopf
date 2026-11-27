@@ -23,6 +23,10 @@ pub(crate) mod original_beam_diagnostics;
 pub mod destructive_carrier_effect_inventory;
 pub(crate) mod destructive_edit_attribution;
 pub mod renderer_system_break_readback;
+#[cfg(test)]
+pub(crate) mod tied_stem_ink_roster;
+#[cfg(test)]
+pub(crate) mod tied_stem_pair_decision;
 pub(crate) mod engraving_native_export_proof;
 pub mod phrase_boundary_evidence;
 pub(crate) mod source_event_causal_ledger;

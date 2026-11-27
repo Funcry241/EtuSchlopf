@@ -2,6 +2,9 @@ use crate::clef_readability_observation::{PianoClef, observe_pitch};
 use roxmltree::{Document, Node};
 use std::collections::BTreeMap;
 
+#[path = "notation_final_stems_tie_chain.rs"]
+mod tie_chain;
+
 pub(super) type StemEdit = (usize, usize, &'static str);
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -38,6 +41,8 @@ struct Head {
     stem: Option<StemEdit>,
     written_pitch: Option<i64>,
     ties: Option<StemTies>,
+    source: (usize, usize),
+    ordinary_stem: bool,
 }
 
 struct Attack<'a> {
@@ -516,11 +521,17 @@ fn collect_attacks<'a>(
             None if beams.next().is_some() => Some("unbound"),
             None => None,
         };
+        let source = node.range();
         let head = Head {
             distance: printed.map_or(0, |(_, distance)| distance),
             stem,
             written_pitch: pitch.map(|pitch| PianoClef::TrebleG2.distance_from_middle_line(pitch)),
             ties: stem_ties(node),
+            source: (source.start, source.end),
+            ordinary_stem: child(node, "cue").is_none()
+                && child(node, "notehead").is_none_or(|head| head.text().map(str::trim) == Some("normal"))
+                && matches!(field(node, "type"), Some("half" | "quarter" | "eighth" | "16th"
+                    | "32nd" | "64th" | "128th" | "256th" | "512th" | "1024th")),
         };
         let clef = printed.map(|(clef, _)| clef);
         if is_chord {
@@ -1202,6 +1213,13 @@ pub(super) fn plan_countervoice_stem_directions(xml: &str) -> Vec<StemEdit> {
 
 pub(super) fn plan_final_stem_directions(xml: &str) -> Vec<StemEdit> {
     plan_stem_directions(xml, measure_edits)
+}
+
+pub(super) fn plan_tied_stem_chains(
+    xml: &str,
+    authenticated_chains: &[Vec<std::ops::Range<usize>>],
+) -> Vec<Vec<StemEdit>> {
+    tie_chain::plan(xml, authenticated_chains)
 }
 
 fn plan_stem_directions(xml: &str, decide: impl Fn(&[Group<'_>], &[PositionedSymbol]) -> Vec<StemEdit>) -> Vec<StemEdit> {

@@ -1,6 +1,6 @@
 kind=EtuSchlopfTake
 version=0.10.1839
-revision=r2014
-name=PDFBeleg
-parent_revision=r2013
+revision=r2020
+name=Halsnachweis
+parent_revision=r2019
 change_class=AuditOnly

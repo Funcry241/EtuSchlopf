@@ -69,7 +69,7 @@ def validated_files(public, revision):
     return files
 
 
-def prepare(public, build, downloads, revision="r2014"):
+def prepare(public, build, downloads, revision):
     files = validated_files(public, revision)
     if build.exists() or downloads.exists():
         raise FileExistsError("Use empty paths for the assembled build and download")
@@ -85,8 +85,11 @@ def prepare(public, build, downloads, revision="r2014"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("public", type=Path, help="Public r2014 checkout")
+    parser.add_argument("public", type=Path, help="Public checkout with the accepted source evidence")
     parser.add_argument("build", type=Path, help="New native build directory")
     parser.add_argument("downloads", type=Path, help="New source archive directory")
+    parser.add_argument("--revision", required=True, help="Accepted source revision, for example r2020")
     args = parser.parse_args()
-    prepare(args.public, args.build, args.downloads)
+    if not re.fullmatch(r"r[0-9]+", args.revision):
+        parser.error("--revision must have the form r<number>")
+    prepare(args.public, args.build, args.downloads, args.revision)

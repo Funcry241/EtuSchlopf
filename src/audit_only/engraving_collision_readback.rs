@@ -14,6 +14,10 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+#[cfg(test)]
+#[path = "tied_stem_render_review.rs"]
+mod tied_stem_render_review;
+
 struct Shadow(PathBuf);
 
 impl Shadow {
@@ -492,5 +496,188 @@ mod tests {
             before.each_ref().map(String::as_str),
             after.each_ref().map(String::as_str),
         );
+    }
+
+    #[test]
+    #[ignore = "requires ETUSCHLOPF_PDF_FOREGROUND_INPUT pointing to an exported PDF"]
+    fn exported_pdf_foreground_text_is_observed() {
+        use crate::audit_only::renderer_system_break_readback::pdf_source_anchor_audit::probe_pdf_foreground;
+
+        let input = std::env::var_os("ETUSCHLOPF_PDF_FOREGROUND_INPUT").expect("exported PDF path");
+        let input = fs::read(input).expect("read exported PDF");
+        let pages = probe_pdf_foreground(&input).expect("qualified PDF text paint");
+        assert!(pages.iter().any(|page| !page.is_empty()), "PDF has no proven text ink");
+        for (index, page) in pages.iter().enumerate() {
+            println!("PDF page {}: {} nonempty glyph shows", index + 1, page.len());
+            for glyph in page.iter().filter(|glyph| glyph.marked_actual_text) {
+                println!("  ActualText glyph {} CID {} in page points: {:?}", glyph.font, glyph.cid, glyph.bounds);
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "requires ETUSCHLOPF_PDF_RENDERER pointing to a MuseScore converter"]
+    fn synthetic_two_measure_tied_stem_previews_are_bound_to_pdf() -> anyhow::Result<()> {
+        use super::tied_stem_render_review::{PdfReviewFrame, review_tied_stem_previews};
+
+        struct SyntheticDrawnFrame {
+            source: String,
+            marked_source: String,
+            pdf: Vec<u8>,
+            marked_pdf: Vec<u8>,
+            svg: Vec<String>,
+        }
+
+        impl SyntheticDrawnFrame {
+            fn preview_frame(&self) -> PdfReviewFrame<'_> {
+                PdfReviewFrame { source: &self.source, marked_source: &self.marked_source,
+                    pdf: &self.pdf, marked_pdf: &self.marked_pdf, svg: &self.svg }
+            }
+        }
+
+        let executable = std::env::var("ETUSCHLOPF_PDF_RENDERER")?;
+        let shadow = Shadow::new().expect("disposable synthetic preview directory");
+        let paint_note = |side: &str, first: bool, painted: bool| {
+            let attributes = |code| if painted { format!(r##" color="#{code}""##) } else { String::new() };
+            let (tie, head_rgb, stem_rgb) = if first { ("start", "310001", "320001") }
+                else { ("stop", "310002", "320002") };
+            let (head, stem) = (attributes(head_rgb), attributes(stem_rgb));
+            let bow = if first { attributes("330001") } else { String::new() };
+            format!(r#"<note{head}><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration>
+                       <tie type="{tie}"/><voice>1</voice><type>quarter</type><stem{stem}>{side}</stem>
+                       <notations><tied type="{tie}"{bow}/></notations></note>"#)
+        };
+        let score = |side: &str, painted| {
+            let first = paint_note(side, true, painted);
+            let second = paint_note(side, false, painted);
+            let (a, b) = (1, 2);
+            format!(r#"<score-partwise version="4.0"><part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+            <part id="P1"><measure number="{a}"><attributes><divisions>1</divisions>
+            <time><beats>1</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef>
+            </attributes>{first}</measure><measure number="{b}">{second}</measure></part></score-partwise>"#)
+        };
+        let draw_frame = |side: &str| -> anyhow::Result<SyntheticDrawnFrame> {
+            let folder = shadow.0.join(side);
+            fs::create_dir(&folder)?;
+            let source = score(side, false);
+            let marked_source = score(side, true);
+            let plain_path = folder.join("plain.musicxml");
+            let marked_path = folder.join("marked.musicxml");
+            fs::write(&plain_path, &source)?;
+            fs::write(&marked_path, &marked_source)?;
+            for (input, name) in [(&plain_path, "plain.pdf"), (&plain_path, "plain.svg"), (&marked_path, "marked.pdf")] {
+                let output = folder.join(name);
+                let option = render_command_variants(&absolute_path(input), &absolute_path(&output)).remove(0);
+                let run = run_renderer_command(&executable, &option.args, None)?;
+                anyhow::ensure!(run.code == Some(0), "synthetic preview render of {name} failed");
+            }
+            Ok(SyntheticDrawnFrame { source, marked_source, pdf: fs::read(folder.join("plain.pdf"))?,
+                marked_pdf: fs::read(folder.join("marked.pdf"))?, svg: pages(&folder, "plain").expect("synthetic preview pages") })
+        };
+        let baseline = draw_frame("up")?;
+        let candidate = draw_frame("down")?;
+        let marks = "group\tfrom_measure\tfrom_note\tto_measure\tto_note\tfrom_head\tfrom_stem\ttie\tto_head\tto_stem\n\
+                     1\t1\t0\t2\t0\t#310001\t#320001\t#330001\t#310002\t#320002";
+        let report = review_tied_stem_previews(&baseline.preview_frame(), &[(1, candidate.preview_frame())],
+            &candidate.preview_frame(), marks)?;
+        assert!(report.contains("owned=Proven"), "{report}");
+        assert!(report.contains("stem_changes=2 scoped=true"), "{report}");
+        Ok(())
+    }
+
+    #[test]
+    #[ignore = "requires ETUSCHLOPF_PDF_RENDERER pointing to a MuseScore converter"]
+    fn tied_stem_correction_renders_across_page_breaks() {
+        use crate::pipeline::notation::project_tied_stem_chain_probe;
+        use crate::pipeline::svg_notation_geometry::{
+            Side,
+            collision_observation::{
+                pdf_head_binding::{Attachment, prove_bound_heads},
+                source_anchor_audit::split_tie::{SplitLayout, SvgFrame, assert_split_transition},
+            },
+        };
+
+        let executable = std::env::var("ETUSCHLOPF_PDF_RENDERER").expect("MuseScore executable");
+        let folder = Shadow::new().expect("disposable audit directory");
+        let convert = |input: &Path, output: &Path| {
+            let option = render_command_variants(&absolute_path(input), &absolute_path(output)).remove(0);
+            let run = run_renderer_command(&executable, &option.args, None).unwrap();
+            assert_eq!(run.code, Some(0), "conversion for {}", output.display());
+        };
+        let attachments = |side| [
+            Attachment { head: [0x31, 0x10, 1], stem: [0x31, 0x10, 2], side },
+            Attachment { head: [0x31, 0x10, 3], stem: [0x31, 0x10, 4], side },
+            Attachment { head: [0x31, 0x10, 5], stem: [0x31, 0x10, 6], side: Side::Below },
+        ];
+        let draw = |name: &str, score: &str, painted: &str, side| {
+            let dir = folder.0.join(name);
+            fs::create_dir(&dir).unwrap();
+            let plain_xml = dir.join("plain.musicxml");
+            let marked_xml = dir.join("painted.musicxml");
+            let native = dir.join("painted.mscx");
+            fs::write(&plain_xml, score).unwrap();
+            fs::write(&marked_xml, painted).unwrap();
+            for (input, target) in [
+                (&plain_xml, "plain.svg"),
+                (&marked_xml, "painted.svg"),
+                (&marked_xml, "painted.mscx"),
+                (&native, "reread.svg"),
+                (&plain_xml, "plain.pdf"),
+                (&marked_xml, "painted.pdf"),
+            ] {
+                convert(input, &dir.join(target));
+            }
+            assert_eq!(fs::read_to_string(&plain_xml).unwrap(), score);
+            assert_eq!(fs::read_to_string(&marked_xml).unwrap(), painted);
+            let plain = pages(&dir, "plain").unwrap();
+            let painted = pages(&dir, "painted").unwrap();
+            prove_bound_heads(
+                &plain.iter().map(String::as_str).collect::<Vec<_>>(),
+                &painted.iter().map(String::as_str).collect::<Vec<_>>(),
+                &fs::read(dir.join("plain.pdf")).unwrap(),
+                &fs::read(dir.join("painted.pdf")).unwrap(),
+                &attachments(side),
+            )
+            .expect("PDF retains embedded head contours, source-bound stem attachments and split ties");
+            SvgFrame {
+                native: fs::read_to_string(native).unwrap(),
+                plain,
+                painted,
+                reread: pages(&dir, "reread").unwrap(),
+            }
+        };
+
+        let system = SplitLayout::System;
+        let page = SplitLayout::Page;
+        let system = draw("system", &system.score("up", 17, false),
+            &system.score("up", 17, true), Side::Above);
+        let baseline = page.score("up", 37, false);
+        let authored_ranges = |score: &str| {
+            let xml = roxmltree::Document::parse(score).unwrap();
+            let tied: Vec<_> = xml
+                .descendants()
+                .filter(|note| note.has_tag_name("note") && note.children().any(|n| n.has_tag_name("tie")))
+                .map(|note| note.range())
+                .collect();
+            assert_eq!(tied.len(), 2);
+            tied
+        };
+        let candidate = project_tied_stem_chain_probe(&baseline, &[authored_ranges(&baseline)])
+            .unwrap().expect("the final stem planner corrects the authored chain");
+        assert_eq!(candidate, page.score("down", 37, false));
+        assert!(project_tied_stem_chain_probe(&candidate, &[authored_ranges(&candidate)]).unwrap().is_none());
+        let before = draw("before", &baseline, &page.score("up", 37, true), Side::Above);
+        let after = draw("after", &candidate, &page.score("down", 37, true), Side::Below);
+        assert_split_transition(&system, &before, &after);
+        let stale_pdf = fs::read(folder.0.join("before/plain.pdf")).unwrap();
+        let marked_candidate_pdf = fs::read(folder.0.join("after/painted.pdf")).unwrap();
+        let regular = after.plain.iter().map(String::as_str).collect::<Vec<_>>();
+        let marked = after.painted.iter().map(String::as_str).collect::<Vec<_>>();
+        assert!(prove_bound_heads(&regular, &marked, &stale_pdf, &marked_candidate_pdf,
+            &attachments(Side::Below)).is_err());
+        let final_pdf = fs::read(folder.0.join("after/plain.pdf")).unwrap();
+        let wrong_direction = prove_bound_heads(&regular, &marked, &final_pdf, &marked_candidate_pdf,
+            &attachments(Side::Above)).unwrap_err();
+        assert!(wrong_direction.to_string().contains("intended stem attachment"));
     }
 }

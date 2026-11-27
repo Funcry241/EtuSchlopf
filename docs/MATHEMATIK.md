@@ -1,6 +1,6 @@
 # Mathematik in EtuSchlopf
 
-**Wie lange soll eine gespielte Note im Notenbild stehen?** EtuSchlopf leitet die Dauer einer frei gespielten Klaviernote aus den Einsätzen, der Artikulation und den gleichzeitig laufenden Stimmen ab. Beim Vergleich mit einer Druckvorlage lassen sich Einsatz, Tonhöhe und geschriebene Dauer einzeln prüfen. Die folgenden Formeln beschreiben diese Entscheidungen und die Grenzen der Auswertung. [Aktuelle Referenzen](examples/README.md#aktuelle-referenzen) · [Aktueller Windows-Prüfbeleg](evidence/r2014/README.md)
+**Wie lange soll eine gespielte Note im Notenbild stehen?** EtuSchlopf leitet die Dauer einer frei gespielten Klaviernote aus den Einsätzen, der Artikulation und den gleichzeitig laufenden Stimmen ab. Beim Vergleich mit einer Druckvorlage lassen sich Einsatz, Tonhöhe und geschriebene Dauer einzeln prüfen. Die folgenden Formeln beschreiben diese Entscheidungen und die Grenzen der Auswertung. [Aktuelle Referenzen](examples/README.md#aktuelle-referenzen) · [Aktueller Windows-Prüfbeleg](evidence/r2020/README.md)
 
 Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die Kapitelnummer, etwa [Kapitel 3.2 · Folgeeinsatz oder Akkordende](#kapitel-3-2). Bestehende Kapitel behalten ihre Nummer.
 
@@ -37,6 +37,7 @@ Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die
   - [6.15 Speicherplanung für den Korpus](#kapitel-6-15)
   - [6.16 Projektion und Integrität](#kapitel-6-16)
   - [6.17 Phrasierungsbögen und Konturabstände](#kapitel-6-17)
+  - [6.18 Halsanschluss und Abstände in Haltebogenketten](#kapitel-6-18)
 - [7 Quellzeit, Pausen und Balken](#kapitel-7)
 - [8 Stimmfortsetzungen prüfen](#kapitel-8)
 - [9 Korpusprüfung und Grenzen](#kapitel-9)
@@ -62,7 +63,7 @@ Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die
 | --- | --- |
 | Wie gelangt eine frei gespielte Note in den gedruckten Takt? | [Kapitel 3 · Vom Anschlag zur geschriebenen Dauer](#kapitel-3) |
 | Welche Zusammenhänge beschreibt das Modell für Stimmen, Register und Seiten? | [Kapitel 4 · Verfahrensfamilien](#kapitel-4) und [Kapitel 6 · Formeln](#kapitel-6) |
-| Was wurde mit welchen Stücken geprüft? | [Kapitel 9 · Korpusprüfung](#kapitel-9) · [Windows-Vollkorpus r2014](evidence/r2014/README.md) |
+| Was wurde mit welchen Stücken geprüft? | [Kapitel 9 · Korpusprüfung](#kapitel-9) · [Windows-Vollkorpus r2020](evidence/r2020/README.md) |
 | Woran ließe sich als Nächstes arbeiten? | [Kapitel 10 · Nächste mathematische Vorhaben](#kapitel-10) |
 
 <a name="kapitel-1"></a>
@@ -203,9 +204,7 @@ Ein Ausschluss muss in jeder relevanten Fassung tragen. Er kann auf einem deklar
 
 **Idempotenz.** Sei $T_r$ die Übernahmefunktion für Regel $r$. Bei gleichem Kontext und Renderprofil soll $T_r(T_r(x_0))=T_r(x_0)$ für den gebundenen Notationszustand und die normalisierte Rendergeometrie gelten. Angenommene Ketten dürfen beim zweiten Lauf keinen weiteren Korrekturvorschlag auslösen. Eine Probe mit zuvor abgewiesenen Gruppen prüft, ob die gesamte ausgegebene Fassung ein Fixpunkt bleibt.
 
-**Prüfstand r2014.** In synthetischen MuseScore-Ausgaben sind Halsstriche und Haltebögen bis zu ihren gezeichneten PDF-Konturen gebunden. Eine eigene Probe ordnet 24 Notenköpfe den Konturen ihrer eingebetteten PDF-Glyphen zu. Der synthetische Trockenlauf prüft Entscheidungen für unabhängige und gekoppelte Gruppen. Er verlangt einen eigenen Beleg für den Erhalt eines unklaren Befunds und prüft den Rückfall auf die belegte Ausgangsfassung, wenn der Schlussbeleg abweicht. [PDF-Nachweis und Trockenlauf](final_stem_pdf_evidence_r2014.md)
-
-Im r2014-Trockenlauf stammen Paarlisten und Kopplungen aus synthetischen Vorgaben. Für die produktive Übernahme stehen die Rollendefinitionen und musikalisch begründeten Mindestabstände für Hals–Kopf und Hals–Haltebogen, die vollständige Paarermittlung einschließlich mehrseitiger und geteilter Zeichen sowie die hergeleitete Kopplung noch aus. Dazu kommen die Bestätigung aller geänderten Hälse, der Fixpunkttest und der Gesamt- und Renderbeleg für die tatsächlich ausgegebene Teilfassung nach dem endgültigen Layout. [Reparaturbereich für Haltebogenketten](final_stem_tie_chain_repair_scope.md)
+**Stand des Halsnachweises.** Der Audit r2020 prüft den eigenen Halsanschluss, den Abstand zu fremden Zeichen und den Änderungsumfang am gemeinsamen Vorschau-PDF. Damit ist der geometrische Teil für den in Kapitel 6.18 beschriebenen Übergang belegt. Für die produktive Anwendung der Übernahmeformel stehen der Beleg aus dem tatsächlichen Windows-Ausgabelauf mit gebundener Quelle, der Fixpunkttest der ausgegebenen Fassung und die gemeinsame Übernahme von MusicXML und PDF aus. [Geometrischer Nachweis](#kapitel-6-18) · [Reparaturbereich für Haltebogenketten](final_stem_tie_chain_repair_scope.md)
 
 <a name="kapitel-2-2"></a>
 <a name="schlöpfchen-formel-die-angestrebte-seitenfüllung"></a>
@@ -730,6 +729,40 @@ Bei einer zulässigen Gegenlage prüft EtuSchlopf zusätzlich Seitenformat, Zeic
 
 Die gemeinsame Vorschau bindet die Bewertung an die tatsächlich gezeichnete Kontur. Bleibt ein Kontakt oder lässt sich die Zuordnung über den Umbruch nicht eindeutig herstellen, behält EtuSchlopf die Ausgangslage. [Verfahren und Prüfkriterien](selector_derivation_contract_phrase_slur_clearance_implementation.md)
 
+<a name="kapitel-6-18"></a>
+
+### 6.18 Halsanschluss und Abstände in Haltebogenketten
+
+Der r2020-Audit prüft gegebene Vorschläge in der Ausgangsfassung $x_0$, in den Einzelvorschauen und in der gemeinsamen Vorschau $x$. Die Quellzuordnung bestimmt für jede betroffene Note ihren Kopf, Hals und Haltebogen. Innerhalb jeder Fassung bindet ein farbmarkierter Zweitrender diese Zeichen an die normale PDF-Ausgabe. Beide Render müssen bis auf die Markierungsfarben dieselben Zeichenoperationen, Schriftressourcen und Seitenmaße haben. Die Konturen der Köpfe stammen aus den eingebetteten Schriftprogrammen.
+
+**Änderungsumfang.** Der Prüfer vergleicht die übrigen Zeichen mit ihrer tatsächlichen Kontur, ihrer Lage auf der Seite und ihrer Zeichenrolle. Im geprüften Profil arbeiten die Zeichen mit deckendem Schwarz über demselben Grund. Darum dürfen die Operationen dort in anderer Reihenfolge auftreten, sofern jede beobachtete Geometrie in beiden Fassungen gleich oft vorkommt. So bleibt der Vergleich auch bei neu nummerierten PDF-Glyphen gültig, deren gebundene Kontur und Lage dieselben sind.
+
+**Anschluss am eigenen Kopf.** Seien $S$ die gezeichnete Halsfläche und $H$ die Fläche des zugehörigen Notenkopfs. Der Prüfer verlangt im vorgesehenen Ansatzbereich einen Punkt $p$ und einen Radius $\rho>0$ mit
+
+```math
+B_\rho(p)\subseteq \operatorname{int}(S)\cap\operatorname{int}(H).
+```
+
+Die offene Kreisscheibe belegt eine Überdeckung mit positiver Fläche. Ihre Lage bindet den Anschluss an die vorgesehene Halsrichtung. Die Probe bestätigt diesen Anschluss sowohl vor als auch nach der Korrektur.
+
+**Abstand zu fremder Tinte.** Für die tatsächlich gezeichneten Flächen $A$ und $B$ umfassen die Rechtecke $R(A)$ und $R(B)$ alle Konturen einschließlich der vorgesehenen Messreserven. Der kleinste Abstand der Rechtecke liefert daher eine Untergrenze:
+
+```math
+L(A,B)=d\bigl(R(A),R(B)\bigr)\le d(A,B).
+```
+
+Für eine Gruppe $G$ verlangt die Probe für die geprüften Fremdpaare $L(A,B)\ge m_G$ mit $m_G=\max_{s\in G}w_s+0{,}015\,\mathrm{pt}$. Dabei ist $w_s$ die gezeichnete Strichbreite eines betroffenen Halses in PDF-Punkten. Der Zusatz zum Mindestabstand kommt zu den Reserven in den Hüllen hinzu. Die Berechnung rundet die Abstandsschranke nach unten und die Schwelle nach oben. Ist die Schranke zu klein, bleibt der Abstand anhand dieser Messung unklar. Das gilt auch bei überlappenden Rechtecken. Der Prüfer erkennt Notenlinien über gebundene SVG-Linien und ihre zugehörigen PDF-Segmente als Führungsgeometrie.
+
+**Erlaubte Kreuzung am Taktstrich.** Für die beiden kubischen Ränder eines Haltebogens bestimmt der Prüfer den Höhenbereich an der Abszisse $x_b$ des gebundenen Taktstrichs. Nach Orientierung jedes Randes von links nach rechts sichern strikt steigende Abszissen der Kontrollpunkte den eindeutigen Schnitt mit $x=x_b$ zwischen seinen Endpunkten. Die Bisektion engt den zugehörigen Parameter auf $[a,b]$ ein. Für die Höhenabschätzung einer Kurve mit Kontrollpunkten $P_i$ verwendet die Probe
+
+```math
+\eta_y=3\max_{0\le i<3}\bigl|P_{i+1,y}-P_{i,y}\bigr|\,(b-a)+0{,}015\,\mathrm{pt}.
+```
+
+Der erste Term folgt aus der Ableitung der kubischen Bézierkurve und begrenzt die Höhenabweichung im Parameterintervall. Die Probe verlangt einen Taktstrich mit mehr als $0{,}030\,\mathrm{pt}$ Breite und zwei disjunkte Höhenintervalle im Inneren seines vertikalen Bereichs. Damit liegt ein Stück gefüllter Bogenfläche im Inneren des Strichs. Diese Ausnahme gilt für denselben eindeutig gebundenen Taktstrich zwischen den beiden Quellköpfen benachbarter Takte und bei belegter Kreuzung in beiden Fassungen. Für weitere Taktstriche gilt die Fremdabstandsprüfung.
+
+**Belegter Anwendungsfall.** In Schuberts Deutschem Tanz As-Dur D 783 Nr. 15 bestehen alle sieben vorgeschlagenen Gruppen die Prüfung einzeln und im gemeinsamen Render. Der gemeinsame Beleg erfasst 14 geänderte Halsrichtungen und sieben zugehörige Haltebögen. Die betroffenen Hälse tragen je einen Kopf. Benachbarte Akkordhälse, Balken und Fähnchen gehen als fremde Tinte in die Prüfung ein. Der Windows-Einzellauf hat den Audit-Take r2020 angenommen. Der geometrische Beleg gilt für die aus Windows exportierte Render-MusicXML samt ihrer unter Linux mit demselben MuseScore gerenderten Ausgangs- und Vorschaufassung. Die Freigabe der regulären Ausgabe verlangt den Schlussbeleg mit der dort gebundenen Quelle und dem dort verwendeten Renderer. [Übernahmebedingungen](#kapitel-2-1a)
+
 <a name="kapitel-7"></a>
 
 ## 7 Quellzeit, Pausen und Balken
@@ -760,7 +793,9 @@ Zwei zeitlich gebundene Noten können im selben Ausgabekanal liegen, wenn eine z
 
 ## 9 Korpusprüfung und Grenzen
 
-Der unter Windows abgenommene Stand r2014 erzeugt aus MIDI und WAV 15 Partituren mit 58 PDF-Seiten. Die Galerie enthält die Original-PDFs dieses Laufs und die jeweils verwendete MusicXML. Der Windows-Lauf prüft die Ausführung und den PDF-Export. Ein musikalischer Vergleich mit einer Referenz bewertet zusätzlich Tonhöhe, Einsatz, geschriebene Dauer und sichtbare Notation. [Windows-Prüfbeleg](evidence/r2014/README.md) · [Notenbilder](examples/README.md#notenbilder)
+Der unter Windows abgenommene Audit-Stand r2020 erzeugt aus MIDI und WAV 15 Partituren mit 58 PDF-Seiten. Die Galerie enthält die Original-PDFs dieses Laufs und die jeweils verwendete MusicXML. Verglichen mit der zuvor veröffentlichten Galerie sind die zugehörigen MusicXML-Quellen bytegleich. Alle 58 Seiten stimmen in Zeichengeometrie und im Pixelvergleich bei 300 dpi überein. [Windows-Prüfbeleg](evidence/r2020/README.md) · [Notenbilder](examples/README.md#notenbilder)
+
+Der Windows-Lauf prüft die Ausführung und den PDF-Export. Ein musikalischer Vergleich mit einer Referenz bewertet zusätzlich Tonhöhe, Einsatz, geschriebene Dauer und sichtbare Notation. Für die Halskorrektur gilt der gesonderte Vorschau- und Übernahmenachweis. [Halsnachweis](#kapitel-6-18)
 
 <a name="kapitel-9-1"></a>
 

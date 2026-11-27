@@ -26,7 +26,7 @@ use super::audit_only::serialized_temporal_replay::{
 
 #[path = "notation.rs"]
 mod notation;
-pub(crate) use notation::{LedgerBoundedLowerStaffClefReadbackPreservingMint, NotationPolishPreservingMint};
+pub(crate) use notation::{LedgerBoundedLowerStaffClefReadbackPreservingMint, NotationPolishPreservingMint, tied_stem_plan_counts};
 #[cfg(test)]
 pub(crate) use notation::NotationClefIslandPreservingMint;
 #[path = "render.rs"]

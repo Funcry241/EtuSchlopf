@@ -1,0 +1,10 @@
+{
+  "revision": "r2020",
+  "version": "0.10.1839",
+  "accepted_take_sha256": "86670ec976c8b2db9a739afa11aa628554b7bf40b797da821c81eb0a9d313dda",
+  "native_snapshot_sha256": "efb6d611f2d472575dff18c670db8795c06594f78ae85ebc252cbe73f3e2224f",
+  "inventory_sha256": "9737bf4c655c7441f00fc14f9e1bacad30c889c6924cf35585d1a64e1dbdc02f",
+  "native_documents_sha256": "ce6d3ad64af6ce4fb89f245ff14285d4fae949167d45836426a0f7a7a7ec0902",
+  "cargo_lock_sha256": "a0178cc691bf26f99e83af20498711117ccb557bccc6d0827e6d5b1c204a6884",
+  "source_file_count": 2288
+}

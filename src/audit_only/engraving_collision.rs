@@ -11,6 +11,10 @@ use super::{
     point_near_segment, possible_contact,
 };
 
+#[cfg(test)]
+#[path = "engraving_pdf_head_binding.rs"]
+pub(crate) mod pdf_head_binding;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Mark {
     Head,
@@ -655,6 +659,10 @@ pub(crate) mod source_anchor_audit;
 #[cfg(test)]
 #[path = "engraving_transition_dry_run.rs"]
 mod transition_dry_run;
+
+#[cfg(test)]
+#[path = "engraving_pair_inventory_audit.rs"]
+mod pair_inventory_audit;
 
 #[cfg(test)]
 mod tests {

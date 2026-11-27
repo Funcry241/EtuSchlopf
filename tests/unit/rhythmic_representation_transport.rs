@@ -9,6 +9,20 @@ fn document(duration: i64, label: &str) -> String {
 }
 
 #[test]
+fn representation_refusal_reports_the_first_unrecorded_change() {
+    let before = document(24, "alpha");
+    let after = document(48, "alpha");
+    let mismatch = before.find("24</duration>").unwrap();
+    let error = transport(&before, &after, Vec::new())
+        .carry(&before, &after, Vec::new())
+        .unwrap_err();
+    let diagnostic = format!("{error:#}");
+    assert!(diagnostic.contains("Original representation step 1"));
+    assert!(diagnostic.contains("operations=0"));
+    assert!(diagnostic.contains(&format!("first_difference_byte=Some({mismatch})")));
+}
+
+#[test]
 fn preserving_evidence_distinguishes_noop_missing_and_present_receipts() {
     let before = document(24, "alpha");
     let after = before.replace("</note>", "<beam number=\"1\">begin</beam></note>");
