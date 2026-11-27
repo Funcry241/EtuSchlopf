@@ -15,7 +15,7 @@ mit zusammen 58 PDF-Seiten. Die Galerie zeigt die Original-PDFs dieses Laufs,
 Vorschauausschnitte und die jeweils verwendete MusicXML. Die Mathe-Seite erklärt
 den geometrischen Halsnachweis anhand der geprüften Schubert-Vorschau.
 
-[Windows-Download r2014](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r2014-windows-preview) ·
+[Windows-Download r2020](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r2020-windows-preview) ·
 [Windows-Abnahme r2020](docs/evidence/r2020/README.md) ·
 [Halsnachweis](docs/MATHEMATIK.md#kapitel-6-18)
 
