@@ -16,7 +16,7 @@ Vorschauausschnitte und die jeweils verwendete MusicXML. Die Oktavbewertung
 verwendet die vorhandene Zeitanalyse wieder. Das Notenbild stimmt mit r2021
 überein.
 
-[Windows-Download r2020](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r2020-windows-preview) ·
+[Windows-Download r2022](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r2022-windows-preview) ·
 [Windows-Abnahme r2022](docs/evidence/r2022/README.md) ·
 [Halsnachweis](docs/MATHEMATIK.md#kapitel-6-18)
 
