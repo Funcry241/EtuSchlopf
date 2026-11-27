@@ -6,12 +6,12 @@
 
 ## Dein erstes Stück
 
-1. Lade die **Windows-EXE r2014 für x64** herunter. Für die PDF-Ausgabe brauchst du MuseScore. [EtuSchlopf-Windows-x64-r2014.exe](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r2014-windows-preview/EtuSchlopf-Windows-x64-r2014.exe) · [MuseScore](https://musescore.org/de/download)
-2. Lege `Mein Stück.mid` und `Mein Stück.wav` in denselben Ordner. Beide Dateien müssen zur selben Einspielung gehören. Zum Ausprobieren kannst du das fertige MIDI/WAV-Paar entpacken. [Startbeispiel r2014 als ZIP](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r2014-windows-preview/EtuSchlopf-Beispiel-r2014.zip)
+1. Lade die **Windows-EXE r2020 für x64** herunter. Für die PDF-Ausgabe brauchst du MuseScore. [EtuSchlopf-Windows-x64-r2020.exe](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r2020-windows-preview/EtuSchlopf-Windows-x64-r2020.exe) · [MuseScore](https://musescore.org/de/download)
+2. Lege `Mein Stück.mid` und `Mein Stück.wav` in denselben Ordner. Beide Dateien müssen zur selben Einspielung gehören. Zum Ausprobieren kannst du das fertige MIDI/WAV-Paar entpacken. [Startbeispiel r2020 als ZIP](https://github.com/Funcry241/EtuSchlopf/releases/download/v0.10.1839-r2020-windows-preview/EtuSchlopf-Beispiel-r2020.zip)
 3. Ziehe die MIDI-Datei auf die EXE. Du kannst die EXE auch öffnen und den Pfad zur MIDI eingeben.
 4. Öffne im neuen Laufordner unter `EtuSchlopf-Ergebnisse` das PDF. Für die Weiterbearbeitung in MuseScore öffnest du die `.render.musicxml`. Verwendet der PDF-Export direkt den Master, öffnest du die `.musicxml`.
 
-Der Ergebnisordner liegt neben der MIDI. EtuSchlopf arbeitet dort mit Kopien der Eingaben. Bei einem Fehler zeigt die Konsole die Meldung. Wenn der Lauf einen Bericht geschrieben hat, findest du ihn im Laufordner als `.result.txt`. [Version und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r2014-windows-preview)
+Der Ergebnisordner liegt neben der MIDI. EtuSchlopf arbeitet dort mit Kopien der Eingaben. Bei einem Fehler zeigt die Konsole die Meldung. Wenn der Lauf einen Bericht geschrieben hat, findest du ihn im Laufordner als `.result.txt`. [Version und Prüfsummen](https://github.com/Funcry241/EtuSchlopf/releases/tag/v0.10.1839-r2020-windows-preview)
 
 > **In English:** EtuSchlopf uses a matching MIDI and WAV pair to produce piano sheet music as PDF and MusicXML. The Windows x64 preview uses MuseScore for PDF export. Issues in English are welcome.
 
