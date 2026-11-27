@@ -57,8 +57,10 @@ fn temporal_source_cost_is_invariant_under_equivalent_stream_order() {
         let part = local_part(&xml);
         let surfaces = scan_lower_clef_surfaces(part).unwrap();
         let notes = scan_lower_pitches(part, None);
-        let cost =
-            score_readability_course(part, &surfaces, &notes, &vec![true; surfaces.len()]).unwrap();
+        let time = TemporalPart::observe(part);
+        let cost = score_readability_course(
+            time.as_ref(), &surfaces, &notes, &vec![true; surfaces.len()],
+        ).unwrap();
         assert_eq!(cost.ledger_pressure, 60);
         costs.push(cost);
     }
@@ -78,7 +80,10 @@ fn temporal_foreign_tie_blocks_the_same_boundary_in_either_encoding() {
         assert!(lower_tie_open_at_position(part, target));
         let surfaces = scan_lower_clef_surfaces(part).unwrap();
         let notes = scan_lower_pitches(part, None);
-        let solution = solve_readability_course(part, &surfaces, &notes).unwrap();
+        let time = TemporalPart::observe(part).unwrap();
+        let solution = solve_readability_course(
+            part, &surfaces, &notes, &time, &beam_boundary::observe(part),
+        ).unwrap();
         assert!(!solution.insertions.iter().any(|(at, _)| *at == target));
     }
 }
@@ -213,6 +218,23 @@ fn temporal_overlapping_heads_in_one_voice_grant_no_plan() {
     assert!(!time.origin_supported(notes[1].0));
     let plan = derive_clef_readability_primary_course_plan(&xml);
     assert!(plan.insertions.is_empty());
+
+    for hidden in [false, true] {
+        let member = pitch("E", 5, 2, "shared", "").replacen(
+            "<note>",
+            if hidden { "<note print-object=\"no\"><chord/>" } else { "<note><chord/>" },
+            1,
+        );
+        let xml = format!(
+            "<part><measure>{}{member}{}</measure></part>",
+            pitch("C", 5, 1, "shared", ""),
+            pitch("G", 5, 1, "shared", ""),
+        );
+        let time = TemporalPart::observe(&xml).unwrap();
+        let notes = note_ranges(&xml);
+        assert_eq!(time.origin_supported(notes[0].0), hidden);
+        assert_eq!(time.origin_supported(notes[2].0), hidden);
+    }
 }
 
 fn nonoverlapping_reordered_tail(reverse: bool, voice: &str) -> String {
@@ -239,7 +261,9 @@ fn temporal_disjoint_tail_order_preserves_course_receipt_and_reentry() {
             assert!(note_ranges(part).iter().all(|(start, _, _)| time.origin_supported(*start)));
             let surfaces = scan_lower_clef_surfaces(part).unwrap();
             let notes = scan_lower_pitches(part, None);
-            let plan = solve_readability_course(part, &surfaces, &notes).unwrap();
+            let plan = solve_readability_course(
+                part, &surfaces, &notes, &time, &beam_boundary::observe(part),
+            ).unwrap();
             assert_eq!(plan.cost.ledger_pressure, 0);
             assert_eq!(plan.cost.clef_transitions, 2);
             let (result, receipt) = apply_rustig_clef_course_to_buffer(&mut xml);
@@ -310,7 +334,7 @@ fn temporal_ordered_equal_time_initial_override_retains_a_valid_course() {
     assert_eq!(surfaces.len(), 2);
     let notes = scan_lower_pitches(&xml, None);
     assert_eq!(
-        score_readability_course(&xml, &surfaces, &notes, &[true, true])
+        score_readability_course(TemporalPart::observe(&xml).as_ref(), &surfaces, &notes, &[true, true])
             .unwrap()
             .ledger_pressure,
         0
@@ -376,7 +400,9 @@ fn temporal_scalar_whitespace_matches_the_existing_observation_semantics() {
     let notes = scan_lower_pitches(part, None);
     let surfaces = scan_lower_clef_surfaces(part).unwrap();
     assert_eq!(
-        score_readability_course(part, &surfaces, &notes, &vec![true; surfaces.len()])
+        score_readability_course(
+            TemporalPart::observe(part).as_ref(), &surfaces, &notes, &vec![true; surfaces.len()],
+        )
             .unwrap()
             .ledger_pressure,
         60
