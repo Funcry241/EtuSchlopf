@@ -16,6 +16,7 @@ Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die
 - [3 Vom Anschlag zur geschriebenen Dauer](#kapitel-3)
   - [3.1 Das Zeitraster einer freien Einspielung](#kapitel-3-1)
   - [3.2 Folgeeinsatz oder Akkordende](#kapitel-3-2)
+    - [3.2a Ende am Folgeeinsatz derselben Linie](#kapitel-3-2a)
   - [3.3 Ein Quellton über mehrere geschriebene Fragmente](#kapitel-3-3)
 - [4 Verfahrensfamilien im aktuellen Quellstand](#kapitel-4)
 - [5 Lokale Entscheidungen zu Pausen und Stimmen](#kapitel-5)
@@ -38,6 +39,7 @@ Diese Seite bündelt die Mathematik des Projekts. Für einen Verweis genügt die
   - [6.16 Projektion und Integrität](#kapitel-6-16)
   - [6.17 Phrasierungsbögen und Konturabstände](#kapitel-6-17)
   - [6.18 Halsanschluss und Abstände in Haltebogenketten](#kapitel-6-18)
+  - [6.19 Dauer, Halsgruppe, Linie, Rolle und Spur](#kapitel-6-19)
 - [7 Quellzeit, Pausen und Balken](#kapitel-7)
 - [8 Stimmfortsetzungen prüfen](#kapitel-8)
 - [9 Korpusprüfung und Grenzen](#kapitel-9)
@@ -270,7 +272,7 @@ Der Abstand zum Notenanfang liefert einen Hinweis auf die geschriebene Länge. E
 
 ### 3.2 Folgeeinsatz oder Akkordende
 
-Für jeden regulären Anschlag $i$ vergleicht das Modell mögliche Folgeeinsätze $j$. Die Kosten $c_{ij}$ bewerten unter anderem das Verhältnis von beobachteter Dauer zum Abstand der Einsätze, den Tonhöhenabstand und die Notierbarkeit. Zusätzliche freie Spalten erlauben ein eigenes Ende. Jeder reale Folgeeinsatz steht höchstens einmal zur Verfügung. Für die gewählten Zuordnungen $x_{ij}$ gilt
+Im WAV-gestützten Ableitungspfad vergleicht das Modell für jeden regulären Anschlag $i$ mögliche Folgeeinsätze $j$. Die Kosten $c_{ij}$ bewerten unter anderem das Verhältnis von beobachteter Dauer zum Abstand der Einsätze, den Tonhöhenabstand und die Notierbarkeit. Zusätzliche freie Spalten erlauben ein eigenes Ende. Jeder reale Folgeeinsatz steht höchstens einmal zur Verfügung. Für die gewählten Zuordnungen $x_{ij}$ gilt
 
 ```math
 \min_x \sum_{i,j}c_{ij}x_{ij},\qquad
@@ -287,6 +289,43 @@ r_i,r_j\gt\max_k t_k,\qquad |r_i-r_j|\le w.
 ```
 
 Die passenden Partner mit eigenem Folgeeinsatz müssen sich über das geschriebene Ende einig sein. Ein erneuter Anschlag derselben Taste vor diesem Ende schließt die Übernahme aus. Ein weiterer Fall betrifft die Pause im gleichmäßigen Akkordpuls. Dort müssen an zwei vorherigen Pulsen alle Akkordtöne unabhängig dieselbe Unterteilung bestätigen, die nächste Attacke muss eine Lücke lassen und die gemessene Artikulation muss im zuvor beobachteten Bereich liegen. Offen gebliebene Dauern werden nach der Zuordnung zum Notensystem im Kontext der benachbarten Einsätze entschieden. Auch Nakamura, Yoshii und Dixon werten den mehrstimmigen Kontext für die Wahl des Notenwerts aus. Ihre Arbeit verwendet dafür ein Markov-Zufallsfeld.<a name="beleg-3-2-notenwert"></a><sup><a href="#quelle-nakamura-yoshii-dixon">[36]</a></sup> [Akkordenden und Puls](../src/free_performance_timing.rs) · [Offene Dauern im Notensystem](../src/midi_seed.rs)
+
+<a name="kapitel-3-2a"></a>
+
+#### 3.2a Ende am Folgeeinsatz derselben Linie
+
+**Entwurf für den MIDI-Zweig.** Der direkte MIDI-Pfad schreibt zunächst einen aus der Tastendauer und dem örtlichen Puls abgeleiteten Notenwert $d_0(i)$. Ein belegter Folgeeinsatz $j$ derselben Linie liefert einen früheren Endpunkt im Notenraster. Die musikalische Bindung stützt sich auf Quellanschläge, Tonhöhen und Tastenloslasszeiten. Halsgruppen, Darstellungsrollen und MusicXML-Stimmnummern liegen außerhalb dieser Entscheidung. [Direkte MIDI-Dauerableitung](../src/inferred_performance_timing.rs) · [Pfadwahl](../src/pipeline_shards/pipeline_orchestrator_project_setup_stages.rs#L355)
+
+**A1 · Bindung des Folgeeinsatzes.** $F_+(w)$ und $F_-(w)$ sind die besten Kosten vollständiger zulässiger Pläne mit beziehungsweise ohne die Kante $i\to j$ beim Kostenprofil $w$. $W$ enthält die vorab festgelegten Variationen der Kostengewichte, einschließlich der Kosten für ein eigenes Tonende. Die Kante ist unabhängig zu binden und muss in jedem Profil den strikten Abstand einhalten.
+
+```math
+\inf_{w\in W}\bigl(F_-(w)-F_+(w)\bigr) > \delta .
+```
+
+Bei Gleichheit bleibt der Gegenplan im Toleranzbereich. Die Prüfung verlangt mindestens einen vollständigen Plan mit der Kante. Eine leere Gegenklasse zählt als unzulässig, sobald ihr Ausschluss vollständig belegt ist. Bei einer abgebrochenen Prüfung bleibt der Befund offen. Als Prüfparameter stehen eine Variation der Gewichte um jeweils $\pm25\,\%$ und ein vorab festzulegender Abstand $\delta\ge0$ zur Diskussion. Ein Profil mit zu kleinem Abstand widerlegt die Bedingung bereits. Ein positiver Befund braucht eine Schranke über den ganzen Profilbereich. [Vollständige Gegenpläne und Bindungszeugen](#kapitel-6-4)
+
+**Eckenzertifikat für A1.** Bilden $k$ unabhängig variierte Gewichte einen Quader $W$, bleiben die zulässigen Planmengen über $W$ fest und sind die Kosten jedes Plans affin in den Gewichten, genügt folgender Nachweis. Wähle einen festen zulässigen Plan $p^\ast$ mit der Kante $i\to j$ und berechne an jeder der $2^k$ Ecken $v$ die minimalen Gegenplankosten $F_-(v)$. Mit den Kosten $C(p^\ast,w)$ des festen Plans gilt
+
+```math
+F_-(w)-F_+(w)\ge F_-(w)-C(p^\ast,w)\ge
+\min_{v\in\operatorname{Ecken}(W)}\bigl(F_-(v)-C(p^\ast,v)\bigr).
+```
+
+Die erste Schranke folgt aus $F_+(w)\le C(p^\ast,w)$. Die zweite folgt aus der Konkavität von $F_--C(p^\ast,\cdot)$ als Minimum affiner Funktionen. Liegt die untere Schranke strikt über $\delta$, ist A1 für ganz $W$ belegt. Andernfalls bleibt der Befund mit diesem Zertifikat offen. Ein Profil mit nachgewiesenem Abstand $F_-(w)-F_+(w)\le\delta$ entscheidet ihn negativ. Die Differenz der beiden profilabhängigen Optima ist im Allgemeinen weder konkav noch konvex. Ihre Eckwerte allein tragen deshalb keinen Beleg für den ganzen Quader.
+
+**A2 · Überhang.** Für Einsatzzeiten $t_i,t_j$ und Tastenloslasszeit $r_i$ in der Aufführungszeit verlangt das Modell
+
+```math
+0\lt\frac{r_i-t_j}{t_j-t_i}\le\kappa,\qquad r_i\lt t_{j^+} .
+```
+
+$j^+$ ist der unabhängig gebundene übernächste Einsatz derselben Linie. $\kappa=\tfrac12$ ist ein vorläufiger Prüfparameter. **A3 · Vorlauf.** Für drei vorangehende, unabhängig gebundene Übergänge bleibt der jeweilige Überhanganteil höchstens $\kappa$. **A4 · Wiederanschlag.** Zwischen $t_i$ und $t_j$ erfolgt kein neuer Anschlag derselben Taste.
+
+Der neue Notenwert ist der Rasterabstand $q_j-q_i$. Er muss exakt darstellbar, positiv und kleiner als $d_0(i)$ sein. Sind alle Bedingungen belegt, liefert 3.2a die Dauer für die nachfolgende Halsgruppenprüfung. Bei offenem oder negativem Befund gilt der Ausgangswert. Die gemessene Tastenloslasszeit bleibt als Quellbeobachtung erhalten. [Halsgruppenprüfung](#kapitel-6-19)
+
+**Synthetische Gegenprobe.** Zwei Fassungen haben denselben Einsatzabstand, Tastenüberhang und drei belegte vorangehende Übergänge. In einer Fassung setzt der neue Anschlag dieselbe Linie fort. In der anderen gehört er nachweislich zu einer zweiten Linie über dem gehaltenen Ton. Die Verkürzung braucht die belegte Fortsetzung der ersten Fassung.
+
+**Lokaler Befund an Chopin p02.** Auf dem festgehaltenen r2020-Raster liegt der Kostenabstand für Dis → Cis im Nominalprofil bei $0{,}260$. Bei einem um $25\,\%$ höheren Gewicht für die Abweichung von der gemessenen Dauer und um $25\,\%$ geringeren Kosten für ein eigenes Tonende fällt er auf etwa $-0{,}070$. Bei entsprechenden Änderungen um jeweils $24\,\%$ liegt er im Innern des Profilbereichs bei etwa $-0{,}04535$. In beiden Profilen führt der bessere Plan zum nächsten Dis und liefert den Rasterabstand einer Achtelnote. A1 scheitert damit bereits für $\delta=0$. Die ausgegebene Achtelnote in Takt 6 gilt als Ausgangswert. [Render-MusicXML r2020](examples/chopin-op10-no3-p02-r2020.render.musicxml) · [PDF r2020](examples/chopin-op10-no3-p02-r2020.pdf)
 
 <a name="kapitel-3-3"></a>
 <a name="ein-quellton-über-mehrere-geschriebene-fragmente"></a>
@@ -762,6 +801,35 @@ Für eine Gruppe $G$ verlangt die Probe für die geprüften Fremdpaare $L(A,B)\g
 Der erste Term folgt aus der Ableitung der kubischen Bézierkurve und begrenzt die Höhenabweichung im Parameterintervall. Die Probe verlangt einen Taktstrich mit mehr als $0{,}030\,\mathrm{pt}$ Breite und zwei disjunkte Höhenintervalle im Inneren seines vertikalen Bereichs. Damit liegt ein Stück gefüllter Bogenfläche im Inneren des Strichs. Diese Ausnahme gilt für denselben eindeutig gebundenen Taktstrich zwischen den beiden Quellköpfen benachbarter Takte und bei belegter Kreuzung in beiden Fassungen. Für weitere Taktstriche gilt die Fremdabstandsprüfung.
 
 **Belegter Anwendungsfall.** In Schuberts Deutschem Tanz As-Dur D 783 Nr. 15 bestehen alle sieben vorgeschlagenen Gruppen die Prüfung einzeln und im gemeinsamen Render. Der gemeinsame Beleg erfasst 14 geänderte Halsrichtungen und sieben zugehörige Haltebögen. Die betroffenen Hälse tragen je einen Kopf. Benachbarte Akkordhälse, Balken und Fähnchen gehen als fremde Tinte in die Prüfung ein. Der Windows-Einzellauf hat den Audit-Take r2020 angenommen. Der geometrische Beleg gilt für die aus Windows exportierte Render-MusicXML samt ihrer unter Linux mit demselben MuseScore gerenderten Ausgangs- und Vorschaufassung. Die Freigabe der regulären Ausgabe verlangt den Schlussbeleg mit der dort gebundenen Quelle und dem dort verwendeten Renderer. [Übernahmebedingungen](#kapitel-2-1a)
+
+<a name="kapitel-6-19"></a>
+
+### 6.19 Dauer, Halsgruppe, Linie, Rolle und Spur
+
+**Entwurf.** Für eine belegte Notationsentscheidung gilt diese Abhängigkeit.
+
+```math
+\text{Quellanschlag}\longrightarrow\text{geschriebene Dauer}\longrightarrow
+\text{Halsgruppe}\longrightarrow\text{Linie}\longrightarrow\text{Rolle}\longrightarrow\text{Spur}.
+```
+
+Der vorausgehende Dauernachweis verwendet unabhängig aus den Quellereignissen gebundene Anschlussbeziehungen, etwa aus Einsatzzeit, Tonhöhe und Tastenloslasszeit. Die Stufe „Linie“ bezeichnet die spätere Zuordnung in der geschriebenen Fassung. Die Suche kann Halsgruppen und diese geschriebenen Linien als gemeinsame Konfliktgruppe untersuchen. Jede dabei verwendete Dauerhypothese braucht zuvor ihren eigenen rhythmischen Beleg. Die Rollenplanung verwendet die festgelegten Dauern und die belegten Beziehungen. [Dauernachweis](#kapitel-3-2a)
+
+**Halsgruppen und Mitlauf.** Der erste Geltungsbereich umfasst Gruppen gleichzeitiger Noten gleicher geschriebener Dauer. Ein eigener Hals ist eine Gruppe mit einer Note. Der Mitlauf zweier Linien zählt die aufeinanderfolgenden Paare mit übereinstimmendem Einsatz und Notenwert um die geprüfte Stelle. Er erzeugt Vorschläge für gemeinsame Hälse. Die Suche umfasst auch getrennte Hälse, andere Partner und Gruppen mit drei oder mehr Noten. Ein größerer Mitlaufwert hat für sich die Aussagekraft einer Beobachtung. [Individuelle Quellbindung](#kapitel-3-3) · [Konkurrierende Stimmpläne](#kapitel-6-4)
+
+**Gruppenbeleg.** Zuerst begrenzen die harten satzfachlichen Bedingungen die Menge der zulässigen Änderungen. Der tatsächliche Vorher-Nachher-Render muss belegen, dass ein harter Zielbefund verschwindet und jeder übrige betroffene harte Befund einzeln erhalten bleibt oder sich verbessert. Eine geringere Zahl von Hälsen oder Fähnchen ist nur aussagekräftig, wenn die zugehörige Satzpflicht unabhängig belegt ist.
+
+Für den vollständigen zulässigen Plan $p$ gilt zusätzlich die vorab festgelegte fachliche Zielfunktionsordnung. Schreibe $J(p)\prec J(q)$, wenn $p$ fachlich strikt besser abschneidet als $q$. Eine Änderung kommt nur infrage, wenn $J(p)\prec J(q)$ für jeden zulässigen Gegenplan $q$ gilt. Die Ausgangsfassung gehört ausdrücklich zu den Gegenplänen. Bei fachlich gleichwertigen oder unvergleichbaren Plänen und bei unvollständigem Nachweis gilt die Ausgangsfassung. Der Mitlauf liefert Kandidaten für die Prüfung. [SchlopfKopfFormel](#kapitel-2-1a)
+
+**Rolle und Spur.** Die Linie bezeichnet den musikalischen Zusammenhang. Die Rolle beschreibt seine Darstellung im jeweiligen System. Eine technische Spur speichert die Rolle im Ausgabeprofil. Die Schreibquittung bindet jedes Quellvorkommen an genau ein Nachvorkommen mit gleichem Einsatz, gleicher Dauer und gleicher Tonhöhe. Bei weiter geltenden Halteketten hält sie die Zuordnung der Fragmente fest. Sie weist ausdrücklich aus, welche Gruppen, Rollen und Spuren sich ändern. Ein geprüftes Renderergebnis bestätigt die tatsächlich gelesene Spur und die Lage der betroffenen Zeichen.
+
+#### Belege zu 6.19
+
+**Gegenproben.** Ein strikter Mitlauf lässt weiterhin einen Plan mit getrennten Hälsen zu. Ein einzelner abweichender Notenwert kann die Rangfolge zweier vorgeschlagener Gruppen umkehren. Ein Gleichstand lässt den Befund offen. Die vierte Probe prüft die Dauer vor der Gruppenbildung bei gleichem Tastenüberhang und unterschiedlicher Linienbindung. [Vier synthetische Modellproben](../tests/rollenplan_mathe.rs) · [Gleicher Überhang und andere Linie](#kapitel-3-2a)
+
+**Lokaler Befund an Chopin p02.** Bei getrennter Prüfung der Stimmnummerntausche $1\leftrightarrow3$ im oberen und $2\leftrightarrow4$ im unteren System änderte MuseScore 4.7.5 unter Linux die Zuordnung zu Spuren. Oben änderten sich die Seite des Bindebogens bei Takt 5 und 6 sowie die Pausenlage in Takt 9. Unten rückten vier Pausen in den Bereich des Basssystems. Das Fähnchen am A blieb in beiden Proben sichtbar. Die Probe belegt die Spurwirkung für diese Fassungen und dieses Rendererprofil. Die gemeinsame Halsgruppe von Cis und A bleibt offen. [Notenbild und Ausgabedaten r2020](examples/README.md#notenbilder)
+
+**Wiederholungsmessung am Schattenpfad.** Zwei Läufe mit dem unveränderten r2020-Quellstand und derselben Einspielung lieferten am selben Checkpoint-58-Schattenpunkt bytegleiche Render-MusicXML. MuseScore 4.7.5 ordnete in beiden Schattenfassungen alle 469 sichtbaren Notenköpfe eindeutig ihren Spuren zu. Die Rücklesetabellen waren bytegleich und wiesen je Notensystem vier technische Spuren aus. Die beiden zweiseitigen Schatten-PDFs waren bei 300 dpi pixelgleich. Ihre Dateiprüfsummen unterschieden sich. Der erste Lauf erzeugte den Schattenexport und brach bei der späteren XSD-Prüfung ab. Die Wiederholung mit den Laufzeit-Schemata endete mit Exitcode 0. Der Vergleich belegt die Wiederholbarkeit des vorhandenen r2020-Schattenpfads auf derselben Verarbeitungsstufe. Die neue Halsgruppenentscheidung bleibt ein Entwurf. [Schattenpfad](../src/pipeline_shards/pipeline_orchestrator_metric_final_notation_stage.rs#L810)
 
 <a name="kapitel-7"></a>
 
