@@ -302,7 +302,7 @@ Die passenden Partner mit eigenem Folgeeinsatz müssen sich über das geschriebe
 \inf_{w\in W}\bigl(F_-(w)-F_+(w)\bigr) > \delta .
 ```
 
-Bei Gleichheit bleibt der Gegenplan im Toleranzbereich. Die Prüfung verlangt mindestens einen vollständigen Plan mit der Kante. Eine leere Gegenklasse zählt als unzulässig, sobald ihr Ausschluss vollständig belegt ist. Bei einer abgebrochenen Prüfung bleibt der Befund offen. Als Prüfparameter stehen eine Variation der Gewichte um jeweils $\pm25\,\%$ und ein vorab festzulegender Abstand $\delta\ge0$ zur Diskussion. Ein Profil mit zu kleinem Abstand widerlegt die Bedingung bereits. Ein positiver Befund braucht eine Schranke über den ganzen Profilbereich. [Vollständige Gegenpläne und Bindungszeugen](#kapitel-6-4)
+Bei Gleichheit bleibt der Gegenplan im Toleranzbereich. Die Prüfung verlangt mindestens einen vollständigen Plan mit der Kante. Eine leere Gegenklasse zählt als unzulässig, sobald ihr Ausschluss vollständig belegt ist. Bei einer abgebrochenen Prüfung bleibt der Befund offen. Als Prüfparameter stehen eine Variation der Gewichte um jeweils $\pm25$ % und ein vorab festzulegender Abstand $\delta\ge0$ zur Diskussion. Ein Profil mit zu kleinem Abstand widerlegt die Bedingung bereits. Ein positiver Befund braucht eine Schranke über den ganzen Profilbereich. [Vollständige Gegenpläne und Bindungszeugen](#kapitel-6-4)
 
 <a name="eckenzertifikat-a1"></a>
 
@@ -310,7 +310,7 @@ Bei Gleichheit bleibt der Gegenplan im Toleranzbereich. Die Prüfung verlangt mi
 
 ```math
 F_-(w)-F_+(w)\ge F_-(w)-C(p^\ast,w)\ge
-\min_{v\in\operatorname{Ecken}(W)}\bigl(F_-(v)-C(p^\ast,v)\bigr).
+\min_{v\in\mathrm{Ecken}(W)}\bigl(F_-(v)-C(p^\ast,v)\bigr).
 ```
 
 Die erste Schranke folgt aus $F_+(w)\le C(p^\ast,w)$. Die zweite folgt aus der Konkavität von $F_--C(p^\ast,\cdot)$ als Minimum affiner Funktionen. Liegt die untere Schranke strikt über $\delta$, ist A1 für ganz $W$ belegt. Andernfalls bleibt der Befund mit diesem Zertifikat offen. Ein Profil mit nachgewiesenem Abstand $F_-(w)-F_+(w)\le\delta$ entscheidet ihn negativ. Die Differenz der beiden profilabhängigen Optima ist im Allgemeinen weder konkav noch konvex. Ihre Eckwerte allein tragen deshalb keinen Beleg für den ganzen Quader.
@@ -331,7 +331,7 @@ Der neue Notenwert ist der Rasterabstand $q_j-q_i$. Er muss exakt darstellbar, p
 
 **Synthetische Gegenprobe.** Zwei Fassungen haben denselben Einsatzabstand, Tastenüberhang und drei belegte vorangehende Übergänge. In einer Fassung setzt der neue Anschlag dieselbe Linie fort. In der anderen gehört er nachweislich zu einer zweiten Linie über dem gehaltenen Ton. Die Verkürzung braucht die belegte Fortsetzung der ersten Fassung.
 
-**Lokaler Befund an Chopin p02.** Auf dem festgehaltenen r2020-Raster liegt der Kostenabstand für Dis → Cis im Nominalprofil bei $0{,}260$. Bei einem um $25\,\%$ höheren Gewicht für die Abweichung von der gemessenen Dauer und um $25\,\%$ geringeren Kosten für ein eigenes Tonende fällt er auf etwa $-0{,}070$. Bei entsprechenden Änderungen um jeweils $24\,\%$ liegt er im Innern des Profilbereichs bei etwa $-0{,}04535$. In beiden Profilen führt der bessere Plan zum nächsten Dis und liefert den Rasterabstand einer Achtelnote. A1 scheitert damit bereits für $\delta=0$. Die ausgegebene Achtelnote in Takt 6 gilt als Ausgangswert. [Render-MusicXML r2020](examples/chopin-op10-no3-p02-r2020.render.musicxml) · [PDF r2020](examples/chopin-op10-no3-p02-r2020.pdf)
+**Lokaler Befund an Chopin p02.** Auf dem festgehaltenen r2020-Raster liegt der Kostenabstand für Dis → Cis im Nominalprofil bei $0{,}260$. Bei einem um $25$ % höheren Gewicht für die Abweichung von der gemessenen Dauer und um $25$ % geringeren Kosten für ein eigenes Tonende fällt er auf etwa $-0{,}070$. Bei entsprechenden Änderungen um jeweils $24$ % liegt er im Innern des Profilbereichs bei etwa $-0{,}04535$. In beiden Profilen führt der bessere Plan zum nächsten Dis und liefert den Rasterabstand einer Achtelnote. A1 scheitert damit bereits für $\delta=0$. Die ausgegebene Achtelnote in Takt 6 gilt als Ausgangswert. [Render-MusicXML r2020](examples/chopin-op10-no3-p02-r2020.render.musicxml) · [PDF r2020](examples/chopin-op10-no3-p02-r2020.pdf)
 
 <a name="kapitel-3-3"></a>
 <a name="ein-quellton-über-mehrere-geschriebene-fragmente"></a>
@@ -789,7 +789,7 @@ Der r2020-Audit prüft gegebene Vorschläge in der Ausgangsfassung $x_0$, in den
 **Anschluss am eigenen Kopf.** Seien $S$ die gezeichnete Halsfläche und $H$ die Fläche des zugehörigen Notenkopfs. Der Prüfer verlangt im vorgesehenen Ansatzbereich einen Punkt $p$ und einen Radius $\rho>0$ mit
 
 ```math
-B_\rho(p)\subseteq \operatorname{int}(S)\cap\operatorname{int}(H).
+B_\rho(p)\subseteq \mathrm{int}(S)\cap\mathrm{int}(H).
 ```
 
 Die offene Kreisscheibe belegt eine Überdeckung mit positiver Fläche. Ihre Lage bindet den Anschluss an die vorgesehene Halsrichtung. Die Probe bestätigt diesen Anschluss sowohl vor als auch nach der Korrektur.
