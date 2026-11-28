@@ -310,7 +310,7 @@ Bei Gleichheit bleibt der Gegenplan im Toleranzbereich. Die Prüfung verlangt mi
 
 ```math
 F_-(w)-F_+(w)\ge F_-(w)-C(p^\ast,w)\ge
-\min_{v\in\operatorname{Ecken}(W)}\bigl(F_-(v)-C(p^\ast,v)\bigr).
+\min_{v\in\mathrm{Ecken}(W)}\bigl(F_-(v)-C(p^\ast,v)\bigr).
 ```
 
 Die erste Schranke folgt aus $F_+(w)\le C(p^\ast,w)$. Die zweite folgt aus der Konkavität von $F_--C(p^\ast,\cdot)$ als Minimum affiner Funktionen. Liegt die untere Schranke strikt über $\delta$, ist A1 für ganz $W$ belegt. Andernfalls bleibt der Befund mit diesem Zertifikat offen. Ein Profil mit nachgewiesenem Abstand $F_-(w)-F_+(w)\le\delta$ entscheidet ihn negativ. Die Differenz der beiden profilabhängigen Optima ist im Allgemeinen weder konkav noch konvex. Ihre Eckwerte allein tragen deshalb keinen Beleg für den ganzen Quader.
@@ -789,7 +789,7 @@ Der r2020-Audit prüft gegebene Vorschläge in der Ausgangsfassung $x_0$, in den
 **Anschluss am eigenen Kopf.** Seien $S$ die gezeichnete Halsfläche und $H$ die Fläche des zugehörigen Notenkopfs. Der Prüfer verlangt im vorgesehenen Ansatzbereich einen Punkt $p$ und einen Radius $\rho>0$ mit
 
 ```math
-B_\rho(p)\subseteq \operatorname{int}(S)\cap\operatorname{int}(H).
+B_\rho(p)\subseteq \mathrm{int}(S)\cap\mathrm{int}(H).
 ```
 
 Die offene Kreisscheibe belegt eine Überdeckung mit positiver Fläche. Ihre Lage bindet den Anschluss an die vorgesehene Halsrichtung. Die Probe bestätigt diesen Anschluss sowohl vor als auch nach der Korrektur.
