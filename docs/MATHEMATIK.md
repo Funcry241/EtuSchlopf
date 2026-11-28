@@ -302,7 +302,7 @@ Die passenden Partner mit eigenem Folgeeinsatz müssen sich über das geschriebe
 \inf_{w\in W}\bigl(F_-(w)-F_+(w)\bigr) > \delta .
 ```
 
-Bei Gleichheit bleibt der Gegenplan im Toleranzbereich. Die Prüfung verlangt mindestens einen vollständigen Plan mit der Kante. Eine leere Gegenklasse zählt als unzulässig, sobald ihr Ausschluss vollständig belegt ist. Bei einer abgebrochenen Prüfung bleibt der Befund offen. Als Prüfparameter stehen eine Variation der Gewichte um jeweils $\pm25\,\%$ und ein vorab festzulegender Abstand $\delta\ge0$ zur Diskussion. Ein Profil mit zu kleinem Abstand widerlegt die Bedingung bereits. Ein positiver Befund braucht eine Schranke über den ganzen Profilbereich. [Vollständige Gegenpläne und Bindungszeugen](#kapitel-6-4)
+Bei Gleichheit bleibt der Gegenplan im Toleranzbereich. Die Prüfung verlangt mindestens einen vollständigen Plan mit der Kante. Eine leere Gegenklasse zählt als unzulässig, sobald ihr Ausschluss vollständig belegt ist. Bei einer abgebrochenen Prüfung bleibt der Befund offen. Als Prüfparameter stehen eine Variation der Gewichte um jeweils $\pm25$ % und ein vorab festzulegender Abstand $\delta\ge0$ zur Diskussion. Ein Profil mit zu kleinem Abstand widerlegt die Bedingung bereits. Ein positiver Befund braucht eine Schranke über den ganzen Profilbereich. [Vollständige Gegenpläne und Bindungszeugen](#kapitel-6-4)
 
 <a name="eckenzertifikat-a1"></a>
 
@@ -331,7 +331,7 @@ Der neue Notenwert ist der Rasterabstand $q_j-q_i$. Er muss exakt darstellbar, p
 
 **Synthetische Gegenprobe.** Zwei Fassungen haben denselben Einsatzabstand, Tastenüberhang und drei belegte vorangehende Übergänge. In einer Fassung setzt der neue Anschlag dieselbe Linie fort. In der anderen gehört er nachweislich zu einer zweiten Linie über dem gehaltenen Ton. Die Verkürzung braucht die belegte Fortsetzung der ersten Fassung.
 
-**Lokaler Befund an Chopin p02.** Auf dem festgehaltenen r2020-Raster liegt der Kostenabstand für Dis → Cis im Nominalprofil bei $0{,}260$. Bei einem um $25\,\%$ höheren Gewicht für die Abweichung von der gemessenen Dauer und um $25\,\%$ geringeren Kosten für ein eigenes Tonende fällt er auf etwa $-0{,}070$. Bei entsprechenden Änderungen um jeweils $24\,\%$ liegt er im Innern des Profilbereichs bei etwa $-0{,}04535$. In beiden Profilen führt der bessere Plan zum nächsten Dis und liefert den Rasterabstand einer Achtelnote. A1 scheitert damit bereits für $\delta=0$. Die ausgegebene Achtelnote in Takt 6 gilt als Ausgangswert. [Render-MusicXML r2020](examples/chopin-op10-no3-p02-r2020.render.musicxml) · [PDF r2020](examples/chopin-op10-no3-p02-r2020.pdf)
+**Lokaler Befund an Chopin p02.** Auf dem festgehaltenen r2020-Raster liegt der Kostenabstand für Dis → Cis im Nominalprofil bei $0{,}260$. Bei einem um $25$ % höheren Gewicht für die Abweichung von der gemessenen Dauer und um $25$ % geringeren Kosten für ein eigenes Tonende fällt er auf etwa $-0{,}070$. Bei entsprechenden Änderungen um jeweils $24$ % liegt er im Innern des Profilbereichs bei etwa $-0{,}04535$. In beiden Profilen führt der bessere Plan zum nächsten Dis und liefert den Rasterabstand einer Achtelnote. A1 scheitert damit bereits für $\delta=0$. Die ausgegebene Achtelnote in Takt 6 gilt als Ausgangswert. [Render-MusicXML r2020](examples/chopin-op10-no3-p02-r2020.render.musicxml) · [PDF r2020](examples/chopin-op10-no3-p02-r2020.pdf)
 
 <a name="kapitel-3-3"></a>
 <a name="ein-quellton-über-mehrere-geschriebene-fragmente"></a>
